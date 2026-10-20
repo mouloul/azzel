@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'azzel-theme';
-
-type Theme = 'light' | 'dark';
+import {
+  nextTheme,
+  readStoredTheme,
+  resolveInitialTheme,
+  writeStoredTheme,
+  type Theme,
+} from '@/lib/theme';
 
 function applyTheme(theme: Theme): void {
   document.documentElement.setAttribute('data-theme', theme);
@@ -14,18 +18,21 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    const current: Theme =
-      document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    const stored = readStoredTheme();
+    const current = resolveInitialTheme(
+      stored,
+      window.matchMedia('(prefers-color-scheme: dark)').matches,
+    );
     setTheme(current);
 
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const onSystemChange = (event: MediaQueryListEvent) => {
-      if (localStorage.getItem(STORAGE_KEY)) {
+      if (readStoredTheme() !== null) {
         return;
       }
-      const next: Theme = event.matches ? 'dark' : 'light';
-      applyTheme(next);
-      setTheme(next);
+      const system: Theme = resolveInitialTheme(null, event.matches);
+      applyTheme(system);
+      setTheme(system);
     };
     media.addEventListener('change', onSystemChange);
     return () => media.removeEventListener('change', onSystemChange);
@@ -33,9 +40,10 @@ export function ThemeToggle() {
 
   const toggle = useCallback(() => {
     setTheme((current) => {
-      const next: Theme = current === 'dark' ? 'light' : 'dark';
+      const initial: Theme = current ?? resolveInitialTheme(null, false);
+      const next = nextTheme(initial);
       applyTheme(next);
-      localStorage.setItem(STORAGE_KEY, next);
+      writeStoredTheme(next);
       return next;
     });
   }, []);

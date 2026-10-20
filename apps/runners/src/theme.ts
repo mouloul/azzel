@@ -4,7 +4,7 @@ import { tokens } from '@azzel/shared';
 
 type ColorKey = keyof typeof tokens.colors;
 
-const colorPairs: Record<string, readonly [ColorKey, ColorKey]> = {
+export const colorPairs: Record<string, readonly [ColorKey, ColorKey]> = {
   bg: ['bg', 'bg-sombre'],
   surface: ['surface', 'surface-sombre'],
   ink: ['texte', 'texte-sombre'],

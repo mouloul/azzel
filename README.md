@@ -27,6 +27,7 @@ Tout contrat partagé entre les applications vit dans `packages/shared`, nulle p
 pnpm install        # installe le workspace (lockfile pnpm-lock.yaml)
 pnpm build          # shared (tsc) + runners (tsc) + web (next build)
 pnpm typecheck      # zéro erreur TypeScript attendue sur les trois packages
+pnpm test           # tests unitaires (vitest) : shared + lib web
 pnpm dev:web        # serveur de développement Next.js
 pnpm dev:runners    # Metro pour la dev build coureurs (expo start --dev-client)
 ```

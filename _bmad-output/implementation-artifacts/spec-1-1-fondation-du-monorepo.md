@@ -2,7 +2,7 @@
 title: 'Story 1.1 — Fondation du monorepo'
 type: 'feature'
 created: '2026-10-20'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 baseline_commit: 'NO_VCS'
 review_loop_iteration: 0
@@ -55,12 +55,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.gitignore` -- workspace racine : apps/* + packages/*, scripts `build`/`typecheck` orchestrés, resolutions React 19.3.x unique.
-- [ ] `packages/shared/` -- `src/tokens.ts` (tokens typés, verbatim du frontmatter), `src/error-envelope.ts` (type + constructeur v1 : `{ version, error: { code, message, action } }`), `src/datetime.ts` (stockage ISO 8601 UTC → affichage local), `src/index.ts` (barrel) -- source unique du contrat inter-apps (AD-6).
-- [ ] `apps/web/` -- Next.js **16.4.2** exact, App Router : variables CSS injectées depuis les tokens (`:root` clair, `[data-theme="dark"]` sombre), script inline anti-flash, bascule clair/sombre dans l'en-tête (défaut système, override localStorage), page racine française typée aux tokens.
-- [ ] `apps/runners/` -- scaffold Expo SDK 58 / RN 0.88 (dev build, pas Expo Go) : App minimal consommant le thème RN dérivé de `shared`.
-- [ ] `README.md` -- français, sobre : structure, commandes, conventions (UI fr / code en, horodatages).
-- [ ] `git init` + premier commit -- « tout pousse au même endroit dès le premier commit ».
+- [x] `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.gitignore` -- workspace racine : apps/* + packages/*, scripts `build`/`typecheck` orchestrés, resolutions React 19.3.x unique.
+- [x] `packages/shared/` -- `src/tokens.ts` (tokens typés, verbatim du frontmatter), `src/error-envelope.ts` (type + constructeur v1 : `{ version, error: { code, message, action } }`), `src/datetime.ts` (stockage ISO 8601 UTC → affichage local), `src/index.ts` (barrel) -- source unique du contrat inter-apps (AD-6).
+- [x] `apps/web/` -- Next.js **16.4.2** exact, App Router : variables CSS injectées depuis les tokens (`:root` clair, `[data-theme="dark"]` sombre), script inline anti-flash, bascule clair/sombre dans l'en-tête (défaut système, override localStorage), page racine française typée aux tokens.
+- [x] `apps/runners/` -- scaffold Expo SDK 58 / RN 0.88 (dev build, pas Expo Go) : App minimal consommant le thème RN dérivé de `shared`.
+- [x] `README.md` -- français, sobre : structure, commandes, conventions (UI fr / code en, horodatages).
+- [x] `git init` + premier commit -- « tout pousse au même endroit dès le premier commit ».
 
 **Acceptance Criteria:**
 - Given le dépôt fraîchement cloné avec Node compatible, when `pnpm install && pnpm build`, then les trois packages compilent et `apps/web` sert une page racine française.
@@ -69,9 +69,41 @@ context:
 
 ## Implementation Notes
 
+- Implémenté par subagent ; premier commit git : `59dbcc1` (`git init -b main`, tout le projet — scaffold + artefacts de planification — conformément au « tout pousse au même endroit »).
+- Audit de matrice (step-03) : lignes 2/3/4 sans test → ajout de vitest 4 (root, `pnpm test`) + tests : `apps/web/src/lib/theme.test.ts` (résolution thème : système par défaut, override mémorisé, valeur invalide → système), `packages/shared/src/error-envelope.test.ts` (enveloppe v1 + garde), `packages/shared/src/datetime.test.ts` (ISO UTC → local fr-FR, TZ=UTC dans le test, entrée invalide → RangeError). Ligne 1 (build) couverte par `pnpm install && pnpm build` exécuté et passé.
+- Refactor : logique de thème extraite de `theme-toggle.tsx` vers `apps/web/src/lib/theme.ts` (`resolveInitialTheme`, `nextTheme`, `THEME_STORAGE_KEY`) pour être testable ; le script inline anti-flash de `layout.tsx` garde la même sémantique (doit rester inline, pré-peinture).
+- `pnpm-lock.yaml` : une seule version de React (19.3.1) dans tout le workspace (overrides pnpm).
+- Vérifié : `pnpm install` (frozen-lockfile OK), `pnpm build`, `pnpm typecheck`, `pnpm test` (10 tests verts) ; page servie (`next start` + curl) : CSS vars clair/sombre verbatim, `lang="fr"`, script anti-flash présent.
+- Reste manuel (non bloquant) : contrôle visuel navigateur de la bascule (`pnpm dev:web`) ; démarrage Metro/dev build non testé (nécessite build natif, hors périmètre Never).
+- Sécurité : `.opencode/` (clé API Figma en clair dans `opencode.json`) exclu par `.gitignore` et non commité — clé à révoquer côté utilisateur.
+- Revue (3 couches parallèles : blind hunter, edge cases, verification gap) : 9 entrées retenues → 8 patchs appliqués par le même subagent (script anti-flash généré depuis `lib/theme` + testé par exécution, localStorage protégé, garde anti-suivi alignée, build `shared` passé en noEmit — dist mort supprimé, garde win32 sur tests TZ, tests `buildTokensCss`/dérivation RN/parité tokens, `expo-dev-client` ajouté), 1 différé (tests de composant ThemeToggle → deferred-work.md). 11 rejets tracés dans le Review Triage Log. Vérification post-patch : `pnpm install --frozen-lockfile`, `pnpm test` (6 fichiers, 22 tests), `pnpm build`, `pnpm typecheck` — tout vert.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Verdict | Preuve / route |
+|---|---------|----------------|
+| A | medium (BH1+VG1) | Script anti-flash de layout.tsx ré-implémente resolveInitialTheme + clé 'azzel-theme' en dur ; aucun test ne l'exécute → dérive silencieuse pré-peinture possible. → patch |
+| B | medium (EC1+EC4) | localStorage.getItem (effet) et setItem (clic) non protégés : SecurityError en navigation privée → en-tête cassé. → patch |
+| C | low (EC2) | onSystemChange bloque le suivi système sur toute valeur mémorisée, même invalide ('sombre'), que resolveInitialTheme ignore → sémantique incohérente, thème figé après valeur corrompue. Correctif direct. → patch |
+| D | medium (BH4+EC6+VG-Other) | build shared émet dist/ jamais consommé (main → src), invalide en ESM Node (imports sans extension) et pollué par dist/*.test.js (+ .d.ts importants vitest). → patch (build = noEmit) |
+| E | low (BH2+EC7) | process.env.TZ ignoré sous Windows → assertions 08:42:07 échouent sur toute machine Windows. Garde de plateforme directe. → patch |
+| F | medium (VG2) | buildTokensCss sans aucun test : casser le slicing -sombre ou renommer un token casse le style web en silence (typecheck passe). → patch (test de sortie) |
+| G | medium (VG3+BH5+BH14) | Dérivation RN (16 paires colorPairs, math lineHeight/letterSpacing) et parité clair/sombre des tokens hors de tout chemin de vérification ; vitest n'inclut pas apps/runners. → patch (tests + mock react-native) |
+| H | low (BH3) | expo start --dev-client sans expo-dev-client dans les deps → workflow dev build incohérent au premier build natif (Epic 6). Une ligne. → patch |
+| I | medium (VG4) | ThemeToggle non exécuté par aucun test (état initial, persistance, suivi système) — nécessite jsdom/testing-library, dépasse la fondation. → defer |
+| BH6 | low, rejeté | Updater setState impur (applyTheme/setItem) double-exécuté en StrictMode — effets idempotents, aucun tort observable ; restructuration ≠ correction directe. |
+| BH7 | false | Prétendue désynchronisation libellé/thème : l'effet ré-applique et ré-affiche la même valeur re-calculée des mêmes entrées — auto-correctif. |
+| BH8 | low, rejeté | Absence ESLint/CI : l'intent (frozen) ne l'exige pas, l'architecture diffère CI/CD ; ajouter une chaîne d'outils ≠ correction directe. |
+| BH9 | low, rejeté | 44px mobile codé dur dans globals.css : le DESIGN.md pose explicitement 44–48 px comme [ASSUMPTION] à figer sur écrans réels — pas une dérive de token. |
+| BH10 | false | Liens _bmad-output « morts » : le premier commit inclut _bmad-output (1206 fichiers) — les chemins existent dans tout clone. |
+| BH11 | low, rejeté | Alias @/ absent de vitest.config : spéculatif (aucun test actuel ne l'utilise) ; à ajouter au premier besoin. |
+| BH12 | low, rejeté | Intl.DateTimeFormat recréé par tick (2/s) : négligeable, aucun tort mesurable. |
+| BH13 | low, rejeté | ErrorEnvelopeInput duplique ErrorEnvelopePayload : cosmétique, distingue entrée/sortie pour divergence future. |
+| BH15 | low, rejeté | .env.example manquant malgré le whitelist : inoffensif, placeholder pour le futur. |
+| EC3 | low, rejeté | Clic avant l'effet : fenêtre d'une frame post-hydration, inatteignable en usage humain ; le garde ajouterait une branche pour rien. |
+| EC5 | false | Locale invalide ('zz') : aucun appelant n'y passe (DEFAULT_LOCALE interne) ; échec bruyant d'un util interne = comportement correct. |
 
 ## Design Notes
 

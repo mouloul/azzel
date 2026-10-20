@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildTokensCss } from '@/lib/tokens-css';
+import { buildThemeInitScript } from '@/lib/theme';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
     'Plateforme clé en main de gestion de course de trail, hors-ligne d’abord — portée par son village.',
 };
 
-const themeInitScript = `(function(){try{var s=localStorage.getItem('azzel-theme');var t=s==='light'||s==='dark'?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();`;
+const themeInitScript = buildThemeInitScript();
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
