@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Azzel",
+    "slug": "azzel-runners",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic"
+  }
+}

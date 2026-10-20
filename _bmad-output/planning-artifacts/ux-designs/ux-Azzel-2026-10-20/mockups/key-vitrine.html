@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Écran clé · Vitrine publique (Vert Djurdjura)</title>
+<style>
+/* ============================================================================
+   ÉCRAN CLÉ 1/4 — VITRINE PUBLIQUE (avant-course + bloc direct pendant-course)
+   Gouverné par :
+   - DESIGN.md frontmatter : tokens couleurs/typo/rounded/spacing (Vert Djurdjura,
+     variation 5), composants bandeau-égide, bloc-video, temoin-live, frise kabyle,
+     glyphe-pilier (20–24 px)
+   - DESIGN.md § Components : bouton action/contour/assistance, carte, badge dossard,
+     témoin live, bloc sponsors (option A), vidéo trailer, bandeau égide, frise kabyle
+     (monochrome sapin, seuils), glyphe pilier (inline 20–24 px), indicateur de
+     fraîcheur (meta-lg)
+     - EXPERIENCE.md § IA (surface 1 · vitrine), § Voice (sobre vitrine, SM-C1),
+       § Component Patterns (sponsors, vidéo, témoin live, glyphe pilier), § State
+       Patterns (« Phase de course » : avant = CTA dominant, pendant = direct +
+       CTA discret), § Anonymat (dossard seul, jamais de nom), § Jour J (vitrine
+       en direct)
+     - DESIGN.md § Brand & Style « dimension amazigh — elle se respire, elle ne
+       s'expose pas » + § Components glyphe pilier : petit glyphe SVG inline
+       (20–24 px) monochrome sapin devant le nom de chaque pilier — PAS de
+       médaillon, PAS de carte, PAS de libellé kabyle exposé. Fidélité glyphes :
+       .working/research-amazigh-mythologie.md et research-poesie-kabyle.md
+       (Hanoteau 1867, domaine public — ⵣ Yaz, tala, tabzimt, ingel). Pas de
+       webfont : les lettres tifinagh sont dessinées en paths SVG.
+     - EXPERIENCE.md § Component Patterns « citation kabyle » : jamais sur la
+       vitrine d'accueil — aucune citation visible ici. Récits région (vieille
+       de janvier, singes sacrés du Jurjura) = contenu éditorial de la page
+       région, atteinte par le lien discret « La région » des infos pratiques.
+     Structure héritée de .working/direction-village.html — palette remplacée.
+   ============================================================================ */
+:root{
+  --bg:#EDF2EB; --surface:#FAFCF8; --texte:#16281C; --t2:#4A6252;
+  --action:#345E4A; --action-ink:#EFF8F2;
+  --ok:#187A3C; --danger:#B3261E;
+  --filet:rgba(22,40,28,.25); --ombre:rgba(52,94,74,.22);
+  --rond:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#DCE5DA;font-family:var(--rond);color:var(--texte);padding:28px 20px 60px;
+  display:flex;flex-direction:column;align-items:center;gap:34px}
+
+.spec{width:1200px;background:var(--surface);border:1px solid var(--filet);border-left:4px solid var(--action);
+  padding:16px 20px;font-size:13px;line-height:1.6;color:var(--t2)}
+.spec strong{font-size:15px;color:var(--texte)}
+.spec .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px}
+.spec .chips span{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--filet);
+  padding:2px 8px;font-family:var(--mono);font-size:11px;color:var(--texte)}
+.spec .chips i{width:11px;height:11px;display:inline-block;border-radius:50%}
+.spec em{color:var(--action);font-style:normal;font-weight:700}
+
+.stage{display:flex;flex-direction:column;gap:10px}
+.stage-t{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--t2);font-weight:700}
+.browser{width:1200px;border:1px solid var(--filet);border-radius:16px;overflow:hidden;
+  box-shadow:0 24px 70px var(--ombre);background:var(--bg)}
+.bar{display:flex;align-items:center;gap:8px;background:#E2EADF;padding:11px 14px}
+.bar i{width:11px;height:11px;border-radius:50%;background:#C6D4C6}
+.bar i:first-child{background:var(--action)}.bar i:nth-child(2){background:#9DBAA6}.bar i:nth-child(3){background:#6E8F7B}
+.url{margin-left:12px;flex:1;background:var(--surface);border:1px solid var(--filet);border-radius:10px;
+  padding:5px 12px;font-family:var(--mono);font-size:12px;color:var(--t2)}
+.vp{overflow:hidden}
+
+.frieze{height:11px;background:
+  repeating-linear-gradient(45deg,var(--action) 0 5px,transparent 5px 10px),
+  repeating-linear-gradient(-45deg,var(--action) 0 5px,transparent 5px 10px);
+  background-color:var(--surface);opacity:.8}
+
+.nav{display:flex;align-items:center;gap:22px;background:var(--surface);padding:16px 48px;
+  border-bottom:1px solid var(--filet)}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-size:25px;letter-spacing:.08em;color:var(--texte)}
+.brand span{font-size:11.5px;color:var(--t2);letter-spacing:.12em}
+.nav nav{margin-left:auto;display:flex;gap:22px;font-size:14.5px;color:var(--t2)}
+.nav nav b{color:var(--texte);font-weight:700}
+.theme-toggle{font-size:15px;color:var(--t2);border:1px solid var(--filet);border-radius:999px;
+  width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center}
+.btn-action{display:inline-block;background:var(--action);color:var(--action-ink);font-weight:700;
+  font-size:15px;padding:12px 26px;border-radius:999px;text-decoration:none}
+
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;padding:52px 48px 44px;background:var(--bg);
+  background-image:radial-gradient(circle at 88% 12%,rgba(74,98,82,.16) 0,transparent 26%)}
+.kick{font-size:13.5px;font-weight:700;color:var(--action);letter-spacing:.14em;text-transform:uppercase}
+h1{font-size:62px;line-height:1.04;color:var(--texte);margin:14px 0 12px;font-weight:800}
+.lieu{font-size:17px;color:var(--texte)}
+.lieu b{color:var(--action)}
+.lead{margin-top:18px;font-size:16.5px;line-height:1.75;max-width:56ch;color:var(--texte)}
+.cta-row{display:flex;gap:14px;margin-top:26px;align-items:center;flex-wrap:wrap}
+.chev{display:inline-block;margin-left:8px}
+.btn-contour{display:inline-block;border:2px solid var(--action);color:var(--texte);font-weight:700;
+  font-size:15px;padding:11px 24px;border-radius:999px;text-decoration:none;background:transparent}
+.zeropapier{margin-top:16px;font-family:var(--mono);font-size:12px;color:var(--t2)}
+
+.vues{background:var(--surface);border:1px solid var(--filet);border-radius:24px;overflow:hidden;position:relative}
+.vues svg{display:block;width:100%;height:330px}
+.vues-cap{position:absolute;left:18px;bottom:16px;background:rgba(250,252,248,.92);border-radius:14px;
+  padding:10px 16px;font-size:13.5px;color:var(--texte);font-weight:600}
+
+.piliers{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:30px 48px 44px;background:var(--bg)}
+.pil{display:inline-flex;align-items:center;gap:10px;background:var(--surface);
+  border:1px solid var(--filet);border-radius:999px;padding:9px 22px;
+  font-size:15px;font-weight:700;color:var(--texte)}
+.pil svg{width:22px;height:22px;display:block;color:var(--action)}
+
+.sec{padding:44px 48px}
+.sec-t{font-size:24px;font-weight:800;color:var(--texte);margin-bottom:6px}
+.sec-s{font-size:14.5px;color:var(--t2);margin-bottom:24px}
+.epreuves{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.ep{background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:26px 28px}
+.ep .ico{width:52px;height:52px;border-radius:18px;background:var(--action);color:var(--action-ink);
+  display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
+.ep h3{font-size:24px;color:var(--texte);font-weight:800}
+.ep .dist{color:var(--action);font-weight:800}
+.ep ul{list-style:none;margin:14px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;
+  font-size:15px;color:var(--t2);line-height:1.6}
+.ep ul b{color:var(--texte)}
+.ep a{color:var(--action);font-weight:700;font-size:15px;text-decoration:none}
+.note{margin-top:16px;font-family:var(--mono);font-size:12px;color:var(--t2)}
+
+.video-poster{position:relative;border-radius:24px;overflow:hidden;border:1px solid var(--filet);
+  background:linear-gradient(#1B281F,#101A14);height:380px}
+.video-poster svg{display:block;width:100%;height:100%}
+.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76px;height:76px;border-radius:999px;
+  background:#8FD4A8;display:flex;align-items:center;justify-content:center;text-decoration:none;
+  box-shadow:0 0 0 8px rgba(143,212,168,.28),0 16px 40px rgba(0,0,0,.4)}
+.play span{display:block;width:0;height:0;border-style:solid;border-width:15px 0 15px 24px;
+  border-color:transparent transparent transparent #0C2415;margin-left:6px}
+.video-meta{position:absolute;left:18px;bottom:16px;background:rgba(16,26,20,.96);border-radius:8px;
+  padding:8px 14px;font-family:var(--mono);font-size:12px;color:#E8F0E9}
+.video-note{margin-top:12px;font-size:15px;color:var(--t2);line-height:1.7}
+.video-note b{color:var(--texte)}
+
+.zone{padding:0 48px 44px}
+.card{background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:26px 28px}
+.card h4{font-size:24px;color:var(--texte);font-weight:800;margin-bottom:10px}
+.card p{font-size:15px;line-height:1.7;color:var(--t2)}
+.ifri{font-weight:800;font-size:24px;color:var(--texte);letter-spacing:.06em;font-family:var(--rond)}
+.ifri small{display:block;font-family:var(--mono);font-size:11.5px;color:var(--t2);font-weight:400;
+  margin-top:6px;letter-spacing:0}
+.sig-slot{margin-top:18px;border:2px dashed rgba(52,94,74,.35);border-radius:16px;padding:14px 18px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.sig-slot .tag{font-family:var(--mono);font-size:12px;color:var(--t2)}
+.devenir{color:var(--action);font-weight:700;text-decoration:none;font-size:15px}
+
+.aide{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
+  background:var(--surface);border-top:1px solid var(--filet);border-bottom:1px solid var(--filet);
+  padding:26px 48px}
+.aide .surt{font-size:13.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t2)}
+.aide p{font-size:15px;color:var(--texte);margin-top:6px;line-height:1.7}
+
+.egide{background:var(--action);color:var(--action-ink);text-align:center;padding:30px 48px 34px}
+.egide p{font-size:16px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.egide small{display:block;margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--action-ink);opacity:.85}
+
+.jour{background:var(--bg)}
+.jour-head{display:flex;align-items:flex-start;justify-content:space-between;padding:24px 48px 0;gap:16px}
+.jour-head .t{display:flex;align-items:center;font-size:24px;font-weight:800;color:var(--texte)}
+.grand-ecran{font-family:var(--mono);font-size:12px;color:var(--t2);text-align:right;line-height:1.8}
+.grand-ecran .btn-contour{padding:8px 18px;font-size:13.5px}
+.live-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);
+  margin-right:10px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+.board{margin:20px 48px 30px;background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:30px 32px}
+.board .big{font-size:22px;font-weight:700;color:var(--texte);line-height:1.55;margin:12px 0 20px}
+.board .big b{color:var(--action)}
+.cp-rows{display:flex;flex-direction:column;gap:12px}
+.cp-row{display:grid;grid-template-columns:110px 1fr auto;gap:14px;align-items:center;background:var(--bg);
+  border-radius:16px;padding:14px 18px}
+.cp-row .pos{font-weight:800;color:var(--texte);font-size:16px}
+.doss{display:inline-block;background:var(--action);color:#FFFFFF;border-radius:8px;padding:3px 10px;
+  font-family:var(--mono);font-size:13.5px;font-weight:700}
+.cp-row small{display:block;color:var(--t2);font-size:13px;margin-top:3px}
+.cp-row .when{font-family:var(--mono);font-size:15px;color:var(--texte);text-align:right}
+.frais-line{display:flex;justify-content:space-between;align-items:center;margin-top:20px;
+  font-family:var(--mono);font-size:15px;color:var(--t2);flex-wrap:wrap;gap:8px}
+.frais-line b{color:var(--texte)}
+
+.colophon{font-family:var(--mono);font-size:11px;color:#7C9284}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<aside class="spec">
+  <strong>Écran clé 1/4 — Vitrine publique · registre Village, palette Vert Djurdjura</strong>
+  <p>Phase AVANT-course : CTA « S'inscrire » dominant · épreuves · piliers nus — ligne de
+  chips sobres à petits glyphes amazighs inline (<em>ⵣ Yaz</em> sport · <em>tala</em> santé ·
+  <em>tabzimt</em> citoyenneté · <em>ingel</em> écologie — SVG 22 px monochrome sapin, sourcés,
+  sans médaillon ni libellé kabyle exposé) · trailer 1ʳᵉ édition · sponsor signature (option A) ·
+  lien discret « La région » dans les infos pratiques (récits et citations kabyles = contenu
+  éditorial de la page région, jamais sur la vitrine d'accueil) · assistance <em>SM-C1</em> ·
+  égide toujours visible. Section 2 du même fichier : phase PENDANT-course, « Résultats en
+  direct », témoin live, fraîcheur <em>meta-lg</em>, CTA discret.
+  Anonymat : dossard seul, jamais de nom.</p>
+  <div class="chips">
+    <span><i style="background:#EDF2EB;border:1px solid #C6D4C6"></i>bg #EDF2EB</span>
+    <span><i style="background:#FAFCF8;border:1px solid #C6D4C6"></i>surface #FAFCF8</span>
+    <span><i style="background:#345E4A"></i>action #345E4A</span>
+    <span><i style="background:#16281C"></i>texte #16281C</span>
+    <span><i style="background:#8FD4A8"></i>action-sombre #8FD4A8 (bouton lecture)</span>
+    <span><i style="background:#B3261E"></i>danger #B3261E (témoin live)</span>
+  </div>
+  <p>Perf : zéro requête réseau, zéro JS, zéro webfont, aucune photo — SVG inline et dégradés. ·
+  A11y : frises décoratives aria-hidden, contrastes AA+, reduced-motion.</p>
+</aside>
+
+<section class="stage">
+  <p class="stage-t">1 · Vitrine — desktop 1200 px · phase avant-course</p>
+  <div class="browser">
+    <div class="bar"><i></i><i></i><i></i><span class="url">https://trail.ait-aissi.dz</span></div>
+    <div class="vp">
+
+      <div class="nav">
+        <div class="brand"><b>Azzel</b><span>· Trail d'Ait-Aissi</span></div>
+        <nav><span>La course</span><span>Épreuves</span><span>Le village</span><b>Le jour J</b></nav>
+        <span class="theme-toggle" title="Bascule clair / sombre">◐</span>
+        <a class="btn-action" href="#">S'inscrire</a>
+      </div>
+      <div class="frieze" aria-hidden="true"></div>
+
+      <header class="hero">
+        <div>
+          <p class="kick">2ᵉ édition — le village ouvre ses sentiers</p>
+          <h1>Le Trail<br>d'Ait-Aissi</h1>
+          <p class="lieu"><b>26 mars 2027</b> · Village d'Ait-Aissi — Yakouren, Kabylie, Algérie</p>
+          <p class="lead">Ici, la course traverse les hameaux, les terrasses et les sources ; chaque coureur
+          passe chez quelqu'un. Mille dossards, deux épreuves — la Longue (~35 km) et la Moyenne
+          (10–15 km) — et un village entier pour vous accueillir.</p>
+          <div class="cta-row">
+            <a class="btn-action" href="#">S'inscrire <span class="chev">→</span></a>
+            <a class="btn-contour" href="#">Venir encourager</a>
+          </div>
+          <p class="zeropapier">Zéro papier — chaque coureur reçoit son e-dossard QR.</p>
+        </div>
+        <div class="vues">
+          <svg viewBox="0 0 520 330" aria-hidden="true">
+            <circle cx="430" cy="62" r="34" fill="rgba(74,98,82,.18)"/>
+            <circle cx="430" cy="62" r="46" fill="none" stroke="#4A6252" stroke-width="2" opacity=".45"/>
+            <path d="M0,238 C80,196 150,242 230,214 S380,170 520,208 L520,330 L0,330 Z" fill="#4A6252"/>
+            <path d="M0,272 C90,244 180,282 280,258 S420,236 520,262 L520,330 L0,330 Z" fill="#345E4A"/>
+            <path d="M0,306 C120,290 260,312 400,296 L520,304 L520,330 L0,330 Z" fill="#16281C"/>
+            <g>
+              <rect x="88" y="212" width="34" height="26" fill="#FAFCF8"/><polygon points="84,214 105,198 126,214" fill="#345E4A"/>
+              <rect x="132" y="220" width="28" height="20" fill="#FAFCF8"/><polygon points="129,222 146,208 163,222" fill="#345E4A"/>
+              <rect x="368" y="204" width="32" height="30" fill="#FAFCF8"/><polygon points="364,206 384,190 404,206" fill="#345E4A"/>
+              <rect x="406" y="212" width="26" height="22" fill="#FAFCF8"/><polygon points="403,214 419,201 435,214" fill="#345E4A"/>
+            </g>
+            <rect x="205" y="196" width="9" height="40" fill="#16281C" rx="4"/>
+            <rect x="222" y="206" width="8" height="30" fill="#16281C" rx="4"/>
+            <g stroke="#FAFCF8" stroke-width="3" fill="none" stroke-linecap="round" opacity=".9">
+              <path d="M120,262 C180,240 240,268 300,246"/>
+            </g>
+            <circle cx="150" cy="258" r="4" fill="#FAFCF8"/><circle cx="220" cy="254" r="4" fill="#FAFCF8"/><circle cx="290" cy="248" r="4" fill="#FAFCF8"/>
+          </svg>
+          <p class="vues-cap">Du village aux crêtes — tracé à travers les hameaux</p>
+        </div>
+      </header>
+
+      <section class="piliers" aria-label="Les quatre piliers de la course">
+        <p class="pil"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 9 V24 M12 24 H36 M12 24 V39 M36 24 V39"/></svg>Sport</p>
+        <p class="pil"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8 V15"/><path d="M24 15 C19 19 16 24 16 31"/><path d="M24 15 C29 19 32 24 32 31"/><path d="M10 33 V40 H38 V33"/></svg>Santé</p>
+        <p class="pil"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17 L17 17 L11.5 28 Z"/><path d="M31 17 L42 17 L36.5 28 Z"/><g fill="currentColor" stroke="none"><circle cx="20.5" cy="17" r="1.7"/><circle cx="24" cy="17" r="1.7"/><circle cx="27.5" cy="17" r="1.7"/></g></svg>Citoyenneté</p>
+        <p class="pil"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 38 L24 26 L36 38"/><path d="M16 29 L24 21 L32 29"/><path d="M19 22 L24 16 L29 22"/><path d="M24 38 V43"/></svg>Écologie</p>
+      </section>
+
+      <section class="sec">
+        <p class="sec-t">Deux épreuves, un même accueil</p>
+        <p class="sec-s">Départs du village · 26 mars 2027 · parcours en cours d'homologation</p>
+        <div class="epreuves">
+          <article class="ep">
+            <div class="ico">▲</div>
+            <h3>La Longue <span class="dist">— ~35 km</span></h3>
+            <ul>
+              <li><b>D+ ≈ 1 950 m</b></li><li>Départ <b>08:00</b></li>
+              <li><b>3</b> ravitaillements tenus par les hameaux</li><li>Barrière <b>7 h 00</b></li>
+              <li><b>700</b> dossards</li><li>Crêtes &amp; vallons</li>
+            </ul>
+            <a href="#">S'inscrire — Longue <span class="chev">→</span></a>
+          </article>
+          <article class="ep">
+            <div class="ico">◇</div>
+            <h3>La Moyenne <span class="dist">— 10–15 km</span></h3>
+            <ul>
+              <li><b>D+ ≈ 550 m</b></li><li>Départ <b>09:30</b></li>
+              <li><b>1</b> ravitaillement</li><li>Marcheurs <b>bienv.</b></li>
+              <li><b>400</b> dossards</li><li>Bois &amp; sentiers du village</li>
+            </ul>
+            <a href="#">S'inscrire — Moyenne <span class="chev">→</span></a>
+          </article>
+        </div>
+        <p class="note">Valeurs indicatives au 20.10.2026 — le tracé définitif sera publié après homologation.</p>
+      </section>
+
+      <section class="sec" style="padding-top:0">
+        <p class="sec-t">La 1ʳᵉ édition, en images</p>
+        <p class="sec-s">Le trailer raconte le village, les crêtes et l'arrivée sur la place.</p>
+        <div class="video-poster">
+          <svg viewBox="0 0 1100 380" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <path d="M0,240 C150,180 300,220 450,170 S780,110 1100,180 L1100,380 L0,380 Z" fill="#2A3B2E"/>
+            <path d="M0,290 C200,240 420,290 640,250 S940,220 1100,260 L1100,380 L0,380 Z" fill="#223026"/>
+            <path d="M0,340 C250,310 500,345 750,320 S1000,305 1100,320 L1100,380 L0,380 Z" fill="#182619"/>
+            <g stroke="#8FD4A8" stroke-width="3" fill="none" stroke-linecap="round" opacity=".3">
+              <path d="M120,300 C320,250 560,320 800,270 S1020,250 1100,265"/>
+            </g>
+          </svg>
+          <a class="play" href="#" aria-label="Lire le trailer — 2 min 12"><span></span></a>
+          <p class="video-meta">TRAILER · 1ʳᵉ ÉDITION · 2 MIN 12</p>
+        </div>
+        <p class="video-note"><b>La vidéo ne charge qu'au clic</b> — jamais d'autoplay, jamais dans le
+        chemin critique : la vitrine reste lisible en moins de 5 s sur un réseau lent.</p>
+      </section>
+
+      <section class="zone">
+        <div class="card">
+          <h4>Les amis de la course</h4>
+          <p>Un partenaire signature soutient un projet sportif-citoyen dont la réputation
+          est le produit.</p>
+          <div class="sig-slot">
+            <div class="ifri">Ifri<small>eaux &amp; boissons — partenaire signature</small></div>
+            <span class="tag">emplacement signature · option A</span>
+          </div>
+          <p style="margin-top:16px"><a class="devenir" href="#">Devenir ami de la course <span class="chev">→</span></a></p>
+        </div>
+      </section>
+
+      <section class="aide">
+        <div>
+          <p class="surt">Infos pratiques &amp; assistance</p>
+          <p>Inscription, retrait des dossards, accès au village : une personne répond, pas une FAQ.</p>
+          <p style="margin-top:10px"><a class="devenir" href="#">La région <span class="chev">→</span></a></p>
+        </div>
+        <a class="btn-contour" href="#">Un souci ? Appelle l'équipe : +213 …</a>
+      </section>
+
+      <div class="frieze" aria-hidden="true"></div>
+      <footer class="egide">
+        <p>Sous l'égide de la Fédération et du ministère des Sports</p>
+        <small>Projet sportif-citoyen · bien commun du trail algérien · zéro papier — e-dossard QR · © Azzel — Trail d'Ait-Aissi 2027</small>
+      </footer>
+
+    </div>
+  </div>
+</section>
+
+<section class="stage">
+  <p class="stage-t">1 bis · Même vitrine — bloc « Résultats en direct » · phase pendant-course, 10:42</p>
+  <div class="browser">
+    <div class="bar"><i></i><i></i><i></i><span class="url">https://trail.ait-aissi.dz/le-jour-j</span></div>
+    <div class="vp">
+      <div class="jour">
+        <div class="jour-head">
+          <p class="t"><span class="live-dot"></span>Résultats en direct</p>
+          <div class="grand-ecran">
+            également affiché sur le grand écran de la place du village<br>
+            <a class="btn-contour" href="#">S'inscrire</a>
+          </div>
+        </div>
+        <div class="board">
+          <p class="big">10:42 — <b>217 coureurs</b> en course · checkpoint 2 franchi par le <b>dossard 043</b></p>
+          <div class="cp-rows">
+            <div class="cp-row">
+              <span class="pos">En tête</span>
+              <span><span class="doss">043</span> &nbsp;Longue — checkpoint 2<small>15,2 km · mène la course</small></span>
+              <span class="when">10:41:58</span>
+            </div>
+            <div class="cp-row">
+              <span class="pos">2ᵉ · 1ʳᵉ F</span>
+              <span><span class="doss">128</span> &nbsp;Longue — checkpoint 2<small>à 33 s du dossard 043</small></span>
+              <span class="when">10:42:31</span>
+            </div>
+            <div class="cp-row">
+              <span class="pos">84ᵉ</span>
+              <span><span class="doss">217</span> &nbsp;Longue — checkpoint 1<small>parti vers le checkpoint 2</small></span>
+              <span class="when">10:37:12</span>
+            </div>
+          </div>
+          <p class="frais-line"><span>synchronisé il y a 3 min · si le réseau tombe, on continue : reprise automatique</span><b>classement provisoire</b></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<p class="colophon">Maquette 1:1 — Azzel · Trail d'Ait-Aissi 2027 · 20.10.2026 · zéro JS, zéro requête réseau.</p>
+</body>
+</html>

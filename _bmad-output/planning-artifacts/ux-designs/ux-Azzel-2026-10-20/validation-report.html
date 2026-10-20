@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: Azzel</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+  .synthesis .counts {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>Azzel — UX Design Validation Report</h1>
+        <div class="subtitle">DESIGN.md: /Users/mouloudhaouili/Desktop/ouidou/Azzel/_bmad-output/planning-artifacts/ux-designs/ux-Azzel-2026-10-20/DESIGN.md · EXPERIENCE.md: /Users/mouloudhaouili/Desktop/ouidou/Azzel/_bmad-output/planning-artifacts/ux-designs/ux-Azzel-2026-10-20/EXPERIENCE.md</div>
+      </div>
+    </header>
+
+    <div class="synthesis">
+      <p>Paire solide, immédiatement consommable comme contrat par l'architecture et les stories : les 4 UJ sont marchées avec climax et échecs, les 27 tokens couleur ont hex + paire clair/sombre, toutes les références <code>{path.to.token}</code> résolvent, et les contrastes énoncés tiennent numériquement (toutes paires porteuses recalculées ≥ 5,4:1, objectif AA+ vérifié). Les gaps sont concentrés et peu nombreux : un état critique manquant (permission caméra refusée pour le scan PWA, jour J sans filet), deux composants sans contrat comportemental complet (ligne de board live, journal sync), et trois désalignements de noms de composants entre spines.</p>
+      <p>La revue accessibilité nuance ce tableau sans le renverser : le socle est sain — 37/38 paires hex passent WCAG AA avec marge et l'intention accessibilité (bip + texte, cibles 48 dp, plancher 15 px, reduced-motion, assistance humaine) est réellement écrite dans les spines — mais les défaillances restantes sont de spécification, pas d'intention : une paire en échec que le rubric n'avait pas testée (bouton lecture vidéo, 2,08:1), deux canons jour J non chiffrés (fréquence du clignotement, dimensions du voyant scan), une contradiction interne (meta 12 px vs plancher 15 px), et un SM-C1 déclaré composant mais jamais placé dans les flux et états d'erreur. Tout est corrigeable dans les documents avant moindre ligne de code.</p>
+      <div class="counts">Consolidé (rubric + accessibilité) : 0 critical · 5 high · 16 medium · 12 low — 33 findings</div>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card">
+        <div class="dim-name">1. Flow coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">2. Token completeness</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">3. Component coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">4. State coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">5. Visual reference coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">6. Bloat &amp; overspecification</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">7. Inheritance discipline</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">8. Shape fit</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">strong</div>
+      </div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>1. Flow coverage</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Les 4 UJ du PRD §2.3 sont présentes comme Key Flows, protagoniste nommé avec contexte (Yacine 28 ans, Karim 19 ans, Nadia, Malika), étapes numérotées (11/8/5/4), climax explicites, et chemin d'échec pour chacune (EXPERIENCE.md:186-240). Le mapping FR est affiché par flow ; FR-27 est couvert dans les transverses IA (EXPERIENCE.md:41). Wireflows liés pour UJ-1 et UJ-2.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Mapping UJ-1 élargi vs PRD §2.3</h3>
+              <span class="finding-location">EXPERIENCE.md:188</span>
+            </header>
+            <div class="finding-note">UJ-1 annonce « Réalise FR-1 à FR-7, FR-18 à FR-20 » alors que le PRD §2.3 borne UJ-1 à FR-1 à FR-7 (FR-18–20 y sont rattachés à UJ-4). Élargissement cohérent (la spine intègre l'activation tracking au parcours Yacine) mais le mapping diverge de la source.</div>
+            <div class="finding-fix"><strong>Fix:</strong> garder le mapping spine mais ajouter « (étendu vs PRD §2.3 : tracking intégré) » pour éviter qu'un générateur de stories ne remappe à l'aveugle.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Amont admin (FR-9/FR-10) non marché en flow</h3>
+              <span class="finding-location">EXPERIENCE.md:204-217 (UJ-2)</span>
+            </header>
+            <div class="finding-note">L'amont admin de la chaîne — import Excel volontaires côté organisateur (FR-9) et création secteurs/missions (FR-10) — n'est marché par aucun Key Flow : UJ-2 commence côté volontaire à la réception de l'invitation, UJ-3 au matin du jour J. Les deux FR sont couverts structurellement (IA + State Patterns « Import Excel »), pas dynamiquement.</div>
+            <div class="finding-fix"><strong>Fix:</strong> 3 étapes d'intro à UJ-2 (Nadia importe, affecte, couverture vérifiée) ou une phrase pointer vers IA/State Patterns.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>2. Token completeness</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Les 27 couleurs ont un hex et existent en paire clair/sombre (structure + 5 opérationnelles avec encres) — aucune CRITIQUE. Palette vérifiée identique à la variation 5 de <code>.working/color-themes-1.html</code> (source canonique déclarée). Toutes les références <code>{colors.*}</code>, <code>{typography.*}</code>, <code>{rounded.*}</code>, <code>{spacing.*}</code> des deux spines résolvent vers le frontmatter DESIGN. Contrastes énoncés pour les combinaisons porteuses et recalculés conformes : encre/brume 13,66:1 ; minimum relevé = blanc/succès clair 5,40:1 — l'objectif ≥ 4,5:1 / ≥ 3:1 (DESIGN.md:196) tient sur les 23 paires testées, deux modes compris.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Paires sombres des opérationnelles jamais référencées token par token</h3>
+              <span class="finding-location">DESIGN.md:194, 247</span>
+            </header>
+            <div class="finding-note">Seul le succès est cité en exemple, les autres passent par la formule générique « paires <code>-sombre</code> correspondantes » ; <code>{colors.texte-2-sombre}</code> n'est consommé nulle part (prose ni composants).</div>
+            <div class="finding-fix"><strong>Fix:</strong> une ligne par opérationnelle sombre dans Colors, ou un mini-tableau fg/bg sombre ; consommer <code>texte-2-sombre</code> dans au moins un composant (indicateur de fraîcheur en sombre).</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>3. Component coverage</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Couverture quasi bijective : 27 composants avec spec visuelle dans DESIGN.Components, 25 lignes comportementales dans EXPERIENCE.Component Patterns, « mêmes noms » déclaré des deux côtés (DESIGN.md:237, EXPERIENCE.md:63). Exemple de paire complète : Bouton assistance (DESIGN.md:241 + EXPERIENCE.md:88, SM-C1 cité). Trois exceptions :</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Ligne de board live sans règle comportementale</h3>
+              <span class="finding-location">DESIGN.md:251 vs EXPERIENCE.md:73</span>
+            </header>
+            <div class="finding-note">Spec visuelle dédiée (gras, badge, mono, pointillés) mais zéro règle comportementale propre — elle n'apparaît qu'en parenthèse dans « Tableau de bord live ». Tri, ordre d'affichage, mise à jour temps réel, interaction éventuelle non spécifiées ; c'est pourtant le composant central du PC course.</div>
+            <div class="finding-fix"><strong>Fix:</strong> une ligne dédiée dans Component Patterns (tri par heure de passage décroissante, mise à jour realtime sans flash complet, non cliquable en V1 ou comportement défini).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Journal sync sans composant porteur</h3>
+              <span class="finding-location">EXPERIENCE.md:99, 137</span>
+            </header>
+            <div class="finding-note">Mentionné deux fois comme « consultable » (lots, rejets, offsets horloge) mais aucun composant ne le porte — ni visuel (DESIGN) ni comportemental. Le dev de story devra inventer la surface d'un élément d'auditabilité déclaré « prime ».</div>
+            <div class="finding-fix"><strong>Fix:</strong> entrée Journal sync dans DESIGN.Components (liste mono sur carte, <code>{typography.meta}</code>) + Component Patterns (accès depuis le bandeau sync, lecture seule).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Grand écran de la place du village non spécifié</h3>
+              <span class="finding-location">EXPERIENCE.md:156</span>
+            </header>
+            <div class="finding-note">Surface évoquée une fois (« Résultats en direct également affiché sur le grand écran ») sans composant, sans ligne Responsive, sans source PRD. Si c'est la vitrine affichée en boucle, une phrase suffit à le dire.</div>
+            <div class="finding-fix"><strong>Fix:</strong> « il s'agit de la vitrine publique en plein écran, pas d'une surface dédiée » ou spécifier.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>4. State coverage</h2>
+          <span class="verdict-pill verdict-adequate">adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Solide sur le cœur produit : hors-ligne planifié, sync attente/envoyée, erreur API enveloppe unique, temps provisoire/doublons neutres, fraîcheur/figée, permission localisation refusée, session révoquée, upload CCP, chargement à froid, dossier vide, missions vacantes, import Excel — 13 états avec traitement (EXPERIENCE.md:93-109). Trous sur les états d'échec edge :</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Permission caméra refusée / caméra indisponible</h3>
+              <span class="finding-location">EXPERIENCE.md State Patterns, absence</span>
+            </header>
+            <div class="finding-note">Sur la PWA volontaires, le scan est LA fonction jour J sans filet, or aucun état ne couvre « caméra bloquée », « permission refusée », « caméra occupée ». Le fallback <code>@zxing/browser</code> est couvert (Responsive), pas la permission. Un dev de story scan devra inventer le contrat le pire jour possible.</div>
+            <div class="finding-fix"><strong>Fix:</strong> ligne State Patterns (détection au premier lancement du scanner → écran dédié « Autoriser la caméra » avec chemin Réglages, mirroring du Guide permission iOS + assistance PC) + étape d'échec dans UJ-2.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Code email erroné/expiré non traité</h3>
+              <span class="finding-location">EXPERIENCE.md:100-105 ; UJ-1 étape 2</span>
+            </header>
+            <div class="finding-note">FR-1 exige « un code expiré ou erroné ne crée pas de compte » ; ni State Patterns ni les échecs d'UJ-1 ne traitent la saisie de code invalide.</div>
+            <div class="finding-fix"><strong>Fix:</strong> état dédié (message + renvoi limité, cohérent avec la limitation de rythme d'envoi) + mention dans les échecs UJ-1.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Rejet de format à l'upload CCP</h3>
+              <span class="finding-location">EXPERIENCE.md:105</span>
+            </header>
+            <div class="finding-note">L'état « Upload preuve CCP » couvre compression et feedback, pas le rejet des formats non image/PDF exigé par FR-4 (« message clair »).</div>
+            <div class="finding-fix"><strong>Fix:</strong> compléter la ligne (rejet côté client avant envoi, message reprenant les formats acceptés).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">États temporels de la vitrine (avant/pendant/après course)</h3>
+              <span class="finding-location">absence ; cf. reconcile-azronthor.md §Double CTA</span>
+            </header>
+            <div class="finding-note">CTA adapté à la phase (inscription → live → résultats) promis par la réconciliation mais absent des State Patterns ; l'état « résultats vides avant départ » non plus.</div>
+            <div class="finding-fix"><strong>Fix:</strong> trois colonnes d'état vitrine (avant : CTA S'inscrire dominant ; pendant : Résultats en direct + témoin ; après : résultats + historique) ou renoncer explicitement dans les Questions ouvertes.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Classement vide / « pas encore de partants »</h3>
+              <span class="finding-location">EXPERIENCE.md:102</span>
+            </header>
+            <div class="finding-note">Couvert seulement implicitement par la ligne Fraîcheur.</div>
+            <div class="finding-fix"><strong>Fix:</strong> libellé dédié dans la ligne Fraîcheur.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>5. Visual reference coverage</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Les 8 artefacts visuels de <code>.working/</code> sont tous liés inline à la section pertinente en nommant ce qu'ils illustrent : les 5 HTML dans DESIGN.md:172 (color-themes-1 comme source canonique des hex, direction-village retenu avec sa divergence de palette énoncée, les 3 directions écartées pour contraste — re-citées dans EXPERIENCE.md:170) ; les 3 excalidraw dans EXPERIENCE (ia → IA:31, flow-app-coureur → UJ-1:188, flow-scan → UJ-2:206). <code>imports/</code> vide. La règle « spines gagnent » est énoncée une fois (EXPERIENCE.md:27) et démontrée par un vrai cas : le wireflow app coureur contient bien « certificat médical / pièce d'identité » (vérifié dans le JSON) et la spine tranche « la PRD fait foi — décharge, règlement, preuve CCP ». Aucune référence vague aux maquettes.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Orphelins dans .working/</h3>
+              <span class="finding-location">WS/.working/</span>
+            </header>
+            <div class="finding-note"><code>source-extract-architecture.md</code>, <code>source-extract-brief.md</code>, <code>source-extract-prd.md</code> — notes de travail non liées. Tolérable (ce ne sont pas des artefacts visuels) mais la règle « tout fichier .working est lié » n'est pas tenue à la lettre.</div>
+            <div class="finding-fix"><strong>Fix:</strong> une ligne dans IA ou Foundation (« extraits de sources : .working/source-extract-*.md ») ou déplacement hors .working.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>6. Bloat &amp; overspecification</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>DESIGN porte la voix éditoriale (Brand &amp; Style, registre Village) — légitime ; EXPERIENCE reste factuelle, en tableaux, sans prose éditoriale. Les détails pixel (9 px, lift 2 px, pulsation 1,5 s) vivent dans DESIGN où ils sont de la spec visuelle, pas de l'overspec. Le tableau IA reprend le PRD mais y ajoute l'accès et le contenu par surface — valeur aval réelle. MoSCoW verbatim (Should/Could sur vidéo, témoignages, galerie) sans redéfinition.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Formule « l'appareil propose, le serveur dispose » répétée à 4 endroits</h3>
+              <span class="finding-location">EXPERIENCE.md:41, 100-101, 134-141, 217</span>
+            </header>
+            <div class="finding-note">La formule et ses corollaires (jamais de suppression locale, lots idempotents) reviennent à 4 endroits. Cœur produit assumé, mais un patch sur l'un des 4 endroits dérivera.</div>
+            <div class="finding-fix"><strong>Fix:</strong> garder la section « Offline &amp; Synchronisation » comme canon, les autres occurrences deviennent des renvois.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>7. Inheritance discipline</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Les 5 sources du frontmatter EXPERIENCE résolvent (chemins vérifiés). Le vocabulaire des sources est repris fidèlement et activement : outbox append-only, lots idempotents, clé <code>(édition, coureur, checkpoint)</code> = AD-8, jeton unique édition dans le QR = AD-8, session unique + jeton d'appareil = AD-5, enveloppe d'erreur unique = convention « État &amp; erreurs », SSE/polling + realtime réservé admin = convention « Canaux publics », BarcodeDetector/@zxing iOS = convention « Scan QR », NTP/dry-run/3 scanneurs/~700-300/powerbanks = addendum brief, J-10 = FR-26. Les refs token EXPERIENCE → DESIGN résolvent toutes. SM-C1/SM-C2/SM-5/FR-27 cités à bon escient.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Titre d'UJ-1 reformulé vs PRD §2.3</h3>
+              <span class="finding-location">EXPERIENCE.md:186</span>
+            </header>
+            <div class="finding-note">« Yacine s'inscrit, installe l'app et boucle son dossier seul » vs source « Yacine s'inscrit à la longue et boucle son dossier seul ». UJ-2/3/4 quasi verbatim.</div>
+            <div class="finding-fix"><strong>Fix:</strong> conserver le libellé source en préfixe (« UJ-1 — Yacine s'inscrit à la longue et boucle son dossier seul ; la spine étend à l'installation et au tracking »).</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>8. Shape fit</h2>
+          <span class="verdict-pill verdict-strong">strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>DESIGN : les 8 sections canoniques présentes dans l'ordre verrouillé exact (Brand &amp; Style → Do's and Don'ts). Frontmatter conforme au spec. EXPERIENCE : tous les defaults présents ; triggered présents tous les deux (Inspiration &amp; Anti-patterns avec azronthor, Responsive &amp; Platform) ; Key Flows en dernier comme dans les deux exemples. Sections inventées : « Offline &amp; Synchronisation », « Anonymat &amp; Vie privée », « Jour J — Mode Opératoire » (EXPERIENCE) et « Questions ouvertes » (les deux) — toutes quatre justifiées par le produit et cohérentes avec la pratique des documents amont du projet.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">« Questions ouvertes » n'est pas une section canonique DESIGN</h3>
+              <span class="finding-location">DESIGN.md:283-287, EXPERIENCE.md:242-253</span>
+            </header>
+            <div class="finding-note">Justifiée (lieu de vie des <code>[ASSUMPTION]</code>), mais à garder balisée pour ne pas proliférer.</div>
+            <div class="finding-fix"><strong>Fix:</strong> aucune si le gabarit du skill l'accepte ; sinon fusionner dans Do's and Don'ts ou un sous-bloc de Brand &amp; Style.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary>
+          <h2>Revue accessibilité</h2>
+          <span class="reviewer-source">review-accessibilite.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Le socle est solide : sur 38 paires hex calculées (structure, opérationnelles, composants mixtes, deux modes), 37 passent WCAG AA avec marge, et l'intention accessibilité (bip + texte, cibles 48 dp, plancher 15 px, reduced-motion, assistance humaine) est réellement écrite dans les spines. Les défaillances restantes sont de spécification, pas d'intention : une paire WCAG en échec (bouton lecture vidéo), deux canons jour J non chiffrés (fréquence du clignotement, dimensions du voyant), une contradiction interne (meta 12 px vs plancher 15 px), et un SM-C1 déclaré composant mais jamais placé dans les flux/états d'erreur. Tout est corrigeable dans les documents avant moindre ligne de code.</p>
+            <p>Points forts : palette mathématiquement saine (37/38 paires AA, minimum 5,40:1 sur une paire texte ; encres sombres dédiées) ; jamais la couleur seule, structurellement (bip + texte intégral, checklist double-encodage, <code>prefers-reduced-motion</code> cité trois fois) ; SM-C1 présent dans l'intention ; lisibilité terrain pensée (plancher 15 px, mono pour heures/dossards, cibles ≥ 48/44, « tap d'abord ») ; offline sans angoisse ; contraintes réelles intégrées (budget 300 Ko, Android entrée de gamme, fallback iOS).</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">F-01 · Bouton lecture vidéo illisible sur son propre bloc sombre</h3>
+              <span class="finding-location">Contrastes · DESIGN.md frontmatter L151-154, L256</span>
+            </header>
+            <div class="finding-note"><code>bloc-video</code> = dégradé <code>#1B281F → #101A14</code> avec <code>playButton: '{colors.action}'</code> = <code>#345E4A</code>. Ratios calculés : 2,08:1 (sur #1B281F) et 2,41:1 (sur #101A14) — sous le seuil 3:1 UI de WCAG 1.4.11. Le composant est en outre figé en couleur clair, sans variante sombre.</div>
+            <div class="finding-fix"><strong>Fix:</strong> bouton en <code>{colors.action-sombre}</code> <code>#8FD4A8</code> (8,87:1) ou blanc plein sur les deux modes ; ajouter la paire play/bloc au frontmatter comme paire testée.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-02 · Voile d'overlay caméra à 93 % : contraste non garanti</h3>
+              <span class="finding-location">Contrastes · DESIGN.md L196, L245</span>
+            </header>
+            <div class="finding-note">« voiles d'overlay caméra = surface à 93 % » : badges « · LIVE », heure, overlay dossard reposent sur un voile semi-transparent au-dessus du flux caméra — le contraste réel varie avec la scène filmée (plein soleil → voile écrasé).</div>
+            <div class="finding-fix"><strong>Fix:</strong> fond quasi opaque (≥ 96 %) derrière tout texte du pied de cadre, ou texte sur pastille pleine ; ajouter la règle au composant Caméra scan.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">F-03 · Séparation tonale cartes/fond très faible (1,10:1 / 1,16:1)</h3>
+              <span class="finding-location">Contrastes · DESIGN.md L181, L196, L242</span>
+            </header>
+            <div class="finding-note">Surface <code>#FAFCF8</code> sur fond <code>#EDF2EB</code> = 1,10:1 ; sombre 1,16:1 ; filet encre 16 % ≈ 1,37:1. Pas un échec WCAG strict (la carte n'est pas le seul porteur d'information), mais sous soleil la structure de page se dissout.</div>
+            <div class="finding-fix"><strong>Fix:</strong> filet à 25–30 % d'opacité ou fond légèrement assombri ; à trancher avec le registre « pas d'ombre ».</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">F-04 · « Lampe clignotante » du voyant danger sans fréquence spécifiée</h3>
+              <span class="finding-location">Photosensibilité · DESIGN.md L246 ; EXPERIENCE.md L68</span>
+            </header>
+            <div class="finding-note">WCAG 2.3.1 exige ≤ 3 flashs/s ; rien ne borne la fréquence, et c'est un composant jour J manipulé par 150–200 volontaires.</div>
+            <div class="finding-fix"><strong>Fix:</strong> spécifier clignotement ~1 Hz (période ≥ 1 s) par alternance on/off, jamais de stroboscope ; même borne pour l'alerte hors-délais (déjà « lent, ~1,1 s » — conforme, à généraliser en règle).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-05 · Le bip audio a trois points de défaillance non couverts</h3>
+              <span class="finding-location">Photosensibilité · EXPERIENCE.md L67, L113, L127, L153</span>
+            </header>
+            <div class="finding-note">Le bip est un canal principal de confirmation mais : (a) politique autoplay navigateur — un AudioContext non débloqué par geste reste muet, et le scan n'a pas de tap après lancement ; (b) téléphone en silencieux/volume bas ; (c) bruit du ravitaillement (1000 coureurs). Aucun canal haptique prévu.</div>
+            <div class="finding-fix"><strong>Fix:</strong> débloquer l'audio au tap « Démarrer le scan » ; ajouter la vibration (Vibration API / haptique natif) comme troisième canal ; bip distinct doublon vs inconnu (deux mélodies, pas deux volumes).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">F-06 · meta à 12 px contredit le plancher « jamais &lt; 15 px critiques »</h3>
+              <span class="finding-location">Lisibilité terrain · DESIGN.md L69-71, L206-207 ; EXPERIENCE.md L125</span>
+            </header>
+            <div class="finding-note"><code>typography.meta</code> = 12 px est affectée aux heures de passage, bandeau e-dossard, fraîcheur — données chrono/audit critiques jour J — tandis que le plancher « jamais &lt; 15 px pour les contenus critiques » est posé par les deux spines.</div>
+            <div class="finding-fix"><strong>Fix:</strong> soit monter les occurrences critiques de meta à 14–15 px mono, soit lister explicitement lesquelles restent 12 px (légendes galerie, notes) et passer heures/fraîcheur/bandeau au-dessus du plancher.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-07 · Voyant scan « géant » sans dimension chiffrée</h3>
+              <span class="finding-location">Lisibilité terrain · DESIGN.md L246</span>
+            </header>
+            <div class="finding-note">« pill géante lisible à bout de bras » : aucune taille de texte, hauteur de pill, ni graisse spécifiée. C'est le composant n°1 du jour J, lu en plein soleil à 50 cm par un volontaire pressé.</div>
+            <div class="finding-fix"><strong>Fix:</strong> chiffrer dans la spec — texte ≥ 24 px / graisse 800, heure mono ≥ 16 px, pill ≥ 96 px de haut, plein cadre ; graisse ≥ 700 partout sur ce composant.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-08 · Zoom pincer/navigateur non garanti</h3>
+              <span class="finding-location">Lisibilité terrain · EXPERIENCE.md L120-130</span>
+            </header>
+            <div class="finding-note">Aucune mention interdisant <code>user-scalable=no</code> / viewport zoomé ; coureurs presbytes mal servis sinon (Accessibility Floor muet sur le sujet).</div>
+            <div class="finding-fix"><strong>Fix:</strong> ajouter au floor : zoom navigateur 200 % testé, pinch-zoom jamais désactivé, textes sans troncature à 200 %.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">F-09 · Bouton assistance déclaré mais jamais placé dans les flux ni les états d'erreur</h3>
+              <span class="finding-location">SM-C1 · EXPERIENCE.md L88, L100, L186-202</span>
+            </header>
+            <div class="finding-note">EXPERIENCE.md L88 le limite à « Espace coureur, app, PWA ». Or : (a) UJ-1 ne le mentionne à aucune étape ; (b) l'état « Erreur API » promet « message homogène + action à faire » sans exiger le numéro humain ; (c) l'email de refus de dossier remonterait le motif sans canal d'appel ; (d) la vitrine publique n'a pas de contact spécifié en bouton.</div>
+            <div class="finding-fix"><strong>Fix:</strong> faire du « Appeler l'équipe : +213 … » un élément obligatoire de l'enveloppe d'erreur, de l'email de refus, de la checklist incomplète et des infos pratiques vitrine ; l'inscrire comme étape d'échec dans UJ-1.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-10 · « DOSSARD INCONNU — signaler au PC » : l'action est nommée, pas actionnable</h3>
+              <span class="finding-location">SM-C1 · EXPERIENCE.md L68, L213 ; DESIGN.md L249</span>
+            </header>
+            <div class="finding-note">Le voyant rouge dit « signaler au PC » mais n'offre pas l'appel direct ; le contact PC cliquable vit dans la fiche mission — à deux écrans de là, sous stress.</div>
+            <div class="finding-fix"><strong>Fix:</strong> bouton appel direct sur l'écran d'erreur inconnu (et sur le doublon en variante silencieuse).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-11 · Annonce du scan sans mécanisme spécifié</h3>
+              <span class="finding-location">Lecteur d'écran · EXPERIENCE.md L127</span>
+            </header>
+            <div class="finding-note">« le scan annonce "Passage enregistré" à la transition » : pas de live region, pas d'annonce du doublon avec l'heure du 1er passage, ni de l'état caméra au lancement.</div>
+            <div class="finding-fix"><strong>Fix:</strong> <code>role="status"</code> / <code>aria-live="assertive"</code> sur le voyant ; annonces distinctes succès / doublon (+ heure du 1er passage) / inconnu ; état « caméra active / annuaire chargé » annoncé au démarrage.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-12 · Focus visible non spécifié</h3>
+              <span class="finding-location">Lecteur d'écran · EXPERIENCE.md L130</span>
+            </header>
+            <div class="finding-note">« Ordre de focus = ordre de lecture » couvre l'ordre, jamais la visibilité — indispensable pour l'admin au clavier (PC course) et tout utilisateur clavier.</div>
+            <div class="finding-fix"><strong>Fix:</strong> ajouter au floor : focus visible 2 px <code>{colors.action}</code> / <code>{colors.action-sombre}</code> selon mode, offset 2 px, <code>outline</code> jamais supprimé.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">F-13 · Libellés d'icônes non généralisés</h3>
+              <span class="finding-location">Lecteur d'écran · DESIGN.md L260</span>
+            </header>
+            <div class="finding-note">✓, ◷, « · LIVE », avatar initiales, bouton play : aucun <code>aria-label</code> exigé ; la frise kabyle est déclarée décorative mais sans <code>aria-hidden</code> explicite.</div>
+            <div class="finding-fix"><strong>Fix:</strong> règle transverse « toute icône porte un libellé accessible ; toute décoration est <code>aria-hidden="true"</code> ».</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-14 · Code à 6 chiffres : pattern de saisie non spécifié</h3>
+              <span class="finding-location">Formulaires · EXPERIENCE.md L193</span>
+            </header>
+            <div class="finding-note">UJ-1 étape 2 « email + code à 6 chiffres ». Les OTP à cases séparées sont un piège classique (collage, autofill, lecteur d'écran).</div>
+            <div class="finding-fix"><strong>Fix:</strong> champ unique <code>inputmode="numeric"</code> <code>autocomplete="one-time-code"</code>, collage autorisé, durée de validité affichée, renvoi du code possible avec compte à rebours.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-15 · Télversement CCP : l'échec réseau n'a pas de traitement</h3>
+              <span class="finding-location">Formulaires · EXPERIENCE.md L105, L43</span>
+            </header>
+            <div class="finding-note">Feedback de compression/envoi prévu, mais l'espace coureur est en ligne uniquement : que se passe-t-il si l'envoi échoue en 3G ? Ni reprise, ni conservation du fichier, ni assistance.</div>
+            <div class="finding-fix"><strong>Fix:</strong> retry idempotent sans re-sélectionner le fichier, brouillon conservé localement, message d'erreur doublé du bouton « Appeler l'équipe » (rejoint F-09).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-16 · Bascule mode sombre : défaut, placement et mémorisation non spécifiés</h3>
+              <span class="finding-location">Mode sombre · EXPERIENCE.md L25, L181 ; DESIGN.md L170</span>
+            </header>
+            <div class="finding-note">« Mode sombre optionnel partout, basculable » : aucun composant toggle, aucun placement, pas de <code>prefers-color-scheme</code>, pas de choix mémorisé. Départ 06:00 : une PWA qui s'ouvre en clair à l'aube éblouit et attire l'œil.</div>
+            <div class="finding-fix"><strong>Fix:</strong> défaut = préférence système + override mémorisé ; toggle visible dans l'en-tête de chaque surface ; PWA volontaires : proposer le sombre à la première ouverture la veille (checklist de préparation).</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">F-17 · Mains mouillées / boue : espacement des cibles non spécifié</h3>
+              <span class="finding-location">Jour J · EXPERIENCE.md L118</span>
+            </header>
+            <div class="finding-note">48 dp ok, gestes cachés bannis, mais rien sur l'espacement entre cibles adjacentes ni sur les actions en bord d'écran (fausses touches du pouce, gants).</div>
+            <div class="finding-fix"><strong>Fix:</strong> gap ≥ 8 px entre cibles interactives ; aucune action critique collée au bord ; bouton pause/stop du scan ≥ 64 dp.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">F-18 · Doublon vs inconnu : même rouge, actions opposées, volontaire sous stress</h3>
+              <span class="finding-location">Jour J · EXPERIENCE.md L68</span>
+            </header>
+            <div class="finding-note">« DÉJÀ PASSÉ » (ne rien faire) et « DOSSARD INCONNU » (signaler) partagent la couleur danger et le format. Le texte les distingue, mais sous fatigue la confusion action/ne-pas-faire coûte cher.</div>
+            <div class="finding-fix"><strong>Fix:</strong> différencier par icône (ex. ↻ vs ⚠) et position (doublon = laisser passer rapidement), sans toucher à la sémantique danger.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">F-19 · E-dossard accessible en un geste depuis l'écran verrouillé</h3>
+              <span class="finding-location">Jour J · EXPERIENCE.md L71</span>
+            </header>
+            <div class="finding-note">Aube, mains occupées, batterie : le coureur doit sortir le QR en 1 tap (raccourci/widget iOS, quick settings Android) ; rien dans EXPERIENCE.md L71 ou UJ-1.</div>
+            <div class="finding-fix"><strong>Fix:</strong> ajouter au composant E-dossard : raccourci système recommandé + fallback app ; test les gants/mines.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li><strong>Noms de composants divergents entre spines</strong> (la règle déclarée est « mêmes noms ») : « Fiche mission » (DESIGN.md:249) vs « Fiche mission hors-ligne » (EXPERIENCE.md:69) ; « Témoignage » (DESIGN.md:257) vs « Témoignages coureurs » (EXPERIENCE.md:81) ; frontmatter <code>bloc-video</code> vs prose « Vidéo trailer » ; frontmatter <code>voyant-scan-succes</code>/<code>voyant-scan-danger</code> vs « Voyant scan » unique en prose. Un consommateur aval qui apparie par nom exact perdra ces paires.</li>
+        <li>Frontmatter <code>components</code> incomplet vs prose Components (pas d'entrées pour alerte-hors-delais, tableau-de-bord-live, e-dossard complet, fiche-mission…) — la prose porte la spec, non bloquant, mais l'incohérence de granularité mérite un choix assumé.</li>
+        <li>DESIGN.md n'a pas de champ <code>sources</code> au frontmatter (le spec design-md ne l'exige pas ; EXPERIENCE les porte pour la paire) — la traçabilité DESIGN→sources passe par la prose (.working) uniquement.</li>
+        <li>« 1ᵉʳ passage » (EXPERIENCE.md:213) : exposant non standard (préférer « premier » ou « 1er ») ; cosmétique.</li>
+        <li><code>reconcile-azronthor.md</code> à la racine du WS (hors <code>.working/</code>) : non lié depuis les spines ; sa promesse « double CTA par phase → repris dans EXPERIENCE.md » n'est pas tenue à la lettre (voir finding medium cat. 4).</li>
+        <li>Cross-refs vérifiées : tous les chemins <code>.working/</code> cités existent ; hex frontmatter = variation 5 de color-themes-1.html (vérifié valeurs à valeurs) ; ombre <code>rgba(52,94,74,.22)</code> = action #345E4A ; dégradé bloc-video = surface-sombre→bg-sombre ; contrastes recalculés conformes aux affirmations des deux spines.</li>
+        <li>Mapping FR global couvert : FR-1..FR-27 tous présents quelque part entre IA, Component Patterns, State Patterns, Key Flows et Jour J (seul écart : l'amont FR-9/FR-10 non marché en flow, voir cat. 1).</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>DESIGN.md: /Users/mouloudhaouili/Desktop/ouidou/Azzel/_bmad-output/planning-artifacts/ux-designs/ux-Azzel-2026-10-20/DESIGN.md</span>
+        <span>EXPERIENCE.md: /Users/mouloudhaouili/Desktop/ouidou/Azzel/_bmad-output/planning-artifacts/ux-designs/ux-Azzel-2026-10-20/EXPERIENCE.md</span>
+      </div>
+      <div class="meta" style="margin-top: 8px;">
+        <span>Rubric: review-rubric.md</span>
+        <span>Reviewer: review-accessibilite.md</span>
+        <span>Generated: 2026-10-20T14:14:50Z</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

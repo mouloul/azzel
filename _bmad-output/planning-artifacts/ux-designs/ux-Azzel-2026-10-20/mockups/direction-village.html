@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Direction « Village » — Trail d'Ait-Aissi 2027</title>
+<!--
+  RATIONALE — DIRECTION 3/4 « VILLAGE »
+  Le village n'est pas un décor, c'est l'acteur : palette terre et olive, graphie humaniste ronde,
+  visages en initiales, frises géométriques d'inspiration kabyle tenues discrètes. La maquette chante
+  la proximité — bénévoles, hameaux, écoles — avec la chaleur d'une maison ouverte. Sérieux et chaleur
+  ne s'opposent pas : ils se serrent la main.
+-->
+<style>
+/* ============================================================
+   PALETTE VILLAGE (hex documentés)
+   Sable          #F4ECDD   fond principal (encre/sable ≈ 11:1)
+   Crème          #FAF5EA   cartes
+   Olive          #5F6C33   identité, liens (sur sable ≈ 5.6:1)
+   Olive foncé    #3F4A22   titres, bandeau
+   Terre cuite    #C05F2E   CTA, accents chauds (grandes tailles)
+   Encre          #2F2C20   texte (sur sable ≈ 11:1)
+   Ocre clair     #E4C48A   fonds secondaires
+   Frise kabyle   olive #5F6C33 + terre #C05F2E sur crème (bandeaux décoratifs)
+   Sombre (phone) #23261A fond / #F4ECDD texte
+   ============================================================ */
+:root{
+  --sable:#F4ECDD; --creme:#FAF5EA; --olive:#5F6C33; --olive-fonce:#3F4A22; --terre:#C05F2E;
+  --encre:#2F2C20; --ocre:#E4C48A; --sombre:#23261A;
+  --rond:ui-rounded,"Arial Rounded MT Bold","Hiragino Maru Gothic ProN","Trebuchet MS","Segoe UI",Verdana,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#E9E0CC;font-family:var(--rond);color:var(--encre);padding:28px 20px 60px;
+  display:flex;flex-direction:column;align-items:center;gap:34px}
+
+/* ---------- Bandeau spec ---------- */
+.spec{width:1200px;background:#F9F4E8;border:1px solid #DCD2B8;border-left:4px solid var(--terre);
+  padding:16px 20px;font-size:13px;line-height:1.6;color:#6B654E}
+.spec strong{font-size:15px;color:var(--olive-fonce)}
+.spec .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px}
+.spec .chips span{display:inline-flex;align-items:center;gap:6px;border:1px solid #DCD2B8;
+  padding:2px 8px;font-family:var(--mono);font-size:11px;color:var(--encre)}
+.spec .chips i{width:11px;height:11px;display:inline-block;border-radius:50%}
+.spec em{color:var(--olive-fonce);font-style:normal}
+
+/* ---------- Scène & navigateur ---------- */
+.stage{display:flex;flex-direction:column;gap:10px}
+.stage-t{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#6B654E;font-weight:600}
+.browser{width:1200px;border:1px solid #CFC3A4;border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(63,74,34,.22);background:var(--sable)}
+.bar{display:flex;align-items:center;gap:8px;background:#E7DDC6;padding:11px 14px}
+.bar i{width:11px;height:11px;border-radius:50%;background:#D6C9A8}
+.bar i:first-child{background:var(--terre)}.bar i:nth-child(2){background:var(--ocre)}.bar i:nth-child(3){background:var(--olive)}
+.url{margin-left:12px;flex:1;background:#F1E9D6;border:1px solid #DCD2B8;border-radius:10px;padding:5px 12px;
+  font-family:var(--mono);font-size:12px;color:#6B654E}
+.vp{overflow:hidden}
+
+/* ---------- Frise kabyle (motif discret) ---------- */
+.frieze{height:12px;background:
+  repeating-linear-gradient(45deg,var(--terre) 0 5px,transparent 5px 10px),
+  repeating-linear-gradient(-45deg,var(--olive) 0 5px,transparent 5px 10px);
+  background-color:var(--creme);opacity:.85}
+
+/* ---------- Nav ---------- */
+.nav{display:flex;align-items:center;gap:22px;background:var(--olive-fonce);padding:16px 48px;color:#FAF5EA}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-size:25px;letter-spacing:.08em}
+.brand span{font-size:11.5px;color:#D9DCB8;letter-spacing:.12em}
+.nav nav{margin-left:auto;display:flex;gap:22px;font-size:14.5px;color:#D9DCB8}
+.nav nav b{color:#FAF5EA;font-weight:600}
+.btn-terre{display:inline-block;background:var(--terre);color:#FFF6EC;font-weight:700;font-size:15px;
+  padding:12px 26px;border-radius:999px;text-decoration:none}
+
+/* ---------- Héros village ---------- */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;padding:52px 48px 44px;background:var(--sable);
+  background-image:radial-gradient(circle at 88% 12%,rgba(228,196,138,.5) 0,transparent 26%)}
+.kick{font-size:13.5px;font-weight:700;color:var(--terre);letter-spacing:.14em;text-transform:uppercase}
+h1{font-size:62px;line-height:1.04;color:var(--olive-fonce);margin:14px 0 12px;font-weight:800}
+.lieu{font-size:17px;color:var(--encre)}
+.lieu b{color:var(--olive)}
+.lead{margin-top:18px;font-size:16.5px;line-height:1.75;max-width:56ch}
+.cta-row{display:flex;gap:14px;margin-top:26px;align-items:flex-end;flex-wrap:wrap}
+.btn-ghost{display:inline-block;border:2px solid var(--olive);color:var(--olive-fonce);font-weight:700;
+  font-size:15px;padding:11px 24px;border-radius:999px;text-decoration:none}
+.chev{display:inline-block;margin-left:8px;transition:transform .2s}
+.hover-demo{display:flex;gap:12px}
+.hover-demo small{display:block;font-family:var(--mono);font-size:10px;color:#6B654E;margin-top:7px}
+.sim-survol{transform:translateY(-2px);box-shadow:0 10px 26px rgba(192,95,46,.35)}
+.sim-survol .chev{animation:drift 1.2s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translateX(0)}to{transform:translateX(5px)}}
+.zeropapier{margin-top:14px;font-family:var(--mono);font-size:12px;color:#6B654E}
+
+.vues{background:var(--creme);border:1px solid #DCD2B8;border-radius:26px;overflow:hidden;position:relative}
+.vues svg{display:block;width:100%;height:330px}
+.vues-cap{position:absolute;left:18px;bottom:16px;background:rgba(250,245,234,.92);border-radius:14px;
+  padding:10px 16px;font-size:13.5px;color:var(--olive-fonce);font-weight:600}
+
+/* ---------- Piliers ---------- */
+.piliers{display:flex;gap:12px;flex-wrap:wrap;padding:26px 48px;background:var(--sable)}
+.piliers span{border:2px solid var(--olive);color:var(--olive-fonce);border-radius:999px;padding:9px 18px;
+  font-weight:700;font-size:14.5px}
+.piliers span::before{content:"◆ ";color:var(--terre);font-size:11px;vertical-align:2px}
+
+/* ---------- Épreuves ---------- */
+.sec{padding:44px 48px}
+.sec-t{font-size:24px;font-weight:800;color:var(--olive-fonce);margin-bottom:6px}
+.sec-s{font-size:14.5px;color:#6B654E;margin-bottom:24px}
+.epreuves{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.ep{background:var(--creme);border:1px solid #DCD2B8;border-radius:24px;padding:26px 28px}
+.ep .ico{width:52px;height:52px;border-radius:18px;background:var(--olive);color:#FAF5EA;display:flex;
+  align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
+.ep.mid .ico{background:var(--terre)}
+.ep h3{font-size:26px;color:var(--olive-fonce)}
+.ep .dist{color:var(--terre)}
+.ep ul{list-style:none;margin:14px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:14.5px;color:#55503C}
+.ep ul b{color:var(--encre)}
+.ep a{color:var(--olive);font-weight:700;font-size:15px;text-decoration:none}
+.note{margin-top:16px;font-family:var(--mono);font-size:11.5px;color:#6B654E}
+
+/* ---------- Le village ---------- */
+.village{display:grid;grid-template-columns:1fr 1.1fr;gap:44px;align-items:center;background:var(--creme);
+  border-top:1px solid #DCD2B8;border-bottom:1px solid #DCD2B8;padding:48px}
+.faces{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.face{text-align:center}
+.face .av{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:#FAF5EA;font-weight:800;font-size:24px;margin:0 auto 10px;border:4px solid var(--sable)}
+.face small{display:block;font-size:12.5px;color:#6B654E;margin-top:2px}
+.face b{font-size:14.5px;color:var(--olive-fonce)}
+.av.ol{background:var(--olive)}.av.te{background:var(--terre)}.av.of{background:var(--olive-fonce)}
+.quote{background:var(--sable);border-radius:24px;padding:28px 30px;position:relative}
+.quote::before{content:"«";position:absolute;top:-2px;left:18px;font-size:74px;color:var(--ocre);line-height:1}
+.quote p{font-size:19px;line-height:1.65;color:var(--olive-fonce);font-weight:600;padding-top:20px}
+.quote footer{margin-top:14px;font-size:14px;color:#6B654E}
+.chiffres{display:flex;gap:26px;margin-top:22px;flex-wrap:wrap}
+.chiffres div b{display:block;font-size:34px;color:var(--terre);font-weight:800}
+.chiffres div span{font-size:13px;color:#55503C}
+
+/* ---------- Jour J teaser + sponsors ---------- */
+.duo{display:grid;grid-template-columns:1.3fr 1fr;gap:26px;padding:44px 48px}
+.card{background:var(--creme);border:1px solid #DCD2B8;border-radius:24px;padding:26px 28px}
+.mini-board{background:var(--sable);border-radius:18px;padding:18px 20px;margin-top:14px}
+.mini-board .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+  border-bottom:1px dashed #D6C9A8;font-size:15px}
+.mini-board .row:last-child{border-bottom:none}
+.mini-board .doss{display:inline-block;background:var(--olive);color:#FAF5EA;border-radius:8px;
+  padding:2px 10px;font-family:var(--mono);font-size:13px;font-weight:700}
+.mini-board .doss.chaud{background:var(--terre)}
+.live-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#C0392B;margin-right:7px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+.frais{font-family:var(--mono);font-size:11.5px;color:var(--olive)}
+.card h4{font-size:20px;color:var(--olive-fonce);margin-bottom:10px}
+.card p{font-size:15px;line-height:1.7;color:#55503C}
+.spos{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:8px}
+.ifri{font-weight:800;font-size:38px;color:var(--olive-fonce);letter-spacing:.06em}
+.ifri small{display:block;font-family:var(--mono);font-size:10.5px;color:#6B654E;font-weight:400;margin-top:4px}
+.slot{width:150px;height:62px;border:2px dashed #CBBE9C;border-radius:18px;display:flex;align-items:center;
+  justify-content:center;font-size:12.5px;color:#6B654E;font-weight:700}
+.devenir{color:var(--terre);font-weight:700;text-decoration:none;font-size:15px}
+
+/* ---------- Égide / pied ---------- */
+.egide{background:var(--olive-fonce);color:#FAF5EA;text-align:center;padding:30px 48px 34px}
+.egide p{font-size:16px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.egide small{display:block;margin-top:10px;font-family:var(--mono);font-size:11.5px;color:#D9DCB8}
+
+/* ---------- Fenêtre Jour J ---------- */
+.jour{background:var(--sable)}
+.jour-head{display:flex;align-items:center;justify-content:space-between;padding:24px 48px 0}
+.jour-head .t{display:flex;align-items:center;font-size:22px;font-weight:800;color:var(--olive-fonce)}
+.grand-ecran{font-family:var(--mono);font-size:12px;color:#6B654E;text-align:right}
+.board{margin:20px 48px 30px;background:var(--creme);border:1px solid #DCD2B8;border-radius:26px;padding:30px 32px}
+.board .big{font-size:22px;font-weight:700;color:var(--olive-fonce);line-height:1.55;margin:12px 0 20px}
+.board .big b{color:var(--terre)}
+.cp-rows{display:flex;flex-direction:column;gap:12px}
+.cp-row{display:grid;grid-template-columns:110px 1fr auto;gap:14px;align-items:center;background:var(--sable);
+  border-radius:18px;padding:14px 18px}
+.cp-row .pos{font-weight:800;color:var(--olive-fonce);font-size:16px}
+.cp-row .doss{display:inline-block;background:var(--olive);color:#FAF5EA;border-radius:8px;padding:3px 10px;
+  font-family:var(--mono);font-size:13.5px;font-weight:700}
+.cp-row .doss.chaud{background:var(--terre)}
+.cp-row small{display:block;color:#6B654E;font-size:13px;margin-top:3px}
+.cp-row .when{font-family:var(--mono);font-size:13px;color:#55503C;text-align:right}
+.board .frais-line{display:flex;justify-content:space-between;align-items:center;margin-top:20px;
+  font-family:var(--mono);font-size:12px;color:#6B654E;flex-wrap:wrap;gap:8px}
+.board .frais-line b{color:var(--olive)}
+
+/* ---------- Téléphone ---------- */
+.stage-phone{align-items:center}
+.phone{width:304px;border:9px solid #171A10;border-radius:44px;overflow:hidden;background:var(--sombre);
+  box-shadow:0 26px 70px rgba(35,38,26,.55);position:relative;color:var(--sable)}
+.notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:108px;height:22px;background:#171A10;border-radius:12px;z-index:5}
+.ph-sys{display:flex;justify-content:space-between;padding:14px 22px 6px;font-family:var(--mono);font-size:12px;color:#B9BE9F}
+.ph-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 10px}
+.ph-head b{font-size:15px;letter-spacing:.06em}
+.offline{font-family:var(--mono);font-size:10px;color:#E4C48A;border:1px solid rgba(228,196,138,.5);padding:3px 9px;border-radius:999px}
+.ph-hero{margin:0 14px;background:#2C3021;border-radius:26px 26px 0 0;padding:18px 18px 8px;text-align:center;position:relative;overflow:hidden}
+.ph-hero .frieze{position:absolute;left:0;right:0;top:0;height:9px;opacity:.9}
+.dossard-no{font-weight:800;font-size:74px;line-height:1;color:#F4ECDD;margin-top:14px}
+.dossard-no small{font-size:20px;color:#E4C48A;vertical-align:top}
+.ph-name{font-size:21px;font-weight:700;margin-top:4px}
+.ph-course{font-family:var(--mono);font-size:11.5px;color:#B9BE9F;margin-top:8px;line-height:1.7}
+.ph-course b{color:#F4ECDD}
+.qr-wrap{display:flex;justify-content:center;padding:16px 0 4px}
+.qr{position:relative;width:176px;height:176px;background:#FFFFFF;border-radius:18px;
+  box-shadow:0 0 0 5px #3F4A22,0 0 0 6px #171A10}
+.qm{position:absolute;left:8px;top:8px;width:8px;height:8px;background:#3F4A22;
+  box-shadow:
+   48px 0 0 0 #3F4A22,64px 0 0 0 #3F4A22,80px 0 0 0 #3F4A22,96px 0 0 0 #3F4A22,
+   56px 8px 0 0 #3F4A22,72px 8px 0 0 #3F4A22,88px 8px 0 0 #3F4A22,
+   48px 16px 0 0 #3F4A22,56px 16px 0 0 #3F4A22,80px 16px 0 0 #3F4A22,104px 16px 0 0 #3F4A22,
+   64px 24px 0 0 #3F4A22,96px 24px 0 0 #3F4A22,
+   48px 32px 0 0 #3F4A22,72px 32px 0 0 #3F4A22,88px 32px 0 0 #3F4A22,104px 32px 0 0 #3F4A22,
+   8px 40px 0 0 #3F4A22,24px 40px 0 0 #3F4A22,40px 40px 0 0 #3F4A22,64px 40px 0 0 #3F4A22,80px 40px 0 0 #3F4A22,96px 40px 0 0 #3F4A22,112px 40px 0 0 #3F4A22,128px 40px 0 0 #3F4A22,144px 40px 0 0 #3F4A22,
+   16px 48px 0 0 #3F4A22,32px 48px 0 0 #3F4A22,48px 48px 0 0 #3F4A22,72px 48px 0 0 #3F4A22,88px 48px 0 0 #3F4A22,120px 48px 0 0 #3F4A22,136px 48px 0 0 #3F4A22,
+   8px 56px 0 0 #3F4A22,40px 56px 0 0 #3F4A22,56px 56px 0 0 #3F4A22,80px 56px 0 0 #3F4A22,104px 56px 0 0 #3F4A22,128px 56px 0 0 #3F4A22,144px 56px 0 0 #3F4A22,
+   24px 64px 0 0 #3F4A22,48px 64px 0 0 #3F4A22,64px 64px 0 0 #3F4A22,96px 64px 0 0 #3F4A22,112px 64px 0 0 #3F4A22,136px 64px 0 0 #3F4A22,
+   16px 72px 0 0 #3F4A22,40px 72px 0 0 #3F4A22,72px 72px 0 0 #3F4A22,88px 72px 0 0 #3F4A22,120px 72px 0 0 #3F4A22,144px 72px 0 0 #3F4A22,
+   8px 80px 0 0 #3F4A22,32px 80px 0 0 #3F4A22,56px 80px 0 0 #3F4A22,80px 80px 0 0 #3F4A22,104px 80px 0 0 #3F4A22,128px 80px 0 0 #3F4A22,
+   24px 88px 0 0 #3F4A22,48px 88px 0 0 #3F4A22,64px 88px 0 0 #3F4A22,96px 88px 0 0 #3F4A22,136px 88px 0 0 #3F4A22,
+   16px 96px 0 0 #3F4A22,40px 96px 0 0 #3F4A22,72px 96px 0 0 #3F4A22,112px 96px 0 0 #3F4A22,144px 96px 0 0 #3F4A22,
+   8px 104px 0 0 #3F4A22,56px 104px 0 0 #3F4A22,88px 104px 0 0 #3F4A22,120px 104px 0 0 #3F4A22,136px 104px 0 0 #3F4A22,
+   32px 112px 0 0 #3F4A22,48px 112px 0 0 #3F4A22,80px 112px 0 0 #3F4A22,104px 112px 0 0 #3F4A22,128px 112px 0 0 #3F4A22,
+   48px 120px 0 0 #3F4A22,64px 120px 0 0 #3F4A22,96px 120px 0 0 #3F4A22,112px 120px 0 0 #3F4A22,136px 120px 0 0 #3F4A22,152px 120px 0 0 #3F4A22,
+   56px 128px 0 0 #3F4A22,72px 128px 0 0 #3F4A22,104px 128px 0 0 #3F4A22,128px 128px 0 0 #3F4A22,144px 128px 0 0 #3F4A22,
+   48px 136px 0 0 #3F4A22,80px 136px 0 0 #3F4A22,96px 136px 0 0 #3F4A22,120px 136px 0 0 #3F4A22,152px 136px 0 0 #3F4A22,
+   64px 144px 0 0 #3F4A22,88px 144px 0 0 #3F4A22,112px 144px 0 0 #3F4A22,136px 144px 0 0 #3F4A22,
+   48px 152px 0 0 #3F4A22,72px 152px 0 0 #3F4A22,104px 152px 0 0 #3F4A22,128px 152px 0 0 #3F4A22,144px 152px 0 0 #3F4A22}
+.qf{position:absolute;width:38px;height:38px;border:7px solid #3F4A22}
+.qf::after{content:"";position:absolute;left:4px;top:4px;width:16px;height:16px;background:#3F4A22;border-radius:4px}
+.qf.tl{left:8px;top:8px}.qf.tr{right:8px;top:8px}.qf.bl{left:8px;bottom:8px}
+.ph-body{margin:0 14px;background:#2C3021;border-radius:0 0 26px 26px;padding:14px 18px 20px}
+.ph-tip{text-align:center;font-size:14px;color:#D9D6BF;line-height:1.65}
+.ph-tip b{color:#F4ECDD}
+.ph-actions{display:flex;gap:10px;padding:16px 14px 0}
+.ph-actions a{flex:1;text-align:center;border:1.5px solid #55603A;border-radius:999px;padding:11px 6px;
+  font-size:13px;font-weight:700;color:#F4ECDD;text-decoration:none}
+.ph-actions a.plein{background:var(--terre);border-color:var(--terre);color:#FFF6EC}
+.ph-foot{padding:16px 22px 28px;text-align:center;font-family:var(--mono);font-size:10.5px;color:#B9BE9F}
+.ph-cap{width:640px;font-size:13px;line-height:1.65;color:#6B654E;text-align:center}
+.ph-cap em{color:var(--olive-fonce);font-style:normal}
+.colophon{font-family:var(--mono);font-size:11px;color:#A79B76}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<aside class="spec">
+  <strong>Direction 3/4 — « Village » — une course portée par son village</strong>
+  <p>Chaleur citoyenne : terre cuite et olive, graphie ronde, visages en initiales, frises géométriques
+  d'inspiration kabyle posées comme des seuils discrets. L'organisation montre ses visages et ses chiffres —
+  <em>bénévoles, hameaux, écoles</em> — car ici la confiance se serre la main.</p>
+  <div class="chips">
+    <span><i style="background:#F4ECDD;border:1px solid #CBBE9C"></i>#F4ECDD sable</span><span><i style="background:#5F6C33"></i>#5F6C33 olive</span>
+    <span><i style="background:#3F4A22"></i>#3F4A22 olive foncé</span><span><i style="background:#C05F2E"></i>#C05F2E terre</span>
+    <span><i style="background:#E4C48A"></i>#E4C48A ocre</span>
+  </div>
+  <p>Perf : 0 requête réseau, ~25 Ko HTML+CSS inline · A11y : encre/sable ≈ 11:1, terre réservée aux grandes tailles,
+  frises décoratives en arrière-plan · Motion : point live pulsé, chevron au survol simulé (position alternée) · Zéro JS.</p>
+</aside>
+
+<!-- ═══════════ LIVRABLE 1 — VITRINE PUBLIQUE (desktop 1200) ═══════════ -->
+<section class="stage">
+  <p class="stage-t">Livrable 1 · Vitrine publique — desktop 1200 px · état avant-course</p>
+  <div class="browser">
+    <div class="bar"><i></i><i></i><i></i><span class="url">https://trail.ait-aissi.dz</span></div>
+    <div class="vp">
+
+      <div class="nav">
+        <div class="brand"><b>Azzel</b><span>· Trail d'Ait-Aissi</span></div>
+        <nav><span>La course</span><span>Épreuves</span><span>Le village</span><b>Le jour J</b></nav>
+        <a class="btn-terre" href="#">S'inscrire</a>
+      </div>
+      <div class="frieze"></div>
+
+      <header class="hero">
+        <div>
+          <p class="kick">2ᵉ édition — le village ouvre ses sentiers</p>
+          <h1>Le Trail<br>d'Ait-Aissi</h1>
+          <p class="lieu"><b>26 mars 2027</b> · Village d'Ait-Aissi — Yakouren, Kabylie, Algérie</p>
+          <p class="lead">Ici, la course traverse les hameaux, les terrasses et les sources ; chaque coureur passe
+          chez quelqu'un. Mille dossards, deux épreuves — la Longue (~35 km) et la Moyenne (10–15 km) —
+          et un village entier pour vous accueillir.</p>
+          <div class="cta-row">
+            <div class="hover-demo">
+              <div><a class="btn-terre" href="#">S'inscrire <span class="chev">→</span></a><small>état repos</small></div>
+              <div><a class="btn-terre sim-survol" href="#">S'inscrire <span class="chev">→</span></a><small>état survol (simulé)</small></div>
+            </div>
+            <a class="btn-ghost" href="#">Venir encourager</a>
+          </div>
+          <p class="zeropapier">Zéro papier — chaque coureur reçoit son e-dossard QR.</p>
+        </div>
+        <div class="vues">
+          <svg viewBox="0 0 520 330" aria-hidden="true">
+            <circle cx="430" cy="62" r="34" fill="#E4C48A"/>
+            <circle cx="430" cy="62" r="46" fill="none" stroke="#E4C48A" stroke-width="2" opacity=".6"/>
+            <path d="M0,238 C80,196 150,242 230,214 S380,170 520,208 L520,330 L0,330 Z" fill="#8A9455"/>
+            <path d="M0,272 C90,244 180,282 280,258 S420,236 520,262 L520,330 L0,330 Z" fill="#5F6C33"/>
+            <path d="M0,306 C120,290 260,312 400,296 L520,304 L520,330 L0,330 Z" fill="#3F4A22"/>
+            <g>
+              <rect x="88" y="212" width="34" height="26" fill="#FAF5EA"/><polygon points="84,214 105,198 126,214" fill="#C05F2E"/>
+              <rect x="132" y="220" width="28" height="20" fill="#F4ECDD"/><polygon points="129,222 146,208 163,222" fill="#C05F2E"/>
+              <rect x="368" y="204" width="32" height="30" fill="#FAF5EA"/><polygon points="364,206 384,190 404,206" fill="#C05F2E"/>
+              <rect x="406" y="212" width="26" height="22" fill="#F4ECDD"/><polygon points="403,214 419,201 435,214" fill="#C05F2E"/>
+            </g>
+            <rect x="205" y="196" width="9" height="40" fill="#2F2C20" rx="4"/>
+            <rect x="222" y="206" width="8" height="30" fill="#2F2C20" rx="4"/>
+            <g stroke="#FAF5EA" stroke-width="3" fill="none" stroke-linecap="round">
+              <path d="M120,262 C180,240 240,268 300,246"/>
+            </g>
+            <circle cx="150" cy="258" r="4" fill="#C05F2E"/><circle cx="220" cy="254" r="4" fill="#C05F2E"/><circle cx="290" cy="248" r="4" fill="#C05F2E"/>
+          </svg>
+          <p class="vues-cap">Du village aux crêtes — tracé à travers les hameaux</p>
+        </div>
+      </header>
+
+      <div class="piliers"><span>Sport</span><span>Santé</span><span>Citoyenneté</span><span>Écologie</span></div>
+
+      <section class="sec">
+        <p class="sec-t">Deux épreuves, un même accueil</p>
+        <p class="sec-s">Départs du village · 26 mars 2027 · parcours en cours d'homologation</p>
+        <div class="epreuves">
+          <article class="ep">
+            <div class="ico">▲</div>
+            <h3>La Longue <span class="dist">— ~35 km</span></h3>
+            <ul>
+              <li><b>D+ ≈ 1 950 m</b></li><li>Départ <b>08:00</b></li>
+              <li><b>3</b> ravitaillements tenus par les hameaux</li><li>Barrière <b>7 h 00</b></li>
+              <li><b>700</b> dossards</li><li>Crêtes &amp; vallons</li>
+            </ul>
+            <a href="#">S'inscrire — Longue <span class="chev">→</span></a>
+          </article>
+          <article class="ep mid">
+            <div class="ico">◇</div>
+            <h3>La Moyenne <span class="dist">— 10–15 km</span></h3>
+            <ul>
+              <li><b>D+ ≈ 550 m</b></li><li>Départ <b>09:30</b></li>
+              <li><b>1</b> ravitaillement</li><li>Marcheurs <b>bienv.</b></li>
+              <li><b>400</b> dossards</li><li>Bois &amp; sentiers du village</li>
+            </ul>
+            <a href="#">S'inscrire — Moyenne <span class="chev">→</span></a>
+          </article>
+        </div>
+        <p class="note">Valeurs indicatives au 20.10.2026 — le tracé définitif sera publié après homologation.</p>
+      </section>
+
+      <section class="village">
+        <div>
+          <p class="sec-t">Portée par son village</p>
+          <p class="sec-s">Ce ne sont pas des prestataires : ce sont nos voisins.</p>
+          <div class="faces">
+            <div class="face"><div class="av ol">KA</div><b>Kaci A.</b><small>direction de course</small></div>
+            <div class="face"><div class="av te">LB</div><b>Lynda B.</b><small>poste de santé</small></div>
+            <div class="face"><div class="av of">MS</div><b>Mohand S.</b><small>ravitaillements</small></div>
+            <div class="face"><div class="av te">FK</div><b>Farida K.</b><small>bénévoles</small></div>
+            <div class="face"><div class="av of">HB</div><b>Hocine B.</b><small>parcours &amp; balisage</small></div>
+            <div class="face"><div class="av ol">+44</div><b>et 44 autres</b><small>rejoindre l'équipe →</small></div>
+          </div>
+          <div class="chiffres">
+            <div><b>48</b><span>bénévoles engagés (obj. 2027)</span></div>
+            <div><b>12</b><span>hameaux traversés</span></div>
+            <div><b>3</b><span>écoles mobilisées</span></div>
+          </div>
+        </div>
+        <div class="quote">
+          <p>Toute la vallée se tient prête : l'eau bouillira, les figues sèches aussi.
+          Celui qui court passera chez nous.</p>
+          <footer>— Arezki M., comité du village d'Ait-Aissi</footer>
+        </div>
+      </section>
+
+      <section class="duo">
+        <div class="card">
+          <h4><span class="live-dot"></span>Au village, le jour J</h4>
+          <p>Grand écran sur la place, suivi du dossard de vos proches en direct, ravitaillements tenus
+          par les familles. La course se vit ensemble.</p>
+          <div class="mini-board">
+            <div class="row"><span><span class="doss chaud">217</span>&nbsp; Yacine B. — le fils du village</span><span class="frais">CP1 · 10:37</span></div>
+            <div class="row"><span><span class="doss">043</span>&nbsp; Karim T. — en tête</span><span class="frais">CP2 · 10:41</span></div>
+            <div class="row"><span>Aperçu — la course n'a pas commencé</span><span class="frais">démo</span></div>
+          </div>
+          <p style="margin-top:12px"><a class="devenir" href="#">Prévenir mes proches <span class="chev">→</span></a></p>
+        </div>
+        <div class="card">
+          <h4>Les amis de la course</h4>
+          <div class="spos">
+            <div class="ifri">Ifri<small>eaux &amp; boissons — partenaire visé</small></div>
+            <div class="slot">Ami 2027</div><div class="slot">Ami 2027</div>
+          </div>
+          <p style="margin-top:16px">Soutenir la course, c'est soutenir un projet sportif-citoyen
+          dont la réputation est le produit. <a class="devenir" href="#">Devenir ami <span class="chev">→</span></a></p>
+        </div>
+      </section>
+
+      <div class="frieze"></div>
+      <footer class="egide">
+        <p>Sous l'égide de la Fédération et du ministère des Sports</p>
+        <small>Projet sportif-citoyen · bien commun du trail algérien · zéro papier — e-dossard QR · © Azzel — Trail d'Ait-Aissi 2027</small>
+      </footer>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ LIVRABLE 2 — ÉTAT JOUR J ═══════════ -->
+<section class="stage">
+  <p class="stage-t">Livrable 2 · Variante Jour J — 26.03.2027, 10:42 · bloc « Résultats en direct »</p>
+  <div class="browser">
+    <div class="bar"><i></i><i></i><i></i><span class="url">https://trail.ait-aissi.dz/le-jour-j</span></div>
+    <div class="vp">
+      <div class="jour">
+        <div class="jour-head">
+          <p class="t"><span class="live-dot"></span>Résultats en direct</p>
+          <p class="grand-ecran">également affiché sur le grand écran de la place du village</p>
+        </div>
+        <div class="board">
+          <p class="big">10:42 — <b>217 coureurs</b> en course · checkpoint 2 franchi par le <b>dossard 043</b></p>
+          <div class="cp-rows">
+            <div class="cp-row">
+              <span class="pos">En tête</span>
+              <span><span class="doss chaud">043</span> &nbsp;Karim T. — Béjaïa<small>checkpoint 2 — 15,2 km</small></span>
+              <span class="when">10:41:58</span>
+            </div>
+            <div class="cp-row">
+              <span class="pos">2ᵉ · 1ʳᵉ F</span>
+              <span><span class="doss">128</span> &nbsp;Samia L. — Tizi Ouzou<small>checkpoint 2 · à 33 s</small></span>
+              <span class="when">10:42:31</span>
+            </div>
+            <div class="cp-row">
+              <span class="pos">84ᵉ</span>
+              <span><span class="doss">217</span> &nbsp;Yacine B. — le fils du village<small>checkpoint 1 · parti pour CP2</small></span>
+              <span class="when">10:37:12</span>
+            </div>
+          </div>
+          <p class="frais-line"><span>synchronisé il y a 3 min · si le réseau tombe, on continue : reprise automatique</span><b>classement provisoire</b></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ LIVRABLE 3 — E-DOSSARD, TÉLÉPHONE, THÈME SOMBRE ═══════════ -->
+<section class="stage stage-phone">
+  <p class="stage-t">Livrable 3 · E-dossard — mobile, thème sombre</p>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="ph-sys"><span>10:42</span><span>▮▮▯ · 5G</span></div>
+    <div class="ph-head"><b>Mon dossard</b><span class="offline">HORS-LIGNE PRÊT</span></div>
+    <div class="ph-hero">
+      <div class="frieze"></div>
+      <p class="dossard-no"><small>N°</small> 217</p>
+      <p class="ph-name">Yacine B.</p>
+      <p class="ph-course">Trail d'Ait-Aissi 2027<br><b>Longue — 35 km</b></p>
+      <div class="qr-wrap">
+        <div class="qr" role="img" aria-label="QR stylisé — maquette non scannable">
+          <div class="qm"></div><span class="qf tl"></span><span class="qf tr"></span><span class="qf bl"></span>
+        </div>
+      </div>
+    </div>
+    <div class="ph-body">
+      <p class="ph-tip">Présente ton code aux postes de contrôle.<br><b>L'équipe est à chaque col.</b></p>
+    </div>
+    <div class="ph-actions"><a class="plein" href="#">Mon parcours</a><a href="#">Appeler l'équipe</a></div>
+    <div class="ph-foot">ZÉRO PAPIER · N° 217 — YACINE B. — TRAIL D'AIT-AISSI 2027 — LONGUE 35 KM</div>
+  </div>
+  <p class="ph-cap">Thème sombre aux couleurs du soir au village. QR olive foncé sur carte blanche :
+  <em>scan assuré même quand la lumière manque</em>.</p>
+</section>
+
+<p class="colophon">Maquette directionnelle — Azzel · Trail d'Ait-Aissi 2027 · 20.10.2026 · zéro JS, zéro requête réseau.</p>
+</body>
+</html>

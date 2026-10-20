@@ -1,0 +1,93 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 10-20-2026 22:35
+last_updated: 10-20-2026 22:44
+project: Azzel
+project_key: NOKEY
+tracking_system: file-system
+story_location: 
+  /Users/mouloudhaouili/Desktop/ouidou/Azzel/_bmad-output/implementation-artifacts
+development_status:
+  epic-1: in-progress
+  1-1-fondation-du-monorepo: in-progress
+  1-2-accès-coureur-par-email-code-session-unique: backlog
+  1-3-formulaire-d-inscription-à-l-édition: backlog
+  1-4-acceptation-décharge-et-règlement-intérieur: backlog
+  1-5-télversement-de-la-preuve-de-paiement-ccp: backlog
+  1-6-validation-ou-refus-du-dossier-par-l-organisateur: backlog
+  1-7-checklist-de-dossier-self-service: backlog
+  1-8-notifications-de-statut-par-email: backlog
+  1-9-socle-multi-organisation-schéma-rls: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-page-d-annonce-publique-minimale: backlog
+  2-2-identité-village-piliers-frises-sombre: backlog
+  2-3-bloc-sponsors-option-a-option-b: backlog
+  2-4-parcours-gpx-consignes-et-page-région: backlog
+  2-5-vidéo-trailer-1ʳᵉ-édition-témoignages-coureurs-should: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-import-excel-des-volontaires-et-invitations: backlog
+  3-2-secteurs-et-missions-typées: backlog
+  3-3-fiche-mission-hors-ligne-pwa-volontaires: backlog
+  3-4-préchargement-de-l-annuaire-des-coureurs: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-e-dossard-qr-hors-ligne: backlog
+  4-2-moteur-de-scan-caméra-et-états-de-retour: backlog
+  4-3-scan-de-retrait-du-dossard: backlog
+  4-4-scan-de-passage-aux-checkpoints: backlog
+  4-5-synchronisation-par-lots-idempotente: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-tableau-de-bord-live-du-pc-course: backlog
+  5-2-alertes-hors-délais: backlog
+  5-3-saisie-des-abandons: backlog
+  5-4-annulation-auditable-des-passages: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-installation-et-onboarding-de-l-app-native: backlog
+  6-2-activation-du-suivi-gps-opt-in: backlog
+  6-3-guide-permission-ios-autoriser-une-fois: backlog
+  6-4-pédagogie-batterie-et-rappel-j-7: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-classements-par-épreuve-et-départs-échelonnés: backlog
+  7-2-résultats-en-direct-partageables: backlog
+  7-3-carte-publique-anonyme: backlog
+  7-4-rapports-post-course-et-export-commande: backlog
+  epic-7-retrospective: optional

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Carnet de chasse au trésor · Mary &amp; Boss · 19.10.2026</title>
+<style>
+:root{
+--ink:#1d2b24;--ink2:rgba(29,43,36,.62);--paper:#f6efe3;--paper2:#efe4cf;--paper3:#fffdf6;
+--green:#2f6b4f;--greend:#1f4a36;--ochre:#c9902f;--gold:#caa64c;--terra:#b3502e;--water:#2e6d8e;
+--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+--mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.62;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:1000;pointer-events:none;opacity:.55;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+.wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+h1,h2,h3{line-height:1.15;font-weight:700}
+.stamp{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;padding:3px 9px;border:1.5px solid currentColor;border-radius:4px;transform:rotate(-2deg);background:rgba(255,253,246,.65)}
+.stamp.boss{color:var(--terra)}.stamp.mary{color:var(--green)}.stamp.insight{color:#8a6210;background:rgba(255,220,130,.28)}
+.stamp.decision{color:var(--ink);border:3px double var(--ink)}.stamp.gold{color:#5e4410;background:linear-gradient(#f7dfa4,#eac870);border-color:#7a5a12}
+.stamp.dashed{border-style:dashed}.stamp.white{color:#f6efe3;background:rgba(29,43,36,.25)}
+.hero{position:relative}
+.hero-svg{display:block;width:100%;height:min(46vw,430px)}
+.hero-ov{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:26px 30px;gap:12px}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:11px;letter-spacing:.06em;border:2px solid var(--ink);background:var(--paper3);padding:5px 11px;border-radius:999px;box-shadow:2px 2px 0 rgba(29,43,36,.25)}
+.chip.dark{background:var(--ink);color:var(--paper)}
+.zb{display:inline-flex;gap:9px;align-items:center;border:2px dashed var(--terra);color:var(--terra);padding:7px 13px;border-radius:12px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;background:rgba(255,240,225,.85);font-weight:700}
+.zb svg{width:18px;height:18px;flex:none}
+.hero-bot{max-width:660px}
+.hero-t{font-size:clamp(54px,11vw,112px);letter-spacing:.04em;text-shadow:3px 3px 0 rgba(246,239,227,.85)}
+.hero-s{font-size:clamp(16px,2.6vw,22px);font-style:italic;background:rgba(246,239,227,.8);display:inline;padding:2px 6px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.hero-m{margin-top:14px;font-family:var(--mono);font-size:11.5px;background:rgba(246,239,227,.9);display:inline-block;padding:6px 12px;border-left:4px solid var(--green)}
+.route{margin:36px auto 6px}
+.route h2{font-size:13px;font-family:var(--mono);letter-spacing:.22em;text-transform:uppercase;text-align:center;color:var(--greend);margin-bottom:6px}
+.route svg{display:block;width:100%;height:auto}
+.stage{position:relative;padding-left:66px;margin-top:76px}
+.stage::before{content:"";position:absolute;left:24px;top:58px;bottom:-46px;border-left:3px dashed rgba(47,107,79,.4)}
+.stage-num{position:absolute;left:0;top:2px;width:50px;height:50px;border-radius:50%;background:var(--green);color:var(--paper);display:grid;place-items:center;font-family:var(--mono);font-size:14px;font-weight:700;border:3px solid var(--paper3);box-shadow:0 3px 0 rgba(29,43,36,.28);z-index:2}
+.skick{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--terra);font-weight:700}
+.stage h2{font-size:clamp(25px,4.4vw,37px);margin:6px 0 10px}
+.lede{max-width:720px;color:var(--ink2);font-size:16.5px}
+.card{background:var(--paper2);border:2px solid rgba(29,43,36,.25);border-radius:16px;padding:22px 24px;box-shadow:4px 5px 0 rgba(29,43,36,.1)}
+.co{background:var(--paper3);border:2px solid var(--green);border-left-width:10px;border-radius:12px;padding:15px 20px;margin:16px 0}
+.co.terra{border-color:var(--terra)}.co.ochre{border-color:var(--ochre)}.co.ink{border-color:var(--ink)}
+.co b{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:5px}
+.deck{background:var(--paper3);border:2px solid rgba(29,43,36,.3);border-radius:18px;padding:26px 28px;margin-top:24px;box-shadow:6px 7px 0 rgba(29,43,36,.1)}
+.deck p+p{margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+.chips .chip{box-shadow:none;font-size:10.5px;background:var(--paper2)}
+.bigq{font-size:clamp(19px,2.8vw,24px);font-style:italic;line-height:1.45}
+.bigq strong{font-style:normal}
+hr.gpx{border:0;border-top:3px dashed rgba(47,107,79,.45);width:min(420px,70%);margin:64px auto 0;position:relative}
+hr.gpx::after{content:"GPX · TRACE DE LA SESSION";position:absolute;right:0;top:-24px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--green)}
+.bibs{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:24px;margin-top:24px}
+.bib{position:relative;background:var(--paper2);border:2px solid rgba(29,43,36,.3);border-radius:16px;padding:22px 18px 16px;box-shadow:5px 6px 0 rgba(29,43,36,.1);transition:transform .3s,box-shadow .3s;--c:var(--green)}
+.bib:hover{transform:translateY(-5px) rotate(-.6deg);box-shadow:8px 10px 0 rgba(29,43,36,.14)}
+.bib::before,.bib::after{content:"";position:absolute;top:9px;width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fdfaf2,#9aa0a0 55%,#3c4242);box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.bib::before{left:11px}.bib::after{right:11px}
+.bib.spo{--c:var(--water)}.bib.run{--c:var(--terra)}.bib.vol{--c:var(--ochre)}
+.plate{background:var(--paper3);border:2.5px solid var(--c);border-radius:10px;padding:10px 12px 8px;text-align:center;margin-bottom:14px}
+.plate .r{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--c);font-weight:700}
+.plate .n{font-size:50px;font-weight:800;letter-spacing:.06em;line-height:1.05}
+.plate .f{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;border-top:2px solid var(--c);margin-top:7px;padding-top:5px;color:var(--ink2)}
+.bib blockquote{font-size:15px;font-style:italic;margin-bottom:10px}
+.bib ul{list-style:none}
+.bib li{font-size:13.5px;line-height:1.5;padding-left:16px;position:relative;margin:7px 0;color:rgba(29,43,36,.85)}
+.bib li::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-radius:50%;background:var(--c)}
+.bib .stamp{margin:2px 4px 0 0}
+.mx-wrap{position:relative;padding:14px 0 0 34px;margin-top:24px}
+.ax-y{position:absolute;left:8px;top:55%;transform:rotate(-90deg);transform-origin:left center;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
+.mx{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:16px;border:2.5px solid var(--ink);border-radius:18px;padding:18px;box-shadow:6px 7px 0 rgba(29,43,36,.1);background:linear-gradient(rgba(239,228,207,.55),rgba(239,228,207,.55)),repeating-linear-gradient(0deg,transparent 0 26px,rgba(47,107,79,.06) 26px 27px),repeating-linear-gradient(90deg,transparent 0 26px,rgba(47,107,79,.06) 26px 27px)}
+.capflag{position:absolute;top:-15px;left:50%;transform:translateX(-50%) rotate(-1.5deg);z-index:5}
+.quad{border-radius:14px;padding:17px 17px 15px;border:2px solid rgba(29,43,36,.3);background:var(--paper3)}
+.quad .t{font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink2);display:block;margin-bottom:5px}
+.quad h3{font-size:21px;letter-spacing:.05em;margin-bottom:6px}
+.quad p{font-size:13.5px;line-height:1.55;color:rgba(29,43,36,.85)}
+.quad .stamp{margin:0 0 8px}
+.quad.cap{border-color:#7a5a12;box-shadow:0 0 0 3px rgba(202,166,76,.35);background:linear-gradient(180deg,#fff8e6,var(--paper3))}
+.quad.tsu{border-color:var(--water);background:linear-gradient(180deg,#eef6fa,var(--paper3))}
+.ax-x{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2);margin-top:12px;padding-left:34px}
+.mm{position:relative;height:690px;margin-top:22px}
+.mm svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.nd{position:absolute;transform:translate(-50%,-50%);width:208px;background:var(--paper3);border:2px solid var(--c,var(--green));border-radius:13px;padding:12px 14px;box-shadow:4px 5px 0 rgba(29,43,36,.12)}
+.nd h3{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--c,var(--green));margin-bottom:5px}
+.nd p{font-size:12.5px;line-height:1.5;color:rgba(29,43,36,.85)}
+.nd.ctr{width:252px;border:3px solid #7a5a12;background:linear-gradient(180deg,#fff6dd,var(--paper3));border-radius:16px;text-align:center;box-shadow:0 0 0 4px rgba(202,166,76,.3),6px 7px 0 rgba(29,43,36,.14)}
+.nd.ctr h3{font-size:12.5px;color:#7a5a12}
+.nd.ctr .x{font-size:32px;line-height:1;display:block}
+.chain{display:flex;flex-direction:column;align-items:center;margin-top:26px}
+.lk{width:min(580px,100%);background:var(--paper3);border:2px solid rgba(29,43,36,.35);border-radius:15px;padding:24px 24px 18px;position:relative;margin:32px 0;text-align:center;box-shadow:5px 6px 0 rgba(29,43,36,.1)}
+.lk::before{content:"";position:absolute;top:-34px;left:50%;transform:translateX(-50%);height:32px;border-left:3px dashed rgba(47,107,79,.5)}
+.lk:first-child::before,.chain .medal::before{display:none}
+.lk:nth-child(odd){transform:rotate(-.7deg)}
+.lk:nth-child(even){transform:rotate(.7deg)}
+.lk .ye{position:absolute;top:-13px;left:50%;transform:translateX(-50%) rotate(-3deg);white-space:nowrap}
+.lk p{font-size:15px}
+.lk .who{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink2);display:block;margin-top:8px}
+.medal{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#f3d98a,#d8ae4e 62%,#b98f2e);border:3px solid #7a5a12;display:grid;place-items:center;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;line-height:1.6;color:#4a350b;box-shadow:0 0 0 5px rgba(202,166,76,.3),0 8px 16px rgba(0,0,0,.22);margin:28px auto 6px;transform:rotate(-6deg)}
+.conv{margin-top:24px;background:var(--greend);color:var(--paper);border-radius:16px;padding:24px 28px;text-align:center;border:2px solid var(--ink);box-shadow:6px 7px 0 rgba(29,43,36,.22)}
+.conv b{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#eac870;display:block;margin-bottom:8px}
+.conv strong{color:#eac870}
+.chest-scene{perspective:1000px;text-align:center;margin-top:28px}
+.chest{position:relative;width:min(430px,88%);height:158px;margin:0 auto;transform-style:preserve-3d}
+.glow{position:absolute;inset:-50px -30px;background:radial-gradient(ellipse at 50% 20%,rgba(255,208,90,.6),transparent 62%);opacity:0;transition:opacity 1s;z-index:0}
+.lid{position:absolute;inset:0 0 auto 0;height:66px;background:repeating-linear-gradient(90deg,#7c4a24 0 46px,#6b3e1e 46px 50px);border:3px solid #4c2a12;border-radius:12px 12px 4px 4px;transform-origin:50% 0;transition:transform .95s cubic-bezier(.55,-.25,.35,1.2);z-index:3;box-shadow:inset 0 -7px 0 rgba(0,0,0,.28)}
+.lid::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 13%,#caa64c 13% 17%,transparent 17% 83%,#caa64c 83% 87%,transparent 87%)}
+.cbody{position:absolute;inset:58px 0 0 0;background:repeating-linear-gradient(90deg,#8a5330 0 46px,#7a4826 46px 50px);border:3px solid #4c2a12;border-radius:6px;box-shadow:inset 0 10px 18px rgba(0,0,0,.45);z-index:1}
+.lock{position:absolute;left:50%;top:50px;transform:translateX(-50%);width:36px;height:46px;background:linear-gradient(#e3c06a,#b98f2e);border:3px solid #4c2a12;border-radius:7px;z-index:4;transition:.6s;display:grid;place-items:center}
+.lock i{width:9px;height:9px;border-radius:50%;background:#3a2410;box-shadow:0 9px 0 -1px #3a2410,0 0 0 1px rgba(0,0,0,.2) inset;display:block}
+.chest.open .lid{transform:rotateX(-112deg)}
+.chest.open .glow{opacity:1}
+.chest.open .lock{opacity:0;transform:translate(-50%,10px) rotate(14deg)}
+.btn{margin-top:20px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;background:var(--green);color:var(--paper);padding:13px 26px;border-radius:999px;border:2px solid var(--ink);cursor:pointer;box-shadow:0 5px 0 var(--greend);transition:transform .15s,box-shadow .15s;display:inline-flex;align-items:center;gap:10px}
+.btn:hover{transform:translateY(-2px);box-shadow:0 7px 0 var(--greend)}
+.btn svg{width:15px;height:15px}
+.vault{margin-top:36px}
+body.js .vault.armed .vb{opacity:0;transform:translateY(26px)}
+.vault.lit .vb{opacity:1;transform:none;transition:opacity .65s ease var(--d,0s),transform .65s ease var(--d,0s)}
+.vb{margin-bottom:34px}
+.vb>.vk{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--terra);font-weight:700;display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.vb>.vk::after{content:"";flex:1;border-top:2px dashed rgba(47,107,79,.4)}
+.phrases{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}
+.ph{background:var(--paper3);border:2px solid var(--c);border-radius:13px;padding:16px 16px 14px;position:relative}
+.ph .who{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--c);font-weight:700;margin-bottom:8px;display:block}
+.ph p{font-size:14.5px;font-style:italic;line-height:1.5}
+.schema{display:flex;gap:0;align-items:stretch;flex-wrap:wrap}
+.sch{flex:1;min-width:215px;background:var(--paper3);border:2px solid var(--ink);border-radius:14px;padding:18px 20px;margin:0 26px 12px 0;position:relative;box-shadow:5px 6px 0 rgba(29,43,36,.1)}
+.sch::after{content:"";position:absolute;right:-22px;top:50%;transform:translateY(-50%);border:12px solid transparent;border-left:16px solid var(--terra)}
+.sch:last-child{margin-right:0}.sch:last-child::after{display:none}
+.sch b{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:6px;color:var(--terra)}
+.sch p{font-size:13.5px;color:rgba(29,43,36,.85)}
+.loop-frame{position:relative;padding:92px 128px}
+.loop-stage{position:relative;width:min(520px,100%);aspect-ratio:1;margin:0 auto}
+.loop-stage svg{position:absolute;inset:0;width:100%;height:100%}
+.ll{position:absolute;width:180px;text-align:center;font-size:12px;line-height:1.45;color:rgba(29,43,36,.85)}
+.ll b{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.14em;margin-bottom:3px;color:var(--ink)}
+.ll.n{top:0;left:50%;transform:translate(-50%,-100%)}
+.ll.e{right:0;top:50%;transform:translate(6px,-50%)}
+.ll.s{bottom:0;left:50%;transform:translate(-50%,100%)}
+.ll.w{left:0;top:50%;transform:translate(-6px,-50%);text-align:right}
+.ring{animation:spin 90s linear infinite;transform-origin:260px 260px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.moscow{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+.mc{background:var(--paper3);border:2px solid var(--c,var(--ink));border-radius:14px;padding:20px 18px 16px;position:relative;box-shadow:4px 5px 0 rgba(29,43,36,.1)}
+.mc .stamp{position:absolute;top:-13px;left:14px}
+.mc h3{font-size:16px;margin:8px 0 8px;letter-spacing:.03em}
+.mc p{font-size:13.5px;color:rgba(29,43,36,.85)}
+.mc.must{--c:var(--terra)}.mc.should{--c:var(--ochre)}.mc.rec{--c:var(--water)}.mc.park{--c:#8b8375;border-style:dashed}
+.flags{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:22px}
+.flag{background:var(--paper3);border:2px solid var(--c);border-radius:5px 14px 14px 5px;padding:0 14px 14px;box-shadow:4px 5px 0 rgba(29,43,36,.1)}
+.fband{height:36px;margin:0 -14px 12px;background:var(--c);clip-path:polygon(0 0,100% 0,100% 68%,50% 100%,0 68%);display:grid;place-items:center;color:#fffdf6;font-family:var(--mono);font-size:12px;letter-spacing:.22em;font-weight:700}
+.flag p{font-size:13px;color:rgba(29,43,36,.85)}
+.f1{--c:var(--green)}.f2{--c:var(--terra)}.f3{--c:var(--ochre)}.f4{--c:#557a3f}
+.ifri{position:relative;overflow:hidden;background:linear-gradient(160deg,#2e6d8e,#1d4b66);color:#eaf4f8;border-radius:18px;padding:28px 30px;border:2px solid var(--ink);box-shadow:6px 7px 0 rgba(29,43,36,.18)}
+.ifri .drop{position:absolute;right:-26px;top:-30px;width:190px;height:190px;opacity:.14}
+.ifri h3{font-size:24px;color:#fff}
+.ifri p{font-size:14.5px;max-width:640px}
+.ifri .q{font-size:19px;font-style:italic;margin:10px 0 12px;color:#dff1f9}
+.ifri .next{display:inline-block;margin-top:14px;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;border:2px dashed #bcd9e8;color:#dff1f9;padding:7px 13px;border-radius:10px}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:14px;margin-top:10px}
+.step{flex:1;max-width:215px;background:var(--paper3);border:2px solid var(--ink);border-radius:12px 12px 0 0;padding:16px 14px;box-shadow:4px 0 0 rgba(29,43,36,.08);text-align:center}
+.step b{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:6px}
+.step p{font-size:12.5px;color:rgba(29,43,36,.85)}
+.step.h1{height:238px;border-bottom:8px solid var(--gold)}
+.step.h2{height:196px;border-bottom:8px solid var(--ochre)}
+.step.h3{height:218px;border-bottom:8px solid var(--green)}
+.quote-xl{text-align:center;font-size:clamp(23px,4vw,38px);line-height:1.3;max-width:860px;margin:0 auto;font-style:italic}
+.quote-xl em{font-style:normal;color:var(--terra)}
+.ql-und{width:130px;height:5px;background:var(--gold);margin:22px auto 0;border-radius:3px}
+footer{margin:80px 0 46px;text-align:center}
+.seal-wax{width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#d4694b,#9c3a22 72%);display:grid;place-items:center;color:#f6efe3;font-family:var(--serif);font-size:32px;box-shadow:inset 0 0 0 6px rgba(0,0,0,.14),0 4px 10px rgba(0,0,0,.3);transform:rotate(-8deg);margin:0 auto 16px}
+footer p{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink2);line-height:2}
+.compass{position:fixed;right:16px;bottom:16px;width:62px;z-index:60;opacity:.88;pointer-events:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.25))}
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease var(--d,0s),transform .7s ease var(--d,0s)}
+.reveal.in{opacity:1;transform:none}
+@media (max-width:919px){
+.mm{height:auto;display:flex;flex-direction:column;gap:14px}
+.mm svg.edges{display:none}
+.nd{position:static;transform:none;width:100%}
+.nd.ctr{width:100%;order:-1}
+}
+@media (max-width:640px){
+.stage{padding-left:0}
+.stage::before{display:none}
+.stage-num{position:static;margin-bottom:12px}
+.loop-frame{padding:78px 6px}
+.ll{width:120px;font-size:10.5px}
+.ll.e{transform:translate(4px,-50%)}.ll.w{transform:translate(-4px,-50%)}
+.compass{display:none}
+.sch{margin-right:0}.sch::after{display:none}
+.ax-y{display:none}
+.mx{grid-template-columns:1fr}
+.podium{flex-direction:column;align-items:stretch}
+.step{max-width:none;height:auto!important;border-radius:12px;border-bottom-width:4px}
+}
+@media (prefers-reduced-motion:reduce){
+*,*::before,*::after{animation:none!important;transition:none!important}
+.reveal{opacity:1;transform:none}
+}
+
+</style>
+</head>
+<body>
+<header class="hero">
+<svg class="hero-svg" viewBox="0 0 1200 430" preserveAspectRatio="xMidYMax slice" role="img" aria-label="Montagnes de Kabylie, un sentier pointillé monte vers un fanion">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f4ead2"/><stop offset=".62" stop-color="#f0dcae"/><stop offset="1" stop-color="#eac985"/>
+</linearGradient>
+</defs>
+<rect width="1200" height="430" fill="url(#sky)"/>
+<circle cx="935" cy="105" r="44" fill="#e8a13c"/>
+<g stroke="#e8a13c" stroke-width="4" stroke-linecap="round">
+<line x1="935" y1="30" x2="935" y2="46"/><line x1="935" y1="164" x2="935" y2="180"/>
+<line x1="860" y1="105" x2="876" y2="105"/><line x1="994" y1="105" x2="1010" y2="105"/>
+<line x1="882" y1="52" x2="894" y2="64"/><line x1="976" y1="146" x2="988" y2="158"/>
+<line x1="988" y1="52" x2="976" y2="64"/><line x1="894" y1="146" x2="882" y2="158"/>
+</g>
+<path fill="#9db48a" opacity=".55" d="M0,300 L150,190 L280,260 L420,150 L560,250 L700,170 L860,260 L1000,190 L1200,280 L1200,430 L0,430 Z"/>
+<path fill="#4a7a5c" d="M0,340 L120,240 L260,320 L400,210 L540,300 L680,230 L820,320 L960,240 L1100,320 L1200,275 L1200,430 L0,430 Z"/>
+<path fill="#2f5b45" d="M0,430 L0,360 L180,290 L330,350 L520,270 L700,350 L900,280 L1080,350 L1200,308 L1200,430 Z"/>
+<g fill="#22462f">
+<path d="M120,352 l11,-26 l11,26 z"/><path d="M148,356 l9,-21 l9,21 z"/><path d="M560,332 l11,-26 l11,26 z"/><path d="M588,336 l9,-21 l9,21 z"/><path d="M980,340 l11,-26 l11,26 z"/><path d="M300,384 l10,-23 l10,23 z"/><path d="M760,388 l10,-23 l10,23 z"/>
+</g>
+<path d="M60,406 C160,384 140,332 220,322 C300,312 320,282 400,264 C470,249 500,227 560,210 C640,187 660,152 728,134" fill="none" stroke="#f6efe3" stroke-width="4.5" stroke-dasharray="1 13" stroke-linecap="round"/>
+<line x1="728" y1="134" x2="728" y2="88" stroke="#1d2b24" stroke-width="3.5"/>
+<path d="M728,88 l30,9 l-30,9 z" fill="#b3502e"/>
+<circle cx="60" cy="406" r="7" fill="#b3502e" stroke="#f6efe3" stroke-width="3"/>
+</svg>
+<div class="hero-ov">
+<div class="hero-top">
+<div class="hero-chips">
+<span class="chip dark">SOUVENIR DE SESSION · À OUVRIR ET PARTAGER</span>
+<span class="chip">19 OCTOBRE 2026</span>
+<span class="chip">MODE CREATIVE PARTNER · <s>CRAZY 8s</s> → JTBD → CROSS → MIND MAP → YES AND</span>
+</div>
+<span class="zb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8.6 15.4a4.8 4.8 0 0 1 6.8 0"/><path d="M5.8 12.6a8.8 8.8 0 0 1 12.4 0"/><circle cx="12" cy="18.5" r="1.2" fill="currentColor" stroke="none"/><line x1="4" y1="4" x2="20" y2="20"/></svg>ZONE BLANCHE · HORS COUVERTURE RÉSEAU</span>
+</div>
+<div class="hero-bot">
+<h1 class="hero-t">AZZEL</h1>
+<p class="hero-s">La chasse au trésor d&rsquo;un trail en zone blanche — et le coffre qu&rsquo;on a rapporté au village.</p>
+<div class="hero-m">Mary, la coach créative &nbsp;×&nbsp; le Boss, capitaine de l&rsquo;expédition &nbsp;·&nbsp; Kabylie, Yakouren / Aït-Aïssi &nbsp;·&nbsp; <span class="stamp gold" style="transform:rotate(2deg)">SESSION COMPLÈTE</span></div>
+</div>
+</div>
+</header>
+
+<div class="wrap">
+<section class="route reveal">
+<h2>Le profil d&rsquo;altitude de la session — l&rsquo;axe vertical se lit en réputation</h2>
+<svg viewBox="0 0 1000 224" role="img" aria-label="Profil de la session : Crazy 8s passés, JTBD, Scenario Cross, Mind Mapping, Yes And, MoSCoW, Synthèse">
+<path d="M0,186 Q45,181 90,169 Q165,151 240,141 Q320,149 400,121 Q480,101 560,109 Q640,113 720,85 Q795,67 870,59 Q920,55 958,46" fill="none" stroke="#1d2b24" stroke-width="3"/>
+<path d="M0,186 Q45,181 90,169 Q165,151 240,141 Q320,149 400,121 Q480,101 560,109 Q640,113 720,85 Q795,67 870,59 Q920,55 958,46 L958,214 L0,214 Z" fill="rgba(47,107,79,.13)"/>
+<g fill="#f6efe3" stroke="#2f6b4f" stroke-width="3.5">
+<circle cx="90" cy="169" r="7"/><circle cx="240" cy="141" r="7"/><circle cx="400" cy="121" r="7"/><circle cx="560" cy="109" r="7"/><circle cx="720" cy="85" r="7"/><circle cx="870" cy="59" r="7"/>
+</g>
+<line x1="958" y1="46" x2="958" y2="16" stroke="#1d2b24" stroke-width="3"/>
+<path d="M958,16 l26,8 l-26,8 z" fill="#c9902f"/>
+<g font-family="Menlo,Consolas,monospace" font-size="12.5" fill="#1d2b24" text-anchor="middle" letter-spacing="1.5">
+<text x="90" y="200"><tspan fill="#b3502e">CRAZY 8s</tspan></text>
+<text x="240" y="200">JTBD</text>
+<text x="400" y="200">SCENARIO CROSS</text>
+<text x="560" y="200">MIND MAPPING</text>
+<text x="720" y="200">YES AND</text>
+<text x="870" y="200">MoSCoW</text>
+<text x="958" y="200" fill="#8a6210" font-weight="bold">SYNTHÈSE</text>
+</g>
+<line x1="56" y1="165" x2="122" y2="165" stroke="#b3502e" stroke-width="2.5"/>
+<text x="90" y="217" font-family="Menlo,Consolas,monospace" font-size="8.5" fill="#b3502e" text-anchor="middle" letter-spacing="1">PASSÉS SUR ORDRE DU BOSS</text>
+</svg>
+</section>
+
+<section class="stage reveal">
+<div class="stage-num">D</div>
+<div class="stage-head">
+<span class="skick">Le décor · avant le premier coup de boussole</span>
+<h2>Un village, des jeunes, une montagne — et zéro barre de réseau</h2>
+<p class="lede">Quelque part entre Yakouren et le village d&rsquo;Aït-Aïssi, un groupe de jeunes sportifs, amoureux de nature, prépare la 2e édition de son trail — le 26 mars 2027 — sans aide externe. La mission de la soirée : challenger le spec existant, le transformer en brief solide, et poser les bases de l&rsquo;implémentation.</p>
+</div>
+<div class="deck">
+<p><span class="stamp insight">idée fondatrice</span> Une <strong>application clé en main pour gérer un trail local en zone sans couverture réseau</strong>, faite pour des structures sans moyens d&rsquo;accéder aux plateformes pro. Offline-first, ou rien.</p>
+<p>Sur la table au départ, le périmètre posé par le Boss&nbsp;:</p>
+<div class="chips">
+<span class="chip">inscriptions</span><span class="chip">validation dossiers · upload preuve paiement CCP</span><span class="chip">infos participants · hébergement</span><span class="chip">parcours · dénivelé · difficulté</span><span class="chip">horaires</span><span class="chip">événements annexes · exhibitions sportives</span><span class="chip">sponsoring*</span><span class="chip">portail admin</span><span class="chip">portail volontaires · missions</span><span class="chip">tracking GPS sur carte</span><span class="chip">chrono par scan QR aux ravitos</span>
+</div>
+<p style="font-size:12.5px;color:var(--ink2);margin-top:10px">* Le sponsoring quittera l&rsquo;app en cours de route — décision prise au fil de la chasse, voir étape 1.</p>
+<div class="co">
+<b>Le job profond, déterré en premier</b>
+<span class="bigq">« Se construire une <strong>réputation dans le milieu du trail</strong> grâce à la modernisation de la gestion — puis scaler à d&rsquo;autres équipes organisatrices. »</span>
+</div>
+</div>
+</section>
+<hr class="gpx">
+
+<section class="stage reveal" id="etape1">
+<div class="stage-num">1</div>
+<div class="stage-head">
+<span class="skick">Étape 1 · Job to be done</span>
+<h2>Quatre coureurs, quatre boussoles</h2>
+<p class="lede">On a miné à fond les quatre acteurs du trail. Chacun porte son dossard, chacun a son job — et le wow fait partie du job.</p>
+</div>
+<div class="bibs">
+<article class="bib job">
+<div class="plate"><span class="r">L&rsquo;organisateur</span><span class="n">01</span><div class="f">AÏT-AÏSSI · 26.03.2027 · 2e ÉDITION · SANS AIDE EXTERNE</div></div>
+<blockquote>« Tiens ton trail en zone blanche, avec une appli clé en main — et bâtis ta réputation. »</blockquote>
+<ul>
+<li><span class="stamp boss">insight boss</span> Le job profond : la réputation d&rsquo;abord, le scaling ensuite.</li>
+<li>L&rsquo;app = <strong>la vitrine d&rsquo;un travail sérieux</strong> pour convaincre les sponsors majeurs de financer et accompagner.</li>
+<li>Succès visé au soir du 27.03 : voir la photo d&rsquo;arrivée, tout en bas de ce carnet.</li>
+</ul>
+</article>
+<article class="bib spo">
+<div class="plate"><span class="r">Le sponsor</span><span class="n">02</span><div class="f">ENTREPRISE DU PEUPLE · PRÉSENCE MÉDIATIQUE</div></div>
+<blockquote>« Soutiens une petite initiative ambitieuse — et récolte la lumière. »</blockquote>
+<ul>
+<li><span class="stamp boss">insight boss</span> Renforcer l&rsquo;image d&rsquo;« entreprise du peuple / entreprise locale » + profiter de la présence médiatique.</li>
+<li>Preuve terrain, 1re édition : <strong>2 chaînes TV nationales, des reportages de 5 min, des milliers de vues</strong> sur Facebook, Instagram, TikTok.</li>
+<li><span class="stamp decision">décision</span> Sponsoring géré hors app ; l&rsquo;app ne fait que mettre en valeur le sponsor unique, une fois contractualisé.</li>
+</ul>
+</article>
+<article class="bib run">
+<div class="plate"><span class="r">Le coureur</span><span class="n">03</span><div class="f">INSCRIPTION SIMPLE · INTERFACE « QUI EN JETTE »</div></div>
+<blockquote>« Inscris-toi en deux gestes — et prends la file moderne. »</blockquote>
+<ul>
+<li><span class="stamp boss">idée boss</span> Interface moderne « qui en jette » — le wow fait partie du job.</li>
+<li>Tout ce qui valide la participation au même endroit : dossier, pièces, paiement.</li>
+<li><span class="stamp mary">idée mary</span> Checklist self-service : « il te manque le certificat », visible en un coup d&rsquo;œil.</li>
+<li>Contenu progressif vers la course : parcours, conseils, découverte de la région, restauration, hébergement — le doc actuel n&rsquo;a qu&rsquo;une page statique.</li>
+</ul>
+</article>
+<article class="bib vol">
+<div class="plate"><span class="r">Le volontaire</span><span class="n">04</span><div class="f">SECTEURS · MISSIONS · FICHE OFFLINE DANS LA POCHE</div></div>
+<blockquote>« Vis un jour J fluide : ta mission, ton secteur, ton rôle. »</blockquote>
+<ul>
+<li>La zone découpée en <strong>SECTEURS</strong> : chacun connaît son secteur et son rôle.</li>
+<li>Rôles multiples : ravitaillement, accueil des sportifs, sécurité des tronçons routiers, sécurité de la ligne d&rsquo;arrivée, coordination des dossards… <strong>le scan n&rsquo;est qu&rsquo;UNE mission</strong>.</li>
+<li><span class="stamp mary">idée mary</span> Fiche mission offline dans la poche le jour J — zone blanche oblige, cohérent offline-first.</li>
+</ul>
+</article>
+</div>
+<div class="co reveal">
+<b>Embarquées d&rsquo;office — le trésor commence à briller</b>
+<p style="font-size:15px">La <strong>vitrine publique</strong> (résultats live partageables, page course) : le moteur de réputation totalement absent du doc initial. Et le <strong>multi-édition</strong> : coureurs revenants, historique, comparatifs — la réputation se compose. Bonus de chasse : récupérer les données de la 1re édition <em>(à vérifier)</em> pour peupler l&rsquo;historique.</p>
+</div>
+<div class="co ochre reveal" style="font-size:14.5px">
+<b>Parqué au bord du sentier</b> Idées de Mary appréciées mais non prioritaires : module photos/média (galerie, kit presse pour les TVs locales) et rapport sponsor auto-généré. On y reviendra, le coffre est déjà lourd.
+</div>
+</section>
+<hr class="gpx">
+<section class="stage reveal" id="etape2">
+<div class="stage-num">2</div>
+<div class="stage-head">
+<span class="skick">Étape 2 · Scenario Cross</span>
+<h2>Quatre futurs autour du feu</h2>
+<p class="lede">Deux incertitudes croisées : le <strong>Rayonnement</strong> (confidentiel ↔ national) et la <strong>Structuration de l&rsquo;équipe</strong> (fragile ↔ solide). Quatre mondes possibles — et un cap à viser.</p>
+</div>
+<div class="mx-wrap">
+<span class="ax-y">Équipe · fragile → solide</span>
+<div class="mx">
+<span class="capflag"><span class="stamp gold">Cap visé ★ Championne + Forge — rayonner ET être scalable</span></span>
+<div class="quad cap">
+<span class="t">Rayonnement confidentiel · équipe solide</span>
+<h3>FORGE</h3>
+<p>L&rsquo;outillage se forge à l&rsquo;abri des regards : équipe solide, outils scalables dans l&rsquo;ombre. Le socle silencieux du cap.</p>
+</div>
+<div class="quad cap">
+<span class="t">Rayonnement national · équipe solide</span>
+<h3>CHAMPIONNE</h3>
+<p>La vague est tenue en main, la réputation rayonne au-delà de la montagne. Le sommet du cap visé.</p>
+</div>
+<div class="quad">
+<span class="t">Rayonnement confidentiel · équipe fragile</span>
+<h3>BRAISE</h3>
+<p>Le feu couve sous la cendre : le trail brûle sans éclairer. Le futur qu&rsquo;on contourne.</p>
+</div>
+<div class="quad tsu">
+<span class="t">Rayonnement national · équipe fragile</span>
+<h3>TSUNAMI</h3>
+<span class="stamp water" style="color:#2e6d8e;background:rgba(255,255,255,.5)">Scénario attendu — il doit être tenu</span>
+<svg class="wave-ic" viewBox="0 0 200 26" aria-hidden="true"><path d="M2,18 Q16,4 30,16 T58,16 T86,16 T114,16 T142,16 T170,16 T198,16" fill="none" stroke="#2e6d8e" stroke-width="3" stroke-linecap="round"/><path d="M2,24 Q16,12 30,22 T58,22 T86,22 T114,22 T142,22 T170,22 T198,22" fill="none" stroke="#2e6d8e" stroke-width="2" opacity=".45"/></svg>
+<p><strong>Confirmé : au moins 1000 participants</strong>, deux catégories (longue et courte). Pour tenir la vague : deux parcours GPX · deux chronométries · classements séparés · départs échelonnés pour absorber la vague au premier ravito.</p>
+</div>
+</div>
+<div class="ax-x"><span>Rayonnement · confidentiel</span><span>Rayonnement · national</span></div>
+</div>
+<div class="card multi reveal">
+<b style="font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--green)">L&rsquo;échappée belle · multi-instanciation</b>
+<p style="margin-top:6px;font-size:15px">Un autre trail pourra demander <strong>une instance d&rsquo;Azzel à son image</strong>, avec les mêmes outils que la première instance d&rsquo;Aït-Aïssi. Multi-organisation natif : c&rsquo;est la Forge qui parle, déjà prête pour la Championne.</p>
+</div>
+</section>
+<hr class="gpx">
+<section class="stage reveal" id="etape3">
+<div class="stage-num">3</div>
+<div class="stage-head">
+<span class="skick">Étape 3 · Mind Mapping</span>
+<h2>La carte au trésor du jour J</h2>
+<p class="lede">Première branche poussée sur ordre du Boss : <strong>Logistique jour J</strong>. Le X marque le stade — huit relais autour, un seul point de chute.</p>
+</div>
+<div class="mm" id="mmStage">
+<svg class="edges" id="mmEdges" aria-hidden="true"></svg>
+<div class="nd ctr" id="mmCenter" style="left:50%;top:46%">
+<span class="x">✕</span>
+<h3>STADE D&rsquo;AÏT-AÏSSI</h3>
+<p><strong>Point unique</strong> : départ · arrivée · village accueil. Tout le jour J converge ici — 26.03.2027.</p>
+</div>
+<div class="nd" style="left:13%;top:13%;--c:var(--green)">
+<h3>Matériel &amp; moyens</h3>
+<p>Check-list téléphones, batteries, impression des dossards QR — et <strong>répétition générale (dry-run)</strong> avant le jour J.</p>
+</div>
+<div class="nd" style="left:40%;top:5%;--c:var(--ochre)">
+<h3>Zéro papier</h3>
+<p>Dossier validé en ligne = <strong>dossard prêt</strong>. Remise express, guichets multiples avec créneaux pour absorber les 700.</p>
+</div>
+<div class="nd" style="left:70%;top:9%;--c:var(--terra)">
+<h3>Dossards échelonnés</h3>
+<p><strong>~300 retirés en avance</strong> (200 hébergés sur place + ~100 locaux), <strong>~700 le jour J</strong> pour les venus de loin.</p>
+</div>
+<div class="nd" style="left:90%;top:26%;--c:var(--water)">
+<h3>Presse &amp; com</h3>
+<p>Un <strong>chargé de communication nommé</strong> (volontaire) — une mission du portail volontaires, comme les autres.</p>
+</div>
+<div class="nd" style="left:88%;top:66%;--c:var(--green)">
+<h3>Post-course</h3>
+<p>L&rsquo;app produit des <strong>rapports chiffrés</strong> ; bilan consolidé par le directoire, publié site + réseaux.</p>
+</div>
+<div class="nd" style="left:66%;top:88%;--c:var(--ochre)">
+<h3>Fédération</h3>
+<p>Hors application. Le site affichera « <strong>sous l&rsquo;égide de la fédération et du ministère des sports</strong> ».</p>
+</div>
+<div class="nd" style="left:30%;top:90%;--c:var(--water)">
+<h3>Ravitaillement</h3>
+<p>Acheminé par <strong>véhicule adapté avant le début</strong> de la course. Les ravitos tiennent, la vague aussi.</p>
+</div>
+<div class="nd" style="left:8%;top:62%;--c:var(--terra)">
+<h3>Sécurité &amp; secours</h3>
+<p>Gérés par des <strong>volontaires, comme les autres missions</strong>. Rien à signaler côté difficulté.</p>
+</div>
+</div>
+<div class="co reveal">
+<b>La pierre angulaire</b>
+<p style="font-size:15px">Les rapports chiffrés <strong>se collectent tout seuls</strong> si l&rsquo;app enregistre tout au fil de l&rsquo;eau : inscrits, passages, abandons, portée. Le bilan du directoire n&rsquo;attend plus personne — c&rsquo;est la boucle du trésor, on y vient.</p>
+</div>
+</section>
+<hr class="gpx">
+<section class="stage reveal" id="etape4">
+<div class="stage-num">4</div>
+<div class="stage-head">
+<span class="skick">Étape 4 · Yes And Building</span>
+<h2>La chaîne — on ajoute, on ne casse jamais</h2>
+<p class="lede">Chaque idée en attrape une autre par la main. La chaîne de la session, maillon après maillon, jusqu&rsquo;au sourire final.</p>
+</div>
+<div class="chain">
+<div class="lk">
+<span class="ye stamp boss">Ordre du capitaine</span>
+<p>« Les Crazy 8s ? <strong>Passe, on va droit au JTBD.</strong> »</p>
+<span class="who">le boss · l&rsquo;échauffement sauté, la montée commence</span>
+</div>
+<div class="lk">
+<span class="ye stamp gold">Oui, et…</span>
+<p>Quatre acteurs minés à fond — « et si on croisait les <strong>futurs</strong> ? » → Scenario Cross, le cap Championne&nbsp;+&nbsp;Forge est posé.</p>
+<span class="who">maillons 1 &amp; 2 · jtbd → scenario cross</span>
+</div>
+<div class="lk">
+<span class="ye stamp gold">Oui, et…</span>
+<p>« Et la <strong>logistique du jour J</strong> ? » → la carte du stade se dessine, branches complètes, de la check-list batteries au bilan du directoire.</p>
+<span class="who">maillon 3 · mind mapping</span>
+</div>
+<div class="lk">
+<span class="ye stamp gold">Oui, et…</span>
+<p>« Et alors ? » — « <strong>C&rsquo;est déjà très bien, honnêtement.</strong> »</p>
+<span class="who">le boss, satisfait · signe de fin de génération</span>
+</div>
+</div>
+<div class="medal">TOUR JUGÉE<br>COMPLÈTE</div>
+<div class="conv reveal">
+<b>Convergence</b>
+<p>Le move choisi : <strong>MoSCoW</strong> — le scoping du build pour le <strong>26 mars 2027</strong>. Direction le coffre.</p>
+</div>
+</section>
+<hr class="gpx">
+<section class="stage reveal" id="coffre">
+<div class="stage-num">★</div>
+<div class="stage-head">
+<span class="skick">Le climax · la synthèse</span>
+<h2>Le coffre</h2>
+<p class="lede">Tout ce que la chasse a rapporté, réuni dans un même coffre : les quatre jobs gravés sur le couvercle, le verdict, la boucle du trésor, le sac MoSCoW, les quatre fanions — et l&rsquo;eau du sommet.</p>
+</div>
+<div class="chest-scene">
+<div class="chest" id="chest">
+<div class="glow"></div>
+<div class="cbody"></div>
+<div class="lid"></div>
+<div class="lock"><i></i></div>
+</div>
+<button class="btn" id="chestBtn" aria-expanded="false">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8" cy="14" r="4.5"/><path d="M11.5 10.5 L20 2"/><path d="M16 6 l3 3"/></svg>
+<span>Ouvrir le coffre</span>
+</button>
+</div>
+<div class="vault" id="vault">
+<div class="vb" style="--d:.05s">
+<div class="vk">Gravés sur le couvercle · les quatre phrases</div>
+<div class="phrases">
+<div class="ph" style="--c:var(--green)"><span class="who">01 · Organisateur</span><p>« Tiens ton trail en zone blanche avec une appli clé en main — et forge, édition après édition, ta réputation dans le milieu. »</p></div>
+<div class="ph" style="--c:var(--water)"><span class="who">02 · Sponsor</span><p>« Soutiens une petite initiative ambitieuse, affine ton image d&rsquo;entreprise du peuple — et récolte la présence médiatique. »</p></div>
+<div class="ph" style="--c:var(--terra)"><span class="who">03 · Coureur</span><p>« Inscris-toi simplement, garde ton dossier sous l&rsquo;œil en un coup d&rsquo;œil — et savoure une interface qui en jette. »</p></div>
+<div class="ph" style="--c:var(--ochre)"><span class="who">04 · Volontaire</span><p>« Vis un jour J fluide : ton secteur, ton rôle, ta fiche mission offline dans la poche. »</p></div>
+</div>
+</div>
+<div class="vb" style="--d:.15s">
+<div class="vk">Le verdict · Championne + Forge</div>
+<div class="schema">
+<div class="sch"><b>Organisation</b><p>Multi-organisation natif : chaque trail demandera <strong>son instance d&rsquo;Azzel, à son image</strong> — mêmes outils qu&rsquo;Aït-Aïssi.</p></div>
+<div class="sch"><b>Événement</b><p>Du stade au bilan : <strong>un seul point de chute</strong>, tout enregistré au fil de l&rsquo;eau — inscrits, passages, abandons, portée.</p></div>
+<div class="sch"><b>Édition</b><p>Les données d&rsquo;une édition <strong>capitalisent sur l&rsquo;autre</strong> : coureurs revenants, historique, comparatifs — et celles de la 1re édition <em>(à vérifier)</em> en point de départ.</p></div>
+</div>
+</div>
+<div class="vb" style="--d:.25s">
+<div class="vk">La boucle du trésor · elle tourne, édition après édition</div>
+<div class="loop-frame">
+<div class="loop-stage">
+<svg viewBox="0 0 520 520" role="img" aria-label="Boucle : l&rsquo;app nourrit le bilan, qui nourrit la vitrine, qui nourrit la réputation, qui revient à l&rsquo;app">
+<defs>
+<marker id="ar1" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f6b4f"/></marker>
+<marker id="ar2" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c9902f"/></marker>
+<marker id="ar3" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b3502e"/></marker>
+<marker id="ar4" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2e6d8e"/></marker>
+</defs>
+<circle class="ring" cx="260" cy="260" r="216" fill="none" stroke="#1d2b24" stroke-width="2" stroke-dasharray="3 10" opacity=".28"/>
+<g fill="none" stroke-width="15" stroke-linecap="round">
+<path d="M332.7,84.5 A190,190 0 0 1 435.5,187.3" stroke="#2f6b4f" stroke-dasharray="4 13" marker-end="url(#ar1)"/>
+<path d="M435.5,332.7 A190,190 0 0 1 332.7,435.5" stroke="#c9902f" stroke-dasharray="4 13" marker-end="url(#ar2)"/>
+<path d="M187.3,435.5 A190,190 0 0 1 84.5,332.7" stroke="#b3502e" stroke-dasharray="4 13" marker-end="url(#ar3)"/>
+<path d="M84.5,187.3 A190,190 0 0 1 187.3,84.5" stroke="#2e6d8e" stroke-dasharray="4 13" marker-end="url(#ar4)"/>
+</g>
+<g stroke="#f6efe3" stroke-width="3.5">
+<circle cx="260" cy="70" r="11" fill="#2f6b4f"/>
+<circle cx="450" cy="260" r="11" fill="#c9902f"/>
+<circle cx="260" cy="450" r="11" fill="#b3502e"/>
+<circle cx="70" cy="260" r="11" fill="#2e6d8e"/>
+</g>
+<circle cx="260" cy="260" r="114" fill="#fffdf6" stroke="#1d2b24" stroke-width="2.5"/>
+<circle cx="260" cy="260" r="101" fill="none" stroke="#c9902f" stroke-width="1.5" stroke-dasharray="4 6"/>
+<g text-anchor="middle" fill="#1d2b24" font-family="Georgia,serif">
+<text x="260" y="243" font-size="23" font-weight="bold">LA RÉPUTATION</text>
+<text x="260" y="272" font-size="17" letter-spacing="3">EST LE</text>
+<text x="260" y="301" font-size="23" font-weight="bold">PRODUIT</text>
+</g>
+</svg>
+<div class="ll n"><b>L&rsquo;APP</b>enregistre tout au fil de l&rsquo;eau : inscrits, passages, abandons, portée</div>
+<div class="ll e"><b>LE BILAN</b>rapports chiffrés, consolidés par le directoire</div>
+<div class="ll s"><b>LA VITRINE</b>publiée site + réseaux · résultats live partageables</div>
+<div class="ll w"><b>LA RÉPUTATION</b>coureurs revenants, sponsors conquis — et la boucle repart</div>
+</div>
+</div>
+</div>
+<div class="vb" style="--d:.35s">
+<div class="vk">Le sac du coureur · MoSCoW final pour le 26.03.2027</div>
+<div class="moscow">
+<div class="mc must">
+<span class="stamp boss">Must · déplacé sur ordre du boss</span>
+<h3>Tracking GPS sur carte</h3>
+<p>Avec un <strong>gros effort de pédagogie</strong> : prévenir les coureurs — équipez-vous de batterie externe. La trace vivante n&rsquo;est pas négociable.</p>
+</div>
+<div class="mc should">
+<span class="stamp insight">Should</span>
+<h3>Timeline d&rsquo;engagement</h3>
+<p>Pas de verdict contraire : elle reste en Should. <strong>Le reste du tri tient.</strong></p>
+</div>
+<div class="mc rec">
+<span class="stamp" style="color:#2e6d8e">La recette inattendue</span>
+<h3>Powerbanks vendues le jour J</h3>
+<p>Nouvelle rentrée d&rsquo;argent imaginée en route : la batterie vendue nourrit <strong>la santé</strong> (trace vivante) <strong>et la caisse</strong>.</p>
+</div>
+<div class="mc">
+<span class="stamp decision">Écarté · la preuve suffit</span>
+<h3>Pas de passerelle de paiement</h3>
+<p>Le coureur paie au <strong>CCP</strong>, uploade la preuve, l&rsquo;organisateur valide le dossier. Simple, tenu, déjà rodé.</p>
+</div>
+<div class="mc">
+<span class="stamp dashed">Hors app</span>
+<h3>Le dehors assumé</h3>
+<p>La <strong>gestion du sponsoring</strong> reste dehors ; l&rsquo;app met en valeur le sponsor unique une fois contractualisé. Le dossier <strong>fédération</strong> aussi, dehors.</p>
+</div>
+<div class="mc park">
+<span class="stamp dashed">Parqué · le cabas de départ</span>
+<h3>Idées de Mary, aimées puis parquées</h3>
+<p>Module photos/média (galerie, kit presse TVs locales), rapport sponsor auto-généré, emplacement signature sponsor. Pour la prochaine édition.</p>
+</div>
+</div>
+</div>
+<div class="vb" style="--d:.45s">
+<div class="vk">Quatre fanions · structurels, pas décoratifs</div>
+<div class="flags">
+<div class="flag f1"><div class="fband">SPORT</div><p>Le trail lui-même, les exhibitions sportives, la performance — la raison d&rsquo;être de la journée.</p></div>
+<div class="flag f2"><div class="fband">SANTÉ</div><p>La powerbank vendue = la trace vivante qui ne s&rsquo;éteint pas — et une recette pour l&rsquo;organisation.</p></div>
+<div class="flag f3"><div class="fband">CITOYENNETÉ</div><p>La multi-instance d&rsquo;Azzel, à l&rsquo;échelle des villages : chaque commune peut organiser, outillée pareil.</p></div>
+<div class="flag f4"><div class="fband">ÉCOLOGIE</div><p>Zéro papier le jour J, e-dossard : le dossier validé en ligne, le dossard prêt, la forêt remercie.</p></div>
+</div>
+<div class="co reveal" style="margin-top:18px"><b>La connexion qui change tout</b><p style="font-size:15px">Les quatre thèmes = <strong>le langage exact que cherche le sponsor « entreprise du peuple »</strong>. Ce ne sont pas des rubriques de site : c&rsquo;est l&rsquo;ADN du positionnement.</p></div>
+</div>
+<div class="vb" style="--d:.55s">
+<div class="vk">La bouteille d&rsquo;eau du sommet · Ifri</div>
+<div class="ifri">
+<svg class="drop" viewBox="0 0 24 24" fill="#eaf4f8" aria-hidden="true"><path d="M12,1.8 C17,9 20.4,13 20.4,17 a8.4,8.4 0 1 1 -16.8,0 C3.6,13 7,9 12,1.8 Z"/></svg>
+<span class="stamp white">sponsor visé · à préciser avant les artefacts</span>
+<p class="q">« On va cibler Ifri. » — l&rsquo;annonce du Boss, tombée vers la fin de la chasse.</p>
+<h3>Ifri Algérie · la marque d&rsquo;eau minérale</h3>
+<p style="margin-top:6px">C&rsquo;est l&rsquo;entreprise avec laquelle on compte monter le <strong>contrat de sponsoring</strong> — le sponsor unique à mettre en valeur dans l&rsquo;app, une fois le contrat signé. La négociation se joue dehors ; la vitrine, dedans.</p>
+<span class="next">Prochaine borne · one-pager sponsor Ifri (artefact n°3)</span>
+</div>
+</div>
+<div class="vb" style="--d:.65s">
+<div class="vk">La photo d&rsquo;arrivée · soir du 27 mars 2027</div>
+<div class="podium">
+<div class="step h2"><b>Télévisions locales</b><p>Des reportages <strong>élogieux</strong>, après la preuve de la 1re édition : 2 chaînes nationales, 5 minutes d&rsquo;antenne.</p></div>
+<div class="step h1"><b>Fédération</b><p>Des <strong>félicitations</strong>, au soir du 27.03 — la reconnaissance du milieu, le trésor nommé.</p></div>
+<div class="step h3"><b>Réseaux sociaux</b><p>Forte visibilité, <strong>de belles images</strong> — le carburant des partages et de l&rsquo;édition suivante.</p></div>
+</div>
+</div>
+<div class="vb" style="--d:.75s">
+<div class="vk">Gravé dans le bois du coffre</div>
+<p class="quote-xl">« Azzel n&rsquo;est pas un outil de chronométrage. C&rsquo;est un <em>projet sportif-citoyen outillé</em> — la réputation est le produit. »</p>
+<div class="ql-und"></div>
+</div>
+</div>
+</section>
+<footer>
+<div class="seal-wax">A</div>
+<p>Cousu depuis le memlog de la session · AZZEL × MARY &amp; BOSS · 19 OCTOBRE 2026<br>
+TARGET : 26.03.2027 · AÏT-AÏSSI (YAKOUREN) · CHAMPIONNE + FORGE · PROCHAINE BORNE : ONE-PAGER IFRI<br>
+À ROUVRIR COMME UNE CARTE POSTALE DE LA MONTAGNE — ET À PARTAGER.</p>
+</footer>
+</div>
+<svg class="compass" id="compass" viewBox="0 0 80 80" aria-hidden="true">
+<circle cx="40" cy="40" r="36" fill="#f6efe3" stroke="#1d2b24" stroke-width="3"/>
+<g stroke="#1d2b24" stroke-width="2"><line x1="40" y1="6" x2="40" y2="14"/><line x1="40" y1="66" x2="40" y2="74"/><line x1="6" y1="40" x2="14" y2="40"/><line x1="66" y1="40" x2="74" y2="40"/></g>
+<g id="needle"><polygon points="40,14 45,42 40,38 35,42" fill="#b3502e"/><polygon points="40,66 45,38 40,42 35,38" fill="#2f6b4f"/></g>
+<circle cx="40" cy="40" r="4" fill="#c9902f" stroke="#1d2b24" stroke-width="1.5"/>
+<text x="40" y="27" text-anchor="middle" font-size="9" font-family="Georgia,serif" fill="#1d2b24">N</text>
+</svg>
+<script>
+(function(){
+document.body.classList.add("js");
+var vault=document.getElementById("vault"),chest=document.getElementById("chest"),btn=document.getElementById("chestBtn");
+vault.classList.add("armed");
+function setOpen(o){chest.classList.toggle("open",o);vault.classList.toggle("lit",o);vault.classList.toggle("armed",!o);btn.setAttribute("aria-expanded",String(o));btn.querySelector("span").textContent=o?"Refermer le coffre":"Ouvrir le coffre";}
+btn.addEventListener("click",function(){setOpen(!chest.classList.contains("open"));});
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}});},{threshold:.12});
+document.querySelectorAll(".reveal").forEach(function(el){io.observe(el);});
+var needle=document.getElementById("needle"),tick=false;
+window.addEventListener("scroll",function(){if(tick)return;tick=true;requestAnimationFrame(function(){needle.setAttribute("transform","rotate("+((window.scrollY*0.08)%360)+" 40 40)");tick=false;});},{passive:true});
+var stage=document.getElementById("mmStage"),edges=document.getElementById("mmEdges"),center=document.getElementById("mmCenter");
+function draw(){
+if(!window.matchMedia("(min-width: 920px)").matches){edges.innerHTML="";return;}
+var r=stage.getBoundingClientRect();edges.setAttribute("viewBox","0 0 "+r.width+" "+r.height);edges.innerHTML="";
+var c=center.getBoundingClientRect(),cx=c.left-r.left+c.width/2,cy=c.top-r.top+c.height/2;
+stage.querySelectorAll(".nd:not(.ctr)").forEach(function(n){
+var b=n.getBoundingClientRect(),nx=b.left-r.left+b.width/2,ny=b.top-r.top+b.height/2;
+var dx=nx-cx,dy=ny-cy,qx=cx+dx*.5+dy*.14,qy=cy+dy*.5-dx*.14;
+var p=document.createElementNS("http://www.w3.org/2000/svg","path");
+p.setAttribute("d","M"+cx+","+cy+" Q"+qx+","+qy+" "+nx+","+ny);
+p.setAttribute("fill","none");p.setAttribute("stroke","#2f6b4f");p.setAttribute("stroke-width","2.5");
+p.setAttribute("stroke-dasharray","3 8");p.setAttribute("stroke-linecap","round");p.setAttribute("opacity",".5");
+edges.appendChild(p);
+var d=document.createElementNS("http://www.w3.org/2000/svg","circle");
+d.setAttribute("cx",nx);d.setAttribute("cy",ny);d.setAttribute("r","3.5");d.setAttribute("fill","#2f6b4f");
+edges.appendChild(d);
+});
+}
+draw();
+var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(draw,150);});
+window.addEventListener("load",draw);
+})();
+</script>
+
+
+
+</body>
+</html>

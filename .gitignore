@@ -1,0 +1,27 @@
+# Dépendances
+node_modules/
+
+# Builds
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Expo
+.expo/
+expo-env.d.ts
+ios/
+android/
+
+# Divers
+.DS_Store
+*.log
+coverage/
+
+# Environnement
+.env
+.env.*
+!.env.example
+
+# Config outil locale (contient des secrets)
+.opencode/

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3610" height="1904" viewBox="0 0 3610 1904">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="40.0" y="40.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="bold" fill="#1e1e1e" text-anchor="start"><tspan x="40.0" dy="22.4">Azzel — Architecture d&#x27;information · Trail d&#x27;Ait-Aissi · 26/03/2027 · Kabylie</tspan></text>
+<rect x="40.0" y="132.0" width="660.0" height="540.0" rx="8" fill="#d0ebff" stroke="#1971c2" stroke-width="2"/>
+<text x="70.0" y="146.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#1971c2" text-anchor="start"><tspan x="70.0" dy="16.0">1 · Vitrine publique — sans compte · Next.js · &lt; 300 Ko</tspan></text>
+<rect x="70.0" y="192.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#1971c2" stroke-width="1"/>
+<text x="369.5" y="204.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="369.5" dy="12.8">Page course — dates · Longue 35 km / Moyenne 10–15 km</tspan><tspan x="369.5" dy="20.0">parcours GPX · égide Fédération + ministère</tspan></text>
+<rect x="70.0" y="268.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#1971c2" stroke-width="1"/>
+<text x="369.5" y="280.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="369.5" dy="12.8">Carte live publique</tspan><tspan x="369.5" dy="20.0">dossards anonymes · positions &gt; 1 h estompées</tspan></text>
+<rect x="70.0" y="344.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#1971c2" stroke-width="1"/>
+<text x="370.0" y="356.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="370.0" dy="12.8">Résultats en direct</tspan><tspan x="370.0" dy="20.0">URLs partageables · fraîcheur affichée</tspan></text>
+<rect x="70.0" y="420.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#1971c2" stroke-width="1"/>
+<text x="369.5" y="442.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="369.5" dy="12.8">Infos pratiques</tspan></text>
+<rect x="70.0" y="496.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#1971c2" stroke-width="1"/>
+<text x="369.5" y="508.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="369.5" dy="12.8">Bloc sponsors</tspan><tspan x="369.5" dy="20.0">option A : signature · option B : multiples</tspan></text>
+<rect x="780.0" y="132.0" width="560.0" height="540.0" rx="8" fill="#d3f9d8" stroke="#2f9e44" stroke-width="2"/>
+<text x="810.0" y="146.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#2f9e44" text-anchor="start"><tspan x="810.0" dy="16.0">2 · Espace coureur web (email + code)</tspan></text>
+<rect x="810.0" y="192.0" width="500.0" height="64.0" rx="8" fill="#ffffff" stroke="#2f9e44" stroke-width="1"/>
+<text x="1059.5" y="204.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1059.5" dy="12.8">Inscription</tspan><tspan x="1059.5" dy="20.0">formulaire épreuve · t-shirt</tspan></text>
+<rect x="810.0" y="268.0" width="500.0" height="64.0" rx="8" fill="#ffffff" stroke="#2f9e44" stroke-width="1"/>
+<text x="1059.5" y="280.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1059.5" dy="12.8">Décharge + règlement</tspan><tspan x="1059.5" dy="20.0">horodatés</tspan></text>
+<rect x="810.0" y="344.0" width="500.0" height="64.0" rx="8" fill="#ffffff" stroke="#2f9e44" stroke-width="1"/>
+<text x="1059.5" y="356.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1059.5" dy="12.8">Télversement preuve CCP</tspan><tspan x="1059.5" dy="20.0">compression ≤ 300 Ko</tspan></text>
+<rect x="810.0" y="420.0" width="500.0" height="64.0" rx="8" fill="#ffffff" stroke="#2f9e44" stroke-width="1"/>
+<text x="1059.5" y="432.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1059.5" dy="12.8">Checklist dossier self-service</tspan><tspan x="1059.5" dy="20.0">chaque pièce manquante → action à faire</tspan></text>
+<rect x="810.0" y="496.0" width="500.0" height="64.0" rx="8" fill="#ffffff" stroke="#2f9e44" stroke-width="1"/>
+<text x="1059.5" y="518.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1059.5" dy="12.8">E-dossard QR</tspan></text>
+<rect x="810.0" y="572.0" width="500.0" height="64.0" rx="8" fill="#ffffff" stroke="#2f9e44" stroke-width="1"/>
+<text x="1059.5" y="594.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1059.5" dy="12.8">Notifications par email</tspan></text>
+<rect x="1420.0" y="132.0" width="680.0" height="540.0" rx="8" fill="#e5dbff" stroke="#7048e8" stroke-width="2"/>
+<text x="1450.0" y="146.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#7048e8" text-anchor="start"><tspan x="1450.0" dy="16.0">3 · App native coureurs (Expo · stores · repli APK)</tspan></text>
+<rect x="1450.0" y="192.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#7048e8" stroke-width="1"/>
+<text x="1749.5" y="204.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1749.5" dy="12.8">E-dossard QR hors-ligne</tspan><tspan x="1749.5" dy="20.0">cache 30 jours</tspan></text>
+<rect x="1450.0" y="268.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#7048e8" stroke-width="1"/>
+<text x="1749.5" y="280.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1749.5" dy="12.8">Activation du tracking — opt-in</tspan><tspan x="1749.5" dy="20.0">fenêtre 5–10 min</tspan></text>
+<rect x="1450.0" y="344.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#7048e8" stroke-width="1"/>
+<text x="1749.5" y="356.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1749.5" dy="12.8">Permission localisation</tspan><tspan x="1749.5" dy="20.0">piège iOS : « Autoriser une seule fois »</tspan></text>
+<rect x="1450.0" y="420.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#7048e8" stroke-width="1"/>
+<text x="1749.5" y="442.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1749.5" dy="12.8">Pédagogie batterie</tspan></text>
+<rect x="1450.0" y="496.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#7048e8" stroke-width="1"/>
+<text x="1750.0" y="518.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1750.0" dy="12.8">Outbox sync</tspan></text>
+<rect x="40.0" y="932.0" width="700.0" height="460.0" rx="8" fill="#ffe8cc" stroke="#e8590c" stroke-width="2"/>
+<text x="70.0" y="946.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#e8590c" text-anchor="start"><tspan x="70.0" dy="16.0">4 · PWA volontaires (invitation Excel → mot de passe)</tspan></text>
+<rect x="70.0" y="992.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>
+<text x="389.5" y="1004.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="389.5" dy="12.8">Missions par secteur</tspan><tspan x="389.5" dy="20.0">couverture · vacante</tspan></text>
+<rect x="70.0" y="1068.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>
+<text x="390.0" y="1090.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="390.0" dy="12.8">Fiche mission hors-ligne</tspan></text>
+<rect x="70.0" y="1144.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>
+<text x="390.0" y="1156.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="390.0" dy="12.8">Caméra scan plein écran</tspan><tspan x="390.0" dy="20.0">&lt; 1 s · bip · feu vert / rouge</tspan></text>
+<rect x="70.0" y="1220.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>
+<text x="390.0" y="1232.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="390.0" dy="12.8">Annuaire coureurs préchargé</tspan><tspan x="390.0" dy="20.0">IndexedDB</tspan></text>
+<rect x="70.0" y="1296.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>
+<text x="389.5" y="1308.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="389.5" dy="12.8">Outbox sync</tspan><tspan x="389.5" dy="20.0">« 217 passages en attente → envoyés »</tspan></text>
+<rect x="940.0" y="932.0" width="1180.0" height="460.0" rx="8" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2"/>
+<text x="970.0" y="946.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#c92a2a" text-anchor="start"><tspan x="970.0" dy="16.0">5 · Portail admin / PC course (temps réel réservé admin)</tspan></text>
+<rect x="970.0" y="992.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1244.5" y="1004.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1244.5" dy="12.8">Tableau de bord live</tspan><tspan x="1244.5" dy="20.0">retraits · partants · en course · arrivés · fraîcheur</tspan></text>
+<rect x="970.0" y="1068.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1245.0" y="1090.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1245.0" dy="12.8">Alertes hors-délais clignotantes</tspan></text>
+<rect x="970.0" y="1144.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1244.5" y="1156.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1244.5" dy="12.8">Abandons</tspan><tspan x="1244.5" dy="20.0">lieu · motif · heure</tspan></text>
+<rect x="970.0" y="1220.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1245.0" y="1232.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1245.0" dy="12.8">Validation / refus de dossiers</tspan><tspan x="1245.0" dy="20.0">avec motif</tspan></text>
+<rect x="1540.0" y="992.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1815.0" y="1004.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1815.0" dy="12.8">Secteurs &amp; missions</tspan><tspan x="1815.0" dy="20.0">import Excel volontaires</tspan></text>
+<rect x="1540.0" y="1068.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1815.0" y="1090.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1815.0" dy="12.8">Annulation auditable de passages</tspan></text>
+<rect x="1540.0" y="1144.0" width="550.0" height="64.0" rx="8" fill="#ffffff" stroke="#c92a2a" stroke-width="1"/>
+<text x="1814.5" y="1156.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1814.5" dy="12.8">Rapports post-course</tspan><tspan x="1814.5" dy="20.0">export J-10</tspan></text>
+<rect x="870.0" y="752.0" width="420.0" height="80.0" rx="8" fill="#e9ecef" stroke="#343a40" stroke-width="2"/>
+<text x="1080.0" y="772.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#343a40" text-anchor="middle"><tspan x="1080.0" dy="12.8">Serveur Azzel</tspan><tspan x="1080.0" dy="20.0">outbox append-only · lots idempotents</tspan></text>
+<rect x="40.0" y="1452.0" width="2080.0" height="190.0" rx="8" fill="#f1f3f5" stroke="#868e96" stroke-width="2"/>
+<text x="80.0" y="1466.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#495057" text-anchor="start"><tspan x="80.0" dy="16.0">Transverses — « l&#x27;appareil propose, le serveur dispose »</tspan></text>
+<rect x="80.0" y="1504.0" width="650.0" height="56.0" rx="8" fill="#ffffff" stroke="#868e96" stroke-width="1"/>
+<text x="404.5" y="1522.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="404.5" dy="12.8">Outbox append-only · lots idempotents</tspan></text>
+<rect x="760.0" y="1504.0" width="650.0" height="56.0" rx="8" fill="#ffffff" stroke="#868e96" stroke-width="1"/>
+<text x="1085.0" y="1522.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1085.0" dy="12.8">Session unique par compte · jeton d&#x27;appareil</tspan></text>
+<rect x="1440.0" y="1504.0" width="650.0" height="56.0" rx="8" fill="#ffffff" stroke="#868e96" stroke-width="1"/>
+<text x="1764.5" y="1522.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1764.5" dy="12.8">Enveloppe d&#x27;erreur unique</tspan></text>
+<rect x="80.0" y="1572.0" width="650.0" height="56.0" rx="8" fill="#ffffff" stroke="#868e96" stroke-width="1"/>
+<text x="405.0" y="1590.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="405.0" dy="12.8">Horodatage UTC → affichage local</tspan></text>
+<rect x="760.0" y="1572.0" width="650.0" height="56.0" rx="8" fill="#ffffff" stroke="#868e96" stroke-width="1"/>
+<text x="1085.0" y="1590.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1085.0" dy="12.8">Anonymat public · dossard qualifié par édition</tspan></text>
+<rect x="1440.0" y="1572.0" width="650.0" height="56.0" rx="8" fill="#ffffff" stroke="#868e96" stroke-width="1"/>
+<text x="1765.0" y="1590.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1765.0" dy="12.8">UI français</tspan></text>
+<text x="739.5" y="215.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="739.5" dy="11.2">inscription</tspan></text>
+<polyline points="674.0,224.0 806.0,224.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="806.0,224.0 793.2,229.7 793.2,218.3" fill="#495057"/>
+<polyline points="816.0,256.0 795.0,256.0 795.0,528.0 806.0,528.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="806.0,528.0 793.2,533.7 793.2,522.3" fill="#495057"/>
+<text x="1379.5" y="367.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1379.5" dy="11.2">e-dossard</tspan></text>
+<polyline points="1314.0,528.0 1380.0,528.0 1380.0,224.0 1446.0,224.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="1446.0,224.0 1433.2,229.7 1433.2,218.3" fill="#495057"/>
+<polyline points="80.0,1208.0 56.0,1208.0 56.0,1328.0 66.0,1328.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="66.0,1328.0 53.2,1333.7 53.2,1322.3" fill="#495057"/>
+<text x="789.5" y="1051.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="789.5" dy="11.2">passages · lots idempotents</tspan></text>
+<polyline points="714.0,1328.0 800.0,1328.0 800.0,792.0 866.0,792.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="866.0,792.0 853.2,797.7 853.2,786.3" fill="#495057"/>
+<text x="437.5" y="563.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="437.5" dy="11.2">résultats live + positions</tspan></text>
+<polyline points="866.0,768.0 10.0,768.0 10.0,376.0 66.0,376.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="66.0,376.0 53.2,381.7 53.2,370.3" fill="#495057"/>
+<text x="1522.0" y="669.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1522.0" dy="11.2">positions (tracking)</tspan></text>
+<polyline points="1750.0,564.0 1750.0,792.0 1294.0,792.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="1294.0,792.0 1306.8,786.3 1306.8,797.7" fill="#495057"/>
+<text x="1412.0" y="729.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#495057" text-anchor="middle"><tspan x="1412.0" dy="11.2">annulation → classements</tspan></text>
+<polyline points="2094.0,1100.0 2150.0,1100.0 2150.0,722.0 750.0,722.0 750.0,376.0 674.0,376.0" fill="none" stroke="#495057" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><polygon points="674.0,376.0 686.8,370.3 686.8,381.7" fill="#495057"/>
+</svg>

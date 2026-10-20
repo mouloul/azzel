@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Thèmes chromatiques · Registre VILLAGE</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS","Segoe UI",system-ui,sans-serif;background:#EDE7DB;color:#25201A;padding:26px 22px 40px}
+  .page-head{max-width:1720px;margin:0 auto 22px}
+  .page-head h1{font-size:27px;letter-spacing:.01em}
+  .page-head .sub{margin-top:6px;font-size:13.5px;color:#5C5346;max-width:980px;line-height:1.55}
+  .aa-note{margin-top:10px;display:inline-block;font-size:11.5px;font-weight:700;color:#3F382C;background:#FFFFFF;border:1px solid #D5CCBB;border-radius:999px;padding:6px 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(345px,1fr));gap:18px;max-width:1720px;margin:0 auto}
+  .theme{background:#FFFFFF;border:1px solid #D8D0C0;border-radius:18px;overflow:hidden;box-shadow:0 6px 18px rgba(60,45,30,.07)}
+  .theme-head{padding:13px 16px 11px;border-bottom:1px solid #E6DFD0;background:#FBF8F1}
+  .theme-head h2{font-size:16.5px}
+  .theme-head p{font-size:12px;color:#5C5346;margin-top:3px;line-height:1.45}
+
+  .mode{background:var(--bg);color:var(--texte);padding:14px;display:grid;gap:11px}
+  .mode + .mode{border-top:4px solid #D8D0C0}
+  .mode-tag{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--t2)}
+  .mode-tag i{width:8px;height:8px;border-radius:50%;background:var(--action)}
+
+  .grp{display:grid;gap:5px}
+  .grp-t{font-size:9.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--t2)}
+  .swatches{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--texte);line-height:1.2}
+  .chip .dot{width:11px;height:11px;border-radius:50%;background:var(--c);border:1px solid rgba(0,0,0,.22);flex:none}
+  .chip code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5px;opacity:.78}
+  .chip.solid{background:var(--c);color:var(--ink);border-color:transparent;font-weight:700}
+  .chip.solid code{opacity:.85}
+
+  .phone{width:100%;max-width:272px;margin:0 auto;background:var(--surface);border:1.5px solid var(--line);border-radius:26px;padding:10px 10px 12px;box-shadow:0 12px 26px rgba(25,12,5,.16);display:grid;gap:8px}
+  .p-notch{width:64px;height:5px;border-radius:99px;background:var(--line);margin:1px auto 0}
+  .p-vitrine{background:var(--texte);color:var(--bg);border-radius:999px;padding:7px 12px;font-size:11px;font-weight:800;text-align:center;letter-spacing:.01em}
+  .p-cam{position:relative;border-radius:15px;height:188px;background:var(--cam);overflow:hidden}
+  .cam-badge{position:absolute;top:9px;background:var(--veil);color:var(--texte);font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:999px;letter-spacing:.06em}
+  .cam-badge.l{left:9px}.cam-badge.r{right:9px;font-family:ui-monospace,Menlo,monospace;font-weight:700}
+  .vf{position:absolute;inset:12px;border:1.5px solid rgba(255,255,255,.78);border-radius:10px}
+  .scanline{position:absolute;left:12px;right:12px;height:2px;background:rgba(255,255,255,.9);box-shadow:0 0 8px rgba(255,255,255,.65);animation:scan 2.8s ease-in-out infinite}
+  @keyframes scan{0%,100%{top:20px}50%{top:calc(100% - 22px)}}
+  .ov-stack{position:absolute;left:9px;right:9px;bottom:9px;display:grid;gap:5px}
+  .ov-dossard{background:var(--veil);color:var(--texte);border-radius:10px;padding:7px 10px;font-size:13.5px;font-weight:800;line-height:1.25}
+  .ov-dossard small{display:block;font-size:9.5px;font-weight:700;color:var(--t2);letter-spacing:.05em}
+  .ov-ok{background:var(--ok);color:var(--ok-ink);border-radius:999px;padding:6px 11px;font-size:11.5px;font-weight:800;display:flex;align-items:center;gap:6px}
+  .ov-ok b{font-family:ui-monospace,Menlo,monospace;font-weight:700}
+
+  .p-states{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .st{border-radius:10px;padding:7px 9px;font-size:10.5px;font-weight:800;display:flex;align-items:center;gap:7px;line-height:1.25}
+  .st small{display:block;font-size:9px;font-weight:700;opacity:.85}
+  .st .lamp{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none;animation:blink 1.1s steps(2,start) infinite}
+  @keyframes blink{50%{opacity:.2}}
+  .st-danger{background:var(--danger);color:var(--danger-ink)}
+  .st-warn{background:var(--warn);color:var(--warn-ink)}
+  .st-wait{background:var(--wait);color:var(--wait-ink)}
+  .st-sent{background:var(--sent);color:var(--sent-ink)}
+
+  .cta{background:var(--action);color:var(--action-ink);border:none;border-radius:999px;padding:11px 10px;font-size:14px;font-weight:800;font-family:inherit;text-align:center;letter-spacing:.02em}
+  .p-foot{display:flex;justify-content:space-between;font-size:9px;font-weight:700;color:var(--t2);letter-spacing:.04em}
+</style>
+
+<style>
+/* ── V1 · TERRE CUITE ───────────────────────────────────────────
+   CLAIR  bg #F8EFE4 · surface #FFFDF9 · texte #3B2116 · texte-2 #7A5744
+          action #B03A1B / action-texte #FFF8F0
+          succès #256B3B · danger #B3261E · attention #8F5F00
+          sync-attente #7A4E12 · sync-envoyé #1F5F6B   (encres : blanc)
+   SOMBRE bg #241511 · surface #33201A · texte #F5E6D8 · texte-2 #C9A690
+          action #E06A3F / action-texte #2A1006
+          succès #58C779 (encre #0B2E18) · danger #FF6B5A (#330B06)
+          attention #F5B83D (#3A2600) · sync-attente #D29A5B (#2E1B05)
+          sync-envoyé #63C6D9 (#05262D)                            */
+.t1-l{--bg:#F8EFE4;--surface:#FFFDF9;--texte:#3B2116;--t2:#7A5744;--line:rgba(59,33,22,.16);
+  --action:#B03A1B;--action-ink:#FFF8F0;--ok:#256B3B;--ok-ink:#FFFFFF;--danger:#B3261E;--danger-ink:#FFFFFF;
+  --warn:#8F5F00;--warn-ink:#FFFFFF;--wait:#7A4E12;--wait-ink:#FFFFFF;--sent:#1F5F6B;--sent-ink:#FFFFFF;
+  --veil:rgba(255,253,249,.93);--cam:linear-gradient(180deg,#D9A05B 0%,#A8683A 55%,#6E4527 100%)}
+.t1-d{--bg:#241511;--surface:#33201A;--texte:#F5E6D8;--t2:#C9A690;--line:rgba(245,230,216,.17);
+  --action:#E06A3F;--action-ink:#2A1006;--ok:#58C779;--ok-ink:#0B2E18;--danger:#FF6B5A;--danger-ink:#330B06;
+  --warn:#F5B83D;--warn-ink:#3A2600;--wait:#D29A5B;--wait-ink:#2E1B05;--sent:#63C6D9;--sent-ink:#05262D;
+  --veil:rgba(51,32,26,.93);--cam:radial-gradient(130% 75% at 50% 0%,rgba(224,106,63,.22),transparent 60%),linear-gradient(180deg,#3A241A 0%,#241511 60%,#19100B 100%)}
+</style>
+
+<style>
+/* ── V2 · OLIVE & CRAIE ─────────────────────────────────────────
+   CLAIR  bg #F3F2EA · surface #FDFCF8 · texte #26301C · texte-2 #5C6852
+          action #4E6B1F / action-texte #F7FAEC
+          succès #2F6B3F · danger #AC2B24 · attention #8A5A00
+          sync-attente #71512B · sync-envoyé #33636B   (encres : blanc)
+   SOMBRE bg #1B2114 · surface #26301E · texte #EDEFE2 · texte-2 #B4BCA4
+          action #A8C24B / action-texte #243008
+          succès #7BD98F (#0A2E14) · danger #FF7A6B (#360D08)
+          attention #F0B342 (#33230A) · sync-attente #C89B62 (#2C1D06)
+          sync-envoyé #7CC7D4 (#07262B)                            */
+.t2-l{--bg:#F3F2EA;--surface:#FDFCF8;--texte:#26301C;--t2:#5C6852;--line:rgba(38,48,28,.16);
+  --action:#4E6B1F;--action-ink:#F7FAEC;--ok:#2F6B3F;--ok-ink:#FFFFFF;--danger:#AC2B24;--danger-ink:#FFFFFF;
+  --warn:#8A5A00;--warn-ink:#FFFFFF;--wait:#71512B;--wait-ink:#FFFFFF;--sent:#33636B;--sent-ink:#FFFFFF;
+  --veil:rgba(253,252,248,.93);--cam:linear-gradient(180deg,#A9B26A 0%,#77803F 55%,#4A5228 100%)}
+.t2-d{--bg:#1B2114;--surface:#26301E;--texte:#EDEFE2;--t2:#B4BCA4;--line:rgba(237,239,226,.16);
+  --action:#A8C24B;--action-ink:#243008;--ok:#7BD98F;--ok-ink:#0A2E14;--danger:#FF7A6B;--danger-ink:#360D08;
+  --warn:#F0B342;--warn-ink:#33230A;--wait:#C89B62;--wait-ink:#2C1D06;--sent:#7CC7D4;--sent-ink:#07262B;
+  --veil:rgba(38,48,30,.93);--cam:linear-gradient(180deg,#2C3618 0%,#1D2410 60%,#141A0B 100%)}
+</style>
+
+<style>
+/* ── V3 · ARGILE DE NUIT (dark-first) ───────────────────────────
+   CLAIR  bg #F2E4DC · surface #FDF6F1 · texte #2E1B12 · texte-2 #6E4E3F
+          action #9E3A2E / action-texte #FFF6F2
+          succès #2D6B45 · danger #A8261D · attention #805500
+          sync-attente #75502C · sync-envoyé #2F5F70   (encres : blanc)
+   SOMBRE bg #1C1210 · surface #2A1C17 · texte #F3E4DA · texte-2 #C79E8B
+          action #F07A4A / action-texte #2E0E04
+          succès #52C078 (#062711) · danger #FF6352 (#340A05)
+          attention #EFB13C (#302004) · sync-attente #CE9256 (#2B1804)
+          sync-envoyé #5CBAD0 (#04222A)                            */
+.t3-l{--bg:#F2E4DC;--surface:#FDF6F1;--texte:#2E1B12;--t2:#6E4E3F;--line:rgba(46,27,18,.16);
+  --action:#9E3A2E;--action-ink:#FFF6F2;--ok:#2D6B45;--ok-ink:#FFFFFF;--danger:#A8261D;--danger-ink:#FFFFFF;
+  --warn:#805500;--warn-ink:#FFFFFF;--wait:#75502C;--wait-ink:#FFFFFF;--sent:#2F5F70;--sent-ink:#FFFFFF;
+  --veil:rgba(253,246,241,.93);--cam:linear-gradient(180deg,#E4B48C 0%,#B26E44 55%,#6E3E24 100%)}
+.t3-d{--bg:#1C1210;--surface:#2A1C17;--texte:#F3E4DA;--t2:#C79E8B;--line:rgba(243,228,218,.16);
+  --action:#F07A4A;--action-ink:#2E0E04;--ok:#52C078;--ok-ink:#062711;--danger:#FF6352;--danger-ink:#340A05;
+  --warn:#EFB13C;--warn-ink:#302004;--wait:#CE9256;--wait-ink:#2B1804;--sent:#5CBAD0;--sent-ink:#04222A;
+  --veil:rgba(42,28,23,.93);--cam:radial-gradient(140% 80% at 50% 0%,rgba(240,122,74,.28),transparent 62%),linear-gradient(180deg,#33201A 0%,#241511 58%,#160D0A 100%)}
+</style>
+
+<style>
+/* ── V4 · SABLE & INDIGO ATLAS ──────────────────────────────────
+   CLAIR  bg #F4ECDD · surface #FDF9F0 · texte #2A2A33 · texte-2 #635C4E
+          action #3B4FB8 / action-texte #F5F7FF
+          succès #2E6B3F · danger #B3261E · attention #8F5F00
+          sync-attente #7D5A26 · sync-envoyé #2E6B7E   (encres : blanc)
+   SOMBRE bg #191A2A · surface #242638 · texte #EDEBF6 · texte-2 #B0AFC6
+          action #93A6FF / action-texte #10143A
+          succès #6FD08C (#062712) · danger #FF7061 (#350A06)
+          attention #F2B445 (#322304) · sync-attente #D2A668 (#2C1F05)
+          sync-envoyé #6FC3DC (#062530)                            */
+.t4-l{--bg:#F4ECDD;--surface:#FDF9F0;--texte:#2A2A33;--t2:#635C4E;--line:rgba(42,42,51,.16);
+  --action:#3B4FB8;--action-ink:#F5F7FF;--ok:#2E6B3F;--ok-ink:#FFFFFF;--danger:#B3261E;--danger-ink:#FFFFFF;
+  --warn:#8F5F00;--warn-ink:#FFFFFF;--wait:#7D5A26;--wait-ink:#FFFFFF;--sent:#2E6B7E;--sent-ink:#FFFFFF;
+  --veil:rgba(253,249,240,.93);--cam:linear-gradient(180deg,#E4CFA6 0%,#C2A071 55%,#8A6B44 100%)}
+.t4-d{--bg:#191A2A;--surface:#242638;--texte:#EDEBF6;--t2:#B0AFC6;--line:rgba(237,235,246,.16);
+  --action:#93A6FF;--action-ink:#10143A;--ok:#6FD08C;--ok-ink:#062712;--danger:#FF7061;--danger-ink:#350A06;
+  --warn:#F2B445;--warn-ink:#322304;--wait:#D2A668;--wait-ink:#2C1F05;--sent:#6FC3DC;--sent-ink:#062530;
+  --veil:rgba(36,38,56,.93);--cam:radial-gradient(120% 70% at 80% 0%,rgba(147,166,255,.14),transparent 55%),linear-gradient(180deg,#2B2A4A 0%,#1D1D33 58%,#131324 100%)}
+</style>
+
+<style>
+/* ── V5 · VERT DJURDJURA ────────────────────────────────────────
+   CLAIR  bg #EDF2EB · surface #FAFCF8 · texte #16281C · texte-2 #4A6252
+          action #345E4A / action-texte #EFF8F2
+          succès #187A3C · danger #B3261E · attention #8A5A00
+          sync-attente #6B5A33 · sync-envoyé #2E6570   (encres : blanc)
+   SOMBRE bg #101A14 · surface #1B281F · texte #E8F0E9 · texte-2 #A9C0AE
+          action #8FD4A8 / action-texte #0C2415
+          succès #62D288 (#07290F) · danger #FF7268 (#340905)
+          attention #F0B445 (#302205) · sync-attente #C4A366 (#291D04)
+          sync-envoyé #74C7D6 (#06262C)                            */
+.t5-l{--bg:#EDF2EB;--surface:#FAFCF8;--texte:#16281C;--t2:#4A6252;--line:rgba(22,40,28,.16);
+  --action:#345E4A;--action-ink:#EFF8F2;--ok:#187A3C;--ok-ink:#FFFFFF;--danger:#B3261E;--danger-ink:#FFFFFF;
+  --warn:#8A5A00;--warn-ink:#FFFFFF;--wait:#6B5A33;--wait-ink:#FFFFFF;--sent:#2E6570;--sent-ink:#FFFFFF;
+  --veil:rgba(250,252,248,.93);--cam:linear-gradient(180deg,#B8C9B4 0%,#7D977A 55%,#3E5E42 100%)}
+.t5-d{--bg:#101A14;--surface:#1B281F;--texte:#E8F0E9;--t2:#A9C0AE;--line:rgba(232,240,233,.16);
+  --action:#8FD4A8;--action-ink:#0C2415;--ok:#62D288;--ok-ink:#07290F;--danger:#FF7268;--danger-ink:#340905;
+  --warn:#F0B445;--warn-ink:#302205;--wait:#C4A366;--wait-ink:#291D04;--sent:#74C7D6;--sent-ink:#06262C;
+  --veil:rgba(27,40,31,.93);--cam:linear-gradient(180deg,#223528 0%,#16241B 58%,#0D1710 100%)}
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <h1>Azzel — 5 thèmes chromatiques · registre VILLAGE</h1>
+  <p class="sub">Chaleureux citoyen-local : terres, olive, ancrage Kabylie, typographie humaniste arrondie. Chaque variation décline un mode clair et un mode sombre, avec les rôles sémantiques (structure + couleurs opérationnelles jour J) et le même écran de scan bénévole.</p>
+  <span class="aa-note">Contrastes accessibles AA visés : ≥ 4,5:1 sur textes courants, ≥ 3:1 sur grands textes ; encres des chips pleines ajustées par mode.</span>
+</header>
+
+<main class="grid">
+
+  <section class="theme">
+    <div class="theme-head"><h2>1 · Terre cuite</h2><p>Argile brûlée et lumière solaire ; l'accent terracotta porte l'inscription et les confirmations.</p></div>
+
+    <div class="mode t1-l">
+      <span class="mode-tag"><i></i>Clair</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#F8EFE4"></i>bg <code>#F8EFE4</code></span>
+          <span class="chip"><i class="dot" style="--c:#FFFDF9"></i>surface <code>#FFFDF9</code></span>
+          <span class="chip"><i class="dot" style="--c:#3B2116"></i>texte <code>#3B2116</code></span>
+          <span class="chip"><i class="dot" style="--c:#7A5744"></i>texte-2 <code>#7A5744</code></span>
+          <span class="chip"><i class="dot" style="--c:#B03A1B"></i>action <code>#B03A1B</code></span>
+          <span class="chip"><i class="dot" style="--c:#FFF8F0"></i>action-texte <code>#FFF8F0</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#256B3B;--ink:#FFFFFF">succès <code>#256B3B</code></span>
+          <span class="chip solid" style="--c:#B3261E;--ink:#FFFFFF">danger <code>#B3261E</code></span>
+          <span class="chip solid" style="--c:#8F5F00;--ink:#FFFFFF">attention <code>#8F5F00</code></span>
+          <span class="chip solid" style="--c:#7A4E12;--ink:#FFFFFF">sync-attente <code>#7A4E12</code></span>
+          <span class="chip solid" style="--c:#1F5F6B;--ink:#FFFFFF">sync-envoyé <code>#1F5F6B</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+
+    <div class="mode t1-d">
+      <span class="mode-tag"><i></i>Sombre</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#241511"></i>bg <code>#241511</code></span>
+          <span class="chip"><i class="dot" style="--c:#33201A"></i>surface <code>#33201A</code></span>
+          <span class="chip"><i class="dot" style="--c:#F5E6D8"></i>texte <code>#F5E6D8</code></span>
+          <span class="chip"><i class="dot" style="--c:#C9A690"></i>texte-2 <code>#C9A690</code></span>
+          <span class="chip"><i class="dot" style="--c:#E06A3F"></i>action <code>#E06A3F</code></span>
+          <span class="chip"><i class="dot" style="--c:#2A1006"></i>action-texte <code>#2A1006</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#58C779;--ink:#0B2E18">succès <code>#58C779</code></span>
+          <span class="chip solid" style="--c:#FF6B5A;--ink:#330B06">danger <code>#FF6B5A</code></span>
+          <span class="chip solid" style="--c:#F5B83D;--ink:#3A2600">attention <code>#F5B83D</code></span>
+          <span class="chip solid" style="--c:#D29A5B;--ink:#2E1B05">sync-attente <code>#D29A5B</code></span>
+          <span class="chip solid" style="--c:#63C6D9;--ink:#05262D">sync-envoyé <code>#63C6D9</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="theme">
+    <div class="theme-head"><h2>2 · Olive &amp; Craie</h2><p>Vert olive profond posé sur craie tendre ; rural, paisible, très lisible en plein jour.</p></div>
+
+    <div class="mode t2-l">
+      <span class="mode-tag"><i></i>Clair</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#F3F2EA"></i>bg <code>#F3F2EA</code></span>
+          <span class="chip"><i class="dot" style="--c:#FDFCF8"></i>surface <code>#FDFCF8</code></span>
+          <span class="chip"><i class="dot" style="--c:#26301C"></i>texte <code>#26301C</code></span>
+          <span class="chip"><i class="dot" style="--c:#5C6852"></i>texte-2 <code>#5C6852</code></span>
+          <span class="chip"><i class="dot" style="--c:#4E6B1F"></i>action <code>#4E6B1F</code></span>
+          <span class="chip"><i class="dot" style="--c:#F7FAEC"></i>action-texte <code>#F7FAEC</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#2F6B3F;--ink:#FFFFFF">succès <code>#2F6B3F</code></span>
+          <span class="chip solid" style="--c:#AC2B24;--ink:#FFFFFF">danger <code>#AC2B24</code></span>
+          <span class="chip solid" style="--c:#8A5A00;--ink:#FFFFFF">attention <code>#8A5A00</code></span>
+          <span class="chip solid" style="--c:#71512B;--ink:#FFFFFF">sync-attente <code>#71512B</code></span>
+          <span class="chip solid" style="--c:#33636B;--ink:#FFFFFF">sync-envoyé <code>#33636B</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+
+    <div class="mode t2-d">
+      <span class="mode-tag"><i></i>Sombre</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#1B2114"></i>bg <code>#1B2114</code></span>
+          <span class="chip"><i class="dot" style="--c:#26301E"></i>surface <code>#26301E</code></span>
+          <span class="chip"><i class="dot" style="--c:#EDEFE2"></i>texte <code>#EDEFE2</code></span>
+          <span class="chip"><i class="dot" style="--c:#B4BCA4"></i>texte-2 <code>#B4BCA4</code></span>
+          <span class="chip"><i class="dot" style="--c:#A8C24B"></i>action <code>#A8C24B</code></span>
+          <span class="chip"><i class="dot" style="--c:#243008"></i>action-texte <code>#243008</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#7BD98F;--ink:#0A2E14">succès <code>#7BD98F</code></span>
+          <span class="chip solid" style="--c:#FF7A6B;--ink:#360D08">danger <code>#FF7A6B</code></span>
+          <span class="chip solid" style="--c:#F0B342;--ink:#33230A">attention <code>#F0B342</code></span>
+          <span class="chip solid" style="--c:#C89B62;--ink:#2C1D06">sync-attente <code>#C89B62</code></span>
+          <span class="chip solid" style="--c:#7CC7D4;--ink:#07262B">sync-envoyé <code>#7CC7D4</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="theme">
+    <div class="theme-head"><h2>3 · Argile de nuit</h2><p>Dark-first : brun-noir chaud, terracotta lumineux — pensé pour les départs à l'aube et les postes de nuit.</p></div>
+
+    <div class="mode t3-l">
+      <span class="mode-tag"><i></i>Clair (jour de course)</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#F2E4DC"></i>bg <code>#F2E4DC</code></span>
+          <span class="chip"><i class="dot" style="--c:#FDF6F1"></i>surface <code>#FDF6F1</code></span>
+          <span class="chip"><i class="dot" style="--c:#2E1B12"></i>texte <code>#2E1B12</code></span>
+          <span class="chip"><i class="dot" style="--c:#6E4E3F"></i>texte-2 <code>#6E4E3F</code></span>
+          <span class="chip"><i class="dot" style="--c:#9E3A2E"></i>action <code>#9E3A2E</code></span>
+          <span class="chip"><i class="dot" style="--c:#FFF6F2"></i>action-texte <code>#FFF6F2</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#2D6B45;--ink:#FFFFFF">succès <code>#2D6B45</code></span>
+          <span class="chip solid" style="--c:#A8261D;--ink:#FFFFFF">danger <code>#A8261D</code></span>
+          <span class="chip solid" style="--c:#805500;--ink:#FFFFFF">attention <code>#805500</code></span>
+          <span class="chip solid" style="--c:#75502C;--ink:#FFFFFF">sync-attente <code>#75502C</code></span>
+          <span class="chip solid" style="--c:#2F5F70;--ink:#FFFFFF">sync-envoyé <code>#2F5F70</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+
+    <div class="mode t3-d">
+      <span class="mode-tag"><i></i>Sombre (signature)</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#1C1210"></i>bg <code>#1C1210</code></span>
+          <span class="chip"><i class="dot" style="--c:#2A1C17"></i>surface <code>#2A1C17</code></span>
+          <span class="chip"><i class="dot" style="--c:#F3E4DA"></i>texte <code>#F3E4DA</code></span>
+          <span class="chip"><i class="dot" style="--c:#C79E8B"></i>texte-2 <code>#C79E8B</code></span>
+          <span class="chip"><i class="dot" style="--c:#F07A4A"></i>action <code>#F07A4A</code></span>
+          <span class="chip"><i class="dot" style="--c:#2E0E04"></i>action-texte <code>#2E0E04</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#52C078;--ink:#062711">succès <code>#52C078</code></span>
+          <span class="chip solid" style="--c:#FF6352;--ink:#340A05">danger <code>#FF6352</code></span>
+          <span class="chip solid" style="--c:#EFB13C;--ink:#302004">attention <code>#EFB13C</code></span>
+          <span class="chip solid" style="--c:#CE9256;--ink:#2B1804">sync-attente <code>#CE9256</code></span>
+          <span class="chip solid" style="--c:#5CBAD0;--ink:#04222A">sync-envoyé <code>#5CBAD0</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="theme">
+    <div class="theme-head"><h2>4 · Sable &amp; Indigo atlas</h2><p>Sable désertique rencontré à l'indigo du textile nord-africain ; contraste artisanal, encre indigo pour l'action.</p></div>
+
+    <div class="mode t4-l">
+      <span class="mode-tag"><i></i>Clair</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#F4ECDD"></i>bg <code>#F4ECDD</code></span>
+          <span class="chip"><i class="dot" style="--c:#FDF9F0"></i>surface <code>#FDF9F0</code></span>
+          <span class="chip"><i class="dot" style="--c:#2A2A33"></i>texte <code>#2A2A33</code></span>
+          <span class="chip"><i class="dot" style="--c:#635C4E"></i>texte-2 <code>#635C4E</code></span>
+          <span class="chip"><i class="dot" style="--c:#3B4FB8"></i>action <code>#3B4FB8</code></span>
+          <span class="chip"><i class="dot" style="--c:#F5F7FF"></i>action-texte <code>#F5F7FF</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#2E6B3F;--ink:#FFFFFF">succès <code>#2E6B3F</code></span>
+          <span class="chip solid" style="--c:#B3261E;--ink:#FFFFFF">danger <code>#B3261E</code></span>
+          <span class="chip solid" style="--c:#8F5F00;--ink:#FFFFFF">attention <code>#8F5F00</code></span>
+          <span class="chip solid" style="--c:#7D5A26;--ink:#FFFFFF">sync-attente <code>#7D5A26</code></span>
+          <span class="chip solid" style="--c:#2E6B7E;--ink:#FFFFFF">sync-envoyé <code>#2E6B7E</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+
+    <div class="mode t4-d">
+      <span class="mode-tag"><i></i>Sombre</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#191A2A"></i>bg <code>#191A2A</code></span>
+          <span class="chip"><i class="dot" style="--c:#242638"></i>surface <code>#242638</code></span>
+          <span class="chip"><i class="dot" style="--c:#EDEBF6"></i>texte <code>#EDEBF6</code></span>
+          <span class="chip"><i class="dot" style="--c:#B0AFC6"></i>texte-2 <code>#B0AFC6</code></span>
+          <span class="chip"><i class="dot" style="--c:#93A6FF"></i>action <code>#93A6FF</code></span>
+          <span class="chip"><i class="dot" style="--c:#10143A"></i>action-texte <code>#10143A</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#6FD08C;--ink:#062712">succès <code>#6FD08C</code></span>
+          <span class="chip solid" style="--c:#FF7061;--ink:#350A06">danger <code>#FF7061</code></span>
+          <span class="chip solid" style="--c:#F2B445;--ink:#322304">attention <code>#F2B445</code></span>
+          <span class="chip solid" style="--c:#D2A668;--ink:#2C1F05">sync-attente <code>#D2A668</code></span>
+          <span class="chip solid" style="--c:#6FC3DC;--ink:#062530">sync-envoyé <code>#6FC3DC</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="theme">
+    <div class="theme-head"><h2>5 · Vert Djurdjura</h2><p>Verts de sapins et d'altitude de la montagne kabyle ; fraîcheur, profondeur, silhouette forestière.</p></div>
+
+    <div class="mode t5-l">
+      <span class="mode-tag"><i></i>Clair</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#EDF2EB"></i>bg <code>#EDF2EB</code></span>
+          <span class="chip"><i class="dot" style="--c:#FAFCF8"></i>surface <code>#FAFCF8</code></span>
+          <span class="chip"><i class="dot" style="--c:#16281C"></i>texte <code>#16281C</code></span>
+          <span class="chip"><i class="dot" style="--c:#4A6252"></i>texte-2 <code>#4A6252</code></span>
+          <span class="chip"><i class="dot" style="--c:#345E4A"></i>action <code>#345E4A</code></span>
+          <span class="chip"><i class="dot" style="--c:#EFF8F2"></i>action-texte <code>#EFF8F2</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#187A3C;--ink:#FFFFFF">succès <code>#187A3C</code></span>
+          <span class="chip solid" style="--c:#B3261E;--ink:#FFFFFF">danger <code>#B3261E</code></span>
+          <span class="chip solid" style="--c:#8A5A00;--ink:#FFFFFF">attention <code>#8A5A00</code></span>
+          <span class="chip solid" style="--c:#6B5A33;--ink:#FFFFFF">sync-attente <code>#6B5A33</code></span>
+          <span class="chip solid" style="--c:#2E6570;--ink:#FFFFFF">sync-envoyé <code>#2E6570</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+
+    <div class="mode t5-d">
+      <span class="mode-tag"><i></i>Sombre</span>
+      <div class="grp"><span class="grp-t">Structure</span>
+        <div class="swatches">
+          <span class="chip"><i class="dot" style="--c:#101A14"></i>bg <code>#101A14</code></span>
+          <span class="chip"><i class="dot" style="--c:#1B281F"></i>surface <code>#1B281F</code></span>
+          <span class="chip"><i class="dot" style="--c:#E8F0E9"></i>texte <code>#E8F0E9</code></span>
+          <span class="chip"><i class="dot" style="--c:#A9C0AE"></i>texte-2 <code>#A9C0AE</code></span>
+          <span class="chip"><i class="dot" style="--c:#8FD4A8"></i>action <code>#8FD4A8</code></span>
+          <span class="chip"><i class="dot" style="--c:#0C2415"></i>action-texte <code>#0C2415</code></span>
+        </div>
+      </div>
+      <div class="grp"><span class="grp-t">Jour J</span>
+        <div class="swatches">
+          <span class="chip solid" style="--c:#62D288;--ink:#07290F">succès <code>#62D288</code></span>
+          <span class="chip solid" style="--c:#FF7268;--ink:#340905">danger <code>#FF7268</code></span>
+          <span class="chip solid" style="--c:#F0B445;--ink:#302205">attention <code>#F0B445</code></span>
+          <span class="chip solid" style="--c:#C4A366;--ink:#291D04">sync-attente <code>#C4A366</code></span>
+          <span class="chip solid" style="--c:#74C7D6;--ink:#06262C">sync-envoyé <code>#74C7D6</code></span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="p-notch"></div>
+        <div class="p-vitrine">Trail d'Ait-Aissi — 26 mars 2027</div>
+        <div class="p-cam">
+          <span class="cam-badge l">· LIVE</span><span class="cam-badge r">10:42:05</span>
+          <div class="vf"></div><div class="scanline"></div>
+          <div class="ov-stack">
+            <div class="ov-dossard">Dossard 217 — Checkpoint 2<small>Scan volontaire · caméra</small></div>
+            <div class="ov-ok">✓ Passage enregistré <b>10:42:07</b></div>
+          </div>
+        </div>
+        <div class="p-states">
+          <div class="st st-danger"><span class="lamp"></span><span>DÉJÀ PASSÉ<small>voyant rouge · 10:41:58</small></span></div>
+          <div class="st st-warn"><span>⚡</span><span>Batterie 12 %<small>recharge conseillée</small></span></div>
+          <div class="st st-wait"><span>◷</span><span>217 en attente<small>passages non envoyés</small></span></div>
+          <div class="st st-sent"><span>✓</span><span>Lot envoyé<small>10:44 · au serveur</small></span></div>
+        </div>
+        <button class="cta">S'inscrire</button>
+        <div class="p-foot"><span>Azzel · registre Village</span><span>Mode bénévole</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

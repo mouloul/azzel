@@ -1,0 +1,22 @@
+{
+  "name": "azzel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plateforme clé en main de gestion de course de trail — monorepo Azzel",
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "dev:web": "pnpm --filter @azzel/web dev",
+    "dev:runners": "pnpm --filter @azzel/runners start"
+  },
+  "pnpm": {
+    "overrides": {
+      "react": "~19.3.0",
+      "react-dom": "~19.3.0"
+    }
+  }
+}

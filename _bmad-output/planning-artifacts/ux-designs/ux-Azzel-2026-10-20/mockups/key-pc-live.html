@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Écran clé · PC course, tableau de bord live</title>
+<style>
+/* ============================================================================
+   ÉCRAN CLÉ 4/4 — TABLEAU DE BORD LIVE PC COURSE (admin, realtime)
+   Gouverné par :
+   - DESIGN.md frontmatter : tokens mode clair, opérationnelles clair
+     (danger #B3261E/#FFFFFF), display-sm 24/800, meta 12 / meta-lg 15
+   - DESIGN.md § Components : tableau de bord live (agrégats par checkpoint,
+     chiffres display-sm, fraîcheur en pied), ligne de board live (position en
+     gras, badge dossard mono/action/blanc radius sm, légende texte-2, heure mono
+     meta-lg alignée à droite, séparateurs pointillés, jamais de zébrage),
+     alerte hors-délais (bloc danger, clignotement lent ~1,1 s, texte intégral),
+     témoin live 9 px / 1,5 s, badge dossard, indicateur de fraîcheur meta-lg
+   - EXPERIENCE.md § IA (surface 5 : realtime réservé admin), § Component
+     Patterns (tableau live, ligne board, alerte hors-délais → appeler le secteur /
+     saisir l'abandon), § State Patterns (fraîcheur jamais présentée comme
+     instantanée), § Voice (neutre et sobre admin), UJ-3
+   ============================================================================ */
+:root{
+  --bg:#EDF2EB; --surface:#FAFCF8; --texte:#16281C; --t2:#4A6252;
+  --action:#345E4A; --action-ink:#EFF8F2;
+  --danger:#B3261E; --danger-ink:#FFFFFF;
+  --filet:rgba(22,40,28,.25); --ombre:rgba(52,94,74,.22);
+  --rond:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#DCE5DA;font-family:var(--rond);color:var(--texte);padding:28px 20px 60px;
+  display:flex;flex-direction:column;align-items:center;gap:34px}
+
+.spec{width:1200px;background:var(--surface);border:1px solid var(--filet);border-left:4px solid var(--action);
+  padding:16px 20px;font-size:13px;line-height:1.6;color:var(--t2)}
+.spec strong{font-size:15px;color:var(--texte)}
+.spec em{color:var(--action);font-style:normal;font-weight:700}
+
+.stage{display:flex;flex-direction:column;gap:10px}
+.stage-t{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--t2);font-weight:700}
+.browser{width:1200px;border:1px solid var(--filet);border-radius:16px;overflow:hidden;
+  box-shadow:0 24px 70px var(--ombre);background:var(--bg)}
+.bar{display:flex;align-items:center;gap:8px;background:#E2EADF;padding:11px 14px}
+.bar i{width:11px;height:11px;border-radius:50%;background:#C6D4C6}
+.bar i:first-child{background:var(--action)}.bar i:nth-child(2){background:#9DBAA6}.bar i:nth-child(3){background:#6E8F7B}
+.url{margin-left:12px;flex:1;background:var(--surface);border:1px solid var(--filet);border-radius:10px;
+  padding:5px 12px;font-family:var(--mono);font-size:12px;color:var(--t2)}
+.vp{overflow:hidden}
+
+.nav{display:flex;align-items:center;gap:22px;background:var(--surface);padding:14px 32px;
+  border-bottom:1px solid var(--filet)}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-size:19px;color:var(--texte)}
+.brand span{font-size:11.5px;color:var(--t2);letter-spacing:.12em}
+.nav nav{margin-left:auto;display:flex;gap:20px;font-size:14px;color:var(--t2)}
+.nav nav b{color:var(--texte);font-weight:700}
+.user{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--t2)}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--action);color:var(--action-ink);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+.theme-toggle{font-size:14px;color:var(--t2);border:1px solid var(--filet);border-radius:999px;
+  width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center}
+
+.wrap{padding:26px 32px 34px;display:flex;flex-direction:column;gap:22px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.head h1{font-size:24px;font-weight:800;color:var(--texte);display:flex;align-items:center}
+.live-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);
+  margin-right:10px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+.head .en-direct{font-size:14px;color:var(--t2);font-weight:700;margin-left:10px}
+.frais{font-family:var(--mono);font-size:15px;color:var(--t2);text-align:right;line-height:1.7}
+.frais small{display:block;font-size:12px}
+
+.alerte{background:var(--danger);color:var(--danger-ink);border-radius:16px;padding:18px 24px;
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap;animation:alerte 1.1s steps(1) infinite}
+@keyframes alerte{0%,49%{background:#B3261E}50%,100%{background:#8F1D17}}
+.alerte .lampe{flex:none;width:14px;height:14px;border-radius:50%;background:var(--danger-ink)}
+.alerte .txt{flex:1;min-width:320px}
+.alerte .surt{font-family:var(--mono);font-size:12px;letter-spacing:.14em;opacity:.9}
+.alerte .msg{font-size:18px;font-weight:800;line-height:1.4;margin-top:4px}
+.alerte .actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn-alerte{display:inline-block;background:#FFFFFF;color:var(--danger);font-weight:800;font-size:14.5px;
+  padding:12px 22px;border-radius:999px;text-decoration:none}
+
+.agg{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+.stat{background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:18px 20px}
+.stat .lab{font-size:13.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t2)}
+.stat .val{font-size:24px;font-weight:800;color:var(--texte);margin-top:8px;line-height:1.1}
+.stat .sub{font-family:var(--mono);font-size:12px;color:var(--t2);margin-top:6px}
+
+.board{background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:24px 28px}
+.board-t{font-size:24px;font-weight:800;color:var(--texte)}
+.board-s{font-size:14.5px;color:var(--t2);margin:4px 0 16px}
+.groupe{margin-top:14px}
+.groupe .g-t{font-size:13.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t2);
+  padding-bottom:8px}
+.ligne{display:grid;grid-template-columns:96px auto 1fr auto;gap:14px;align-items:center;
+  padding:11px 0;border-bottom:1px dashed var(--filet)}
+.ligne:last-child{border-bottom:none}
+.ligne .pos{font-weight:800;color:var(--texte);font-size:15px}
+.doss{justify-self:start;display:inline-block;background:var(--action);color:#FFFFFF;border-radius:8px;
+  padding:3px 10px;font-family:var(--mono);font-size:13.5px;font-weight:700}
+.ligne .leg{color:var(--t2);font-size:15px}
+.ligne .leg small{display:block;font-size:13px;margin-top:2px}
+.ligne .when{font-family:var(--mono);font-size:15px;color:var(--texte);text-align:right}
+.board-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:10px;
+  flex-wrap:wrap;font-family:var(--mono);font-size:15px;color:var(--t2)}
+.board-foot .lot{font-size:12px}
+
+.colophon{font-family:var(--mono);font-size:11px;color:#7C9284}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<aside class="spec">
+  <strong>Écran clé 4/4 — PC course · tableau de bord live (admin, realtime)</strong>
+  <p>26.03.2027, 13:04 — agrégats en <em>display-sm 24</em>, lignes de board par checkpoint
+  (badge dossard mono, heure mono 15 alignée à droite, séparateurs pointillés), fraîcheur
+  <em>meta-lg</em> jamais présentée comme instantanée, UNE alerte hors-délais clignotante
+  <em>période 1,1 s ≥ 1 s</em> — texte intégral + « Appeler le secteur » / « Saisir l'abandon ».
+  Registre neutre et sobre. Anonymat : dossard seul.</p>
+</aside>
+
+<section class="stage">
+  <p class="stage-t">PC course — desktop 1200 px · pendant-course, 13:04</p>
+  <div class="browser">
+    <div class="bar"><i></i><i></i><i></i><span class="url">https://admin.ait-aissi.dz/pc — session Nadia A.</span></div>
+    <div class="vp">
+
+      <div class="nav">
+        <div class="brand"><b>Azzel</b><span>· PC COURSE</span></div>
+        <nav><b>Tableau live</b><span>Coureurs</span><span>Secteurs &amp; missions</span><span>Dossiers</span><span>Rapports</span></nav>
+        <div class="user"><span class="theme-toggle" title="Bascule clair / sombre">◐</span><span class="avatar">NA</span>Nadia A.</div>
+      </div>
+
+      <div class="wrap">
+
+        <div class="head">
+          <h1><span class="live-dot"></span>Tableau de bord live<span class="en-direct">en direct</span></h1>
+          <p class="frais">synchronisé il y a 2 min<small>26.03.2027 · 13:04:12 · heure locale</small></p>
+        </div>
+
+        <div class="alerte" role="alert">
+          <span class="lampe" aria-hidden="true"></span>
+          <div class="txt">
+            <p class="surt">ALERTE HORS-DÉLAI · ÉMISE À 13:00</p>
+            <p class="msg">Coureur attendu au checkpoint 3 — non franchi · barrière 13:00</p>
+          </div>
+          <div class="actions">
+            <a class="btn-alerte" href="#">Appeler le secteur</a>
+            <a class="btn-alerte" href="#">Saisir l'abandon</a>
+          </div>
+        </div>
+
+        <div class="agg">
+          <div class="stat"><p class="lab">Retraits</p><p class="val">1 032</p><p class="sub">sur 1 100 inscrits</p></div>
+          <div class="stat"><p class="lab">Partants</p><p class="val">1 004</p><p class="sub">L 604 · M 400</p></div>
+          <div class="stat"><p class="lab">En course</p><p class="val">611</p><p class="sub">L 341 · M 270</p></div>
+          <div class="stat"><p class="lab">Arrivés</p><p class="val">389</p><p class="sub">L 12 · M 377</p></div>
+          <div class="stat"><p class="lab">Abandons</p><p class="val">4</p><p class="sub">saisis · lieu + motif</p></div>
+        </div>
+
+        <div class="board">
+          <p class="board-t">Derniers passages par checkpoint</p>
+          <p class="board-s">Mise à jour realtime sans flash de la liste · tri par heure de passage décroissante</p>
+
+          <div class="groupe">
+            <p class="g-t">Arrivée — village</p>
+            <div class="ligne">
+              <span class="pos">1ᵉʳ</span><span class="doss">043</span>
+              <span class="leg">Longue — premier arrivé<small>temps de course 3 h 04</small></span>
+              <span class="when">12:58:41</span>
+            </div>
+            <div class="ligne">
+              <span class="pos">2ᵉ · 1ʳᵉ F</span><span class="doss">128</span>
+              <span class="leg">Longue — première coureuse<small>à 1 min 52 du dossard 043</small></span>
+              <span class="when">13:00:33</span>
+            </div>
+          </div>
+
+          <div class="groupe">
+            <p class="g-t">Checkpoint 3 — col · barrière 13:00</p>
+            <div class="ligne">
+              <span class="pos">Dernier</span><span class="doss">217</span>
+              <span class="leg">Longue — dernier passage enregistré<small>attendu à l'arrivée vers 13:50</small></span>
+              <span class="when">12:47:10</span>
+            </div>
+            <div class="ligne">
+              <span class="pos">—</span><span class="doss">512</span>
+              <span class="leg">Longue — franchi avant la barrière<small>aucun signalement secteur</small></span>
+              <span class="when">12:44:56</span>
+            </div>
+          </div>
+
+          <div class="groupe">
+            <p class="g-t">Checkpoint 2 — Djurdjura-ouest</p>
+            <div class="ligne">
+              <span class="pos">Tête M</span><span class="doss">077</span>
+              <span class="leg">Moyenne — tête de course<small>ravitaillement tenu par le hameau</small></span>
+              <span class="when">12:41:07</span>
+            </div>
+            <div class="ligne">
+              <span class="pos">2ᵉ M</span><span class="doss">890</span>
+              <span class="leg">Moyenne<small>à 23 s du dossard 077</small></span>
+              <span class="when">12:40:44</span>
+            </div>
+          </div>
+
+          <p class="board-foot">
+            <span>synchronisé il y a 2 min · realtime réservé au PC course — si le réseau tombe, les chiffres restent affichés avec leur fraîcheur</span>
+            <span class="lot">dernier lot reçu : 217 passages · 13:02</span>
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<p class="colophon">Maquette 1:1 — Azzel · PC course · 20.10.2026 · zéro JS, zéro requête réseau.</p>
+</body>
+</html>

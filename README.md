@@ -1,0 +1,52 @@
+# Azzel
+
+Plateforme clé en main de gestion de course de trail, hors-ligne d'abord, portée par son village.
+Monorepo pnpm : web (Next.js), application coureurs (Expo, dev build) et contrat partagé (TypeScript).
+
+## Prérequis
+
+- Node.js `^22.13 || ^24.3 || >=26`
+- pnpm (activé via `corepack enable`, version indiquée dans `packageManager`)
+
+## Structure
+
+```text
+apps/
+  web/        # Vitrine, inscriptions, portail volontaires, admin — Next.js 16.4.2
+  runners/    # Application coureurs — Expo SDK 58 / RN 0.88 (dev build, pas Expo Go)
+packages/
+  shared/     # Contrat inter-apps : design tokens, enveloppe d'erreur, horodatages
+```
+
+Tout contrat partagé entre les applications vit dans `packages/shared`, nulle part ailleurs
+(tokens « Vert Djurdjura », enveloppe d'erreur versionnée, helpers d'horodatage ISO 8601 UTC).
+
+## Commandes
+
+```bash
+pnpm install        # installe le workspace (lockfile pnpm-lock.yaml)
+pnpm build          # shared (tsc) + runners (tsc) + web (next build)
+pnpm typecheck      # zéro erreur TypeScript attendue sur les trois packages
+pnpm dev:web        # serveur de développement Next.js
+pnpm dev:runners    # Metro pour la dev build coureurs (expo start --dev-client)
+```
+
+## Conventions
+
+- **Langues** : interface utilisateur en français ; code et identifiants en anglais.
+  Les rôles des design tokens font exception : ils reprennent verbatim le frontmatter
+  du système visuel (DESIGN.md).
+- **Design tokens** : source unique dans `packages/shared/src/tokens.ts`, déclinée en
+  variables CSS (`--az-*`) côté web et en thème React Native (`apps/runners/src/theme.ts`).
+  Ne jamais copier un hex dans une app : toujours dériver de `shared`.
+- **Mode sombre** : défaut = préférence système, choix mémorisé (localStorage), bascule
+  visible dans l'en-tête ; script anti-flash avant première peinture.
+- **Horodatages** : stockage ISO 8601 UTC, affichage local via `packages/shared/src/datetime.ts`.
+- **Erreurs d'API** : enveloppe unique versionnée `packages/shared/src/error-envelope.ts`
+  (`{ version, error: { code, message, action } }`) — message humain + action à faire,
+  jamais de code brut.
+- **React** : version unique 19.3.x sur tout le workspace (overrides pnpm).
+
+## Édition du projet
+
+Les artefacts de planification (specs, épopées, architecture) vivent dans `_bmad-output/`.

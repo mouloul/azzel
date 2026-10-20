@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trail d'Ait-Aissi 2027 — Dossier sponsor unique · IFRI</title>
+<style>
+  :root{
+    --ink:#12293c;
+    --navy:#0d3a5c;
+    --deep:#0a2c47;
+    --blue:#1f7ab8;
+    --water:#2e9fd6;
+    --mist:#eaf3f9;
+    --line:#d7e4ee;
+    --muted:#5b7386;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#dde6ee;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+    display:flex;justify-content:center;
+    padding:10mm 0;
+  }
+  .sheet{
+    width:210mm;
+    min-height:296mm;
+    background:#fff;
+    box-shadow:0 10px 40px rgba(13,58,92,.25);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+
+  /* ---------- En-tête ---------- */
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:9mm 12mm 5mm 12mm;
+  }
+  .brand{display:flex;align-items:center;gap:8px;}
+  .brand .mark{width:34px;height:34px;flex:none;}
+  .brand .name{font-size:15pt;font-weight:800;letter-spacing:.22em;color:var(--navy);}
+  .brand .role{font-size:6.6pt;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:1px;}
+  .doc-ref{text-align:right;}
+  .doc-ref .k{
+    font-size:6.6pt;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+  }
+  .doc-ref .v{font-size:9.5pt;font-weight:700;color:var(--navy);margin-top:2px;}
+
+  /* ---------- Héro ---------- */
+  .hero{
+    position:relative;
+    background:linear-gradient(135deg,#0a2c47 0%,#134d77 55%,#1f7ab8 100%);
+    color:#fff;
+    padding:11mm 12mm 16mm 12mm;
+  }
+  .hero .mountains{
+    position:absolute;left:0;right:0;bottom:0;width:100%;height:64px;display:block;
+  }
+  .hero .eyebrow{
+    display:inline-block;
+    font-size:7.2pt;letter-spacing:.24em;text-transform:uppercase;
+    color:#bfe0f2;
+    border:1px solid rgba(255,255,255,.35);
+    border-radius:999px;
+    padding:4px 12px;
+    margin-bottom:5mm;
+  }
+  .hero h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:27pt;line-height:1.06;font-weight:700;letter-spacing:.01em;
+  }
+  .hero h1 .thin{font-weight:400;font-style:italic;}
+  .hero p.lead{
+    margin-top:4mm;max-width:138mm;
+    font-size:9.5pt;line-height:1.5;color:#e4f1f9;
+  }
+
+  /* ---------- Chiffres ---------- */
+  .stats{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:4mm;
+    padding:7mm 12mm 6mm 12mm;
+  }
+  .stat{
+    background:var(--mist);
+    border-top:2.5px solid var(--water);
+    border-radius:0 0 8px 8px;
+    padding:4mm 4mm 4.5mm 4mm;
+  }
+  .stat .n{
+    font-family:Georgia,serif;
+    font-size:16.5pt;font-weight:700;color:var(--navy);line-height:1;
+  }
+  .stat .l{
+    margin-top:2mm;
+    font-size:7.2pt;line-height:1.4;color:var(--muted);
+  }
+
+  /* ---------- Corps ---------- */
+  main{
+    flex:1;
+    display:grid;grid-template-columns:57mm 1fr;
+    gap:9mm;
+    padding:2mm 12mm 6mm 12mm;
+  }
+  .col{display:flex;flex-direction:column;gap:6.5mm;min-width:0;}
+
+  section h2{
+    display:flex;align-items:baseline;gap:6px;
+    font-size:11pt;color:var(--navy);font-weight:800;letter-spacing:.01em;
+    margin-bottom:2.5mm;
+  }
+  section h2 .no{
+    font-family:Georgia,serif;font-weight:700;font-size:8.5pt;color:var(--water);
+    letter-spacing:.05em;
+  }
+  section p{
+    font-size:8.6pt;line-height:1.55;color:#33495b;
+  }
+  section p + p{margin-top:2mm;}
+  section p em{color:var(--navy);font-style:italic;}
+  .rule{height:1px;background:linear-gradient(90deg,var(--water),transparent);margin:0 0 3mm 0;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:2.5mm;margin:0 0 3mm 0;}
+  .chip{
+    font-size:7.4pt;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--navy);
+    background:var(--mist);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:4px 10px;
+  }
+
+  ul.bullets{list-style:none;}
+  ul.bullets li{
+    position:relative;
+    padding-left:14px;
+    font-size:8.6pt;line-height:1.5;color:#33495b;
+    margin-bottom:2.5mm;
+  }
+  ul.bullets li:last-child{margin-bottom:0;}
+  ul.bullets li::before{
+    content:"";position:absolute;left:0;top:5px;
+    width:6px;height:6px;border-radius:50% 50% 50% 0;
+    background:var(--water);
+    transform:rotate(-45deg);
+  }
+  ul.bullets b{color:var(--navy);}
+
+  .note{
+    margin-top:3mm;
+    font-size:7.6pt;line-height:1.5;font-style:italic;color:var(--muted);
+    border-left:2px solid var(--line);
+    padding-left:8px;
+  }
+
+  /* ---------- CTA ---------- */
+  .cta{
+    margin:0 12mm;
+    background:linear-gradient(120deg,#0a2c47,#14568a);
+    border-radius:12px;
+    color:#fff;
+    display:flex;align-items:center;justify-content:space-between;gap:10mm;
+    padding:7mm 9mm;
+    position:relative;overflow:hidden;
+  }
+  .cta::after{
+    content:"";position:absolute;right:-30px;top:-45px;
+    width:150px;height:150px;border-radius:50% 50% 50% 0;
+    background:rgba(255,255,255,.07);transform:rotate(45deg);
+  }
+  .cta .big{
+    font-family:Georgia,serif;
+    font-size:16.5pt;font-weight:700;line-height:1.15;
+  }
+  .cta .sub{
+    margin-top:2mm;font-size:9pt;color:#cfe4f2;line-height:1.45;
+  }
+  .cta .sub b{color:#fff;}
+  .cta .badge{
+    flex:none;text-align:center;
+    border:1px solid rgba(255,255,255,.45);
+    border-radius:10px;
+    padding:4mm 6mm;
+  }
+  .cta .badge .t{font-size:6.6pt;letter-spacing:.22em;text-transform:uppercase;color:#bfe0f2;}
+  .cta .badge .b{margin-top:1.5mm;font-size:11pt;font-weight:800;letter-spacing:.08em;}
+
+  /* ---------- Pied ---------- */
+  footer{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:5mm 12mm 7mm 12mm;
+    font-size:7pt;letter-spacing:.06em;color:var(--muted);
+  }
+  footer .dot{margin:0 5px;color:var(--water);}
+
+  /* ---------- Impression ---------- */
+  @page{size:A4;margin:0;}
+  @media print{
+    html,body{background:#fff;padding:0;}
+    .sheet{box-shadow:none;width:210mm;height:296mm;}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- En-tête -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="1" y="1" width="38" height="38" rx="9" fill="#0d3a5c"/>
+        <path d="M20 5.5c2.9 4.1 5 6.9 5 9.3a5 5 0 1 1-10 0c0-2.4 2.1-5.2 5-9.3z" fill="#2e9fd6"/>
+        <path d="M7 32l7.4-12.4L19 27l4-6.2L33 32z" fill="#ffffff" opacity=".92"/>
+      </svg>
+      <div>
+        <div class="name">AZZEL</div>
+        <div class="role">Plateforme de gestion de trail</div>
+      </div>
+    </div>
+    <div class="doc-ref">
+      <div class="k">Dossier de partenariat — sponsor unique</div>
+      <div class="v">À l'attention d'IFRI Algérie</div>
+    </div>
+  </header>
+
+  <!-- Héro -->
+  <div class="hero">
+    <span class="eyebrow">2ᵉ édition &nbsp;·&nbsp; 26 mars 2027 &nbsp;·&nbsp; Ait-Aissi, Yakouren — Kabylie</span>
+    <h1>Trail d'Ait-Aissi<br><span class="thin">l'eau vive d'un village, une course qui déborde.</span></h1>
+    <p class="lead">
+      Une course en montagne organisée par les jeunes d'un village kabyle, couverte dès sa première édition
+      par deux chaînes de télévision nationales — et qui vise, en 2027, au moins 1&nbsp;000 participants.
+    </p>
+    <svg class="mountains" viewBox="0 0 1200 64" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 64 L140 26 L250 50 L390 16 L520 56 L660 30 L800 58 L950 22 L1080 48 L1200 34 L1200 64 Z" fill="#ffffff" opacity=".08"/>
+      <path d="M0 64 L110 40 L230 60 L360 30 L500 62 L640 44 L780 62 L920 34 L1060 56 L1200 44 L1200 64 Z" fill="#ffffff" opacity=".14"/>
+      <path d="M0 64 L90 54 L210 63 L340 50 L480 64 L620 56 L760 64 L900 52 L1040 62 L1200 56 L1200 64 Z" fill="#ffffff" opacity=".22"/>
+    </svg>
+  </div>
+
+  <!-- Chiffres clés -->
+  <div class="stats">
+    <div class="stat">
+      <div class="n">1&nbsp;000+</div>
+      <div class="l">participants attendus, sur deux catégories&nbsp;: longue et courte</div>
+    </div>
+    <div class="stat">
+      <div class="n">2</div>
+      <div class="l">chaînes de télévision nationales — un reportage de 5 minutes chacune (1<sup>re</sup> édition)</div>
+    </div>
+    <div class="stat">
+      <div class="n">Milliers</div>
+      <div class="l">de vues sur Facebook, Instagram et TikTok</div>
+    </div>
+    <div class="stat">
+      <div class="n">1</div>
+      <div class="l">village d'accueil au stade d'Ait-Aissi&nbsp;: départ, arrivée, exhibitions sportives</div>
+    </div>
+  </div>
+
+  <!-- Corps -->
+  <main>
+    <div class="col">
+
+      <section>
+        <h2><span class="no">01</span> L'événement</h2>
+        <div class="rule"></div>
+        <p>
+          Le <em>26 mars 2027</em>, le village d'Ait-Aissi (Yakouren, Kabylie) accueille la 2ᵉ édition de son
+          trail. Au moins 1&nbsp;000 participants sont attendus sur deux catégories, longue et courte.
+          Tout se vit au stade d'Ait-Aissi — point unique de départ, d'arrivée et de vie de la course —
+          où s'installe le village d'accueil, animé par des événements annexes et des exhibitions sportives.
+        </p>
+      </section>
+
+      <section>
+        <h2><span class="no">02</span> La preuve médiatique</h2>
+        <div class="rule"></div>
+        <p>
+          La première édition a attiré l'attention des médias&nbsp;: <em>deux chaînes de télévision nationales</em>
+          y ont consacré un reportage de cinq minutes chacune, et les contenus de la course ont cumulé
+          <em>des milliers de vues</em> sur Facebook, Instagram et TikTok.
+        </p>
+        <p>
+          Une dynamique que cette 2ᵉ édition, portée par une organisation modernisée, entend amplifier.
+        </p>
+      </section>
+
+      <section>
+        <h2><span class="no">03</span> Une équipe de terrain</h2>
+        <div class="rule"></div>
+        <p>
+          Le trail est porté par un <em>groupe de jeunes du village</em>, sportifs amoureux de la nature.
+          Après une première édition montée sans aucune aide externe, l'équipe prépare celle-ci avec une
+          ambition claire&nbsp;: se construire une réputation dans le milieu du trail, grâce à la modernisation
+          de la gestion de la course.
+        </p>
+      </section>
+
+    </div>
+    <div class="col">
+
+      <section>
+        <h2><span class="no">04</span> Un terrain d'entente naturel</h2>
+        <div class="rule"></div>
+        <div class="chips">
+          <span class="chip">Sport</span>
+          <span class="chip">Santé</span>
+          <span class="chip">Citoyenneté</span>
+          <span class="chip">Écologie</span>
+        </div>
+        <p>
+          Quatre piliers structurent l'organisation de la course — et dessinent le langage naturel d'une
+          <em>marque d'eau minérale</em>. S'associer au trail d'Ait-Aissi, c'est incarner ces valeurs
+          sur un terrain vivant, devant un large public.
+        </p>
+      </section>
+
+      <section>
+        <h2><span class="no">05</span> Ce que ce partenariat apporte à IFRI</h2>
+        <div class="rule"></div>
+        <ul class="bullets">
+          <li>
+            <b>Image&nbsp;—</b> renforcer sa stature d'«&nbsp;entreprise du peuple&nbsp;»&nbsp;:
+            une entreprise locale qui soutient les petites initiatives ambitieuses.
+          </li>
+          <li>
+            <b>Présence médiatique&nbsp;—</b> tirer parti de la couverture d'une course modernisée,
+            suivie par les télévisions nationales et les réseaux sociaux.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span class="no">06</span> La vitrine Azzel pour le sponsor unique</h2>
+        <div class="rule"></div>
+        <p>
+          La course est gérée avec Azzel, une plateforme moderne de gestion de trail.
+          En tant que sponsor unique, votre marque est mise en lumière sur toute la vitrine publique&nbsp;:
+        </p>
+        <ul class="bullets" style="margin-top:2.5mm;">
+          <li>votre <b>signature sur la page officielle</b> de la course&nbsp;;</li>
+          <li>les <b>résultats en direct</b>, partagés en ligne&nbsp;;</li>
+          <li>les <b>contenus et les belles images</b> de la course, relayés sur les réseaux sociaux.</li>
+        </ul>
+        <p class="note">
+          Le sponsoring se contractualise directement avec l'équipe organisatrice&nbsp;;
+          l'application, elle, a pour rôle de mettre le sponsor en lumière.
+        </p>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Appel à l'action -->
+  <div class="cta">
+    <div>
+      <div class="big">Rejoignez l'aventure.</div>
+      <div class="sub">
+        <b>IFRI Algérie, sponsor unique du Trail d'Ait-Aissi — édition 2027.</b><br>
+        Rencontrons-nous pour en discuter. Rendez-vous le 26 mars 2027 à Yakouren.
+      </div>
+    </div>
+    <div class="badge">
+      <div class="t">Sponsor unique</div>
+      <div class="b">IFRI</div>
+    </div>
+  </div>
+
+  <!-- Pied de page -->
+  <footer>
+    <div>AZZEL — plateforme de gestion de trail<span class="dot">·</span>Trail d'Ait-Aissi, 2ᵉ édition</div>
+    <div>26 mars 2027<span class="dot">·</span>Yakouren, Kabylie</div>
+  </footer>
+
+</div>
+</body>
+</html>

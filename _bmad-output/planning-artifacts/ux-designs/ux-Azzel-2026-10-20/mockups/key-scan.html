@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Écran clé · Caméra scan & voyants (PWA volontaires)</title>
+<style>
+/* ============================================================================
+   ÉCRAN CLÉ 2/4 — CAMÉRA SCAN PLEIN ÉCRAN + VOYANT SCAN (3 états) + BANDEAU SYNC
+   Gouverné par :
+   - DESIGN.md frontmatter : tokens mode sombre (bg #101A14, surface #1B281F,
+     action-sombre #8FD4A8) et opérationnelles sombre (succès #62D288/#07290F,
+     danger #FF7268/#340905, sync-attente #C4A366/#291D04), meta 12 / meta-lg 15
+   - DESIGN.md § Components : caméra scan plein écran (cadre blanc, ligne de
+     balayage, badge · LIVE meta 12, heure locale meta-lg, voile quasi opaque ≥96 %),
+     voyant scan (pill ≥96 px, ≥24 px graisse 800, heure mono ≥16 px, lampe
+     clignotante ≤1 flash/s), bandeau sync (radius sm), témoin live (9 px, 1,5 s)
+   - EXPERIENCE.md § Component Patterns (caméra scan, voyant scan — ↻/⚠ différenciés,
+     bandeau sync), § Interaction Primitives (cibles ≥48 dp, gap ≥8, pause ≥64),
+     § Accessibility Floor (voile ≥96 %, clignotement borné, aria-live), UJ-2
+   ============================================================================ */
+:root{
+  --bg-d:#101A14; --surface-d:#1B281F; --texte-d:#E8F0E9; --t2-d:#A9C0AE;
+  --action-d:#8FD4A8; --action-ink-d:#0C2415;
+  --ok-d:#62D288; --ok-ink-d:#07290F;
+  --danger-d:#FF7268; --danger-ink-d:#340905;
+  --sync-att-d:#C4A366; --sync-att-ink-d:#291D04;
+  --filet-d:rgba(232,240,233,.22);
+  --rond:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0B130E;font-family:var(--rond);color:var(--texte-d);padding:28px 20px 60px;
+  display:flex;flex-direction:column;align-items:center;gap:34px}
+
+.spec{width:1100px;background:var(--surface-d);border:1px solid var(--filet-d);border-left:4px solid var(--action-d);
+  padding:16px 20px;font-size:13px;line-height:1.6;color:var(--t2-d)}
+.spec strong{font-size:15px;color:var(--texte-d)}
+.spec em{color:var(--action-d);font-style:normal;font-weight:700}
+
+.row{display:flex;gap:36px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+.stage{display:flex;flex-direction:column;align-items:center;gap:12px}
+.stage-t{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--t2-d);font-weight:700}
+
+.phone{width:320px;border:9px solid #060B08;border-radius:44px;overflow:hidden;position:relative;
+  background:#0C0F10;box-shadow:0 26px 70px rgba(0,0,0,.55)}
+.notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:108px;height:22px;
+  background:#060B08;border-radius:12px;z-index:9}
+
+.cam{position:relative;height:560px;background:
+  radial-gradient(ellipse at 50% 38%,#1A1F22 0%,#12161A 46%,#0B0E11 100%)}
+.dossard-vise{position:absolute;left:50%;top:200px;transform:translateX(-50%) rotate(-2deg);
+  width:158px;height:100px;background:#F4F6F3;border-radius:8px;padding:10px 12px;opacity:.95;
+  box-shadow:0 18px 44px rgba(0,0,0,.5)}
+.dossard-vise small{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:#4A6252}
+.dossard-vise b{display:block;text-align:center;font-size:44px;font-weight:800;color:#16281C;line-height:1.15}
+.viseur{position:absolute;left:50%;top:170px;transform:translateX(-50%);width:220px;height:164px}
+.viseur i{position:absolute;width:34px;height:34px;border:3px solid #FFFFFF}
+.viseur i:nth-child(1){left:0;top:0;border-right:none;border-bottom:none;border-radius:6px 0 0 0}
+.viseur i:nth-child(2){right:0;top:0;border-left:none;border-bottom:none;border-radius:0 6px 0 0}
+.viseur i:nth-child(3){left:0;bottom:0;border-right:none;border-top:none;border-radius:0 0 0 6px}
+.viseur i:nth-child(4){right:0;bottom:0;border-left:none;border-top:none;border-radius:0 0 6px 0}
+.scanline{position:absolute;left:50%;top:50%;transform:translateX(-50%);width:200px;height:2px;
+  background:rgba(255,255,255,.75);box-shadow:0 0 14px rgba(255,255,255,.55);
+  animation:baly 2.6s ease-in-out infinite alternate}
+@keyframes baly{from{top:22%}to{top:76%}}
+
+.veil-top{position:absolute;top:40px;left:12px;right:12px;display:flex;align-items:center;justify-content:space-between;
+  gap:8px;background:rgba(16,26,20,.96);border-radius:12px;padding:9px 12px}
+.live-chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;color:var(--texte-d)}
+.live-dot{width:9px;height:9px;border-radius:50%;background:var(--danger-d);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+.mission{font-family:var(--mono);font-size:12px;color:var(--t2-d)}
+.heure{font-family:var(--mono);font-size:15px;color:var(--texte-d);text-align:right;line-height:1.5}
+.heure small{display:block;font-size:12px;color:var(--t2-d)}
+
+.veil-bottom{position:absolute;left:12px;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px}
+.last-scan{align-self:center;background:rgba(16,26,20,.96);border-radius:8px;padding:7px 14px;
+  font-family:var(--mono);font-size:15px;color:var(--texte-d)}
+.last-scan b{color:var(--action-d)}
+.last-scan.att b{color:var(--danger-d)}
+
+.voyant{min-height:96px;border-radius:999px;padding:14px 18px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-weight:700}
+.voyant .l1{font-size:24px;font-weight:800;line-height:1.15}
+.voyant .l2{font-family:var(--mono);font-size:16px;font-weight:700}
+.voyant.ok{background:var(--ok-d);color:var(--ok-ink-d)}
+.voyant.ko{background:var(--danger-d);color:var(--danger-ink-d)}
+.lampe{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--danger-ink-d);
+  margin-right:10px;vertical-align:2px;animation:lampe 1.1s steps(1) infinite}
+@keyframes lampe{0%,49%{opacity:1}50%,100%{opacity:.25}}
+.btn-pc{display:inline-block;background:var(--danger-ink-d);color:var(--danger-d);font-weight:800;
+  font-size:15px;padding:12px 24px;border-radius:999px;text-decoration:none;min-height:48px}
+
+.sync{border-radius:8px;background:var(--sync-att-d);color:var(--sync-att-ink-d);
+  padding:13px 16px;font-family:var(--mono);font-size:15px;font-weight:700;text-align:center}
+
+.cap{width:320px;font-size:13px;line-height:1.65;color:var(--t2-d);text-align:center}
+.cap em{color:var(--texte-d);font-style:normal;font-weight:700}
+.colophon{font-family:var(--mono);font-size:11px;color:#5E7264}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}.scanline{top:50%}}
+</style>
+</head>
+<body>
+
+<aside class="spec">
+  <strong>Écran clé 2/4 — Caméra scan · le composant n°1 du jour J (PWA volontaires, thème sombre)</strong>
+  <p>Zone blanche, 10:42 : viseur plein cadre, badge <em>· LIVE</em> (meta 12) et heure locale
+  (<em>meta-lg 15</em>) sur voile quasi opaque ≥96 %. Trois états du voyant côte à côte — succès,
+  doublon <em>↻</em>, inconnu <em>⚠</em> — pill ≥96 px, texte ≥24 px graisse 800, heures mono ≥16 px,
+  lampe clignotante bornée ≤1 flash/s. Bandeau sync en pied : la file est sûre. Tutoiement volontaire.</p>
+</aside>
+
+<div class="row">
+
+  <section class="stage">
+    <p class="stage-t">État 1 · Succès</p>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="cam">
+        <div class="veil-top">
+          <span class="live-chip"><span class="live-dot"></span>· LIVE</span>
+          <span class="mission">CP2 · Djurdjura-ouest</span>
+          <span class="heure">10:42:07<small>heure locale</small></span>
+        </div>
+        <div class="viseur" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="scanline" aria-hidden="true"></div>
+        <div class="dossard-vise" aria-hidden="true"><small>TRAIL D'AIT-AISSI 2027</small><b>217</b></div>
+        <div class="veil-bottom">
+          <p class="last-scan">Dernier scan — dossard <b>217</b></p>
+          <div class="voyant ok" role="status">
+            <span class="l1">✓ Passage enregistré</span>
+            <span class="l2">dossard 217 · 10:42:07</span>
+          </div>
+          <p class="sync">◷ 217 passages en attente</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><em>Bip + feu vert en moins d'une seconde</em> — le voyant EST la confirmation,
+    écrit dans l'outbox local. Aucun bouton « valider ».</p>
+  </section>
+
+  <section class="stage">
+    <p class="stage-t">État 2 · Doublon ↻</p>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="cam">
+        <div class="veil-top">
+          <span class="live-chip"><span class="live-dot"></span>· LIVE</span>
+          <span class="mission">CP2 · Djurdjura-ouest</span>
+          <span class="heure">10:43:20<small>heure locale</small></span>
+        </div>
+        <div class="viseur" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="scanline" aria-hidden="true"></div>
+        <div class="dossard-vise" aria-hidden="true"><small>TRAIL D'AIT-AISSI 2027</small><b>217</b></div>
+        <div class="veil-bottom">
+          <p class="last-scan att">Dernier scan — dossard <b>217</b></p>
+          <div class="voyant ko" role="status">
+            <span class="l1"><span class="lampe" aria-hidden="true"></span>↻ DÉJÀ PASSÉ</span>
+            <span class="l2">vu à 10:15:33</span>
+          </div>
+          <p class="sync">◷ 217 passages en attente</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Le premier passage <em>reste</em> : le doublon est neutre, archivé pour audit.
+    Bip distinct, icône ↻ — jamais de suppression locale.</p>
+  </section>
+
+  <section class="stage">
+    <p class="stage-t">État 3 · Inconnu ⚠</p>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="cam">
+        <div class="veil-top">
+          <span class="live-chip"><span class="live-dot"></span>· LIVE</span>
+          <span class="mission">CP2 · Djurdjura-ouest</span>
+          <span class="heure">10:44:02<small>heure locale</small></span>
+        </div>
+        <div class="viseur" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="scanline" aria-hidden="true"></div>
+        <div class="dossard-vise" aria-hidden="true"><small>TRAIL D'AIT-AISSI 2027</small><b>?&nbsp;9</b></div>
+        <div class="veil-bottom">
+          <p class="last-scan att">Dernier scan — numéro <b>non reconnu</b></p>
+          <div class="voyant ko" role="status">
+            <span class="l1"><span class="lampe" aria-hidden="true"></span>⚠ DOSSARD INCONNU</span>
+            <span class="l2">revérifier</span>
+            <a class="btn-pc" href="#">Appeler le PC</a>
+          </div>
+          <p class="sync">◷ 217 passages en attente</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Numéro absent de l'annuaire préchargé : <em>appel direct au PC course</em>,
+    cible tactile ≥48 dp. Icône ⚠ différencie l'inconnu du doublon ↻.</p>
+  </section>
+
+</div>
+
+<p class="colophon">Maquette 1:1 — Azzel · PWA volontaires · 20.10.2026 · zéro JS, zéro requête réseau.</p>
+</body>
+</html>

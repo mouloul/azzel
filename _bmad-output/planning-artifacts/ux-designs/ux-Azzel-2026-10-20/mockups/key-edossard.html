@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Écran clé · Checklist dossier & e-dossard (coureur)</title>
+<style>
+/* ============================================================================
+   ÉCRAN CLÉ 3/4 — CHECKLIST DOSSIER (pièce manquante) + E-DOSSARD HORS-LIGNE
+   Gouverné par :
+   - DESIGN.md frontmatter : tokens mode sombre + opérationnelles sombre
+     (succès #62D288/#07290F), typo dossard 74/800, meta 12 / meta-lg 15,
+     rounded md 16 (carte QR), e-dossard-qr (blanc / encre #16281C)
+   - DESIGN.md § Components : checklist dossier (fait = puce succès ; à faire =
+     texte-2 ET action nommée en lien action), e-dossard (surface-sombre, frise
+     discrète en tête, badge HORS-LIGNE PRÊT meta-lg, QR carte blanche coins 16),
+     bouton contour / assistance, avatar & frise aria-hidden
+   - EXPERIENCE.md § Component Patterns (checklist dossier, e-dossard, bouton
+     assistance — SM-C1), § State Patterns (« Dossier vide / incomplet » : chaque
+     pièce nomme l'action, bouton Appeler l'équipe obligatoire ; « Hors-ligne
+     planifié »), § Voice (tutoiement coureur), UJ-1
+   ============================================================================ */
+:root{
+  --bg-d:#101A14; --surface-d:#1B281F; --texte-d:#E8F0E9; --t2-d:#A9C0AE;
+  --action-d:#8FD4A8; --action-ink-d:#0C2415;
+  --ok-d:#62D288; --ok-ink-d:#07290F;
+  --filet-d:rgba(232,240,233,.22);
+  --rond:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0B130E;font-family:var(--rond);color:var(--texte-d);padding:28px 20px 60px;
+  display:flex;flex-direction:column;align-items:center;gap:34px}
+
+.spec{width:1100px;background:var(--surface-d);border:1px solid var(--filet-d);border-left:4px solid var(--action-d);
+  padding:16px 20px;font-size:13px;line-height:1.6;color:var(--t2-d)}
+.spec strong{font-size:15px;color:var(--texte-d)}
+.spec em{color:var(--action-d);font-style:normal;font-weight:700}
+
+.row{display:flex;gap:48px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+.stage{display:flex;flex-direction:column;align-items:center;gap:12px}
+.stage-t{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--t2-d);font-weight:700}
+
+.phone{width:320px;border:9px solid #060B08;border-radius:44px;overflow:hidden;position:relative;
+  background:var(--bg-d);box-shadow:0 26px 70px rgba(0,0,0,.55)}
+.notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:108px;height:22px;
+  background:#060B08;border-radius:12px;z-index:9}
+.ph-sys{display:flex;justify-content:space-between;padding:14px 22px 6px;
+  font-family:var(--mono);font-size:12px;color:var(--t2-d)}
+.ph-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 12px;gap:8px}
+.ph-head b{font-size:15px;letter-spacing:.06em}
+.ph-head .compteur{font-family:var(--mono);font-size:12px;color:var(--t2-d)}
+.offline{font-family:var(--mono);font-size:15px;color:var(--action-d);
+  border:1px solid rgba(143,212,168,.5);padding:3px 10px;border-radius:999px;white-space:nowrap}
+
+.cartes{display:flex;flex-direction:column;gap:12px;padding:0 14px 18px}
+.carte{background:var(--surface-d);border:1px solid var(--filet-d);border-radius:24px;padding:6px 18px}
+.item{display:flex;gap:14px;align-items:flex-start;padding:15px 0;border-bottom:1px solid var(--filet-d)}
+.item:last-child{border-bottom:none}
+.puce{flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:800;margin-top:1px}
+.puce.fait{background:var(--ok-d);color:var(--ok-ink-d)}
+.puce.todo{border:2px solid var(--t2-d);color:transparent}
+.item .t{font-size:15px;font-weight:700;color:var(--texte-d);line-height:1.5}
+.item.todo-item .t{color:var(--t2-d)}
+.item .s{font-family:var(--mono);font-size:12px;color:var(--t2-d);margin-top:3px;line-height:1.6}
+.item .lien{display:block;margin-top:6px;color:var(--action-d);font-weight:700;font-size:15px;
+  text-decoration:none;line-height:1.5}
+
+.note{padding:2px 18px 4px;font-size:15px;line-height:1.7;color:var(--t2-d)}
+.note b{color:var(--texte-d)}
+
+.aide-bloc{background:var(--surface-d);border:1px solid var(--filet-d);border-radius:24px;padding:18px}
+.aide-bloc p{font-size:15px;line-height:1.7;color:var(--texte-d)}
+.btn-contour{display:block;text-align:center;border:2px solid var(--action-d);color:var(--texte-d);
+  font-weight:700;font-size:15px;padding:13px 20px;border-radius:999px;text-decoration:none;margin-top:12px}
+
+.ph-hero{margin:0 14px;background:var(--surface-d);border:1px solid var(--filet-d);
+  border-radius:24px 24px 0 0;padding:18px 18px 8px;text-align:center;position:relative;overflow:hidden}
+.frieze{position:absolute;left:0;right:0;top:0;height:9px;background:
+  repeating-linear-gradient(45deg,var(--action-d) 0 4px,transparent 4px 8px),
+  repeating-linear-gradient(-45deg,var(--action-d) 0 4px,transparent 4px 8px);
+  background-color:var(--surface-d);opacity:.55}
+.dossard-no{font-weight:800;font-size:74px;line-height:1;color:var(--texte-d);margin-top:14px}
+.dossard-no small{font-size:20px;color:var(--action-d);vertical-align:top}
+.ph-name{font-size:21px;font-weight:700;margin-top:4px;color:var(--texte-d)}
+.ph-course{font-family:var(--mono);font-size:12px;color:var(--t2-d);margin-top:8px;line-height:1.7}
+.ph-course b{color:var(--texte-d)}
+.qr-wrap{display:flex;justify-content:center;padding:16px 0 4px}
+.qr{position:relative;width:176px;height:176px;background:#FFFFFF;border-radius:16px}
+.qm{position:absolute;left:8px;top:8px;width:8px;height:8px;background:#16281C;
+  box-shadow:
+   48px 0 0 0 #16281C,64px 0 0 0 #16281C,80px 0 0 0 #16281C,96px 0 0 0 #16281C,
+   56px 8px 0 0 #16281C,72px 8px 0 0 #16281C,88px 8px 0 0 #16281C,
+   48px 16px 0 0 #16281C,56px 16px 0 0 #16281C,80px 16px 0 0 #16281C,104px 16px 0 0 #16281C,
+   64px 24px 0 0 #16281C,96px 24px 0 0 #16281C,
+   48px 32px 0 0 #16281C,72px 32px 0 0 #16281C,88px 32px 0 0 #16281C,104px 32px 0 0 #16281C,
+   8px 40px 0 0 #16281C,24px 40px 0 0 #16281C,40px 40px 0 0 #16281C,64px 40px 0 0 #16281C,80px 40px 0 0 #16281C,96px 40px 0 0 #16281C,112px 40px 0 0 #16281C,128px 40px 0 0 #16281C,144px 40px 0 0 #16281C,
+   16px 48px 0 0 #16281C,32px 48px 0 0 #16281C,48px 48px 0 0 #16281C,72px 48px 0 0 #16281C,88px 48px 0 0 #16281C,120px 48px 0 0 #16281C,136px 48px 0 0 #16281C,
+   8px 56px 0 0 #16281C,40px 56px 0 0 #16281C,56px 56px 0 0 #16281C,80px 56px 0 0 #16281C,104px 56px 0 0 #16281C,128px 56px 0 0 #16281C,144px 56px 0 0 #16281C,
+   24px 64px 0 0 #16281C,48px 64px 0 0 #16281C,64px 64px 0 0 #16281C,96px 64px 0 0 #16281C,112px 64px 0 0 #16281C,136px 64px 0 0 #16281C,
+   16px 72px 0 0 #16281C,40px 72px 0 0 #16281C,72px 72px 0 0 #16281C,88px 72px 0 0 #16281C,120px 72px 0 0 #16281C,144px 72px 0 0 #16281C,
+   8px 80px 0 0 #16281C,32px 80px 0 0 #16281C,56px 80px 0 0 #16281C,80px 80px 0 0 #16281C,104px 80px 0 0 #16281C,128px 80px 0 0 #16281C,
+   24px 88px 0 0 #16281C,48px 88px 0 0 #16281C,64px 88px 0 0 #16281C,96px 88px 0 0 #16281C,136px 88px 0 0 #16281C,
+   16px 96px 0 0 #16281C,40px 96px 0 0 #16281C,72px 96px 0 0 #16281C,112px 96px 0 0 #16281C,144px 96px 0 0 #16281C,
+   8px 104px 0 0 #16281C,56px 104px 0 0 #16281C,88px 104px 0 0 #16281C,120px 104px 0 0 #16281C,136px 104px 0 0 #16281C,
+   32px 112px 0 0 #16281C,48px 112px 0 0 #16281C,80px 112px 0 0 #16281C,104px 112px 0 0 #16281C,128px 112px 0 0 #16281C,
+   48px 120px 0 0 #16281C,64px 120px 0 0 #16281C,96px 120px 0 0 #16281C,112px 120px 0 0 #16281C,136px 120px 0 0 #16281C,152px 120px 0 0 #16281C,
+   56px 128px 0 0 #16281C,72px 128px 0 0 #16281C,104px 128px 0 0 #16281C,128px 128px 0 0 #16281C,144px 128px 0 0 #16281C,
+   48px 136px 0 0 #16281C,80px 136px 0 0 #16281C,96px 136px 0 0 #16281C,120px 136px 0 0 #16281C,152px 136px 0 0 #16281C,
+   64px 144px 0 0 #16281C,88px 144px 0 0 #16281C,112px 144px 0 0 #16281C,136px 144px 0 0 #16281C,
+   48px 152px 0 0 #16281C,72px 152px 0 0 #16281C,104px 152px 0 0 #16281C,128px 152px 0 0 #16281C,144px 152px 0 0 #16281C}
+.qf{position:absolute;width:38px;height:38px;border:7px solid #16281C}
+.qf::after{content:"";position:absolute;left:4px;top:4px;width:16px;height:16px;background:#16281C;border-radius:4px}
+.qf.tl{left:8px;top:8px}.qf.tr{right:8px;top:8px}.qf.bl{left:8px;bottom:8px}
+
+.ph-body{margin:0 14px;background:var(--surface-d);border:1px solid var(--filet-d);
+  border-top:none;border-radius:0 0 24px 24px;padding:14px 18px 18px}
+.ph-tip{text-align:center;font-size:15px;color:var(--t2-d);line-height:1.65}
+.ph-tip b{color:var(--texte-d)}
+.raccourci{margin-top:14px;border:1px solid rgba(143,212,168,.45);border-radius:16px;
+  padding:12px 14px;display:flex;gap:10px;align-items:center;text-align:left}
+.raccourci .ic{flex:none;width:34px;height:34px;border-radius:12px;background:rgba(143,212,168,.16);
+  color:var(--action-d);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px}
+.raccourci b{display:block;font-size:13.5px;color:var(--texte-d)}
+.raccourci small{display:block;font-size:12.5px;color:var(--t2-d);margin-top:2px;line-height:1.5}
+.ph-actions{display:flex;gap:10px;padding:16px 14px 0}
+.ph-actions a{flex:1;text-align:center;border:2px solid var(--action-d);border-radius:999px;
+  padding:12px 6px;font-size:14px;font-weight:700;color:var(--texte-d);text-decoration:none}
+.ph-actions a.plein{background:var(--action-d);border-color:var(--action-d);color:var(--action-ink-d)}
+.ph-foot{padding:16px 22px 26px;text-align:center;font-family:var(--mono);font-size:10.5px;
+  color:var(--t2-d);letter-spacing:.04em}
+
+.cap{width:320px;font-size:13px;line-height:1.65;color:var(--t2-d);text-align:center}
+.cap em{color:var(--texte-d);font-style:normal;font-weight:700}
+.colophon{font-family:var(--mono);font-size:11px;color:#5E7264}
+</style>
+</head>
+<body>
+
+<aside class="spec">
+  <strong>Écran clé 3/4 — Checklist dossier & e-dossard (app coureur, thème sombre)</strong>
+  <p>(a) Dossier incomplet : deux pièces au vert, la pièce manquante <em>nomme l'action</em>
+  (« Dépose ta preuve de paiement CCP ») + bouton assistance <em>SM-C1</em>. (b) E-dossard débloqué :
+  badge <em>HORS-LIGNE PRÊT</em> mono 15, dossard 74 px, QR encre sur carte blanche coins 16,
+  raccourci système — un geste écran verrouillé. Tutoiement coureur.</p>
+</aside>
+
+<div class="row">
+
+  <section class="stage">
+    <p class="stage-t">A · Checklist — une pièce manquante</p>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="ph-sys"><span>10:42</span><span>▮▮▯ · 4G</span></div>
+      <div class="ph-head"><b>Mon dossier</b><span class="compteur">2 / 3 pièces</span></div>
+      <div class="cartes">
+        <div class="carte">
+          <div class="item">
+            <span class="puce fait">✓</span>
+            <div>
+              <p class="t">Décharge signée</p>
+              <p class="s">version conservée · signée le 12.02.2027</p>
+            </div>
+          </div>
+          <div class="item">
+            <span class="puce fait">✓</span>
+            <div>
+              <p class="t">Règlement intérieur accepté</p>
+              <p class="s">version conservée · accepté le 12.02.2027</p>
+            </div>
+          </div>
+          <div class="item todo-item">
+            <span class="puce todo">·</span>
+            <div>
+              <p class="t">Preuve de paiement CCP</p>
+              <p class="s">image ou PDF · compressée ≤ 300 Ko</p>
+              <a class="lien" href="#">Dépose ta preuve de paiement CCP →</a>
+            </div>
+          </div>
+        </div>
+        <p class="note">Ton e-dossard sera prêt <b>dès que les trois pièces sont validées</b>.</p>
+        <div class="aide-bloc">
+          <p>Un souci avec une pièce ?</p>
+          <a class="btn-contour" href="#">Appeler l'équipe — +213 …</a>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Chaque pièce manquante <em>nomme l'action à faire</em> — jamais
+    « Documents manquants (3) ». L'assistance humaine reste à un geste.</p>
+  </section>
+
+  <section class="stage">
+    <p class="stage-t">B · E-dossard — hors-ligne prêt</p>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="ph-sys"><span>10:42</span><span>▮▮▯ · réseau absent</span></div>
+      <div class="ph-head"><b>Mon dossard</b><span class="offline">HORS-LIGNE PRÊT</span></div>
+      <div class="ph-hero">
+        <div class="frieze" aria-hidden="true"></div>
+        <p class="dossard-no"><small>N°</small> 217</p>
+        <p class="ph-name">Yacine B.</p>
+        <p class="ph-course">Trail d'Ait-Aissi 2027<br><b>Longue — 35 km</b></p>
+        <div class="qr-wrap">
+          <div class="qr" role="img" aria-label="QR du dossard — jeton unique édition 2027 (maquette stylisée, non scannable)">
+            <div class="qm" aria-hidden="true"></div><span class="qf tl" aria-hidden="true"></span><span class="qf tr" aria-hidden="true"></span><span class="qf bl" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+      <div class="ph-body">
+        <p class="ph-tip">Présente ton code aux postes de contrôle.<br><b>L'équipe est à chaque col.</b></p>
+        <div class="raccourci">
+          <span class="ic" aria-hidden="true">⬆</span>
+          <div>
+            <b>Raccourci système</b>
+            <small>ton dossard en un geste, même écran verrouillé — sans réseau</small>
+          </div>
+        </div>
+      </div>
+      <div class="ph-actions"><a class="plein" href="#">Mon parcours</a><a href="#">Appeler l'équipe</a></div>
+      <div class="ph-foot">ZÉRO PAPIER · N° 217 — YACINE B. — LONGUE 35 KM — TRAIL D'AIT-AISSI 2027</div>
+    </div>
+    <p class="cap">QR encre <em>#16281C</em> sur carte <em>blanche</em> : lisible même quand la lumière
+    manque. Cache 30 jours, zéro réseau, jeton unique par édition.</p>
+  </section>
+
+</div>
+
+<p class="colophon">Maquette 1:1 — Azzel · app coureur & espace web · 20.10.2026 · zéro JS, zéro requête réseau.</p>
+</body>
+</html>
