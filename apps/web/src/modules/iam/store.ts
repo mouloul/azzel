@@ -7,18 +7,20 @@ import {
   MAX_CODE_ATTEMPTS,
   MAX_CODE_REQUESTS_PER_HOUR,
   MAX_CODE_REQUESTS_PER_WINDOW,
+  type AccountRole,
 } from './constants';
 import { readDatabaseUrl } from './env';
 import { DbUnavailableError, RateLimitedError } from './errors';
 
 export type VerifyOutcome =
-  | { ok: true; accountId: string; organisationId: string; email: string }
+  | { ok: true; accountId: string; organisationId: string; email: string; role: AccountRole }
   | { ok: false; reason: 'code_invalid' | 'code_exhausted' };
 
 export interface SessionRecord {
   accountId: string;
   organisationId: string;
   email: string;
+  role: AccountRole;
   createdAt: Date;
 }
 
@@ -37,6 +39,7 @@ export interface IamStore {
     codeHash: string;
     tokenHash: string;
     sessionExpiresAt: Date;
+    adminEmails: string[];
   }): Promise<VerifyOutcome>;
   findSessionByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
   revokeSessionByTokenHash(tokenHash: string): Promise<void>;
@@ -162,6 +165,7 @@ export function createIamStore(sql: Sql): IamStore {
       codeHash: string;
       tokenHash: string;
       sessionExpiresAt: Date;
+      adminEmails: string[];
     }): Promise<VerifyOutcome> {
       return withDb(() =>
         sql.begin<VerifyOutcome>(async (tx) => {
@@ -196,16 +200,28 @@ export function createIamStore(sql: Sql): IamStore {
             return { ok: false, reason: 'code_invalid' as const };
           }
           await tx`UPDATE login_code SET consumed_at = now() WHERE id = ${code.id}`;
-          const accountRows = await tx<{ id: string }[]>`
+          const accountRows = await tx<{ id: string; role: AccountRole }[]>`
             INSERT INTO account (organisation_id, email, last_login_at)
             VALUES (${code.organisation_id}, ${input.email}, now())
             ON CONFLICT (organisation_id, email)
             DO UPDATE SET last_login_at = now()
-            RETURNING id
+            RETURNING id, role
           `;
           const account = accountRows[0];
           if (!account) {
             throw new Error('find-or-create du compte sans résultat');
+          }
+          let role: AccountRole = account.role;
+          if (input.adminEmails.includes(input.email)) {
+            const promotedRows = await tx<{ role: AccountRole }[]>`
+              UPDATE account SET role = 'organisateur'
+              WHERE id = ${account.id} AND role <> 'organisateur'
+              RETURNING role
+            `;
+            const promoted = promotedRows[0];
+            if (promoted) {
+              role = promoted.role;
+            }
           }
           await tx`
             UPDATE session
@@ -221,6 +237,7 @@ export function createIamStore(sql: Sql): IamStore {
             accountId: account.id,
             organisationId: code.organisation_id,
             email: input.email,
+            role,
           };
         }),
       );
@@ -232,9 +249,10 @@ export function createIamStore(sql: Sql): IamStore {
           account_id: string;
           organisation_id: string;
           email: string;
+          role: AccountRole;
           created_at: Date;
         }[]>`
-          SELECT s.account_id, s.organisation_id, a.email, s.created_at
+          SELECT s.account_id, s.organisation_id, a.email, a.role, s.created_at
           FROM session s
           JOIN account a ON a.id = s.account_id
           WHERE s.token_hash = ${tokenHash}
@@ -250,6 +268,7 @@ export function createIamStore(sql: Sql): IamStore {
           accountId: row.account_id,
           organisationId: row.organisation_id,
           email: row.email,
+          role: row.role,
           createdAt: row.created_at,
         };
       });

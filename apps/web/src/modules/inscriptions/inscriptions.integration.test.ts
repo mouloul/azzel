@@ -112,11 +112,12 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       accountId,
       organisationId: organisation.id,
       email: `coureur-${accountId}@test.azzel`,
+      role: 'coureur' as const,
       createdAt: new Date(),
     };
   }
 
-  it('migrations : 0001 à 0004 appliquées avec les seeds attendus', async () => {
+  it('migrations : 0001 à 0006 appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;
     expect(rows.map((row) => row.name)).toEqual([
@@ -125,6 +126,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       '0003_documents.sql',
       '0004_coureur_checks.sql',
       '0005_preuve.sql',
+      '0006_roles_statuts.sql',
     ]);
 
     const editions = await sql`
@@ -173,7 +175,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(5);
+    expect(rows[0]?.count).toBe(6);
   });
 
   it('inscription complète : coureur créé, rattaché édition/épreuve/organisation', async () => {
@@ -253,7 +255,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
   it('dossier déjà validé : modification refusée, ligne inchangée', async () => {
     const session = await createSession();
     const summary = await submitInscription(session, validInput(), { store });
-    await sql`UPDATE coureur SET status = 'valide' WHERE id = ${summary.id}`;
+    await sql`UPDATE coureur SET status = 'validé' WHERE id = ${summary.id}`;
 
     await expect(
       submitInscription(session, validInput({ epreuve: 'moyenne' }), { store }),
@@ -263,6 +265,48 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       SELECT e.slug FROM coureur c JOIN epreuve e ON e.id = c.epreuve_id WHERE c.account_id = ${session.accountId}
     `;
     expect(rows[0]?.slug).toBe('longue');
+  });
+
+  it('dossier refusé : submitInscription rejeté, ligne inchangée (seule une preuve ou une décision rouvrent)', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+    await sql`UPDATE coureur SET status = 'refusé', refusal_reason = 'dossier incomplet' WHERE id = ${summary.id}`;
+
+    await expect(
+      submitInscription(session, validInput({ epreuve: 'moyenne' }), { store }),
+    ).rejects.toBeInstanceOf(DossierValidatedError);
+
+    const rows = await sql`
+      SELECT e.slug, c.status, c.refusal_reason
+      FROM coureur c JOIN epreuve e ON e.id = c.epreuve_id
+      WHERE c.account_id = ${session.accountId}
+    `;
+    expect(rows[0]?.slug).toBe('longue');
+    expect(rows[0]?.status).toBe('refusé');
+    expect(rows[0]?.refusal_reason).toBe('dossier incomplet');
+  });
+
+  it('dossier refusé : acceptDocuments rejeté, acceptations inchangées', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+    const snapshot = await acceptDocuments(
+      session,
+      { decharge: true, reglement: true },
+      { store },
+    );
+    await sql`UPDATE coureur SET status = 'refusé', refusal_reason = 'dossier incomplet' WHERE id = ${summary.id}`;
+
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toBeInstanceOf(DossierValidatedError);
+
+    const rows = await sql`
+      SELECT decharge_accepted_at, reglement_accepted_at, refusal_reason
+      FROM coureur WHERE id = ${summary.id}
+    `;
+    expect(rows[0]?.decharge_accepted_at?.toISOString()).toBe(snapshot.decharge.acceptedAt);
+    expect(rows[0]?.reglement_accepted_at?.toISOString()).toBe(snapshot.reglement.acceptedAt);
+    expect(rows[0]?.refusal_reason).toBe('dossier incomplet');
   });
 
   it('getInscriptionState : édition ouverte, épreuves et récap coureur', async () => {
@@ -354,7 +398,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     const avant = await sql`
       SELECT decharge_accepted_at, decharge_version FROM coureur WHERE id = ${summary.id}
     `;
-    await sql`UPDATE coureur SET status = 'valide' WHERE id = ${summary.id}`;
+    await sql`UPDATE coureur SET status = 'validé' WHERE id = ${summary.id}`;
 
     await expect(
       acceptDocuments(session, { decharge: true, reglement: true }, { store }),

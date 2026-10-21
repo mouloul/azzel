@@ -84,6 +84,55 @@ export class NoEditionError extends Error {
   }
 }
 
+export class DecisionInvalidError extends Error {
+  constructor() {
+    super('décision inconnue : valider ou refuser');
+    this.name = 'DecisionInvalidError';
+  }
+}
+
+export class RefusalReasonRequiredError extends Error {
+  constructor() {
+    super('motif de refus obligatoire');
+    this.name = 'RefusalReasonRequiredError';
+  }
+}
+
+export class RefusalReasonTooLongError extends Error {
+  constructor(readonly max: number) {
+    super('motif de refus trop long');
+    this.name = 'RefusalReasonTooLongError';
+  }
+}
+
+export class DossierNotFoundError extends Error {
+  constructor() {
+    super('dossier introuvable pour cette organisation');
+    this.name = 'DossierNotFoundError';
+  }
+}
+
+export class PreuveNotFoundError extends Error {
+  constructor() {
+    super('preuve introuvable pour cette organisation');
+    this.name = 'PreuveNotFoundError';
+  }
+}
+
+export class PreuveStorageError extends Error {
+  constructor(readonly storageKey: string) {
+    super('fichier de preuve illisible sur le stockage');
+    this.name = 'PreuveStorageError';
+  }
+}
+
+export class PreuveIdenticalRefusedError extends Error {
+  constructor() {
+    super('preuve identique à celle déjà refusée');
+    this.name = 'PreuveIdenticalRefusedError';
+  }
+}
+
 export interface ApiError {
   status: number;
   envelope: ErrorEnvelope;
@@ -238,6 +287,17 @@ export function toPreuveApiError(error: unknown): ApiError {
       }),
     };
   }
+  if (error instanceof PreuveIdenticalRefusedError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'preuve.identique_refusee',
+        message:
+          'Cette preuve identique a déjà été refusée — dépose une version différente ou appelle l’équipe.',
+        action: 'Choisis un autre fichier (photo reprise, PDF différent) puis renvoie-le.',
+      }),
+    };
+  }
   if (error instanceof ProofTooLargeError) {
     return {
       status: 400,
@@ -277,4 +337,125 @@ export function toPreuveApiError(error: unknown): ApiError {
       'Ton dossier a déjà été validé : la preuve de paiement ne peut plus changer ici.',
     dossierValideAction: 'Contacte l’organisation pour toute modification.',
   });
+}
+
+export function toAdminApiError(error: unknown): ApiError {
+  if (error instanceof DecisionInvalidError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.decision_invalid',
+        message: 'Décision inconnue.',
+        action: 'Choisis « Valider » ou « Refuser » puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof RefusalReasonRequiredError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.refusal_reason_required',
+        message: 'Le motif de refus est obligatoire.',
+        action: 'Écris le motif communiqué au coureur, puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof RefusalReasonTooLongError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.refusal_reason_too_long',
+        message: `Le motif de refus dépasse ${error.max} caractères.`,
+        action: 'Raccourcis le motif puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof DossierNotFoundError) {
+    return {
+      status: 404,
+      envelope: createErrorEnvelope({
+        code: 'admin.dossier_not_found',
+        message: 'Ce dossier n’existe pas ou n’appartient pas à ton organisation.',
+        action: 'Reviens à la liste des dossiers.',
+      }),
+    };
+  }
+  if (error instanceof PreuveNotFoundError) {
+    return {
+      status: 404,
+      envelope: createErrorEnvelope({
+        code: 'admin.preuve_not_found',
+        message: 'Cette preuve n’existe pas ou n’appartient pas à ton organisation.',
+        action: 'Reviens au dossier du coureur.',
+      }),
+    };
+  }
+  if (error instanceof PreuveStorageError) {
+    return {
+      status: 500,
+      envelope: createErrorEnvelope({
+        code: 'admin.preuve_storage_error',
+        message: 'Le fichier de cette preuve est illisible sur le stockage.',
+        action: 'Réessaie dans un instant ; si cela persiste, vérifie le volume STORAGE_DIR.',
+      }),
+    };
+  }
+  if (error instanceof DossierValidatedError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.dossier_valide',
+        message: 'Ce dossier est déjà validé : seule la re-validation idempotente est permise.',
+        action: 'Re-valide le dossier si tu veux simplement confirmer.',
+      }),
+    };
+  }
+  if (error instanceof InvalidBodyError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.invalid_body',
+        message: 'La requête est illisible.',
+        action: 'Recharge la page puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof BodyTooLargeError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.body_too_large',
+        message: 'La requête est trop volumineuse.',
+        action: 'Raccourcis le motif puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof UnauthenticatedError) {
+    return {
+      status: 401,
+      envelope: createErrorEnvelope({
+        code: 'admin.unauthenticated',
+        message: 'Ta session a expiré ou a été fermée.',
+        action: 'Reconnecte-toi pour continuer.',
+      }),
+    };
+  }
+  if (error instanceof DbUnavailableError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'admin.db_unavailable',
+        message: 'Connexion indisponible.',
+        action: 'Réessaie dans un instant.',
+      }),
+    };
+  }
+  return {
+    status: 500,
+    envelope: createErrorEnvelope({
+      code: 'admin.internal_error',
+      message: 'Une erreur inattendue est survenue.',
+      action: 'Réessaie dans un instant.',
+    }),
+  };
 }

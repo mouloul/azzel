@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { AdminHeaderLink } from '@/components/admin-header-link';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildTokensCss } from '@/lib/tokens-css';
 import { buildThemeInitScript } from '@/lib/theme';
@@ -58,7 +59,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           >
             <span className="header-logo" aria-hidden="true" />
           </Link>
-          <ThemeToggle />
+          <div className="header-actions">
+            <AdminHeaderLink />
+            <ThemeToggle />
+          </div>
         </header>
         <main id="contenu">{children}</main>
         <footer className="site-footer">

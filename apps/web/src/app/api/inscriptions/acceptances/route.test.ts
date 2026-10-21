@@ -261,7 +261,7 @@ describe('POST /api/inscriptions/acceptances', () => {
     expect(inscriptionsServiceMock.acceptDocuments).not.toHaveBeenCalled();
   });
 
-  it('sans Content-Length (chunked) : 400 enveloppe acceptances.body_too_large, service non appelé', async () => {
+  it('sans Content-Length (chunked) : 400 enveloppe acceptances.invalid_body, service non appelé', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION);
 
     const response = await postAcceptances(
@@ -280,7 +280,7 @@ describe('POST /api/inscriptions/acceptances', () => {
 
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe('acceptances.body_too_large');
+    expect(body.error.code).toBe('acceptances.invalid_body');
     expect(inscriptionsServiceMock.acceptDocuments).not.toHaveBeenCalled();
   });
 });

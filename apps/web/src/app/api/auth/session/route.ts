@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({
       email: session.email,
+      role: session.role,
       createdAt: session.createdAt.toISOString(),
     });
   } catch (error) {

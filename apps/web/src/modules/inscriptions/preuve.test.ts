@@ -10,9 +10,12 @@ import {
   DossierValidatedError,
   NoCoureurError,
   NoEditionError,
+  PreuveIdenticalRefusedError,
+  PreuveStorageError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
+  toAdminApiError,
   toPreuveApiError,
 } from './errors';
 import {
@@ -172,6 +175,14 @@ describe('LocalDiskProofStore', () => {
 });
 
 describe('toPreuveApiError — enveloppes preuve', () => {
+  it('PreuveIdenticalRefusedError : 409 preuve.identique_refusee avec le message dédié', () => {
+    const apiError = toPreuveApiError(new PreuveIdenticalRefusedError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('preuve.identique_refusee');
+    expect(apiError.envelope.error.message).toContain('déjà été refusée');
+    expect(apiError.envelope.error.message).toContain('version différente');
+  });
+
   it('ProofFormatError : 400 preuve.format, message listant les formats acceptés', () => {
     const apiError = toPreuveApiError(new ProofFormatError());
     expect(apiError.status).toBe(400);
@@ -215,6 +226,12 @@ describe('toPreuveApiError — enveloppes preuve', () => {
     expect(apiError.envelope.error.code).toBe('preuve.internal_error');
     expect(apiError.envelope.error.message).not.toContain('boom');
   });
+
+  it('PreuveStorageError : 500 admin.preuve_storage_error (téléchargement organisateur)', () => {
+    const apiError = toAdminApiError(new PreuveStorageError('uuid.jpg'));
+    expect(apiError.status).toBe(500);
+    expect(apiError.envelope.error.code).toBe('admin.preuve_storage_error');
+  });
 });
 
 describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai disque', () => {
@@ -222,6 +239,7 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
     accountId: 'account-1',
     organisationId: 'org-1',
     email: 'coureur@exemple.dz',
+    role: 'coureur',
     createdAt: new Date('2026-10-01T10:00:00.000Z'),
   };
 
@@ -426,23 +444,37 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
     expect(readdirSync(dir)).toHaveLength(1);
   });
 
-  it('getPreuveState : édition + coureur + preuve active résumés ; sans coureur → preuve null', async () => {
+  it('getPreuveState : édition + coureur + preuve active résumés ; refusé porte son motif ; sans coureur → preuve null', async () => {
     const store = buildStore();
     store.findCoureurByAccount.mockResolvedValue({
       id: 'coureur-1',
       status: 'en constitution',
+      refusalReason: null,
     });
     store.findActivePreuveByAccount.mockResolvedValue(preuveRecord());
     const avec = await getPreuveState(session, { store, proofStore });
     expect(avec.edition?.registrationOpen).toBe(true);
     expect(avec.coureurStatus).toBe('en constitution');
+    expect(avec.refusalReason).toBeNull();
     expect(avec.preuve?.sizeBytes).toBe(2048);
     expect(avec.preuve?.depositedAt).toBe('2026-10-21T10:30:00.000Z');
+
+    const storeRefuse = buildStore();
+    storeRefuse.findCoureurByAccount.mockResolvedValue({
+      id: 'coureur-1',
+      status: 'refusé',
+      refusalReason: 'Reçu de paiement illisible',
+    });
+    storeRefuse.findActivePreuveByAccount.mockResolvedValue(preuveRecord());
+    const refuse = await getPreuveState(session, { store: storeRefuse, proofStore });
+    expect(refuse.coureurStatus).toBe('refusé');
+    expect(refuse.refusalReason).toBe('Reçu de paiement illisible');
 
     const storeVide = buildStore();
     storeVide.findCoureurByAccount.mockResolvedValue(null);
     const sans = await getPreuveState(session, { store: storeVide, proofStore });
     expect(sans.coureurStatus).toBeNull();
+    expect(sans.refusalReason).toBeNull();
     expect(sans.preuve).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { ADMIN_EMAILS_ENV_NAME } from './constants';
+
 type EnvMap = Record<string, string>;
 
 let cachedEnvFiles: EnvMap | null = null;
@@ -79,4 +81,15 @@ export function readDatabaseUrl(): string | null {
 
 export function readSmtpUrl(): string | null {
   return readEnv('SMTP_URL');
+}
+
+export function readAdminEmails(): string[] {
+  const raw = readEnv(ADMIN_EMAILS_ENV_NAME);
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
 }

@@ -7,6 +7,7 @@ import {
   SESSION_TTL_SEC,
 } from './constants';
 import { sendLoginCodeEmail } from './email';
+import { readAdminEmails } from './env';
 import { CodeExhaustedError, EmailInvalidError, InvalidCodeError } from './errors';
 import { getIamStore, type IamStore, type SessionRecord } from './store';
 
@@ -87,6 +88,7 @@ export async function verifyLoginCode(
     codeHash: sha256Hex(code),
     tokenHash: sha256Hex(token),
     sessionExpiresAt: new Date(Date.now() + SESSION_TTL_SEC * 1000),
+    adminEmails: readAdminEmails(),
   });
   if (!outcome.ok) {
     if (outcome.reason === 'code_exhausted') {

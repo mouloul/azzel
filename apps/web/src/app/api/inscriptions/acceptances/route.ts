@@ -59,11 +59,10 @@ export async function POST(request: NextRequest) {
     return authenticated.response;
   }
   const contentLength = request.headers.get('content-length');
-  if (
-    contentLength === null ||
-    !/^\d+$/.test(contentLength) ||
-    Number(contentLength) > MAX_BODY_BYTES
-  ) {
+  if (contentLength === null || !/^\d+$/.test(contentLength)) {
+    return errorResponse(toAcceptancesApiError(new InvalidBodyError()));
+  }
+  if (Number(contentLength) > MAX_BODY_BYTES) {
     return errorResponse(toAcceptancesApiError(new BodyTooLargeError()));
   }
   let body: unknown;

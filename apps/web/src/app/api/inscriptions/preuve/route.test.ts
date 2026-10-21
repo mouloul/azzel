@@ -199,7 +199,7 @@ describe('POST /api/inscriptions/preuve', () => {
     expect(proofServiceMock.uploadPreuve).not.toHaveBeenCalled();
   });
 
-  it('sans Content-Length (chunked) : 400 enveloppe preuve.body_too_large, service non appelé', async () => {
+  it('sans Content-Length (chunked) : 400 enveloppe preuve.invalid_body, service non appelé', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION);
     const part = multipart('recu.jpg', jpegBytes(64), 'image/jpeg');
 
@@ -222,7 +222,7 @@ describe('POST /api/inscriptions/preuve', () => {
 
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe('preuve.body_too_large');
+    expect(body.error.code).toBe('preuve.invalid_body');
     expect(proofServiceMock.uploadPreuve).not.toHaveBeenCalled();
   });
 

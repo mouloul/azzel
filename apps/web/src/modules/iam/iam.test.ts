@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildLoginCodeEmailText, sendLoginCodeEmail } from './email';
-import { readSmtpUrl } from './env';
+import { readAdminEmails, readSmtpUrl } from './env';
 import {
   CodeExhaustedError,
   DbUnavailableError,
   EmailSendError,
+  ForbiddenError,
   InvalidCodeError,
   RateLimitedError,
   toApiError,
@@ -125,10 +126,54 @@ describe('toApiError', () => {
     expect(toApiError(new EmailSendError()).status).toBe(503);
   });
 
+  it('ForbiddenError : 403 enveloppe iam.forbidden', () => {
+    const apiError = toApiError(new ForbiddenError());
+    expect(apiError.status).toBe(403);
+    expect(apiError.envelope.version).toBe(1);
+    expect(apiError.envelope.error.code).toBe('iam.forbidden');
+    expect(apiError.envelope.error.message).not.toBe('');
+    expect(apiError.envelope.error.action).not.toBe('');
+  });
+
   it('erreur inconnue : 500 avec enveloppe, jamais de message brut', () => {
     const apiError = toApiError(new Error('boom'));
     expect(apiError.status).toBe(500);
     expect(apiError.envelope.error.code).toBe('iam.internal_error');
     expect(apiError.envelope.error.message).not.toContain('boom');
+  });
+});
+
+describe('readAdminEmails — AZZEL_ADMIN_EMAILS', () => {
+  const previous = process.env.AZZEL_ADMIN_EMAILS;
+
+  it('absente ou vide : liste vide', () => {
+    delete process.env.AZZEL_ADMIN_EMAILS;
+    expect(readAdminEmails()).toEqual([]);
+    process.env.AZZEL_ADMIN_EMAILS = '   ';
+    expect(readAdminEmails()).toEqual([]);
+  });
+
+  it('liste séparée par virgules : trim + minuscules, entrées vides ignorées', () => {
+    process.env.AZZEL_ADMIN_EMAILS =
+      'Organisateur@Exemple.DZ , autre@test.azzel,,  TROISIEME@test.azzel';
+    expect(readAdminEmails()).toEqual([
+      'organisateur@exemple.dz',
+      'autre@test.azzel',
+      'troisieme@test.azzel',
+    ]);
+  });
+
+  it('un seul email : liste à une entrée', () => {
+    process.env.AZZEL_ADMIN_EMAILS = 'solo@test.azzel';
+    expect(readAdminEmails()).toEqual(['solo@test.azzel']);
+  });
+
+  it('restaure la variable d’environnement', () => {
+    if (previous === undefined) {
+      delete process.env.AZZEL_ADMIN_EMAILS;
+    } else {
+      process.env.AZZEL_ADMIN_EMAILS = previous;
+    }
+    expect(true).toBe(true);
   });
 });

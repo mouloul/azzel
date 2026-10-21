@@ -3,25 +3,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AGE_CATEGORY_LABELS,
   MAX_AGE_AT_RACE,
+  MAX_REFUSAL_REASON_LENGTH,
   MIN_AGE_AT_RACE,
+  canDepositPreuve,
+  coureurStatusChipClass,
   deriveAgeAndCategory,
   isRegistrationOpen,
   isValidPhone,
   normalizeInscriptionInput,
+  normalizeRefusalReason,
   validateInscriptionInput,
   type InscriptionFormInput,
 } from './domain';
 import {
+  BothAcceptancesRequiredError,
+  DecisionInvalidError,
+  DossierNotFoundError,
   DossierValidatedError,
   DocumentsMissingError,
   InvalidFieldsError,
+  PreuveNotFoundError,
+  RefusalReasonRequiredError,
+  RefusalReasonTooLongError,
   RegistrationClosedError,
-  BothAcceptancesRequiredError,
   NoCoureurError,
+  toAdminApiError,
   toApiError,
   toAcceptancesApiError,
 } from './errors';
-import { acceptDocuments, normalizeAcceptancesInput, submitInscription } from './service';
+import {
+  acceptDocuments,
+  decideDossier,
+  normalizeAcceptancesInput,
+  submitInscription,
+} from './service';
 import type { CoureurRecord, EditionRecord, InscriptionsStore } from './store';
 import type { SessionRecord } from '@/modules/iam/store';
 
@@ -242,6 +257,7 @@ describe('submitInscription — service avec store stubbé', () => {
     accountId: 'account-1',
     organisationId: 'org-1',
     email: 'coureur@exemple.dz',
+    role: 'coureur',
     createdAt: new Date('2026-10-01T10:00:00.000Z'),
   };
 
@@ -282,6 +298,9 @@ describe('submitInscription — service avec store stubbé', () => {
       age: input.age,
       categorieAge: input.categorieAge,
       status: 'en constitution',
+      refusalReason: null,
+      decidedBy: null,
+      decidedAt: null,
       dechargeAcceptedAt: null,
       dechargeVersion: null,
       reglementAcceptedAt: null,
@@ -446,6 +465,7 @@ describe('acceptDocuments — service avec store stubbé', () => {
     accountId: 'account-1',
     organisationId: 'org-1',
     email: 'coureur@exemple.dz',
+    role: 'coureur',
     createdAt: new Date('2026-10-01T10:00:00.000Z'),
   };
 
@@ -555,5 +575,231 @@ describe('acceptDocuments — service avec store stubbé', () => {
       acceptDocuments(session, { decharge: true, reglement: true }, { store }),
     ).rejects.toThrow('Aucune édition configurée');
     expect(store.acceptDocuments).not.toHaveBeenCalled();
+  });
+});
+
+describe('cycle de statut — helpers domaine', () => {
+  it('canDepositPreuve : en constitution et refusé oui, validé non', () => {
+    expect(canDepositPreuve('en constitution')).toBe(true);
+    expect(canDepositPreuve('refusé')).toBe(true);
+    expect(canDepositPreuve('validé')).toBe(false);
+  });
+
+  it('normalizeRefusalReason : trim, non-chaînes → vide', () => {
+    expect(normalizeRefusalReason('  reçu illisible  ')).toBe('reçu illisible');
+    expect(normalizeRefusalReason(null)).toBe('');
+    expect(normalizeRefusalReason(42)).toBe('');
+    expect(normalizeRefusalReason(undefined)).toBe('');
+  });
+
+  it('coureurStatusChipClass : une variante charte par statut', () => {
+    expect(coureurStatusChipClass('validé')).toBe('aa-chip aa-chip--phare');
+    expect(coureurStatusChipClass('refusé')).toBe('aa-chip aa-chip--refuse');
+    expect(coureurStatusChipClass('en constitution')).toBe('aa-chip aa-chip--tbc');
+  });
+});
+
+describe('decideDossier — validation d’entrée avec store stubbé', () => {
+  const session: SessionRecord = {
+    accountId: 'account-admin',
+    organisationId: 'org-1',
+    email: 'organisateur@exemple.dz',
+    role: 'organisateur',
+    createdAt: new Date('2026-10-01T10:00:00.000Z'),
+  };
+
+  function buildAdminStore(
+    coureur: Partial<CoureurRecord> = {},
+  ): InscriptionsStore & {
+    findCurrentEdition: ReturnType<typeof vi.fn>;
+    decideDossier: ReturnType<typeof vi.fn>;
+  } {
+    const fullEdition: EditionRecord = {
+      id: 'edition-1',
+      organisationId: 'org-1',
+      slug: '2027',
+      nom: 'Édition 2027',
+      dateCourse: RACE_DATE,
+      registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+    };
+    const record: CoureurRecord = {
+      id: 'coureur-1',
+      organisationId: 'org-1',
+      accountId: 'account-coureur',
+      editionId: 'edition-1',
+      epreuveId: 'ep-1',
+      epreuveSlug: 'longue',
+      epreuveNom: 'La Longue — 35 km',
+      distanceKm: 35,
+      prenom: 'Yani',
+      nom: 'Ulahianne',
+      telephone: '+213555010203',
+      contactUrgenceNom: 'Lounis Ulahianne',
+      contactUrgenceTelephone: '0555010204',
+      dateNaissance: '1990-05-12',
+      tailleTshirt: 'M',
+      age: 36,
+      categorieAge: 'Senior',
+      status: 'en constitution',
+      refusalReason: null,
+      decidedBy: null,
+      decidedAt: null,
+      dechargeAcceptedAt: null,
+      dechargeVersion: null,
+      reglementAcceptedAt: null,
+      reglementVersion: null,
+      createdAt: new Date('2026-10-21T08:00:00.000Z'),
+      updatedAt: new Date('2026-10-21T08:00:00.000Z'),
+      ...coureur,
+    };
+    const store = {
+      findCurrentEdition: vi.fn(async () => fullEdition),
+      listEpreuves: vi.fn(async () => []),
+      findDocuments: vi.fn(async () => []),
+      findCoureurByAccount: vi.fn(async () => null),
+      upsertCoureur: vi.fn(),
+      acceptDocuments: vi.fn(),
+      decideDossier: vi.fn(async () => record),
+    };
+    return store as unknown as InscriptionsStore & {
+      findCurrentEdition: ReturnType<typeof vi.fn>;
+      decideDossier: ReturnType<typeof vi.fn>;
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('valider : store appelé avec decision valider, sans motif, traçabilité décidée par la session', async () => {
+    const store = buildAdminStore();
+    const summary = await decideDossier(session, 'coureur-1', { decision: 'valider' }, { store });
+    expect(store.decideDossier).toHaveBeenCalledWith({
+      organisationId: session.organisationId,
+      editionId: 'edition-1',
+      coureurId: 'coureur-1',
+      decision: 'valider',
+      refusalReason: null,
+      decidedBy: session.accountId,
+    });
+    expect(summary.status).toBe('en constitution');
+  });
+
+  it('refuser avec motif : store appelé avec le motif trimé et la traçabilité', async () => {
+    const store = buildAdminStore();
+    await decideDossier(
+      session,
+      'coureur-1',
+      { decision: 'refuser', motif: '  reçu illisible  ' },
+      { store },
+    );
+    expect(store.decideDossier).toHaveBeenCalledWith({
+      organisationId: session.organisationId,
+      editionId: 'edition-1',
+      coureurId: 'coureur-1',
+      decision: 'refuser',
+      refusalReason: 'reçu illisible',
+      decidedBy: session.accountId,
+    });
+  });
+
+  it('refuser sans motif : RefusalReasonRequiredError, store non appelé', async () => {
+    const store = buildAdminStore();
+    await expect(
+      decideDossier(session, 'coureur-1', { decision: 'refuser' }, { store }),
+    ).rejects.toBeInstanceOf(RefusalReasonRequiredError);
+    await expect(
+      decideDossier(session, 'coureur-1', { decision: 'refuser', motif: '   ' }, { store }),
+    ).rejects.toBeInstanceOf(RefusalReasonRequiredError);
+    expect(store.decideDossier).not.toHaveBeenCalled();
+  });
+
+  it('motif au-delà de 280 caractères : RefusalReasonTooLongError, store non appelé', async () => {
+    const store = buildAdminStore();
+    await expect(
+      decideDossier(
+        session,
+        'coureur-1',
+        { decision: 'refuser', motif: 'x'.repeat(MAX_REFUSAL_REASON_LENGTH + 1) },
+        { store },
+      ),
+    ).rejects.toBeInstanceOf(RefusalReasonTooLongError);
+    expect(store.decideDossier).not.toHaveBeenCalled();
+  });
+
+  it('décision inconnue ou payload non objet : DecisionInvalidError, store non appelé', async () => {
+    const store = buildAdminStore();
+    await expect(
+      decideDossier(session, 'coureur-1', { decision: 'annuler' }, { store }),
+    ).rejects.toBeInstanceOf(DecisionInvalidError);
+    await expect(decideDossier(session, 'coureur-1', 'valider', { store })).rejects.toBeInstanceOf(
+      DecisionInvalidError,
+    );
+    await expect(decideDossier(session, 'coureur-1', null, { store })).rejects.toBeInstanceOf(
+      DecisionInvalidError,
+    );
+    expect(store.decideDossier).not.toHaveBeenCalled();
+  });
+
+  it('le motif est ignoré pour une validation', async () => {
+    const store = buildAdminStore();
+    await decideDossier(
+      session,
+      'coureur-1',
+      { decision: 'valider', motif: 'peu importe' },
+      { store },
+    );
+    expect(store.decideDossier).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: 'valider', refusalReason: null }),
+    );
+  });
+});
+
+describe('toAdminApiError — enveloppes admin', () => {
+  it('RefusalReasonRequiredError : 400 admin.refusal_reason_required nommant le motif', () => {
+    const apiError = toAdminApiError(new RefusalReasonRequiredError());
+    expect(apiError.status).toBe(400);
+    expect(apiError.envelope.version).toBe(1);
+    expect(apiError.envelope.error.code).toBe('admin.refusal_reason_required');
+    expect(apiError.envelope.error.message).toContain('motif');
+  });
+
+  it('RefusalReasonTooLongError : 400 admin.refusal_reason_too_long avec la limite', () => {
+    const apiError = toAdminApiError(new RefusalReasonTooLongError(280));
+    expect(apiError.status).toBe(400);
+    expect(apiError.envelope.error.code).toBe('admin.refusal_reason_too_long');
+    expect(apiError.envelope.error.message).toContain('280');
+  });
+
+  it('DecisionInvalidError : 400 admin.decision_invalid', () => {
+    const apiError = toAdminApiError(new DecisionInvalidError());
+    expect(apiError.status).toBe(400);
+    expect(apiError.envelope.error.code).toBe('admin.decision_invalid');
+  });
+
+  it('DossierNotFoundError : 404 admin.dossier_not_found', () => {
+    const apiError = toAdminApiError(new DossierNotFoundError());
+    expect(apiError.status).toBe(404);
+    expect(apiError.envelope.error.code).toBe('admin.dossier_not_found');
+  });
+
+  it('PreuveNotFoundError : 404 admin.preuve_not_found', () => {
+    const apiError = toAdminApiError(new PreuveNotFoundError());
+    expect(apiError.status).toBe(404);
+    expect(apiError.envelope.error.code).toBe('admin.preuve_not_found');
+  });
+
+  it('DossierValidatedError : 409 admin.dossier_valide avec wording organisateur', () => {
+    const apiError = toAdminApiError(new DossierValidatedError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('admin.dossier_valide');
+    expect(apiError.envelope.error.message).toContain('re-validation');
+  });
+
+  it('erreur inconnue : 500 admin.internal_error sans fuiter le message brut', () => {
+    const apiError = toAdminApiError(new Error('boom'));
+    expect(apiError.status).toBe(500);
+    expect(apiError.envelope.error.code).toBe('admin.internal_error');
+    expect(apiError.envelope.error.message).not.toContain('boom');
   });
 });

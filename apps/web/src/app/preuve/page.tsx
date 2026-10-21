@@ -5,7 +5,7 @@ import { readEnv } from '@/modules/iam/env';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireSession } from '@/modules/iam/session';
 
-import { COUREUR_STATUS_EN_CONSTITUTION } from '@/modules/inscriptions/domain';
+import { canDepositPreuve } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
 
@@ -116,7 +116,7 @@ export default async function PreuvePage() {
     );
   }
 
-  if (state.coureurStatus !== COUREUR_STATUS_EN_CONSTITUTION) {
+  if (!canDepositPreuve(state.coureurStatus)) {
     return (
       <section className="auth">
         <article className="card">
@@ -136,5 +136,22 @@ export default async function PreuvePage() {
     );
   }
 
-  return <PreuveForm state={state} assistancePhone={assistancePhone} />;
+  return (
+    <>
+      {state.coureurStatus === 'refusé' && state.refusalReason !== null ? (
+        <section className="auth">
+          <article className="card">
+            <div role="alert" aria-live="assertive" className="error-box">
+              <p className="error-message">Ta preuve a été refusée.</p>
+              <p className="error-action">Motif : {state.refusalReason}</p>
+              <div className="auth-alt">
+                <AssistanceButton phone={assistancePhone} />
+              </div>
+            </div>
+          </article>
+        </section>
+      ) : null}
+      <PreuveForm state={state} assistancePhone={assistancePhone} />
+    </>
+  );
 }

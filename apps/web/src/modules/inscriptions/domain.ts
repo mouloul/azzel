@@ -18,6 +18,50 @@ export const MAX_AGE_AT_RACE = 100;
 
 export const COUREUR_STATUS_EN_CONSTITUTION = 'en constitution';
 
+export const COUREUR_STATUS_VALIDE = 'validé';
+
+export const COUREUR_STATUS_REFUSE = 'refusé';
+
+export const COUREUR_STATUSES = [
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_VALIDE,
+  COUREUR_STATUS_REFUSE,
+] as const;
+
+export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
+
+export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
+  [COUREUR_STATUS_EN_CONSTITUTION]: 'En constitution',
+  [COUREUR_STATUS_VALIDE]: 'Validé',
+  [COUREUR_STATUS_REFUSE]: 'Refusé',
+};
+
+export function coureurStatusChipClass(status: string): string {
+  if (status === COUREUR_STATUS_VALIDE) {
+    return 'aa-chip aa-chip--phare';
+  }
+  if (status === COUREUR_STATUS_REFUSE) {
+    return 'aa-chip aa-chip--refuse';
+  }
+  return 'aa-chip aa-chip--tbc';
+}
+
+export function canDepositPreuve(status: string): boolean {
+  return (
+    status === COUREUR_STATUS_EN_CONSTITUTION ||
+    status === COUREUR_STATUS_REFUSE
+  );
+}
+
+export const MAX_REFUSAL_REASON_LENGTH = 280;
+
+export function normalizeRefusalReason(raw: unknown): string {
+  if (typeof raw !== 'string') {
+    return '';
+  }
+  return raw.trim();
+}
+
 export const DOCUMENT_SLUGS = ['decharge', 'reglement'] as const;
 
 export type DocumentSlug = (typeof DOCUMENT_SLUGS)[number];

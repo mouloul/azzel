@@ -19,3 +19,11 @@ export const RESEND_COOLDOWN_SEC = 60;
 export const SESSION_TTL_SEC = 30 * 24 * 60 * 60;
 
 export const SESSION_COOKIE_NAME = 'azzel_session';
+
+export const ACCOUNT_ROLES = ['coureur', 'organisateur'] as const;
+
+export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+
+export const ROLE_ORGANISATEUR: AccountRole = 'organisateur';
+
+export const ADMIN_EMAILS_ENV_NAME = 'AZZEL_ADMIN_EMAILS';

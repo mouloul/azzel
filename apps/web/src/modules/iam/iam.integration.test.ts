@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { applyMigrations } from './migrate';
+import { applyAllMigrations } from '@/modules/inscriptions/migrate';
+
 import { readDatabaseUrl } from './env';
 import {
   CodeExhaustedError,
@@ -15,6 +16,7 @@ import {
   getSession,
   requestLoginCode,
   verifyLoginCode,
+  sha256Hex,
   type SendCodeFn,
 } from './service';
 import { createIamStore, type IamStore } from './store';
@@ -64,7 +66,7 @@ describe.skipIf(serverUrl === null)('iam — intégration Postgres (base azzel_t
     const testUrl = new URL(baseUrl.toString());
     testUrl.pathname = '/azzel_test';
     sql = postgres(testUrl.toString(), { max: 2 });
-    await applyMigrations(sql);
+    await applyAllMigrations(sql);
     store = createIamStore(sql);
   }, 60_000);
 
@@ -263,9 +265,138 @@ describe.skipIf(serverUrl === null)('iam — intégration Postgres (base azzel_t
   });
 
   it('migrations idempotentes : re-exécution sans erreur ni doublon', async () => {
-    const applied = await applyMigrations(sql);
+    const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(1);
+    expect(rows[0]?.count).toBe(6);
+  });
+
+  it('rôle : coureur par défaut, la session porte le rôle', async () => {
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+
+    const session = await verifyLoginCode(email, capture.getCode(), { store });
+    const found = await getSession(session.token, { store });
+    expect(found?.role).toBe('coureur');
+
+    const accounts = await sql`SELECT role FROM account WHERE email = ${email}`;
+    expect(accounts[0]?.role).toBe('coureur');
+  });
+
+  it('promotion AZZEL_ADMIN_EMAILS : email listé promu organisateur à la connexion', async () => {
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+
+    const outcome = await store.verifyCodeAndStartSession({
+      email,
+      codeHash: sha256Hex(capture.getCode()),
+      tokenHash: sha256Hex(`token-promotion-${randomUUID()}`),
+      sessionExpiresAt: new Date(Date.now() + 60_000),
+      adminEmails: [email],
+    });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.role).toBe('organisateur');
+    }
+
+    const accounts = await sql`SELECT role FROM account WHERE email = ${email}`;
+    expect(accounts[0]?.role).toBe('organisateur');
+
+    const sessions = await sql`
+      SELECT s.token_hash FROM session s JOIN account a ON a.id = s.account_id
+      WHERE a.email = ${email} AND s.revoked_at IS NULL LIMIT 1
+    `;
+    const record = await store.findSessionByTokenHash(sessions[0]?.token_hash as string);
+    expect(record?.role).toBe('organisateur');
+  });
+
+  it('promotion idempotente : reconnexion sans adminEmails ne rétrograde pas', async () => {
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+    await store.verifyCodeAndStartSession({
+      email,
+      codeHash: sha256Hex(capture.getCode()),
+      tokenHash: sha256Hex(`token-premiere-${randomUUID()}`),
+      sessionExpiresAt: new Date(Date.now() + 60_000),
+      adminEmails: [email],
+    });
+
+    const second = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: second.sendCode });
+    const outcome = await store.verifyCodeAndStartSession({
+      email,
+      codeHash: sha256Hex(second.getCode()),
+      tokenHash: sha256Hex(`token-seconde-${randomUUID()}`),
+      sessionExpiresAt: new Date(Date.now() + 60_000),
+      adminEmails: [],
+    });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.role).toBe('organisateur');
+    }
+
+    const accounts = await sql`SELECT role FROM account WHERE email = ${email}`;
+    expect(accounts[0]?.role).toBe('organisateur');
+  });
+
+  it('email non listé : reste coureur même si d’autres sont promus', async () => {
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+
+    const outcome = await store.verifyCodeAndStartSession({
+      email,
+      codeHash: sha256Hex(capture.getCode()),
+      tokenHash: sha256Hex(`token-tierce-${randomUUID()}`),
+      sessionExpiresAt: new Date(Date.now() + 60_000),
+      adminEmails: ['organisateur@exemple.dz'],
+    });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.role).toBe('coureur');
+    }
+  });
+
+  it('câblage service : AZZEL_ADMIN_EMAILS posé → verifyLoginCode promu organisateur', async () => {
+    const previous = process.env.AZZEL_ADMIN_EMAILS;
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+
+    try {
+      process.env.AZZEL_ADMIN_EMAILS = `Autre@Exemple.DZ, ${email.toUpperCase()}`;
+      const session = await verifyLoginCode(email, capture.getCode(), { store });
+      const found = await getSession(session.token, { store });
+      expect(found?.role).toBe('organisateur');
+      const accounts = await sql`SELECT role FROM account WHERE email = ${email}`;
+      expect(accounts[0]?.role).toBe('organisateur');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AZZEL_ADMIN_EMAILS;
+      } else {
+        process.env.AZZEL_ADMIN_EMAILS = previous;
+      }
+    }
+  });
+
+  it('câblage service : sans AZZEL_ADMIN_EMAILS → verifyLoginCode reste coureur', async () => {
+    const previous = process.env.AZZEL_ADMIN_EMAILS;
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+
+    try {
+      delete process.env.AZZEL_ADMIN_EMAILS;
+      const session = await verifyLoginCode(email, capture.getCode(), { store });
+      const found = await getSession(session.token, { store });
+      expect(found?.role).toBe('coureur');
+    } finally {
+      if (previous !== undefined) {
+        process.env.AZZEL_ADMIN_EMAILS = previous;
+      }
+    }
   });
 });

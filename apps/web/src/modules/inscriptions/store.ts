@@ -2,13 +2,16 @@ import postgres, { type Sql } from 'postgres';
 
 import { readDatabaseUrl } from '@/modules/iam/env';
 
-import { COUREUR_STATUS_EN_CONSTITUTION, isRegistrationOpen } from './domain';
+import { COUREUR_STATUS_EN_CONSTITUTION, canDepositPreuve, isRegistrationOpen } from './domain';
 import {
   DbUnavailableError,
-  DocumentsMissingError,
+  DossierNotFoundError,
   DossierValidatedError,
+  DocumentsMissingError,
   NoCoureurError,
+  PreuveIdenticalRefusedError,
   RegistrationClosedError,
+  RefusalReasonRequiredError,
 } from './errors';
 
 export interface EditionRecord {
@@ -56,6 +59,9 @@ export interface CoureurRecord {
   age: number;
   categorieAge: string;
   status: string;
+  refusalReason: string | null;
+  decidedBy: string | null;
+  decidedAt: Date | null;
   dechargeAcceptedAt: Date | null;
   dechargeVersion: string | null;
   reglementAcceptedAt: Date | null;
@@ -124,6 +130,53 @@ export interface SavePreuveResult {
   replaced: PreuveRecord | null;
 }
 
+export interface ListCoureursInput {
+  organisationId: string;
+  editionId: string;
+  search?: string;
+}
+
+export interface DossierListItem {
+  coureurId: string;
+  prenom: string;
+  nom: string;
+  email: string;
+  epreuveSlug: string;
+  epreuveNom: string;
+  status: string;
+  refusalReason: string | null;
+  hasActivePreuve: boolean;
+  preuveDepositedAt: Date | null;
+  acceptationsCompletes: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type DossierDecision = 'valider' | 'refuser';
+
+export interface DossierDetail {
+  coureur: CoureurRecord;
+  email: string;
+  preuveActive: PreuveRecord | null;
+  decidePar: { email: string; decidedAt: Date } | null;
+}
+
+export interface DecideDossierInput {
+  organisationId: string;
+  editionId: string;
+  coureurId: string;
+  decision: DossierDecision;
+  refusalReason: string | null;
+  decidedBy: string;
+}
+
+export interface ListCoureursResult {
+  items: DossierListItem[];
+  hasMore: boolean;
+}
+
+export const LIST_COUREURS_LIMIT = 200;
+
 export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;
   listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]>;
@@ -141,6 +194,17 @@ export interface InscriptionsStore {
     organisationId: string,
   ): Promise<PreuveRecord | null>;
   savePreuve(input: SavePreuveInput): Promise<SavePreuveResult>;
+  listCoureurs(input: ListCoureursInput): Promise<ListCoureursResult>;
+  findDossierDetail(input: {
+    organisationId: string;
+    editionId: string;
+    coureurId: string;
+  }): Promise<DossierDetail | null>;
+  decideDossier(input: DecideDossierInput): Promise<CoureurRecord>;
+  findPreuveByIdForOrganisation(
+    preuveId: string,
+    organisationId: string,
+  ): Promise<PreuveRecord | null>;
 }
 
 interface PreuveRow {
@@ -213,6 +277,9 @@ interface CoureurRow {
   age: number;
   age_category: string;
   status: string;
+  refusal_reason: string | null;
+  decided_by: string | null;
+  decided_at: Date | null;
   decharge_accepted_at: Date | null;
   decharge_version: string | null;
   reglement_accepted_at: Date | null;
@@ -278,6 +345,9 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     age: row.age,
     categorieAge: row.age_category,
     status: row.status,
+    refusalReason: row.refusal_reason,
+    decidedBy: row.decided_by,
+    decidedAt: row.decided_at,
     dechargeAcceptedAt: row.decharge_accepted_at,
     dechargeVersion: row.decharge_version,
     reglementAcceptedAt: row.reglement_accepted_at,
@@ -287,6 +357,23 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
   };
 }
 
+const COUREUR_COLUMNS = `
+  c.id, c.organisation_id, c.account_id, c.edition_id, c.epreuve_id,
+  c.first_name, c.last_name, c.phone,
+  c.emergency_contact_name, c.emergency_contact_phone,
+  c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
+  c.refusal_reason, c.decided_by, c.decided_at,
+  c.decharge_accepted_at, c.decharge_version,
+  c.reglement_accepted_at, c.reglement_version,
+  c.created_at, c.updated_at,
+  e.slug AS epreuve_slug, e.name AS epreuve_nom, e.distance_km::float8 AS distance_km
+`;
+
+const COUREUR_SOURCE = `
+  coureur c
+  JOIN epreuve e ON e.id = c.epreuve_id
+`;
+
 async function selectCoureurByAccount(
   sql: Sql,
   accountId: string,
@@ -294,17 +381,8 @@ async function selectCoureurByAccount(
   organisationId: string,
 ): Promise<CoureurRecord | null> {
   const rows = await sql<CoureurRow[]>`
-    SELECT
-      c.id, c.organisation_id, c.account_id, c.edition_id, c.epreuve_id,
-      c.first_name, c.last_name, c.phone,
-      c.emergency_contact_name, c.emergency_contact_phone,
-      c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
-      c.decharge_accepted_at, c.decharge_version,
-      c.reglement_accepted_at, c.reglement_version,
-      c.created_at, c.updated_at,
-      e.slug AS epreuve_slug, e.name AS epreuve_nom, e.distance_km::float8 AS distance_km
-    FROM coureur c
-    JOIN epreuve e ON e.id = c.epreuve_id
+    SELECT ${sql.unsafe(COUREUR_COLUMNS)}
+    FROM ${sql.unsafe(COUREUR_SOURCE)}
     WHERE c.account_id = ${accountId} AND c.edition_id = ${editionId} AND c.organisation_id = ${organisationId}
     LIMIT 1
   `;
@@ -452,17 +530,8 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             throw new DossierValidatedError();
           }
           const fullRows = await tx<CoureurRow[]>`
-            SELECT
-              c.id, c.organisation_id, c.account_id, c.edition_id, c.epreuve_id,
-              c.first_name, c.last_name, c.phone,
-              c.emergency_contact_name, c.emergency_contact_phone,
-              c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
-              c.decharge_accepted_at, c.decharge_version,
-              c.reglement_accepted_at, c.reglement_version,
-              c.created_at, c.updated_at,
-              e.slug AS epreuve_slug, e.name AS epreuve_nom, e.distance_km::float8 AS distance_km
-            FROM coureur c
-            JOIN epreuve e ON e.id = c.epreuve_id
+            SELECT ${tx.unsafe(COUREUR_COLUMNS)}
+            FROM ${tx.unsafe(COUREUR_SOURCE)}
             WHERE c.id = ${row.id}
             LIMIT 1
           `;
@@ -583,7 +652,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!coureur) {
             throw new NoCoureurError();
           }
-          if (coureur.status !== COUREUR_STATUS_EN_CONSTITUTION) {
+          if (!canDepositPreuve(coureur.status)) {
             throw new DossierValidatedError();
           }
           const existing = await selectActivePreuve(
@@ -594,6 +663,11 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             true,
           );
           if (existing && existing.sha256 === input.file.sha256) {
+            if (coureur.status === 'refusé') {
+              // Octets identiques à la preuve déjà refusée : pas de « nouvelle preuve »,
+              // le dossier reste refusé — le coureur doit déposer une version différente.
+              throw new PreuveIdenticalRefusedError();
+            }
             return { preuve: toPreuveRecord(existing), replaced: null };
           }
           let replaced: PreuveRecord | null = null;
@@ -624,11 +698,228 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!inserted) {
             throw new Error('insertion de la preuve impossible');
           }
+          if (coureur.status === 'refusé') {
+            // Cycle de correction : une nouvelle preuve rouvre le dossier.
+            // Le motif reste exigé par le CHECK tant que le statut est « refusé » ;
+            // le retour en constitution remet donc refusal_reason à NULL.
+            await tx`
+              UPDATE coureur
+              SET status = ${COUREUR_STATUS_EN_CONSTITUTION}, refusal_reason = NULL, updated_at = now()
+              WHERE id = ${coureur.id}
+            `;
+          }
           return { preuve: toPreuveRecord(inserted), replaced };
         }),
       );
     },
+
+    async listCoureurs(input: ListCoureursInput): Promise<ListCoureursResult> {
+      return withDb(async () => {
+        const search = input.search?.trim() ?? '';
+        const like = search.length > 0 ? `%${escapeLike(search)}%` : null;
+        const rows = await sql<
+          {
+            coureur_id: string;
+            first_name: string;
+            last_name: string;
+            email: string;
+            epreuve_slug: string;
+            epreuve_nom: string;
+            status: string;
+            refusal_reason: string | null;
+            preuve_id: string | null;
+            preuve_created_at: Date | null;
+            decharge_accepted_at: Date | null;
+            reglement_accepted_at: Date | null;
+            created_at: Date;
+            updated_at: Date;
+            total_count: number;
+          }[]
+        >`
+          SELECT c.id AS coureur_id, c.first_name, c.last_name, a.email,
+                 e.slug AS epreuve_slug, e.name AS epreuve_nom,
+                 c.status, c.refusal_reason,
+                 p.id AS preuve_id, p.created_at AS preuve_created_at,
+                 c.decharge_accepted_at, c.reglement_accepted_at,
+                 c.created_at, c.updated_at,
+                 count(*) OVER () AS total_count
+          FROM coureur c
+          JOIN account a ON a.id = c.account_id
+          JOIN epreuve e ON e.id = c.epreuve_id
+          LEFT JOIN preuve p ON p.coureur_id = c.id AND p.status = 'active'
+          WHERE c.edition_id = ${input.editionId}
+            AND c.organisation_id = ${input.organisationId}
+            ${
+              like === null
+                ? sql``
+                : sql`AND (
+                      c.first_name ILIKE ${like}
+                      OR c.last_name ILIKE ${like}
+                      OR a.email ILIKE ${like}
+                    )`
+            }
+          ORDER BY c.created_at DESC
+          LIMIT ${LIST_COUREURS_LIMIT}
+        `;
+        return {
+          items: rows.map((row) => ({
+            coureurId: row.coureur_id,
+            prenom: row.first_name,
+            nom: row.last_name,
+            email: row.email,
+            epreuveSlug: row.epreuve_slug,
+            epreuveNom: row.epreuve_nom,
+            status: row.status,
+            refusalReason: row.refusal_reason,
+            hasActivePreuve: row.preuve_id !== null,
+            preuveDepositedAt: row.preuve_created_at,
+            acceptationsCompletes:
+              row.decharge_accepted_at !== null && row.reglement_accepted_at !== null,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          })),
+          hasMore: (rows[0]?.total_count ?? 0) > LIST_COUREURS_LIMIT,
+        };
+      });
+    },
+
+    async findDossierDetail(input: {
+      organisationId: string;
+      editionId: string;
+      coureurId: string;
+    }): Promise<DossierDetail | null> {
+      return withDb(() =>
+        sql.begin(async (tx) => {
+          const coureurRows = await tx<CoureurRow[]>`
+            SELECT ${tx.unsafe(COUREUR_COLUMNS)}
+            FROM ${tx.unsafe(COUREUR_SOURCE)}
+            WHERE c.id = ${input.coureurId}
+              AND c.edition_id = ${input.editionId}
+              AND c.organisation_id = ${input.organisationId}
+            LIMIT 1
+          `;
+          const coureurRow = coureurRows[0];
+          if (!coureurRow) {
+            return null;
+          }
+          const [emailRows, preuveRows, decideParRows] = await Promise.all([
+            tx<{ email: string }[]>`
+              SELECT email FROM account WHERE id = ${coureurRow.account_id} LIMIT 1
+            `,
+            tx<PreuveRow[]>`
+              SELECT id, organisation_id, coureur_id, storage_key, mime,
+                     size_bytes, sha256, status, created_at
+              FROM preuve
+              WHERE coureur_id = ${input.coureurId} AND status = 'active'
+              LIMIT 1
+            `,
+            coureurRow.decided_by === null
+              ? Promise.resolve([] as { email: string }[])
+              : tx<{ email: string }[]>`
+                  SELECT email FROM account WHERE id = ${coureurRow.decided_by} LIMIT 1
+                `,
+          ]);
+          return {
+            coureur: toCoureurRecord(coureurRow),
+            email: emailRows[0]?.email ?? '',
+            preuveActive: preuveRows[0] ? toPreuveRecord(preuveRows[0]) : null,
+            decidePar:
+              coureurRow.decided_at !== null && decideParRows[0]
+                ? { email: decideParRows[0].email, decidedAt: coureurRow.decided_at }
+                : null,
+          };
+        }),
+      );
+    },
+
+    async decideDossier(input: DecideDossierInput): Promise<CoureurRecord> {
+      return withDb(() =>
+        sql.begin(async (tx) => {
+          const lockedRows = await tx<CoureurRow[]>`
+            SELECT ${tx.unsafe(COUREUR_COLUMNS)}
+            FROM ${tx.unsafe(COUREUR_SOURCE)}
+            WHERE c.id = ${input.coureurId}
+              AND c.edition_id = ${input.editionId}
+              AND c.organisation_id = ${input.organisationId}
+            LIMIT 1
+            FOR UPDATE OF c
+          `;
+          const locked = lockedRows[0];
+          if (!locked) {
+            throw new DossierNotFoundError();
+          }
+          let status: 'validé' | 'refusé';
+          let refusalReason: string | null = null;
+          if (input.decision === 'valider') {
+            if (locked.status === 'validé') {
+              // Re-validation idempotente : no-op, rien ne change.
+              return toCoureurRecord(locked);
+            }
+            status = 'validé';
+          } else if (input.decision === 'refuser') {
+            const motif = input.refusalReason?.trim() ?? '';
+            if (motif.length === 0) {
+              throw new RefusalReasonRequiredError();
+            }
+            if (locked.status === 'validé') {
+              throw new DossierValidatedError();
+            }
+            status = 'refusé';
+            refusalReason = motif;
+          } else {
+            throw new Error('décision inconnue');
+          }
+          const updatedRows = await tx<{ id: string }[]>`
+            UPDATE coureur
+            SET status = ${status},
+                refusal_reason = ${refusalReason},
+                decided_by = ${input.decidedBy},
+                decided_at = now(),
+                updated_at = now()
+            WHERE id = ${input.coureurId}
+            RETURNING id
+          `;
+          if (!updatedRows[0]) {
+            throw new Error('décision sans résultat');
+          }
+          const recordRows = await tx<CoureurRow[]>`
+            SELECT ${tx.unsafe(COUREUR_COLUMNS)}
+            FROM ${tx.unsafe(COUREUR_SOURCE)}
+            WHERE c.id = ${input.coureurId}
+            LIMIT 1
+          `;
+          const record = recordRows[0];
+          if (!record) {
+            throw new Error('relecture du coureur impossible après décision');
+          }
+          return toCoureurRecord(record);
+        }),
+      );
+    },
+
+    async findPreuveByIdForOrganisation(
+      preuveId: string,
+      organisationId: string,
+    ): Promise<PreuveRecord | null> {
+      return withDb(async () => {
+        const rows = await sql<PreuveRow[]>`
+          SELECT id, organisation_id, coureur_id, storage_key, mime,
+                 size_bytes, sha256, status, created_at
+          FROM preuve
+          WHERE id = ${preuveId}
+            AND organisation_id = ${organisationId}
+            AND status = 'active'
+          LIMIT 1
+        `;
+        const row = rows[0];
+        return row ? toPreuveRecord(row) : null;
+      });
+    },
   };
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
 function createUnavailableStore(): InscriptionsStore {
@@ -644,6 +935,10 @@ function createUnavailableStore(): InscriptionsStore {
     acceptDocuments: unavailable,
     findActivePreuveByAccount: unavailable,
     savePreuve: unavailable,
+    listCoureurs: unavailable,
+    findDossierDetail: unavailable,
+    decideDossier: unavailable,
+    findPreuveByIdForOrganisation: unavailable,
   };
 }
 

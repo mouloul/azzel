@@ -127,6 +127,7 @@ describe.skipIf(serverUrl === null)('preuve — intégration Postgres (base azze
       accountId,
       organisationId: organisation.id,
       email: `coureur-${accountId}@test.azzel`,
+      role: 'coureur' as const,
       createdAt: new Date(),
     };
   }
@@ -328,7 +329,7 @@ describe.skipIf(serverUrl === null)('preuve — intégration Postgres (base azze
 
   it('garde dossier validé : DossierValidatedError, aucune ligne ni fichier', async () => {
     const session = await createCoureurSession();
-    await sql`UPDATE coureur SET status = 'valide' WHERE account_id = ${session.accountId}`;
+    await sql`UPDATE coureur SET status = 'validé' WHERE account_id = ${session.accountId}`;
     const filesBefore = readdirSync(storageDir).length;
     await expect(
       uploadPreuve(session, jpegBytes(1024), { store, proofStore }),

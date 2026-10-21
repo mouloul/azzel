@@ -28,6 +28,13 @@ export class CodeExhaustedError extends Error {
   }
 }
 
+export class ForbiddenError extends Error {
+  constructor() {
+    super('rôle insuffisant pour cette action');
+    this.name = 'ForbiddenError';
+  }
+}
+
 export class UnauthenticatedError extends Error {
   constructor() {
     super('session absente, expirée ou révoquée');
@@ -94,6 +101,16 @@ export function toApiError(error: unknown): ApiError {
         code: 'iam.code_exhausted',
         message: 'Cinq tentatives sans succès : ce code n’est plus valable.',
         action: 'Demandez un nouveau code.',
+      }),
+    };
+  }
+  if (error instanceof ForbiddenError) {
+    return {
+      status: 403,
+      envelope: createErrorEnvelope({
+        code: 'iam.forbidden',
+        message: 'Cette action est réservée aux organisateurs.',
+        action: 'Connecte-toi avec un compte organisateur pour continuer.',
       }),
     };
   }

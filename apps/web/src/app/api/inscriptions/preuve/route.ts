@@ -57,11 +57,10 @@ export async function POST(request: NextRequest) {
     return authenticated.response;
   }
   const contentLength = request.headers.get('content-length');
-  if (
-    contentLength === null ||
-    !/^\d+$/.test(contentLength) ||
-    Number(contentLength) > MAX_UPLOAD_BYTES
-  ) {
+  if (contentLength === null || !/^\d+$/.test(contentLength)) {
+    return errorResponse(toPreuveApiError(new InvalidBodyError()));
+  }
+  if (Number(contentLength) > MAX_UPLOAD_BYTES) {
     return errorResponse(toPreuveApiError(new BodyTooLargeError()));
   }
   const contentType = request.headers.get('content-type') ?? '';

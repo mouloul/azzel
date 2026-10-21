@@ -90,6 +90,34 @@ describe('GET /api/auth/session', () => {
     expect(body.error.code).toBe('iam.unauthenticated');
     expect(serviceMock.getSession).not.toHaveBeenCalled();
   });
+
+  it('session valide : 200 avec email, rôle et date de création', async () => {
+    serviceMock.getSession.mockResolvedValue({
+      accountId: 'account-1',
+      organisationId: 'org-1',
+      email: 'organisateur@exemple.dz',
+      role: 'organisateur',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+    });
+
+    const response = await getSessionRoute(
+      new NextRequest(BASE + '/api/auth/session', {
+        headers: { cookie: 'azzel_session=jeton-session' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      email: string;
+      role: string;
+      createdAt: string;
+    };
+    expect(body).toEqual({
+      email: 'organisateur@exemple.dz',
+      role: 'organisateur',
+      createdAt: '2026-10-01T10:00:00.000Z',
+    });
+  });
 });
 
 describe('POST /api/auth/logout', () => {

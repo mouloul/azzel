@@ -1,9 +1,11 @@
 import { formatLocalDateTime } from '@azzel/shared';
 
+import { AssistanceButton, DEFAULT_ASSISTANCE_PHONE } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
+import { readEnv } from '@/modules/iam/env';
 import { requireSession } from '@/modules/iam/session';
 
-import { AGE_CATEGORY_LABELS, COUREUR_STATUS_EN_CONSTITUTION, formatDateFrUtc, type AgeCategory } from '@/modules/inscriptions/domain';
+import { AGE_CATEGORY_LABELS, COUREUR_STATUS_EN_CONSTITUTION, COUREUR_STATUS_REFUSE, canDepositPreuve, formatDateFrUtc, type AgeCategory } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { formatKiloBytes } from '@/modules/inscriptions/proof-format';
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
@@ -16,6 +18,7 @@ export const metadata = {
 };
 
 export default async function EspaceCoureurPage() {
+  const assistancePhone = readEnv('ASSISTANCE_PHONE') ?? DEFAULT_ASSISTANCE_PHONE;
   const result = await requireSession();
   if (result.status === 'db-unavailable') {
     return (
@@ -104,6 +107,23 @@ export default async function EspaceCoureurPage() {
                 {state.coureur.contactUrgenceTelephone}
               </p>
               <p className="mono">Dossier : {state.coureur.status}</p>
+              {state.coureur.status === COUREUR_STATUS_REFUSE &&
+              state.coureur.refusalReason !== null ? (
+                <div role="alert" aria-live="assertive" className="error-box">
+                  <p className="error-message">Ton dossier a été refusé.</p>
+                  <p className="error-action">Motif : {state.coureur.refusalReason}</p>
+                  {state.edition.registrationOpen ? (
+                    <div className="auth-alt">
+                      <a className="btn-action" href="/preuve">
+                        Déposer une nouvelle preuve
+                      </a>
+                    </div>
+                  ) : null}
+                  <div className="auth-alt">
+                    <AssistanceButton phone={assistancePhone} />
+                  </div>
+                </div>
+              ) : null}
               {state.coureur.dechargeAccepte !== null &&
               state.coureur.reglementAccepte !== null ? (
                 <p className="mono">
@@ -132,7 +152,7 @@ export default async function EspaceCoureurPage() {
                     {formatKiloBytes(preuveState.preuve.sizeBytes)} · remplaçable
                   </p>
                   {state.edition.registrationOpen &&
-                  state.coureur.status === COUREUR_STATUS_EN_CONSTITUTION ? (
+                  canDepositPreuve(state.coureur.status) ? (
                     <div className="auth-alt">
                       <a className="btn-contour" href="/preuve">
                         Remplacer ma preuve de paiement
@@ -142,7 +162,7 @@ export default async function EspaceCoureurPage() {
                 </>
               ) : preuveState !== null &&
                 state.edition.registrationOpen &&
-                state.coureur.status === COUREUR_STATUS_EN_CONSTITUTION ? (
+                canDepositPreuve(state.coureur.status) ? (
                 <div className="auth-alt">
                   <a className="btn-action" href="/preuve">
                     Déposer ma preuve de paiement CCP

@@ -3,6 +3,8 @@ import type { SessionRecord } from '@/modules/iam/store';
 import { isRegistrationOpen } from './domain';
 import {
   NoEditionError,
+  PreuveNotFoundError,
+  PreuveStorageError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
@@ -28,6 +30,7 @@ export interface PreuveSummary {
 export interface PreuveState {
   edition: EditionSummary | null;
   coureurStatus: string | null;
+  refusalReason: string | null;
   preuve: PreuveSummary | null;
 }
 
@@ -72,7 +75,7 @@ export async function getPreuveState(
   const store = deps.store ?? getInscriptionsStore();
   const edition = await store.findCurrentEdition(session.organisationId);
   if (!edition) {
-    return { edition: null, coureurStatus: null, preuve: null };
+    return { edition: null, coureurStatus: null, refusalReason: null, preuve: null };
   }
   const coureur = await store.findCoureurByAccount(
     session.accountId,
@@ -85,6 +88,7 @@ export async function getPreuveState(
   return {
     edition: toEditionSummary(edition),
     coureurStatus: coureur ? coureur.status : null,
+    refusalReason: coureur ? coureur.refusalReason : null,
     preuve: preuve ? toPreuveSummary(preuve) : null,
   };
 }
@@ -129,4 +133,32 @@ export async function uploadPreuve(
     await proofStore.remove(file.storageKey).catch(() => undefined);
   }
   return toPreuveSummary(saved.preuve);
+}
+
+export interface AdminPreuveFile {
+  preuve: PreuveRecord;
+  bytes: Uint8Array;
+}
+
+export async function readPreuveForOrganisation(
+  session: SessionRecord,
+  preuveId: string,
+  deps: PreuveServiceDeps = {},
+): Promise<AdminPreuveFile> {
+  const store = deps.store ?? getInscriptionsStore();
+  const proofStore = deps.proofStore ?? getProofStore();
+  const preuve = await store.findPreuveByIdForOrganisation(preuveId, session.organisationId);
+  if (!preuve) {
+    throw new PreuveNotFoundError();
+  }
+  const bytes = await proofStore.read(preuve.storageKey);
+  if (!bytes) {
+    console.error(
+      '[admin] preuve %s : fichier %s illisible sur le stockage',
+      preuve.id,
+      preuve.storageKey,
+    );
+    throw new PreuveStorageError(preuve.storageKey);
+  }
+  return { preuve, bytes };
 }
