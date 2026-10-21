@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@azzel/shared': path.resolve(rootDir, 'packages/shared/src/index.ts'),
+      '@': path.resolve(rootDir, 'apps/web/src'),
     },
   },
   test: {

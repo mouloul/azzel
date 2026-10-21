@@ -1,0 +1,239 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+
+import { CODE_TTL_MINUTES, RESEND_COOLDOWN_SEC } from '@/modules/iam/constants';
+
+interface ErrorPayload {
+  message: string;
+  action: string;
+}
+
+const NETWORK_ERROR: ErrorPayload = {
+  message: 'Connexion au serveur impossible.',
+  action: 'Vérifie ta connexion puis réessaie.',
+};
+
+interface PostResult {
+  ok: boolean;
+  status: number;
+  payload: unknown;
+  retryAfterSec: number | null;
+}
+
+async function postJson(url: string, body: unknown): Promise<PostResult> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const retryAfter = response.headers.get('retry-after');
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload,
+    retryAfterSec:
+      retryAfter !== null && /^\d+$/.test(retryAfter) ? Number(retryAfter) : null,
+  };
+}
+
+function toErrorPayload(payload: unknown): ErrorPayload {
+  if (typeof payload === 'object' && payload !== null && 'error' in payload) {
+    const error = (payload as { error?: { message?: unknown; action?: unknown } }).error;
+    if (
+      typeof error?.message === 'string' &&
+      typeof error?.action === 'string'
+    ) {
+      return { message: error.message, action: error.action };
+    }
+  }
+  return NETWORK_ERROR;
+}
+
+export default function ConnexionPage() {
+  const router = useRouter();
+  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<ErrorPayload | null>(null);
+  const [pending, setPending] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setResendIn((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
+
+  useEffect(() => {
+    if (step === 'code') {
+      codeInputRef.current?.focus();
+    }
+  }, [step]);
+
+  async function requestCode(targetEmail: string): Promise<void> {
+    setPending(true);
+    setError(null);
+    try {
+      const result = await postJson('/api/auth/code', { email: targetEmail });
+      if (!result.ok) {
+        setError(toErrorPayload(result.payload));
+        if (result.status === 429) {
+          setResendIn(result.retryAfterSec ?? RESEND_COOLDOWN_SEC);
+        }
+        return;
+      }
+      setStep('code');
+      setCode('');
+      setResendIn(RESEND_COOLDOWN_SEC);
+    } catch {
+      setError(NETWORK_ERROR);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onSubmitEmail(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    await requestCode(email);
+  }
+
+  async function onSubmitCode(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (pending || code.length !== 6) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const result = await postJson('/api/auth/verify', { email, code });
+      if (!result.ok) {
+        setError(toErrorPayload(result.payload));
+        return;
+      }
+      router.replace('/espace-coureur');
+    } catch {
+      setError(NETWORK_ERROR);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="auth">
+      <article className="card">
+        {step === 'email' ? (
+          <>
+            <p className="surtitre">Espace coureur</p>
+            <h1>Connexion</h1>
+            <p className="lead">
+              Saisis ton adresse email : tu recevras un code à 6 chiffres, valable{' '}
+              {CODE_TTL_MINUTES} minutes.
+            </p>
+            <form onSubmit={onSubmitEmail} noValidate>
+              <div className="field">
+                <label htmlFor="email">Adresse email</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="prenom.nom@exemple.dz"
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn-action"
+                disabled={pending || resendIn > 0}
+              >
+                {pending
+                  ? 'Envoi…'
+                  : resendIn > 0
+                    ? `Réessayer dans ${resendIn} s`
+                    : 'Recevoir mon code'}
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <p className="surtitre">Espace coureur</p>
+            <h1>Saisis ton code</h1>
+            <p className="lead">
+              Un code à 6 chiffres a été envoyé à <strong>{email}</strong> — valable{' '}
+              {CODE_TTL_MINUTES} minutes.
+            </p>
+            <form onSubmit={onSubmitCode} noValidate>
+              <div className="field">
+                <label htmlFor="code">Code à 6 chiffres</label>
+                <input
+                  ref={codeInputRef}
+                  id="code"
+                  name="code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  value={code}
+                  onChange={(event) =>
+                    setCode(event.target.value.replace(/\D+/g, '').slice(0, 6))
+                  }
+                  placeholder="123456"
+                  className="code-input"
+                />
+              </div>
+              <button type="submit" className="btn-action" disabled={pending || code.length !== 6}>
+                {pending ? 'Vérification…' : 'Valider mon code'}
+              </button>
+            </form>
+            <div className="auth-alt">
+              <button
+                type="button"
+                className="btn-contour"
+                onClick={() => requestCode(email)}
+                disabled={pending || resendIn > 0}
+              >
+                {resendIn > 0 ? `Renvoyer un code (${resendIn} s)` : 'Renvoyer un code'}
+              </button>
+              <button
+                type="button"
+                className="btn-lien"
+                onClick={() => {
+                  setStep('email');
+                  setError(null);
+                }}
+                disabled={pending}
+              >
+                Modifier l’adresse email
+              </button>
+            </div>
+          </>
+        )}
+        {error !== null && (
+          <div role="alert" aria-live="assertive" className="error-box">
+            <p className="error-message">{error.message}</p>
+            <p className="error-action">{error.action}</p>
+          </div>
+        )}
+      </article>
+    </section>
+  );
+}

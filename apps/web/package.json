@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "db:migrate": "tsx src/modules/iam/migrate.ts",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
@@ -11,13 +12,17 @@
   "dependencies": {
     "@azzel/shared": "workspace:*",
     "next": "16.4.2",
+    "nodemailer": "^10.1.7",
+    "postgres": "^3.4.9",
     "react": "~19.3.0",
     "react-dom": "~19.3.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "~19.3.0",
     "@types/react-dom": "~19.3.0",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.3"
   }
 }

@@ -195,11 +195,134 @@ main {
   color: var(--az-texte-2);
 }
 
+.auth {
+  max-width: 30rem;
+  padding: var(--az-space-7) var(--az-space-gutter);
+}
+
+.auth .card {
+  display: grid;
+  gap: var(--az-space-4);
+}
+
+.auth h1 {
+  margin: 0;
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  color: var(--az-texte);
+}
+
+.auth .lead {
+  margin: 0;
+}
+
+.auth form {
+  display: grid;
+  gap: var(--az-space-4);
+}
+
+.auth .btn-action {
+  margin-bottom: 0;
+}
+
+.auth .card p {
+  margin: 0;
+}
+
+.field {
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+.field label {
+  font-weight: 700;
+}
+
+.field input {
+  min-height: 48px;
+  width: 100%;
+  padding: var(--az-space-2) var(--az-space-4);
+  background: var(--az-bg);
+  color: var(--az-texte);
+  font: inherit;
+  font-size: 16px;
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+}
+
+.field input.code-input {
+  font-family: var(--az-font-meta-lg);
+  font-size: 24px;
+  font-weight: var(--az-font-weight-meta-lg);
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+
+.btn-action,
+.btn-contour {
+  min-height: 48px;
+}
+
+.btn-action:disabled,
+.btn-contour:disabled,
+.btn-lien:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-action:disabled:hover {
+  filter: none;
+}
+
+.auth-alt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-3);
+}
+
+.btn-lien {
+  padding: var(--az-space-2) 0;
+  background: none;
+  border: none;
+  color: var(--az-action);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error-box {
+  display: grid;
+  gap: var(--az-space-1);
+  padding: var(--az-space-3) var(--az-space-4);
+  border-left: 4px solid var(--az-danger);
+  background: color-mix(in srgb, var(--az-danger) 12%, transparent);
+  border-radius: var(--az-radius-sm);
+}
+
+.error-box .error-message {
+  margin: 0;
+  font-weight: 700;
+}
+
+.error-box .error-action {
+  margin: 0;
+  color: var(--az-texte-2);
+}
+
+.hint {
+  margin: 0;
+  color: var(--az-texte-2);
+}
+
 @media (max-width: 40rem) {
   .site-header,
   .site-footer,
   .hero,
-  .structure {
+  .structure,
+  .auth {
     padding-left: var(--az-space-margin-mobile);
     padding-right: var(--az-space-margin-mobile);
   }

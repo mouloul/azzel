@@ -1,0 +1,72 @@
+/* Week-end Sportif Aït Aïssi — tokens */
+@font-face{font-family:'Barlow Condensed';font-weight:500;font-style:normal;font-display:swap;src:url('fonts/barlow-condensed-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-weight:600;font-style:normal;font-display:swap;src:url('fonts/barlow-condensed-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-weight:700;font-style:normal;font-display:swap;src:url('fonts/barlow-condensed-latin-700-normal.woff2') format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-weight:800;font-style:normal;font-display:swap;src:url('fonts/barlow-condensed-latin-800-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:400;font-style:normal;font-display:swap;src:url('fonts/inter-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:500;font-style:normal;font-display:swap;src:url('fonts/inter-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:600;font-style:normal;font-display:swap;src:url('fonts/inter-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:700;font-style:normal;font-display:swap;src:url('fonts/inter-latin-700-normal.woff2') format('woff2')}
+:root {
+  --forest: #183A2B;
+  --forest-600: #24503C;
+  --forest-400: #2F6A4F;
+  --ochre: #C8742B;
+  --ochre-300: #D98A45;
+  --sage: #8FA58A;
+  --cream: #F4F0E6;
+  --sand: #E6E1D4;
+  --anthracite: #2A2B2E;
+  --surface: #F4F0E6;
+  --surface-raised: #FFFFFF;
+  --forest-surface: #183A2B;
+  --ink: #2A2B2E;
+  --ink-muted: #5D6058;
+  --heading: #183A2B;
+  --on-forest: #F4F0E6;
+  --line: #E6E1D4;
+  --accent: #9E5418;
+  --highlight: #C8742B;
+  --action: #9E5418;
+  --action-hover: #86460F;
+  --on-action: #FFFFFF;
+  --focus: #9E5418;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-card: 0 1px 2px rgba(15,36,26,0.08);
+  --container-max: 1200px;
+  --text-max: 68ch;
+  --header-height: 72px;
+  --bp-sm: 640px;
+  --bp-md: 960px;
+  --bp-lg: 1280px;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+/* Thème sombre (optionnel) */
+[data-theme="dark"] {
+  --surface: #0F241A;
+  --surface-raised: #183A2B;
+  --forest-surface: #24503C;
+  --ink: #F4F0E6;
+  --ink-muted: #B9BDB0;
+  --heading: #F4F0E6;
+  --on-forest: #F4F0E6;
+  --line: #2F4A3C;
+  --accent: #E39A5B;
+  --highlight: #D98A45;
+  --action: #D98A45;
+  --action-hover: #E39A5B;
+  --on-action: #0F241A;
+  --focus: #E39A5B;
+}

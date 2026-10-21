@@ -1,0 +1,36 @@
+/* Week-end Sportif Aït Aïssi — composants web (classes aa-) */
+.aa-root{font-family:var(--font-body);color:var(--ink);background:var(--surface)}
+.aa-eyebrow{font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);margin:0}
+.aa-h2{font-family:var(--font-display);font-weight:800;font-size:36px;line-height:1;text-transform:uppercase;color:var(--heading);margin:8px 0 0;text-wrap:balance}
+.aa-lead{font-size:19px;line-height:1.55;color:var(--ink);max-width:68ch;margin:16px 0 0}
+.aa-btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:17px;letter-spacing:.06em;text-transform:uppercase;padding:12px 24px;border-radius:var(--radius-md);border:2px solid transparent;cursor:pointer;text-decoration:none;line-height:1}
+.aa-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.aa-btn--primary{background:var(--action);color:var(--on-action)}
+.aa-btn--primary:hover{background:var(--action-hover)}
+.aa-btn--secondary{background:transparent;color:var(--heading);border-color:var(--heading)}
+.aa-btn--secondary:hover{background:var(--heading);color:var(--surface)}
+.aa-btn--on-forest{background:transparent;color:var(--on-forest);border-color:var(--on-forest)}
+.aa-stat__value{font-family:var(--font-display);font-weight:800;font-size:96px;line-height:.82;color:var(--highlight);font-variant-numeric:tabular-nums}
+.aa-stat__value--neutral{color:var(--heading)}
+.aa-stat__label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);margin-top:8px}
+.aa-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-md);padding:24px;box-shadow:var(--shadow-card)}
+.aa-card__title{font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading);margin:0}
+.aa-card__text{font-size:14px;line-height:1.5;color:var(--ink-muted);margin:8px 0 0}
+.aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-sm);line-height:1.2}
+.aa-chip--phare{background:var(--action);color:var(--on-action)}
+.aa-chip--nouveau{background:var(--forest-surface);color:var(--on-forest)}
+.aa-chip--tbc{border:1.5px dashed var(--accent);color:var(--accent)}
+.aa-header{display:flex;align-items:center;justify-content:space-between;gap:24px;height:72px;padding:0 32px;background:var(--surface);border-bottom:1px solid var(--line)}
+.aa-header__logo{height:40px;display:block}
+.aa-nav{display:flex;gap:24px;list-style:none;margin:0;padding:0}
+.aa-nav a{font-family:var(--font-display);font-weight:600;font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--heading);text-decoration:none}
+.aa-nav a:hover,.aa-nav a[aria-current]{color:var(--accent)}
+.aa-hero{position:relative;min-height:440px;display:flex;align-items:flex-end;color:var(--on-forest);background:var(--forest);overflow:hidden}
+.aa-hero__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.aa-hero__veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,36,26,.9) 0%,rgba(15,36,26,.7) 40%,rgba(15,36,26,.1) 75%)}
+.aa-hero__body{position:relative;padding:48px 32px;max-width:640px}
+.aa-hero__eyebrow{font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:var(--ochre-300);margin:0}
+.aa-hero__title{font-family:var(--font-display);font-weight:800;font-size:72px;line-height:.92;text-transform:uppercase;margin:12px 0 0}
+.aa-hero__title em{font-style:normal;color:var(--ochre-300)}
+.aa-hero__meta{font-size:16px;margin:16px 0 24px}
+@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-stat__value{font-size:72px}.aa-nav{display:none}}
