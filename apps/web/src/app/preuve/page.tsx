@@ -1,7 +1,7 @@
 import { formatLocalDateTime } from '@azzel/shared';
 
-import { DEFAULT_ASSISTANCE_PHONE, AssistanceButton } from '@/components/assistance-button';
-import { readEnv } from '@/modules/iam/env';
+import { AssistanceButton } from '@/components/assistance-button';
+import { readAssistancePhone } from '@/lib/assistance-phone';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireSession } from '@/modules/iam/session';
 
@@ -18,7 +18,7 @@ export const metadata = {
 };
 
 export default async function PreuvePage() {
-  const assistancePhone = readEnv('ASSISTANCE_PHONE') ?? DEFAULT_ASSISTANCE_PHONE;
+  const assistancePhone = readAssistancePhone();
   const result = await requireSession();
   if (result.status === 'db-unavailable') {
     const { envelope } = toApiError(new DbUnavailableError());

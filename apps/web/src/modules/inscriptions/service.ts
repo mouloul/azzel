@@ -1,4 +1,5 @@
 import type { SessionRecord } from '@/modules/iam/store';
+import { processOutbox, type OutboxProcessSummary } from '@/modules/notifications/worker';
 
 import {
   AGE_CATEGORY_LABELS,
@@ -79,6 +80,20 @@ export interface InscriptionState {
 
 export interface InscriptionsServiceDeps {
   store?: InscriptionsStore;
+  triggerOutbox?: (limit?: number) => Promise<OutboxProcessSummary | void>;
+}
+
+// Envoi best effort post-événement : jamais bloquant pour le parcours coureur
+// (FR-6) — erreurs avalées + log, le rejeu repasse par emails:send.
+function notifyOutbox(deps: InscriptionsServiceDeps): void {
+  const trigger = deps.triggerOutbox ?? processOutbox;
+  void (async () => {
+    try {
+      await trigger();
+    } catch (error) {
+      console.error('[notifications] envoi best effort après événement a échoué :', error);
+    }
+  })();
 }
 
 function acceptanceSummary(
@@ -203,6 +218,7 @@ export async function submitInscription(
     age: derived.age,
     categorieAge: derived.category,
   });
+  notifyOutbox(deps);
   return toCoureurSummary(record);
 }
 
@@ -632,5 +648,6 @@ export async function decideDossier(
     refusalReason: input.refusalReason,
     decidedBy: session.accountId,
   });
+  notifyOutbox(deps);
   return toCoureurSummary(record);
 }

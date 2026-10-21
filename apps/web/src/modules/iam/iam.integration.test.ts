@@ -268,7 +268,7 @@ describe.skipIf(serverUrl === null)('iam — intégration Postgres (base azzel_t
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(6);
+    expect(rows[0]?.count).toBe(7);
   });
 
   it('rôle : coureur par défaut, la session porte le rôle', async () => {

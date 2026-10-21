@@ -35,6 +35,26 @@ pnpm dev:web        # serveur de développement Next.js
 pnpm dev:runners    # Metro pour la dev build coureurs (expo start --dev-client)
 ```
 
+## Notifications par email (file d'envoi)
+
+Chaque événement coureur (inscription reçue, dossier validé, dossier refusé) insère un
+email dans la table `email_outbox` **dans la même transaction** que l'événement ;
+l'envoi est ensuite best effort (un échec SMTP ne bloque jamais le parcours). Les lignes
+en échec repassent en file avec un backoff (`attempts × 5 min`, plafond 1 h) ; après
+**5 tentatives** une ligne n'est plus reprise : elle reste visible en base
+(dead-letter implicite, colonnes `attempts`/`last_error`) et le script la signale.
+
+```bash
+pnpm -F @azzel/web emails:send        # traite la file en attente (20 par défaut)
+pnpm -F @azzel/web emails:send 100    # limite explicite
+```
+
+Rejeu cron VPS (exemple, toutes les 5 minutes) :
+
+```cron
+*/5 * * * * cd /srv/azzel && pnpm -F @azzel/web emails:send >>/var/log/azzel-emails.log 2>&1
+```
+
 ## Conventions
 
 - **Langues** : interface utilisateur en français ; code et identifiants en anglais.

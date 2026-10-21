@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildLoginCodeEmailText, sendLoginCodeEmail } from './email';
 import { readAdminEmails, readSmtpUrl } from './env';
@@ -105,6 +105,21 @@ describe('sendLoginCodeEmail', () => {
       } else {
         process.env.SMTP_URL = previous;
       }
+    }
+  });
+
+  it('sans SMTP_URL en production : EmailSendError (délègue au transport, pas de repli console)', async () => {
+    vi.stubEnv('SMTP_URL', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      await expect(sendLoginCodeEmail('coureur@exemple.dz', '123456')).rejects.toBeInstanceOf(
+        EmailSendError,
+      );
+      expect(info).not.toHaveBeenCalled();
+    } finally {
+      info.mockRestore();
+      vi.unstubAllEnvs();
     }
   });
 });

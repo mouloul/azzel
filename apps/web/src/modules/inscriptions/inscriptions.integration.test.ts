@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import postgres from 'postgres';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/modules/notifications/worker', async () => {
+  const { createSilentOutboxWorker } = await import('@/test/outbox-worker-mock');
+  return createSilentOutboxWorker();
+});
 
 import { readDatabaseUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
@@ -117,7 +122,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     };
   }
 
-  it('migrations : 0001 à 0006 appliquées avec les seeds attendus', async () => {
+  it('migrations : 0001 à 0007 appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;
     expect(rows.map((row) => row.name)).toEqual([
@@ -127,6 +132,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       '0004_coureur_checks.sql',
       '0005_preuve.sql',
       '0006_roles_statuts.sql',
+      '0007_email_outbox.sql',
     ]);
 
     const editions = await sql`
@@ -175,7 +181,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(6);
+    expect(rows[0]?.count).toBe(7);
   });
 
   it('inscription complète : coureur créé, rattaché édition/épreuve/organisation', async () => {

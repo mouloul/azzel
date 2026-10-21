@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/modules/notifications/worker', async () => {
+  const { createSilentOutboxWorker } = await import('@/test/outbox-worker-mock');
+  return createSilentOutboxWorker();
+});
+
+import { processOutbox } from '@/modules/notifications/worker';
+
 import {
   AGE_CATEGORY_LABELS,
   MAX_AGE_AT_RACE,
@@ -344,6 +351,8 @@ describe('submitInscription — service avec store stubbé', () => {
     expect(summary.categorie).toBe('Senior');
     expect(summary.age).toBe(36);
     expect(summary.status).toBe('en constitution');
+    // L’envoi best effort démarre après l’événement, sans le bloquer.
+    expect(vi.mocked(processOutbox)).toHaveBeenCalledTimes(1);
   });
 
   it('après clôture : RegistrationClosedError, rien d’écrit', async () => {
@@ -683,6 +692,7 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       decidedBy: session.accountId,
     });
     expect(summary.status).toBe('en constitution');
+    expect(vi.mocked(processOutbox)).toHaveBeenCalledTimes(1);
   });
 
   it('refuser avec motif : store appelé avec le motif trimé et la traçabilité', async () => {

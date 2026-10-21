@@ -1,6 +1,7 @@
 import postgres, { type Sql } from 'postgres';
 
 import { readDatabaseUrl } from '@/modules/iam/env';
+import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
 import { COUREUR_STATUS_EN_CONSTITUTION, canDepositPreuve, isRegistrationOpen } from './domain';
 import {
@@ -539,6 +540,25 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!full) {
             throw new Error('relecture du coureur impossible après upsert');
           }
+          // Notification « inscription reçue » : même transaction que l’événement
+          // (un échec d’insertion fait échouer la soumission — cohérence).
+          const emailRows = await tx<{ email: string }[]>`
+            SELECT email FROM account WHERE id = ${input.accountId} LIMIT 1
+          `;
+          const destinataire = emailRows[0]?.email ?? '';
+          if (destinataire === '') {
+            console.warn(
+              '[notifications] coureur %s sans email : ligne outbox « inscription_recue » non insérée',
+              full.id,
+            );
+          } else {
+            await insertOutboxEmail(tx, {
+              organisationId: input.organisationId,
+              destinataire,
+              type: 'inscription_recue',
+              payload: { prenom: full.first_name, epreuve: full.epreuve_nom },
+            });
+          }
           return toCoureurRecord(full);
         }),
       );
@@ -891,6 +911,34 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           const record = recordRows[0];
           if (!record) {
             throw new Error('relecture du coureur impossible après décision');
+          }
+          // Notification de décision : même transaction que l’événement ; la
+          // re-validation idempotente (no-op) est revenue avant, sans insérer.
+          const decisionEmailRows = await tx<{ email: string }[]>`
+            SELECT email FROM account WHERE id = ${locked.account_id} LIMIT 1
+          `;
+          const decisionDestinataire = decisionEmailRows[0]?.email ?? '';
+          if (decisionDestinataire === '') {
+            console.warn(
+              '[notifications] coureur %s sans email : ligne outbox « %s » non insérée',
+              locked.id,
+              status === 'validé' ? 'dossier_valide' : 'dossier_refuse',
+            );
+          } else {
+            const payload =
+              status === 'validé'
+                ? { prenom: record.first_name, epreuve: record.epreuve_nom }
+                : {
+                    prenom: record.first_name,
+                    epreuve: record.epreuve_nom,
+                    motif: refusalReason ?? '',
+                  };
+            await insertOutboxEmail(tx, {
+              organisationId: input.organisationId,
+              destinataire: decisionDestinataire,
+              type: status === 'validé' ? 'dossier_valide' : 'dossier_refuse',
+              payload,
+            });
           }
           return toCoureurRecord(record);
         }),

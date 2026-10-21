@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
 import postgres from 'postgres';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+// Le vrai worker ne doit jamais tourner dans ces tests : il se connecterait à la
+// base DEV et enverait de vrais emails. Helper partagé : @/test/outbox-worker-mock.
+vi.mock('@/modules/notifications/worker', async () => {
+  const { createSilentOutboxWorker } = await import('@/test/outbox-worker-mock');
+  return createSilentOutboxWorker();
+});
 
 import { readDatabaseUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';

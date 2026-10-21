@@ -1,8 +1,8 @@
 import { formatLocalDateTime } from '@azzel/shared';
 
-import { AssistanceButton, DEFAULT_ASSISTANCE_PHONE } from '@/components/assistance-button';
+import { AssistanceButton } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
-import { readEnv } from '@/modules/iam/env';
+import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireSession } from '@/modules/iam/session';
 
 import { formatDateFrUtc } from '@/modules/inscriptions/domain';
@@ -28,7 +28,7 @@ export const metadata = {
 };
 
 export default async function EspaceCoureurPage() {
-  const assistancePhone = readEnv('ASSISTANCE_PHONE') ?? DEFAULT_ASSISTANCE_PHONE;
+  const assistancePhone = readAssistancePhone();
   const result = await requireSession();
   if (result.status === 'db-unavailable') {
     return (
