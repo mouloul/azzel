@@ -7,8 +7,19 @@ import { readDatabaseUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import { applyAllMigrations } from './migrate';
-import { DossierValidatedError, InvalidFieldsError, RegistrationClosedError } from './errors';
-import { getInscriptionState, submitInscription } from './service';
+import {
+  BothAcceptancesRequiredError,
+  DossierValidatedError,
+  InvalidFieldsError,
+  NoCoureurError,
+  RegistrationClosedError,
+} from './errors';
+import {
+  acceptDocuments,
+  getAcceptancesState,
+  getInscriptionState,
+  submitInscription,
+} from './service';
 import { createInscriptionsStore, type InscriptionsStore } from './store';
 import type { InscriptionFormInput } from './domain';
 
@@ -82,6 +93,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
   afterEach(async () => {
     if (sql) {
       await sql`UPDATE edition SET registration_closes_at = TIMESTAMPTZ '2027-03-16T22:59:59Z'`;
+      await sql`UPDATE document SET version = 'v1' WHERE slug IN ('decharge', 'reglement')`;
     }
   });
 
@@ -104,10 +116,15 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     };
   }
 
-  it('migrations : 0001 + 0002 appliquées avec les seeds attendus', async () => {
+  it('migrations : 0001 à 0004 appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;
-    expect(rows.map((row) => row.name)).toEqual(['0001_iam.sql', '0002_inscriptions.sql']);
+    expect(rows.map((row) => row.name)).toEqual([
+      '0001_iam.sql',
+      '0002_inscriptions.sql',
+      '0003_documents.sql',
+      '0004_coureur_checks.sql',
+    ]);
 
     const editions = await sql`
       SELECT name, race_date::text AS race_date, registration_closes_at
@@ -125,13 +142,37 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       { slug: 'longue', distance_km: 35 },
       { slug: 'moyenne', distance_km: 12 },
     ]);
+
+    const documents = await sql`
+      SELECT slug, version, content FROM document ORDER BY slug
+    `;
+    expect(documents.map((row) => row.slug)).toEqual(['decharge', 'reglement']);
+    for (const document of documents) {
+      expect(document.version).toBe('v1');
+      expect(document.content).toContain('TEXTE PROVISOIRE');
+      expect(document.content).toContain('à remplacer par l’organisateur');
+    }
+
+    const colonnes = await sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'coureur' AND column_name IN (
+        'decharge_accepted_at', 'decharge_version',
+        'reglement_accepted_at', 'reglement_version'
+      ) ORDER BY column_name
+    `;
+    expect(colonnes.map((row) => row.column_name)).toEqual([
+      'decharge_accepted_at',
+      'decharge_version',
+      'reglement_accepted_at',
+      'reglement_version',
+    ]);
   });
 
   it('migrations idempotentes : re-exécution sans erreur ni doublon', async () => {
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(2);
+    expect(rows[0]?.count).toBe(4);
   });
 
   it('inscription complète : coureur créé, rattaché édition/épreuve/organisation', async () => {
@@ -233,5 +274,139 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     expect(state.epreuves.map((epreuve) => epreuve.slug).sort()).toEqual(['longue', 'moyenne']);
     expect(state.coureur?.age).toBe(20);
     expect(state.coureur?.categorie).toBe('Senior');
+  });
+
+  it('acceptations : les deux cases → horodatage serveur et versions résolues côté serveur', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+    await sql`UPDATE document SET version = 'v2' WHERE slug = 'decharge'`;
+
+    const before = new Date();
+    const result = await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    const after = new Date();
+
+    expect(result.decharge.version).toBe('v2');
+    expect(result.reglement.version).toBe('v1');
+
+    const rows = await sql`
+      SELECT decharge_accepted_at, decharge_version, reglement_accepted_at, reglement_version
+      FROM coureur WHERE id = ${summary.id}
+    `;
+    const row = rows[0];
+    expect(row?.decharge_version).toBe('v2');
+    expect(row?.reglement_version).toBe('v1');
+    const dechargeAt = row?.decharge_accepted_at as Date;
+    const reglementAt = row?.reglement_accepted_at as Date;
+    expect(dechargeAt.getTime()).toBeGreaterThanOrEqual(before.getTime() - 5);
+    expect(dechargeAt.getTime()).toBeLessThanOrEqual(after.getTime() + 5);
+    expect(reglementAt.getTime()).toBe(dechargeAt.getTime());
+  });
+
+  it('acceptations : une seule case → refus atomique, rien n’est écrit en base', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: false }, { store }),
+    ).rejects.toBeInstanceOf(BothAcceptancesRequiredError);
+
+    const rows = await sql`
+      SELECT decharge_accepted_at, reglement_accepted_at
+      FROM coureur WHERE id = ${summary.id}
+    `;
+    expect(rows[0]?.decharge_accepted_at).toBeNull();
+    expect(rows[0]?.reglement_accepted_at).toBeNull();
+  });
+
+  it('acceptations : session sans coureur → NoCoureurError, aucune ligne ni acceptation écrite', async () => {
+    const session = await createSession();
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toBeInstanceOf(NoCoureurError);
+
+    const rows = await sql`
+      SELECT decharge_accepted_at, reglement_accepted_at
+      FROM coureur WHERE account_id = ${session.accountId}
+    `;
+    expect(rows).toEqual([]);
+  });
+
+  it('acceptations : après clôture → refus, acceptations inchangées', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+    await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    await sql`UPDATE edition SET registration_closes_at = now() - interval '1 day'`;
+
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toBeInstanceOf(RegistrationClosedError);
+
+    const rows =
+      await sql`SELECT decharge_version FROM coureur WHERE id = ${summary.id}`;
+    expect(rows[0]?.decharge_version).toBe('v1');
+  });
+
+  it('acceptations : dossier validé → refus immuable sans modification', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+    await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    const avant = await sql`
+      SELECT decharge_accepted_at, decharge_version FROM coureur WHERE id = ${summary.id}
+    `;
+    await sql`UPDATE coureur SET status = 'valide' WHERE id = ${summary.id}`;
+
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toBeInstanceOf(DossierValidatedError);
+
+    const apres = await sql`
+      SELECT decharge_accepted_at, decharge_version FROM coureur WHERE id = ${summary.id}
+    `;
+    expect(apres[0]?.decharge_accepted_at?.toISOString()).toBe(
+      (avant[0]?.decharge_accepted_at as Date).toISOString(),
+    );
+    expect(apres[0]?.decharge_version).toBe(avant[0]?.decharge_version);
+  });
+
+  it('acceptations : ré-acceptation met à jour horodatage et version', async () => {
+    const session = await createSession();
+    const summary = await submitInscription(session, validInput(), { store });
+    const premiere = await acceptDocuments(
+      session,
+      { decharge: true, reglement: true },
+      { store },
+    );
+
+    await sql`UPDATE document SET version = 'v3' WHERE slug = 'reglement'`;
+    await sql`UPDATE coureur SET decharge_accepted_at = now() - interval '2 hours' WHERE id = ${summary.id}`;
+
+    const seconde = await acceptDocuments(
+      session,
+      { decharge: true, reglement: true },
+      { store },
+    );
+
+    expect(seconde.reglement.version).toBe('v3');
+    expect(seconde.decharge.version).toBe('v1');
+    expect(seconde.decharge.acceptedAt).not.toBe(premiere.decharge.acceptedAt);
+  });
+
+  it('getAcceptancesState : documents avec version, état null puis horodaté', async () => {
+    const session = await createSession();
+    const avant = await getAcceptancesState(session, { store });
+    expect(avant.edition).not.toBeNull();
+    expect(avant.coureurStatus).toBeNull();
+    expect(avant.acceptances.decharge).toBeNull();
+    expect(avant.documents.map((document) => document.slug)).toEqual(['decharge', 'reglement']);
+    expect(avant.documents[0]?.version).toBe('v1');
+
+    await submitInscription(session, validInput(), { store });
+    await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+
+    const apres = await getAcceptancesState(session, { store });
+    expect(apres.coureurStatus).toBe('en constitution');
+    expect(apres.acceptances.decharge).toMatchObject({ version: 'v1' });
+    expect(apres.acceptances.reglement).toMatchObject({ version: 'v1' });
+    expect(apres.acceptances.decharge?.acceptedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 });

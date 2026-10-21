@@ -4,7 +4,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireSession } from '@/modules/iam/session';
 
-import { AGE_CATEGORY_LABELS, formatDateFrUtc, type AgeCategory } from '@/modules/inscriptions/domain';
+import { AGE_CATEGORY_LABELS, COUREUR_STATUS_EN_CONSTITUTION, formatDateFrUtc, type AgeCategory } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getInscriptionState } from '@/modules/inscriptions/service';
 
@@ -94,8 +94,27 @@ export default async function EspaceCoureurPage() {
                 {state.coureur.contactUrgenceTelephone}
               </p>
               <p className="mono">Dossier : {state.coureur.status}</p>
+              {state.coureur.dechargeAccepte !== null &&
+              state.coureur.reglementAccepte !== null ? (
+                <p className="mono">
+                  Décharge + règlement : acceptés le{' '}
+                  {formatLocalDateTime(state.coureur.dechargeAccepte.acceptedAt)} (décharge{' '}
+                  {state.coureur.dechargeAccepte.version} · règlement{' '}
+                  {state.coureur.reglementAccepte.version})
+                </p>
+              ) : state.edition.registrationOpen &&
+                state.coureur.status === COUREUR_STATUS_EN_CONSTITUTION ? (
+                <div className="auth-alt">
+                  <a className="btn-contour" href="/acceptations">
+                    Accepter la décharge et le règlement
+                  </a>
+                </div>
+              ) : (
+                <p className="mono">Décharge + règlement : à accepter</p>
+              )}
               <p className="meta">
-                Clôture des inscriptions : {formatDateFrUtc(state.edition.registrationClosesAt)}
+                Clôture des inscriptions :{' '}
+                {formatLocalDateTime(state.edition.registrationClosesAt)}
               </p>
               {state.edition.registrationOpen ? (
                 <div className="auth-alt">
@@ -120,7 +139,8 @@ export default async function EspaceCoureurPage() {
                 M’inscrire à l’édition {state.edition.slug}
               </a>
               <p className="meta">
-                Clôture des inscriptions : {formatDateFrUtc(state.edition.registrationClosesAt)}
+                Clôture des inscriptions :{' '}
+                {formatLocalDateTime(state.edition.registrationClosesAt)}
               </p>
             </>
           ) : (

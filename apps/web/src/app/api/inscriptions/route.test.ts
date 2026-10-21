@@ -63,6 +63,7 @@ function postRequest(body: string, withCookie = true): NextRequest {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
+      'content-length': String(body.length),
       ...(withCookie ? { cookie: 'azzel_session=jeton-session' } : {}),
     },
     body,
@@ -219,6 +220,29 @@ describe('POST /api/inscriptions', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: 'azzel_session=jeton-session', 'content-length': '40000' },
         body: '{}',
+        duplex: 'half',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('inscriptions.body_too_large');
+    expect(inscriptionsServiceMock.submitInscription).not.toHaveBeenCalled();
+  });
+
+  it('sans Content-Length (chunked) : 400 enveloppe inscriptions.body_too_large, service non appelé', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+
+    const response = await postInscriptions(
+      new NextRequest(BASE + '/api/inscriptions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: 'azzel_session=jeton-session' },
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{}'));
+            controller.close();
+          },
+        }),
         duplex: 'half',
       }),
     );

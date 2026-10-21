@@ -13,11 +13,15 @@ import {
 } from './domain';
 import {
   DossierValidatedError,
+  DocumentsMissingError,
   InvalidFieldsError,
   RegistrationClosedError,
+  BothAcceptancesRequiredError,
+  NoCoureurError,
   toApiError,
+  toAcceptancesApiError,
 } from './errors';
-import { submitInscription } from './service';
+import { acceptDocuments, normalizeAcceptancesInput, submitInscription } from './service';
 import type { CoureurRecord, EditionRecord, InscriptionsStore } from './store';
 import type { SessionRecord } from '@/modules/iam/store';
 
@@ -278,6 +282,10 @@ describe('submitInscription — service avec store stubbé', () => {
       age: input.age,
       categorieAge: input.categorieAge,
       status: 'en constitution',
+      dechargeAcceptedAt: null,
+      dechargeVersion: null,
+      reglementAcceptedAt: null,
+      reglementVersion: null,
       createdAt: new Date('2026-10-21T08:00:00.000Z'),
       updatedAt: new Date('2026-10-21T08:00:00.000Z'),
     });
@@ -367,5 +375,185 @@ describe('submitInscription — service avec store stubbé', () => {
   it('labels de catégorie complets pour l’affichage', () => {
     expect(AGE_CATEGORY_LABELS.U20).toContain('U20');
     expect(AGE_CATEGORY_LABELS.V3).toContain('60');
+  });
+});
+
+describe('normalizeAcceptancesInput', () => {
+  it('n’accepte que l’intention booléenne stricte', () => {
+    expect(normalizeAcceptancesInput({ decharge: true, reglement: true })).toEqual({
+      decharge: true,
+      reglement: true,
+    });
+    expect(normalizeAcceptancesInput({ decharge: true })).toEqual({
+      decharge: true,
+      reglement: false,
+    });
+    expect(
+      normalizeAcceptancesInput({ decharge: 'oui', reglement: 1, dechargeVersion: 'v1' }),
+    ).toEqual({ decharge: false, reglement: false });
+    expect(normalizeAcceptancesInput(null)).toEqual({ decharge: false, reglement: false });
+  });
+});
+
+describe('toAcceptancesApiError — erreurs acceptations', () => {
+  it('BothAcceptancesRequiredError : 400, code acceptances.both_required', () => {
+    const apiError = toAcceptancesApiError(new BothAcceptancesRequiredError());
+    expect(apiError.status).toBe(400);
+    expect(apiError.envelope.version).toBe(1);
+    expect(apiError.envelope.error.code).toBe('acceptances.both_required');
+  });
+
+  it('NoCoureurError : 409, code acceptances.no_coureur', () => {
+    const apiError = toAcceptancesApiError(new NoCoureurError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('acceptances.no_coureur');
+  });
+
+  it('DocumentsMissingError : 503, code acceptances.documents_missing', () => {
+    const apiError = toAcceptancesApiError(new DocumentsMissingError());
+    expect(apiError.status).toBe(503);
+    expect(apiError.envelope.version).toBe(1);
+    expect(apiError.envelope.error.code).toBe('acceptances.documents_missing');
+    expect(apiError.envelope.error.message).not.toBe('');
+    expect(apiError.envelope.error.action).not.toBe('');
+  });
+
+  it('RegistrationClosedError : 403, code inscriptions.closed réutilisé', () => {
+    const apiError = toAcceptancesApiError(
+      new RegistrationClosedError(new Date('2027-03-16T22:59:59.000Z')),
+    );
+    expect(apiError.status).toBe(403);
+    expect(apiError.envelope.error.code).toBe('inscriptions.closed');
+    expect(apiError.envelope.error.message).toContain('16 mars 2027');
+  });
+
+  it('DossierValidatedError : 409, code inscriptions.dossier_valide réutilisé', () => {
+    const apiError = toAcceptancesApiError(new DossierValidatedError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('inscriptions.dossier_valide');
+  });
+
+  it('erreur inconnue : 500 acceptances.internal_error sans fuiter le message brut', () => {
+    const apiError = toAcceptancesApiError(new Error('boom'));
+    expect(apiError.status).toBe(500);
+    expect(apiError.envelope.error.code).toBe('acceptances.internal_error');
+    expect(apiError.envelope.error.message).not.toContain('boom');
+  });
+});
+
+describe('acceptDocuments — service avec store stubbé', () => {
+  const session: SessionRecord = {
+    accountId: 'account-1',
+    organisationId: 'org-1',
+    email: 'coureur@exemple.dz',
+    createdAt: new Date('2026-10-01T10:00:00.000Z'),
+  };
+
+  const SNAPSHOT = {
+    dechargeAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+    dechargeVersion: 'v1',
+    reglementAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+    reglementVersion: 'v1',
+  };
+
+  function buildStore(edition: Partial<EditionRecord> = {}): InscriptionsStore & {
+    acceptDocuments: ReturnType<typeof vi.fn>;
+    findCurrentEdition: ReturnType<typeof vi.fn>;
+  } {
+    const fullEdition: EditionRecord = {
+      id: 'edition-1',
+      organisationId: 'org-1',
+      slug: '2027',
+      nom: 'Édition 2027',
+      dateCourse: RACE_DATE,
+      registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      ...edition,
+    };
+    const store = {
+      findCurrentEdition: vi.fn(async () => fullEdition),
+      listEpreuves: vi.fn(async () => []),
+      findDocuments: vi.fn(async () => []),
+      findCoureurByAccount: vi.fn(async () => null),
+      upsertCoureur: vi.fn(),
+      acceptDocuments: vi.fn(async () => SNAPSHOT),
+    };
+    return store as unknown as InscriptionsStore & {
+      acceptDocuments: ReturnType<typeof vi.fn>;
+      findCurrentEdition: ReturnType<typeof vi.fn>;
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('les deux cases : snapshot renvoyé en ISO UTC, store appelé avec org/account/édition', async () => {
+    const store = buildStore();
+    const result = await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    expect(store.acceptDocuments).toHaveBeenCalledTimes(1);
+    expect(store.acceptDocuments).toHaveBeenCalledWith({
+      organisationId: session.organisationId,
+      accountId: session.accountId,
+      editionId: 'edition-1',
+    });
+    expect(result).toEqual({
+      decharge: { acceptedAt: '2026-10-21T09:30:00.000Z', version: 'v1' },
+      reglement: { acceptedAt: '2026-10-21T09:30:00.000Z', version: 'v1' },
+    });
+  });
+
+  it('une seule case : BothAcceptancesRequiredError, store non appelé', async () => {
+    const store = buildStore();
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: false }, { store }),
+    ).rejects.toBeInstanceOf(BothAcceptancesRequiredError);
+    expect(store.acceptDocuments).not.toHaveBeenCalled();
+  });
+
+  it('payload vide : BothAcceptancesRequiredError, store non appelé', async () => {
+    const store = buildStore();
+    await expect(acceptDocuments(session, {}, { store })).rejects.toBeInstanceOf(
+      BothAcceptancesRequiredError,
+    );
+    expect(store.acceptDocuments).not.toHaveBeenCalled();
+  });
+
+  it('le client ne fournit jamais les versions : elles sont ignorées', async () => {
+    const store = buildStore();
+    await acceptDocuments(
+      session,
+      { decharge: true, reglement: true, dechargeVersion: 'v0-falsifiée', reglementVersion: 42 },
+      { store },
+    );
+    expect(store.acceptDocuments).toHaveBeenCalledWith({
+      organisationId: session.organisationId,
+      accountId: session.accountId,
+      editionId: 'edition-1',
+    });
+  });
+
+  it('non inscrit : NoCoureurError propagée', async () => {
+    const store = buildStore();
+    store.acceptDocuments.mockRejectedValue(new NoCoureurError());
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toBeInstanceOf(NoCoureurError);
+  });
+
+  it('dossier validé : DossierValidatedError propagée', async () => {
+    const store = buildStore();
+    store.acceptDocuments.mockRejectedValue(new DossierValidatedError());
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toBeInstanceOf(DossierValidatedError);
+  });
+
+  it('aucune édition configurée : erreur serveur', async () => {
+    const store = buildStore();
+    store.findCurrentEdition.mockResolvedValue(null);
+    await expect(
+      acceptDocuments(session, { decharge: true, reglement: true }, { store }),
+    ).rejects.toThrow('Aucune édition configurée');
+    expect(store.acceptDocuments).not.toHaveBeenCalled();
   });
 });

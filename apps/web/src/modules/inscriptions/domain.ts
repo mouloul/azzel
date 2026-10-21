@@ -18,6 +18,19 @@ export const MAX_AGE_AT_RACE = 100;
 
 export const COUREUR_STATUS_EN_CONSTITUTION = 'en constitution';
 
+export const DOCUMENT_SLUGS = ['decharge', 'reglement'] as const;
+
+export type DocumentSlug = (typeof DOCUMENT_SLUGS)[number];
+
+export const DOCUMENT_TITLES: Record<DocumentSlug, string> = {
+  decharge: 'Décharge de bonne santé',
+  reglement: 'Règlement intérieur',
+};
+
+export function documentTitle(slug: string): string {
+  return DOCUMENT_TITLES[slug as DocumentSlug] ?? 'Document officiel';
+}
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface InscriptionFormInput {

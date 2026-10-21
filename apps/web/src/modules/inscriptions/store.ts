@@ -5,7 +5,9 @@ import { readDatabaseUrl } from '@/modules/iam/env';
 import { COUREUR_STATUS_EN_CONSTITUTION, isRegistrationOpen } from './domain';
 import {
   DbUnavailableError,
+  DocumentsMissingError,
   DossierValidatedError,
+  NoCoureurError,
   RegistrationClosedError,
 } from './errors';
 
@@ -16,6 +18,15 @@ export interface EditionRecord {
   nom: string;
   dateCourse: string;
   registrationClosesAt: Date;
+}
+
+export interface DocumentRecord {
+  id: string;
+  organisationId: string;
+  slug: string;
+  version: string;
+  content: string;
+  updatedAt: Date;
 }
 
 export interface EpreuveRecord {
@@ -45,8 +56,25 @@ export interface CoureurRecord {
   age: number;
   categorieAge: string;
   status: string;
+  dechargeAcceptedAt: Date | null;
+  dechargeVersion: string | null;
+  reglementAcceptedAt: Date | null;
+  reglementVersion: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AcceptDocumentsInput {
+  organisationId: string;
+  accountId: string;
+  editionId: string;
+}
+
+export interface AcceptancesSnapshot {
+  dechargeAcceptedAt: Date;
+  dechargeVersion: string;
+  reglementAcceptedAt: Date;
+  reglementVersion: string;
 }
 
 export interface UpsertCoureurInput {
@@ -68,12 +96,14 @@ export interface UpsertCoureurInput {
 export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;
   listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]>;
+  findDocuments(organisationId: string): Promise<DocumentRecord[]>;
   findCoureurByAccount(
     accountId: string,
     editionId: string,
     organisationId: string,
   ): Promise<CoureurRecord | null>;
   upsertCoureur(input: UpsertCoureurInput): Promise<CoureurRecord>;
+  acceptDocuments(input: AcceptDocumentsInput): Promise<AcceptancesSnapshot>;
 }
 
 interface CoureurRow {
@@ -95,6 +125,10 @@ interface CoureurRow {
   age: number;
   age_category: string;
   status: string;
+  decharge_accepted_at: Date | null;
+  decharge_version: string | null;
+  reglement_accepted_at: Date | null;
+  reglement_version: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -156,6 +190,10 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     age: row.age,
     categorieAge: row.age_category,
     status: row.status,
+    dechargeAcceptedAt: row.decharge_accepted_at,
+    dechargeVersion: row.decharge_version,
+    reglementAcceptedAt: row.reglement_accepted_at,
+    reglementVersion: row.reglement_version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -173,6 +211,8 @@ async function selectCoureurByAccount(
       c.first_name, c.last_name, c.phone,
       c.emergency_contact_name, c.emergency_contact_phone,
       c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
+      c.decharge_accepted_at, c.decharge_version,
+      c.reglement_accepted_at, c.reglement_version,
       c.created_at, c.updated_at,
       e.slug AS epreuve_slug, e.name AS epreuve_nom, e.distance_km::float8 AS distance_km
     FROM coureur c
@@ -239,6 +279,34 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       });
     },
 
+    async findDocuments(organisationId: string): Promise<DocumentRecord[]> {
+      return withDb(async () => {
+        const rows = await sql<
+          {
+            id: string;
+            organisation_id: string;
+            slug: string;
+            version: string;
+            content: string;
+            updated_at: Date;
+          }[]
+        >`
+          SELECT id, organisation_id, slug, version, content, updated_at
+          FROM document
+          WHERE organisation_id = ${organisationId}
+          ORDER BY slug ASC
+        `;
+        return rows.map((row) => ({
+          id: row.id,
+          organisationId: row.organisation_id,
+          slug: row.slug,
+          version: row.version,
+          content: row.content,
+          updatedAt: row.updated_at,
+        }));
+      });
+    },
+
     async findCoureurByAccount(
       accountId: string,
       editionId: string,
@@ -301,6 +369,8 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               c.first_name, c.last_name, c.phone,
               c.emergency_contact_name, c.emergency_contact_phone,
               c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
+              c.decharge_accepted_at, c.decharge_version,
+              c.reglement_accepted_at, c.reglement_version,
               c.created_at, c.updated_at,
               e.slug AS epreuve_slug, e.name AS epreuve_nom, e.distance_km::float8 AS distance_km
             FROM coureur c
@@ -316,6 +386,78 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         }),
       );
     },
+
+    async acceptDocuments(input: AcceptDocumentsInput): Promise<AcceptancesSnapshot> {
+      return withDb(() =>
+        sql.begin(async (tx) => {
+          const editionRows = await tx<{ registration_closes_at: Date }[]>`
+            SELECT registration_closes_at FROM edition
+            WHERE id = ${input.editionId} AND organisation_id = ${input.organisationId}
+          `;
+          const edition = editionRows[0];
+          if (!edition) {
+            throw new Error('édition introuvable pour l’acceptation des documents');
+          }
+          if (!isRegistrationOpen(edition.registration_closes_at)) {
+            throw new RegistrationClosedError(edition.registration_closes_at);
+          }
+          const coureurRows = await tx<{ id: string; status: string }[]>`
+            SELECT id, status FROM coureur
+            WHERE account_id = ${input.accountId}
+              AND edition_id = ${input.editionId}
+              AND organisation_id = ${input.organisationId}
+            FOR UPDATE
+          `;
+          const coureur = coureurRows[0];
+          if (!coureur) {
+            throw new NoCoureurError();
+          }
+          if (coureur.status !== COUREUR_STATUS_EN_CONSTITUTION) {
+            throw new DossierValidatedError();
+          }
+          const documentRows = await tx<{ slug: string; version: string }[]>`
+            SELECT slug, version FROM document
+            WHERE organisation_id = ${input.organisationId}
+              AND slug IN ('decharge', 'reglement')
+          `;
+          const versions = new Map(documentRows.map((row) => [row.slug, row.version]));
+          const dechargeVersion = versions.get('decharge');
+          const reglementVersion = versions.get('reglement');
+          if (dechargeVersion === undefined || reglementVersion === undefined) {
+            throw new DocumentsMissingError();
+          }
+          const updatedRows = await tx<
+            {
+              decharge_accepted_at: Date;
+              decharge_version: string;
+              reglement_accepted_at: Date;
+              reglement_version: string;
+            }[]
+          >`
+            UPDATE coureur SET
+              decharge_accepted_at = now(),
+              decharge_version = ${dechargeVersion},
+              reglement_accepted_at = now(),
+              reglement_version = ${reglementVersion},
+              updated_at = now()
+            WHERE id = ${coureur.id} AND status = ${COUREUR_STATUS_EN_CONSTITUTION}
+            RETURNING
+              decharge_accepted_at, decharge_version,
+              reglement_accepted_at, reglement_version
+          `;
+          const updated = updatedRows[0];
+          if (!updated) {
+            throw new DossierValidatedError();
+          }
+          return {
+            dechargeAcceptedAt: updated.decharge_accepted_at,
+            dechargeVersion: updated.decharge_version,
+            reglementAcceptedAt: updated.reglement_accepted_at,
+            reglementVersion: updated.reglement_version,
+          };
+        }),
+      );
+    },
   };
 }
 
@@ -326,8 +468,10 @@ function createUnavailableStore(): InscriptionsStore {
   return {
     findCurrentEdition: unavailable,
     listEpreuves: unavailable,
+    findDocuments: unavailable,
     findCoureurByAccount: unavailable,
     upsertCoureur: unavailable,
+    acceptDocuments: unavailable,
   };
 }
 

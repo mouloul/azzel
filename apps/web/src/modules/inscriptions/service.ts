@@ -2,13 +2,18 @@ import type { SessionRecord } from '@/modules/iam/store';
 
 import {
   deriveAgeAndCategory,
+  documentTitle,
   hasFieldErrors,
   isRegistrationOpen,
   normalizeInscriptionInput,
   validateInscriptionInput,
   type AgeCategory,
 } from './domain';
-import { InvalidFieldsError, RegistrationClosedError } from './errors';
+import {
+  BothAcceptancesRequiredError,
+  InvalidFieldsError,
+  RegistrationClosedError,
+} from './errors';
 import {
   getInscriptionsStore,
   type CoureurRecord,
@@ -32,6 +37,8 @@ export interface CoureurSummary {
   age: number;
   categorie: AgeCategory;
   status: string;
+  dechargeAccepte: { acceptedAt: string; version: string } | null;
+  reglementAccepte: { acceptedAt: string; version: string } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +69,16 @@ export interface InscriptionsServiceDeps {
   store?: InscriptionsStore;
 }
 
+function acceptanceSummary(
+  acceptedAt: Date | null,
+  version: string | null,
+): { acceptedAt: string; version: string } | null {
+  if (acceptedAt === null || version === null) {
+    return null;
+  }
+  return { acceptedAt: acceptedAt.toISOString(), version };
+}
+
 function toCoureurSummary(record: CoureurRecord): CoureurSummary {
   return {
     id: record.id,
@@ -78,6 +95,8 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
     age: record.age,
     categorie: record.categorieAge as AgeCategory,
     status: record.status,
+    dechargeAccepte: acceptanceSummary(record.dechargeAcceptedAt, record.dechargeVersion),
+    reglementAccepte: acceptanceSummary(record.reglementAcceptedAt, record.reglementVersion),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   };
@@ -172,4 +191,107 @@ export async function submitInscription(
     categorieAge: derived.category,
   });
   return toCoureurSummary(record);
+}
+
+export interface DocumentSummary {
+  slug: string;
+  titre: string;
+  version: string;
+  content: string;
+}
+
+export interface AcceptanceSummary {
+  acceptedAt: string;
+  version: string;
+}
+
+export interface AcceptancesState {
+  edition: EditionSummary | null;
+  coureurStatus: string | null;
+  documents: DocumentSummary[];
+  acceptances: {
+    decharge: AcceptanceSummary | null;
+    reglement: AcceptanceSummary | null;
+  };
+}
+
+export interface AcceptancesResult {
+  decharge: AcceptanceSummary;
+  reglement: AcceptanceSummary;
+}
+
+export function normalizeAcceptancesInput(raw: unknown): { decharge: boolean; reglement: boolean } {
+  const record =
+    typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  return {
+    decharge: record.decharge === true,
+    reglement: record.reglement === true,
+  };
+}
+
+export async function getAcceptancesState(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<AcceptancesState> {
+  const store = deps.store ?? getInscriptionsStore();
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    return {
+      edition: null,
+      coureurStatus: null,
+      documents: [],
+      acceptances: { decharge: null, reglement: null },
+    };
+  }
+  const [documents, coureur] = await Promise.all([
+    store.findDocuments(session.organisationId),
+    store.findCoureurByAccount(session.accountId, edition.id, session.organisationId),
+  ]);
+  return {
+    edition: toEditionSummary(edition),
+    coureurStatus: coureur ? coureur.status : null,
+    documents: documents.map((document) => ({
+      slug: document.slug,
+      titre: documentTitle(document.slug),
+      version: document.version,
+      content: document.content,
+    })),
+    acceptances: {
+      decharge: coureur ? acceptanceSummary(coureur.dechargeAcceptedAt, coureur.dechargeVersion) : null,
+      reglement: coureur
+        ? acceptanceSummary(coureur.reglementAcceptedAt, coureur.reglementVersion)
+        : null,
+    },
+  };
+}
+
+export async function acceptDocuments(
+  session: SessionRecord,
+  rawInput: unknown,
+  deps: InscriptionsServiceDeps = {},
+): Promise<AcceptancesResult> {
+  const store = deps.store ?? getInscriptionsStore();
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    throw new Error('Aucune édition configurée : exécute pnpm -F @azzel/web db:migrate');
+  }
+  const input = normalizeAcceptancesInput(rawInput);
+  if (!input.decharge || !input.reglement) {
+    throw new BothAcceptancesRequiredError();
+  }
+  const snapshot = await store.acceptDocuments({
+    organisationId: session.organisationId,
+    accountId: session.accountId,
+    editionId: edition.id,
+  });
+  return {
+    decharge: {
+      acceptedAt: snapshot.dechargeAcceptedAt.toISOString(),
+      version: snapshot.dechargeVersion,
+    },
+    reglement: {
+      acceptedAt: snapshot.reglementAcceptedAt.toISOString(),
+      version: snapshot.reglementVersion,
+    },
+  };
 }

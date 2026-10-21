@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
   }
   const contentLength = request.headers.get('content-length');
   if (
-    contentLength !== null &&
-    /^\d+$/.test(contentLength) &&
+    contentLength === null ||
+    !/^\d+$/.test(contentLength) ||
     Number(contentLength) > MAX_BODY_BYTES
   ) {
     return errorResponse(toApiError(new BodyTooLargeError()));
