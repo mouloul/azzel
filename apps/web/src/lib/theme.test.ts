@@ -8,19 +8,18 @@ import {
 } from './theme';
 
 describe('resolveInitialTheme', () => {
-  it('suit la préférence système quand aucune préférence n’est mémorisée', () => {
-    expect(resolveInitialTheme(null, true)).toBe('dark');
-    expect(resolveInitialTheme(null, false)).toBe('light');
+  it('sans préférence mémorisée, le thème clair (charte) est la référence', () => {
+    expect(resolveInitialTheme(null)).toBe('light');
   });
 
-  it('la préférence mémorisée surcharge le système', () => {
-    expect(resolveInitialTheme('dark', false)).toBe('dark');
-    expect(resolveInitialTheme('light', true)).toBe('light');
+  it('la préférence mémorisée est appliquée', () => {
+    expect(resolveInitialTheme('dark')).toBe('dark');
+    expect(resolveInitialTheme('light')).toBe('light');
   });
 
-  it('une valeur mémorisée invalide retombe sur le système', () => {
-    expect(resolveInitialTheme('sombre', true)).toBe('dark');
-    expect(resolveInitialTheme('sombre', false)).toBe('light');
+  it('une valeur mémorisée invalide retombe sur le thème clair', () => {
+    expect(resolveInitialTheme('sombre')).toBe('light');
+    expect(resolveInitialTheme('')).toBe('light');
   });
 });
 
@@ -32,16 +31,18 @@ describe('nextTheme', () => {
 });
 
 describe('buildThemeInitScript', () => {
-  function runThemeInitScript(stored: string | null, prefersDark: boolean): string | null {
+  function runThemeInitScript(stored: string | null): string | null {
     const setAttributeCalls: Array<[string, string]> = [];
     const storage = new Map<string, string>();
     if (stored !== null) {
       storage.set(THEME_STORAGE_KEY, stored);
     }
+    const matchMediaCalls: string[] = [];
     const sandboxWindow = {
-      matchMedia: (query: string) => ({
-        matches: query === '(prefers-color-scheme: dark)' && prefersDark,
-      }),
+      matchMedia: (query: string) => {
+        matchMediaCalls.push(query);
+        return { matches: true };
+      },
     };
     const sandboxLocalStorage = {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -60,27 +61,22 @@ describe('buildThemeInitScript', () => {
       buildThemeInitScript(),
     );
     script(sandboxWindow, sandboxLocalStorage, sandboxDocument);
+    expect(matchMediaCalls).toEqual([]);
     return setAttributeCalls.find(([name]) => name === 'data-theme')?.[1] ?? null;
   }
 
   it('préférence mémorisée valide : le script l’applique', () => {
-    expect(runThemeInitScript('dark', false)).toBe('dark');
-    expect(runThemeInitScript('dark', false)).toBe(resolveInitialTheme('dark', false));
+    expect(runThemeInitScript('dark')).toBe('dark');
+    expect(runThemeInitScript('dark')).toBe(resolveInitialTheme('dark'));
   });
 
-  it('préférence mémorisée invalide : le script suit le système', () => {
-    expect(runThemeInitScript('sombre', true)).toBe('dark');
-    expect(runThemeInitScript('sombre', false)).toBe('light');
-    expect(runThemeInitScript('sombre', true)).toBe(resolveInitialTheme('sombre', true));
+  it('préférence mémorisée invalide : thème clair', () => {
+    expect(runThemeInitScript('sombre')).toBe('light');
+    expect(runThemeInitScript('sombre')).toBe(resolveInitialTheme('sombre'));
   });
 
-  it('aucune préférence, système clair : thème clair', () => {
-    expect(runThemeInitScript(null, false)).toBe('light');
-    expect(runThemeInitScript(null, false)).toBe(resolveInitialTheme(null, false));
-  });
-
-  it('aucune préférence, système sombre : thème sombre', () => {
-    expect(runThemeInitScript(null, true)).toBe('dark');
-    expect(runThemeInitScript(null, true)).toBe(resolveInitialTheme(null, true));
+  it('aucune préférence : thème clair, sans suivi système', () => {
+    expect(runThemeInitScript(null)).toBe('light');
+    expect(runThemeInitScript(null)).toBe(resolveInitialTheme(null));
   });
 });

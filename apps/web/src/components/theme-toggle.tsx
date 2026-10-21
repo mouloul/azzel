@@ -18,29 +18,12 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    const stored = readStoredTheme();
-    const current = resolveInitialTheme(
-      stored,
-      window.matchMedia('(prefers-color-scheme: dark)').matches,
-    );
-    setTheme(current);
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onSystemChange = (event: MediaQueryListEvent) => {
-      if (readStoredTheme() !== null) {
-        return;
-      }
-      const system: Theme = resolveInitialTheme(null, event.matches);
-      applyTheme(system);
-      setTheme(system);
-    };
-    media.addEventListener('change', onSystemChange);
-    return () => media.removeEventListener('change', onSystemChange);
+    setTheme(resolveInitialTheme(readStoredTheme()));
   }, []);
 
   const toggle = useCallback(() => {
     setTheme((current) => {
-      const initial: Theme = current ?? resolveInitialTheme(null, false);
+      const initial: Theme = current ?? resolveInitialTheme(null);
       const next = nextTheme(initial);
       applyTheme(next);
       writeStoredTheme(next);

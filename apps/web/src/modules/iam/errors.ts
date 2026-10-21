@@ -63,7 +63,7 @@ export function toApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'iam.rate_limited',
         message: 'Trop de codes demandés pour cette adresse.',
-        action: 'Attends quelques minutes avant de redemander un code.',
+        action: 'Attendez quelques minutes avant de redemander un code.',
       }),
     };
   }
@@ -73,7 +73,7 @@ export function toApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'iam.email_invalid',
         message: 'Cette adresse email ne semble pas valide.',
-        action: 'Vérifie ton adresse puis réessaie.',
+        action: 'Vérifiez votre adresse puis réessayez.',
       }),
     };
   }
@@ -83,7 +83,7 @@ export function toApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'iam.code_invalid',
         message: 'Code erroné ou expiré.',
-        action: 'Vérifie ta saisie ou demande un nouveau code.',
+        action: 'Vérifiez votre saisie ou demandez un nouveau code.',
       }),
     };
   }
@@ -93,7 +93,7 @@ export function toApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'iam.code_exhausted',
         message: 'Cinq tentatives sans succès : ce code n’est plus valable.',
-        action: 'Demande un nouveau code.',
+        action: 'Demandez un nouveau code.',
       }),
     };
   }
@@ -102,8 +102,8 @@ export function toApiError(error: unknown): ApiError {
       status: 401,
       envelope: createErrorEnvelope({
         code: 'iam.unauthenticated',
-        message: 'Ta session a expiré ou a été fermée.',
-        action: 'Reconnecte-toi pour continuer.',
+        message: 'Votre session a expiré ou a été fermée.',
+        action: 'Reconnectez-vous pour continuer.',
       }),
     };
   }
@@ -113,7 +113,7 @@ export function toApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'iam.db_unavailable',
         message: 'Connexion indisponible.',
-        action: 'Réessaie dans un instant.',
+        action: 'Réessayez dans un instant.',
       }),
     };
   }
@@ -123,7 +123,7 @@ export function toApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'iam.email_send_failed',
         message: 'L’envoi du code a échoué.',
-        action: 'Réessaie dans un instant.',
+        action: 'Réessayez dans un instant.',
       }),
     };
   }
@@ -132,7 +132,7 @@ export function toApiError(error: unknown): ApiError {
     envelope: createErrorEnvelope({
       code: 'iam.internal_error',
       message: 'Une erreur inattendue est survenue.',
-      action: 'Réessaie dans un instant.',
+      action: 'Réessayez dans un instant.',
     }),
   };
 }

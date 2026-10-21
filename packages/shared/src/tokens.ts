@@ -110,11 +110,128 @@ export const spacingTokens = {
   'margin-mobile': '20px',
 } as const;
 
-export const tokens = {
+export const operationsTokens = {
   colors: colorTokens,
   typography: typographyTokens,
   rounded: roundedTokens,
   spacing: spacingTokens,
 } as const;
 
+export type OperationsTokens = typeof operationsTokens;
+
+export const tokens = operationsTokens;
+
 export type Tokens = typeof tokens;
+
+export const siteColorTokens = {
+  forest: '#183A2B',
+  'forest-600': '#24503C',
+  'forest-400': '#2F6A4F',
+  ochre: '#C8742B',
+  'ochre-300': '#D98A45',
+  sage: '#8FA58A',
+  cream: '#F4F0E6',
+  sand: '#E6E1D4',
+  anthracite: '#2A2B2E',
+} as const;
+
+export const siteThemeLight = {
+  surface: '#F4F0E6',
+  'surface-raised': '#FFFFFF',
+  'forest-surface': '#183A2B',
+  ink: '#2A2B2E',
+  'ink-muted': '#5D6058',
+  heading: '#183A2B',
+  'on-forest': '#F4F0E6',
+  line: '#E6E1D4',
+  accent: '#9E5418',
+  highlight: '#C8742B',
+  action: '#9E5418',
+  'action-hover': '#86460F',
+  'on-action': '#FFFFFF',
+  focus: '#9E5418',
+} as const;
+
+export const siteThemeDark = {
+  surface: '#0F241A',
+  'surface-raised': '#183A2B',
+  'forest-surface': '#24503C',
+  ink: '#F4F0E6',
+  'ink-muted': '#B9BDB0',
+  heading: '#F4F0E6',
+  'on-forest': '#F4F0E6',
+  line: '#2F4A3C',
+  accent: '#E39A5B',
+  highlight: '#D98A45',
+  action: '#D98A45',
+  'action-hover': '#E39A5B',
+  'on-action': '#0F241A',
+  focus: '#E39A5B',
+} as const;
+
+export type SiteThemeRole = keyof typeof siteThemeLight;
+
+export const siteTypographyTokens = {
+  display: '"Barlow Condensed", "Barlow Condensed Fallback", "Arial Narrow", sans-serif',
+  body: 'Inter, "Inter Fallback", system-ui, -apple-system, "Segoe UI", sans-serif',
+} as const;
+
+export const siteTypographyStyles = {
+  eyebrow: {
+    fontSize: '14px',
+    fontWeight: '600',
+    letterSpacing: '0.28em',
+  },
+  btn: {
+    fontSize: '17px',
+    fontWeight: '700',
+    letterSpacing: '0.06em',
+  },
+} as const;
+
+export const siteSpacingTokens = {
+  '1': '4px',
+  '2': '8px',
+  '3': '12px',
+  '4': '16px',
+  '6': '24px',
+  '8': '32px',
+  '12': '48px',
+  '16': '64px',
+  '24': '96px',
+} as const;
+
+export const siteRadiusTokens = {
+  sm: '4px',
+  md: '6px',
+  lg: '8px',
+} as const;
+
+export const siteShadowTokens = {
+  card: '0 1px 2px rgba(15,36,26,0.08)',
+} as const;
+
+export const siteLayoutTokens = {
+  'container-max': '1200px',
+  'text-max': '68ch',
+  'header-height': '72px',
+  'bp-sm': '640px',
+  'bp-md': '960px',
+  'bp-lg': '1280px',
+} as const;
+
+export const siteTokens = {
+  colors: siteColorTokens,
+  themes: {
+    light: siteThemeLight,
+    dark: siteThemeDark,
+  },
+  typography: siteTypographyTokens,
+  styles: siteTypographyStyles,
+  spacing: siteSpacingTokens,
+  radius: siteRadiusTokens,
+  shadow: siteShadowTokens,
+  layout: siteLayoutTokens,
+} as const;
+
+export type SiteTokens = typeof siteTokens;

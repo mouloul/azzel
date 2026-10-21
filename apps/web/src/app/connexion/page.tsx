@@ -12,8 +12,10 @@ interface ErrorPayload {
 
 const NETWORK_ERROR: ErrorPayload = {
   message: 'Connexion au serveur impossible.',
-  action: 'Vérifie ta connexion puis réessaie.',
+  action: 'Vérifiez votre connexion puis réessayez.',
 };
+
+const TTL_LABEL = `${CODE_TTL_MINUTES} minute${CODE_TTL_MINUTES > 1 ? 's' : ''}`;
 
 interface PostResult {
   ok: boolean;
@@ -142,8 +144,8 @@ export default function ConnexionPage() {
             <p className="surtitre">Espace coureur</p>
             <h1>Connexion</h1>
             <p className="lead">
-              Saisis ton adresse email : tu recevras un code à 6 chiffres, valable{' '}
-              {CODE_TTL_MINUTES} minutes.
+              Saisissez votre adresse email : vous recevrez un code à 6 chiffres,
+              valable {TTL_LABEL}.
             </p>
             <form onSubmit={onSubmitEmail} noValidate>
               <div className="field">
@@ -176,10 +178,10 @@ export default function ConnexionPage() {
         ) : (
           <>
             <p className="surtitre">Espace coureur</p>
-            <h1>Saisis ton code</h1>
+            <h1>Saisissez votre code</h1>
             <p className="lead">
               Un code à 6 chiffres a été envoyé à <strong>{email}</strong> — valable{' '}
-              {CODE_TTL_MINUTES} minutes.
+              {TTL_LABEL}.
             </p>
             <form onSubmit={onSubmitCode} noValidate>
               <div className="field">

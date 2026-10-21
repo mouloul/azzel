@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildTokensCss } from '@/lib/tokens-css';
@@ -8,10 +9,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: {
     default: 'Azzel',
-    template: '%s — Azzel',
+    template: '%s — Week-end Sportif Aït Aïssi',
   },
   description:
-    'Plateforme clé en main de gestion de course de trail, hors-ligne d’abord — portée par son village.',
+    'Inscriptions, e-dossard et gestion de course pour le Week-end Sportif Aït Aïssi — Sport, Santé et Citoyenneté, au village d’Aït Aïssi (Yakouren).',
 };
 
 const themeInitScript = buildThemeInitScript();
@@ -20,6 +21,27 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr" data-theme="light" suppressHydrationWarning>
       <body>
+        <link
+          rel="preload"
+          href="/charte/fonts/barlow-condensed-latin-700-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/charte/fonts/barlow-condensed-latin-800-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/charte/fonts/inter-latin-400-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <style
           precedence="tokens"
           dangerouslySetInnerHTML={{ __html: buildTokensCss() }}
@@ -29,15 +51,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           Aller au contenu
         </a>
         <header className="site-header">
-          <p className="brand">Azzel</p>
+          <Link
+            className="brand-logo"
+            href="/"
+            aria-label="Week-end Sportif Aït Aïssi — Accueil"
+          >
+            <span className="header-logo" aria-hidden="true" />
+          </Link>
           <ThemeToggle />
         </header>
         <main id="contenu">{children}</main>
         <footer className="site-footer">
-          <p className="meta">
-            Azzel — monorepo pnpm · apps/web Next.js 16 · apps/runners Expo SDK 58 ·
-            packages/shared
-          </p>
+          <p className="meta">Plateforme Azzel</p>
         </footer>
       </body>
     </html>
