@@ -28,6 +28,9 @@ pnpm install        # installe le workspace (lockfile pnpm-lock.yaml)
 pnpm build          # shared (tsc) + runners (tsc) + web (next build)
 pnpm typecheck      # zéro erreur TypeScript attendue sur les trois packages
 pnpm test           # tests unitaires (vitest) : shared + lib web
+pnpm test:db        # dev-db.sh up + pnpm test (intégration Postgres garantie)
+bash scripts/dev-db.sh up    # Postgres 17 dédié (port 54329) + .env
+bash scripts/dev-mail.sh up  # faux SMTP Mailpit (SMTP 2525, UI http://localhost:8026) + SMTP_URL
 pnpm dev:web        # serveur de développement Next.js
 pnpm dev:runners    # Metro pour la dev build coureurs (expo start --dev-client)
 ```
