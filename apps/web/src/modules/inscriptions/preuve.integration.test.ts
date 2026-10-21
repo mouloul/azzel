@@ -12,10 +12,14 @@ vi.mock('@/modules/notifications/worker', async () => {
   return createSilentOutboxWorker();
 });
 
-import { readDatabaseUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
+import {
+  closeAzzelTestDb,
+  recreateAzzelTestDb,
+  resolveTestDatabaseUrls,
+  type AzzelTestConnections,
+} from '@/test/integration-db';
 
-import { applyAllMigrations } from './migrate';
 import {
   DossierValidatedError,
   NoCoureurError,
@@ -30,30 +34,7 @@ import { createInscriptionsStore, type InscriptionsStore } from './store';
 import { submitInscription } from './service';
 import type { InscriptionFormInput } from './domain';
 
-function parseUrl(value: string | null): URL | null {
-  if (!value) {
-    return null;
-  }
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-}
-
-const serverUrl = parseUrl(readDatabaseUrl());
-
-const ALLOWED_TEST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-if (serverUrl !== null && !ALLOWED_TEST_HOSTS.has(serverUrl.hostname)) {
-  throw new Error(
-    `Base de test refusée : DATABASE_URL pointe vers « ${serverUrl.hostname} », seules localhost / 127.0.0.1 / ::1 sont autorisées.`,
-  );
-}
-
-if (serverUrl === null) {
-  console.warn('intégration preuve SKIPPÉE — bash scripts/dev-db.sh up pour l’activer');
-}
+const testUrls = resolveTestDatabaseUrls('preuve');
 
 function validInput(): InscriptionFormInput {
   return {
@@ -82,33 +63,27 @@ function pdfBytes(size: number): Uint8Array {
   return bytes;
 }
 
-describe.skipIf(serverUrl === null)('preuve — intégration Postgres (base azzel_test)', () => {
-  const baseUrl = serverUrl as URL;
+describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel_test)', () => {
+  const { appUrl, ownerUrl } = testUrls as NonNullable<typeof testUrls>;
+  // sql : propriétaire (fixtures + assertions, bypass RLS) ; app : rôle azzel_app.
+  let connections: AzzelTestConnections | undefined;
   let sql: postgres.Sql;
+  let app: postgres.Sql;
   let store: InscriptionsStore;
   let storageDir: string;
   let proofStore: LocalDiskProofStore;
 
   beforeAll(async () => {
-    const adminUrl = new URL(baseUrl.toString());
-    adminUrl.pathname = '/postgres';
-    const admin = postgres(adminUrl.toString(), { max: 1 });
-    await admin`DROP DATABASE IF EXISTS azzel_test WITH (FORCE)`;
-    await admin`CREATE DATABASE azzel_test`;
-    await admin.end({ timeout: 5 });
-
-    const testUrl = new URL(baseUrl.toString());
-    testUrl.pathname = '/azzel_test';
-    sql = postgres(testUrl.toString(), { max: 2 });
-    await applyAllMigrations(sql);
-    store = createInscriptionsStore(sql);
+    connections = await recreateAzzelTestDb(ownerUrl, appUrl);
+    ({ owner: sql, app } = connections);
+    store = createInscriptionsStore(app);
     storageDir = mkdtempSync(path.join(tmpdir(), 'azzel-preuve-it-'));
     proofStore = new LocalDiskProofStore(storageDir);
   }, 60_000);
 
   afterAll(async () => {
-    if (sql) {
-      await sql.end({ timeout: 5 });
+    if (connections) {
+      await closeAzzelTestDb(connections);
     }
     rmSync(storageDir, { recursive: true, force: true });
   });

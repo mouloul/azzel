@@ -1,6 +1,11 @@
 import postgres, { type Sql } from 'postgres';
 
 import {
+  findOrganisationIdBySlug,
+  withOrg,
+} from '@/db/org-scope';
+
+import {
   CODE_REQUEST_GLOBAL_WINDOW_MS,
   CODE_REQUEST_WINDOW_MS,
   DEFAULT_ORGANISATION_SLUG,
@@ -99,16 +104,15 @@ export function createIamStore(sql: Sql): IamStore {
   return {
     async getDefaultOrganisationId(): Promise<string> {
       return withDb(async () => {
-        const rows = await sql<{ id: string }[]>`
-          SELECT id FROM organisation WHERE slug = ${DEFAULT_ORGANISATION_SLUG} LIMIT 1
-        `;
-        const row = rows[0];
-        if (!row) {
+        // Lecture publique par slug, sans GUC — exception documentée (spec 1.9) :
+        // résolution de l'organisation par défaut pour les flows pré-session.
+        const id = await findOrganisationIdBySlug(sql, DEFAULT_ORGANISATION_SLUG);
+        if (!id) {
           throw new Error(
             `Organisation « ${DEFAULT_ORGANISATION_SLUG} » absente : exécute pnpm -F @azzel/web db:migrate`,
           );
         }
-        return row.id;
+        return id;
       });
     },
 
@@ -120,8 +124,9 @@ export function createIamStore(sql: Sql): IamStore {
       perEmailCutoff: Date;
       hourlyCutoff: Date;
     }): Promise<void> {
+      // Flow pré-session : GUC = organisation du code (l'org par défaut en V1).
       await withDb(() =>
-        sql.begin(async (tx) => {
+        withOrg(sql, input.organisationId, async (tx) => {
           await tx`SELECT pg_advisory_xact_lock(hashtext(${input.email}))`;
           const perEmailRows = await tx<{ count: number; oldest: Date | null }[]>`
             SELECT count(*)::int AS count, min(created_at) AS oldest
@@ -167,8 +172,24 @@ export function createIamStore(sql: Sql): IamStore {
       sessionExpiresAt: Date;
       adminEmails: string[];
     }): Promise<VerifyOutcome> {
-      return withDb(() =>
-        sql.begin<VerifyOutcome>(async (tx) => {
+      return withDb(async () => {
+        // Multi-org : le code est cherché par email (politique permissive, secret
+        // d'abord) SANS GUC par défaut — c'est l'organisation de la ligne
+        // login_code qui gouverne compte et session. La re-lecture sous verrou
+        // (FOR UPDATE) dans la transaction withOrg garde la consommation atomique.
+        const codeRows = await sql<{ organisation_id: string }[]>`
+          SELECT organisation_id FROM login_code
+          WHERE email = ${input.email}
+            AND consumed_at IS NULL
+            AND invalidated_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT 1
+        `;
+        const codeOrganisationId = codeRows[0]?.organisation_id;
+        if (!codeOrganisationId) {
+          return { ok: false, reason: 'code_invalid' as const };
+        }
+        return withOrg(sql, codeOrganisationId, async (tx) => {
           const rows = await tx<LoginCodeRow[]>`
             SELECT id, organisation_id, code_hash, attempts, expires_at
             FROM login_code
@@ -239,44 +260,72 @@ export function createIamStore(sql: Sql): IamStore {
             email: input.email,
             role,
           };
-        }),
-      );
+        });
+      });
     },
 
     async findSessionByTokenHash(tokenHash: string): Promise<SessionRecord | null> {
       return withDb(async () => {
-        const rows = await sql<{
-          account_id: string;
-          organisation_id: string;
-          email: string;
-          role: AccountRole;
-          created_at: Date;
-        }[]>`
-          SELECT s.account_id, s.organisation_id, a.email, a.role, s.created_at
-          FROM session s
-          JOIN account a ON a.id = s.account_id
-          WHERE s.token_hash = ${tokenHash}
-            AND s.revoked_at IS NULL
-            AND s.expires_at > now()
+        // Exception documentée (spec 1.9) : la session est cherchée par secret
+        // avant que l'organisation soit connue — politique SELECT permissive.
+        const rows = await sql<
+          { account_id: string; organisation_id: string; created_at: Date }[]
+        >`
+          SELECT account_id, organisation_id, created_at
+          FROM session
+          WHERE token_hash = ${tokenHash}
+            AND revoked_at IS NULL
+            AND expires_at > now()
           LIMIT 1
         `;
-        const row = rows[0];
-        if (!row) {
+        const core = rows[0];
+        if (!core) {
           return null;
         }
-        return {
-          accountId: row.account_id,
-          organisationId: row.organisation_id,
-          email: row.email,
-          role: row.role,
-          createdAt: row.created_at,
-        };
+        // Le compte (et son rôle) sont isolés par organisation : GUC = org de la session.
+        return withOrg(sql, core.organisation_id, async (tx) => {
+          const accounts = await tx<{ email: string; role: AccountRole }[]>`
+            SELECT email, role FROM account WHERE id = ${core.account_id} LIMIT 1
+          `;
+          const account = accounts[0];
+          if (!account) {
+            return null;
+          }
+          return {
+            accountId: core.account_id,
+            organisationId: core.organisation_id,
+            email: account.email,
+            role: account.role,
+            createdAt: core.created_at,
+          };
+        });
       });
     },
 
     async revokeSessionByTokenHash(tokenHash: string): Promise<void> {
       await withDb(async () => {
-        await sql`UPDATE session SET revoked_at = now() WHERE token_hash = ${tokenHash} AND revoked_at IS NULL`;
+        // Même exception documentée : secret d'abord, organisation ensuite.
+        const rows = await sql<{ organisation_id: string }[]>`
+          SELECT organisation_id FROM session
+          WHERE token_hash = ${tokenHash}
+            AND revoked_at IS NULL
+            AND expires_at > now()
+          LIMIT 1
+        `;
+        const core = rows[0];
+        if (!core) {
+          return;
+        }
+        await withOrg(sql, core.organisation_id, async (tx) => {
+          // Re-vérifié DANS la transaction (UPDATE atomique conditionnel) : une
+          // session révoquée ou expirée entre les deux étapes n'est plus acceptée.
+          await tx`
+            UPDATE session SET revoked_at = now()
+            WHERE token_hash = ${tokenHash}
+              AND revoked_at IS NULL
+              AND expires_at > now()
+          `;
+        });
       });
     },
   };
@@ -295,17 +344,40 @@ function createUnavailableStore(): IamStore {
   };
 }
 
+// Story 1.9 : au premier accès applicatif, signaler une connexion qui ne serait
+// pas en rôle azzel_app — sinon le RLS serait contourné en silence (owner/superuser).
+function warnIfNotAppRole(sql: Sql): void {
+  const globals = globalThis as typeof globalThis & { __azzelAppRoleWarned?: boolean };
+  if (globals.__azzelAppRoleWarned) {
+    return;
+  }
+  globals.__azzelAppRoleWarned = true;
+  void sql<{ current_user: string }[]>`SELECT current_user`
+    .then((rows) => {
+      const currentUser = rows[0]?.current_user;
+      if (currentUser && currentUser !== 'azzel_app') {
+        console.warn(
+          `[db] connexion applicative en rôle « ${currentUser} » (attendu « azzel_app ») : le RLS est contourné — DATABASE_URL doit pointer sur le rôle applicatif (story 1.9).`,
+        );
+      }
+    })
+    .catch(() => {});
+}
+
 export function getIamStore(): IamStore {
   const globals = globalThis as typeof globalThis & { __azzelIamStore?: IamStore };
   if (globals.__azzelIamStore) {
     return globals.__azzelIamStore;
   }
   const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createIamStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  let store: IamStore;
+  if (databaseUrl) {
+    const sql = postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 });
+    warnIfNotAppRole(sql);
+    store = createIamStore(sql);
+  } else {
+    store = createUnavailableStore();
+  }
   globals.__azzelIamStore = store;
   return store;
 }

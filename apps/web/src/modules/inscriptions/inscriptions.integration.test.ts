@@ -8,8 +8,13 @@ vi.mock('@/modules/notifications/worker', async () => {
   return createSilentOutboxWorker();
 });
 
-import { readDatabaseUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
+import {
+  closeAzzelTestDb,
+  recreateAzzelTestDb,
+  resolveTestDatabaseUrls,
+  type AzzelTestConnections,
+} from '@/test/integration-db';
 
 import { applyAllMigrations } from './migrate';
 import {
@@ -28,30 +33,7 @@ import {
 import { createInscriptionsStore, type InscriptionsStore } from './store';
 import type { InscriptionFormInput } from './domain';
 
-function parseUrl(value: string | null): URL | null {
-  if (!value) {
-    return null;
-  }
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-}
-
-const serverUrl = parseUrl(readDatabaseUrl());
-
-const ALLOWED_TEST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-if (serverUrl !== null && !ALLOWED_TEST_HOSTS.has(serverUrl.hostname)) {
-  throw new Error(
-    `Base de test refusée : DATABASE_URL pointe vers « ${serverUrl.hostname} », seules localhost / 127.0.0.1 / ::1 sont autorisées.`,
-  );
-}
-
-if (serverUrl === null) {
-  console.warn('intégration inscriptions SKIPPÉE — bash scripts/dev-db.sh up pour l’activer');
-}
+const testUrls = resolveTestDatabaseUrls('inscriptions');
 
 const RACE_DATE = '2027-03-26';
 
@@ -69,29 +51,23 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
   };
 }
 
-describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (base azzel_test)', () => {
-  const baseUrl = serverUrl as URL;
+describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base azzel_test)', () => {
+  const { appUrl, ownerUrl } = testUrls as NonNullable<typeof testUrls>;
+  // sql : propriétaire (fixtures + assertions, bypass RLS) ; app : rôle azzel_app.
+  let connections: AzzelTestConnections | undefined;
   let sql: postgres.Sql;
+  let app: postgres.Sql;
   let store: InscriptionsStore;
 
   beforeAll(async () => {
-    const adminUrl = new URL(baseUrl.toString());
-    adminUrl.pathname = '/postgres';
-    const admin = postgres(adminUrl.toString(), { max: 1 });
-    await admin`DROP DATABASE IF EXISTS azzel_test WITH (FORCE)`;
-    await admin`CREATE DATABASE azzel_test`;
-    await admin.end({ timeout: 5 });
-
-    const testUrl = new URL(baseUrl.toString());
-    testUrl.pathname = '/azzel_test';
-    sql = postgres(testUrl.toString(), { max: 2 });
-    await applyAllMigrations(sql);
-    store = createInscriptionsStore(sql);
+    connections = await recreateAzzelTestDb(ownerUrl, appUrl);
+    ({ owner: sql, app } = connections);
+    store = createInscriptionsStore(app);
   }, 60_000);
 
   afterAll(async () => {
-    if (sql) {
-      await sql.end({ timeout: 5 });
+    if (connections) {
+      await closeAzzelTestDb(connections);
     }
   });
 
@@ -122,7 +98,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     };
   }
 
-  it('migrations : 0001 à 0007 appliquées avec les seeds attendus', async () => {
+  it('migrations : 0001 à 0009 appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;
     expect(rows.map((row) => row.name)).toEqual([
@@ -133,6 +109,8 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       '0005_preuve.sql',
       '0006_roles_statuts.sql',
       '0007_email_outbox.sql',
+      '0008_rls_roles.sql',
+      '0009_activate_rls.sql',
     ]);
 
     const editions = await sql`
@@ -181,7 +159,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(7);
+    expect(rows[0]?.count).toBe(9);
   });
 
   it('inscription complète : coureur créé, rattaché édition/épreuve/organisation', async () => {
@@ -348,8 +326,12 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     expect(row?.reglement_version).toBe('v1');
     const dechargeAt = row?.decharge_accepted_at as Date;
     const reglementAt = row?.reglement_accepted_at as Date;
-    expect(dechargeAt.getTime()).toBeGreaterThanOrEqual(before.getTime() - 5);
-    expect(dechargeAt.getTime()).toBeLessThanOrEqual(after.getTime() + 5);
+    // Marge d'horloge ±1 s : l'horodatage vient de now() côté Postgres (VM Docker),
+    // dont l'horloge peut dériver de quelques dizaines de ms de celle de l'hôte.
+    // L'invariant protégé : horodatage serveur DANS la fenêtre de la requête, et
+    // décharge/règlement frappées du même now() (transaction commune).
+    expect(dechargeAt.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+    expect(dechargeAt.getTime()).toBeLessThanOrEqual(after.getTime() + 1000);
     expect(reglementAt.getTime()).toBe(dechargeAt.getTime());
   });
 

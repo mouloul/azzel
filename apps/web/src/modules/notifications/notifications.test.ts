@@ -155,19 +155,30 @@ function outboxRow(overrides: Partial<OutboxRow> = {}): OutboxRow {
   };
 }
 
-function buildStore(rows: OutboxRow[]): OutboxStore & {
+function buildStore(
+  rows: OutboxRow[],
+  organisationIds: string[] = ['org-1'],
+): OutboxStore & {
+  listOrganisationIds: ReturnType<typeof vi.fn>;
   listOutstanding: ReturnType<typeof vi.fn>;
   claimOutboxRow: ReturnType<typeof vi.fn>;
   markOutboxSent: ReturnType<typeof vi.fn>;
   markOutboxFailed: ReturnType<typeof vi.fn>;
 } {
   const store = {
-    listOutstanding: vi.fn(async (limit: number) => rows.slice(0, limit)),
+    listOrganisationIds: vi.fn(async () => organisationIds),
+    listOutstanding: vi.fn(
+      async (organisationId: string, limit: number) =>
+        rows
+          .filter((row) => row.organisationId === organisationId)
+          .slice(0, limit),
+    ),
     claimOutboxRow: vi.fn(async () => true),
     markOutboxSent: vi.fn(async () => {}),
     markOutboxFailed: vi.fn(async () => {}),
   };
   return store as unknown as OutboxStore & {
+    listOrganisationIds: ReturnType<typeof vi.fn>;
     listOutstanding: ReturnType<typeof vi.fn>;
     claimOutboxRow: ReturnType<typeof vi.fn>;
     markOutboxSent: ReturnType<typeof vi.fn>;
@@ -200,9 +211,9 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
     });
 
     expect(summary).toEqual({ processed: 2, sent: 2, failed: 0, storeError: null });
-    expect(store.listOutstanding).toHaveBeenCalledWith(10);
-    expect(store.markOutboxSent).toHaveBeenCalledWith('outbox-1');
-    expect(store.markOutboxSent).toHaveBeenCalledWith('outbox-2');
+    expect(store.listOutstanding).toHaveBeenCalledWith('org-1', 10);
+    expect(store.markOutboxSent).toHaveBeenCalledWith('org-1', 'outbox-1');
+    expect(store.markOutboxSent).toHaveBeenCalledWith('org-1', 'outbox-2');
     expect(sent.map((entry) => entry.to)).toEqual(['coureur@exemple.dz', 'coureur@exemple.dz']);
     expect(sent[0]?.subject).toBe(INSCRIPTION_RECUE_SUBJECT);
     expect(sent[1]?.subject).toBe(DOSSIER_REFUSE_SUBJECT);
@@ -232,7 +243,7 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
       const store = buildStore([row]);
       const summary = await processOutbox(10, { store });
       expect(summary).toEqual({ processed: 1, sent: 1, failed: 0, storeError: null });
-      expect(store.claimOutboxRow).toHaveBeenCalledWith('outbox-1');
+      expect(store.claimOutboxRow).toHaveBeenCalledWith('org-1', 'outbox-1');
       const expected = buildNotificationEmail(
         'inscription_recue',
         normalizeNotificationPayload('inscription_recue', row.payload),
@@ -262,12 +273,12 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
 
     expect(summary).toEqual({ processed: 1, sent: 0, failed: 1, storeError: null });
     expect(store.markOutboxSent).not.toHaveBeenCalled();
-    expect(store.markOutboxFailed).toHaveBeenCalledWith('outbox-1', 'connect ECONNREFUSED');
+    expect(store.markOutboxFailed).toHaveBeenCalledWith('org-1', 'outbox-1', 'connect ECONNREFUSED');
   });
 
   it('store injoignable : résumé à zéro avec storeError, aucune exception', async () => {
     const store = buildStore([]);
-    store.listOutstanding.mockRejectedValue(new Error('database unavailable'));
+    store.listOrganisationIds.mockRejectedValue(new Error('database unavailable'));
     const summary = await processOutbox(10, {
       store,
       send: async () => {
@@ -286,7 +297,102 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
     });
     expect(summary.sent).toBe(0);
     expect(summary.failed).toBe(1);
-    expect(store.markOutboxFailed).toHaveBeenCalledWith('outbox-1', 'update impossible');
+    expect(store.markOutboxFailed).toHaveBeenCalledWith('org-1', 'outbox-1', 'update impossible');
+  });
+
+  it('deux organisations : file fusionnée par created_at, envois dans l’ordre global, chaque ligne dans SON organisation', async () => {
+    // B porte la ligne la plus ANCIENNE : l'ordre d'envoi doit être global
+    // (b1 → b2 → a1 → a2), pas organisation par organisation.
+    const rows = [
+      outboxRow({ id: 'outbox-a1', createdAt: new Date('2026-10-21T08:00:05.000Z'), destinataire: 'a1@exemple.dz' }),
+      outboxRow({
+        id: 'outbox-b1',
+        organisationId: 'org-b',
+        destinataire: 'b1@exemple.dz',
+        createdAt: new Date('2026-10-21T08:00:01.000Z'),
+      }),
+      outboxRow({
+        id: 'outbox-b2',
+        organisationId: 'org-b',
+        destinataire: 'b2@exemple.dz',
+        createdAt: new Date('2026-10-21T08:00:03.000Z'),
+      }),
+      outboxRow({ id: 'outbox-a2', createdAt: new Date('2026-10-21T08:00:07.000Z'), destinataire: 'a2@exemple.dz' }),
+    ];
+    const store = buildStore(rows, ['org-1', 'org-b']);
+    const sent: { to: string }[] = [];
+    const summary = await processOutbox(10, {
+      store,
+      send: async (to) => {
+        sent.push({ to });
+      },
+    });
+
+    expect(summary).toEqual({ processed: 4, sent: 4, failed: 0, storeError: null });
+    expect(sent.map((entry) => entry.to)).toEqual([
+      'b1@exemple.dz',
+      'b2@exemple.dz',
+      'a1@exemple.dz',
+      'a2@exemple.dz',
+    ]);
+    expect(store.listOutstanding).toHaveBeenCalledWith('org-1', 10);
+    expect(store.listOutstanding).toHaveBeenCalledWith('org-b', 10);
+    expect(store.markOutboxSent).toHaveBeenCalledWith('org-b', 'outbox-b1');
+    expect(store.markOutboxSent).toHaveBeenCalledWith('org-1', 'outbox-a1');
+  });
+
+  it('deux organisations, total combiné > limite : summary.processed borné à la limite (les plus anciennes)', async () => {
+    const rows = [
+      outboxRow({ id: 'outbox-a1', createdAt: new Date('2026-10-21T08:00:05.000Z'), destinataire: 'a1@exemple.dz' }),
+      outboxRow({
+        id: 'outbox-b1',
+        organisationId: 'org-b',
+        destinataire: 'b1@exemple.dz',
+        createdAt: new Date('2026-10-21T08:00:01.000Z'),
+      }),
+      outboxRow({
+        id: 'outbox-b2',
+        organisationId: 'org-b',
+        destinataire: 'b2@exemple.dz',
+        createdAt: new Date('2026-10-21T08:00:03.000Z'),
+      }),
+    ];
+    const store = buildStore(rows, ['org-1', 'org-b']);
+    const sent: { to: string }[] = [];
+    const summary = await processOutbox(2, {
+      store,
+      send: async (to) => {
+        sent.push({ to });
+      },
+    });
+
+    expect(summary.processed).toBe(2);
+    expect(summary.sent).toBe(2);
+    expect(sent.map((entry) => entry.to)).toEqual(['b1@exemple.dz', 'b2@exemple.dz']);
+    expect(store.markOutboxSent).toHaveBeenCalledTimes(2);
+  });
+
+  it('une organisation malade n’arrête pas la boucle : storeError accumulé, lignes des autres traitées', async () => {
+    const rows = [outboxRow({ id: 'outbox-a1' })];
+    const store = buildStore(rows, ['org-1', 'org-b']);
+    store.listOutstanding.mockImplementation(
+      async (organisationId: string, limit: number) => {
+        if (organisationId === 'org-b') {
+          throw new Error('org b injoignable');
+        }
+        return rows
+          .filter((row) => row.organisationId === organisationId)
+          .slice(0, limit);
+      },
+    );
+    const summary = await processOutbox(10, { store, send: async () => {} });
+
+    expect(summary).toEqual({
+      processed: 1,
+      sent: 1,
+      failed: 0,
+      storeError: 'org-b: org b injoignable',
+    });
   });
 
   it('limite bornée : minimum 1, maximum 500', () => {

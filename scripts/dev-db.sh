@@ -8,30 +8,87 @@ VOLUME_NAME=azzel-postgres-data
 POSTGRES_USER=azzel
 POSTGRES_PASSWORD=azzel
 POSTGRES_DB=azzel
+# Rôle applicatif (story 1.9) : l'app s'y connecte, les migrations en propriétaire.
+APP_USER=azzel_app
+APP_PASSWORD="${AZZEL_APP_PASSWORD:-azzel}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
-DATABASE_URL_VALUE="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${PORT}/${POSTGRES_DB}"
+DATABASE_URL_VALUE="postgres://${APP_USER}:${APP_PASSWORD}@localhost:${PORT}/${POSTGRES_DB}"
+DATABASE_OWNER_URL_VALUE="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${PORT}/${POSTGRES_DB}"
 
 usage() {
   cat <<EOF
 Usage : bash scripts/dev-db.sh <commande>
 
   up      Démarre le Postgres 17 dédié à Azzel (port ${PORT}, volume ${VOLUME_NAME}),
-          attend qu'il soit prêt et crée .env à la racine s'il est absent.
+          attend qu'il soit prêt, crée le rôle applicatif ${APP_USER} (idempotent)
+          et crée .env à la racine s'il est absent (DATABASE_URL + DATABASE_OWNER_URL).
   down    Arrête le conteneur (les données sont conservées).
   reset   Supprime conteneur et volume : base vide au prochain « up ».
   status  Affiche l'état du conteneur.
 
-DATABASE_URL documenté dans .env.example. Les autres conteneurs Docker ne sont pas touchés.
+DATABASE_URL (rôle ${APP_USER}) et DATABASE_OWNER_URL (propriétaire, migrations)
+documentés dans .env.example. Les autres conteneurs Docker ne sont pas touchés.
 EOF
 }
 
 ensure_env_file() {
   if [ ! -f "$ENV_FILE" ]; then
-    printf 'DATABASE_URL=%s\n# SMTP_URL=smtp://utilisateur:motdepasse@smtp.example.com:587\n' \
-      "$DATABASE_URL_VALUE" >"$ENV_FILE"
+    printf 'DATABASE_URL=%s\nDATABASE_OWNER_URL=%s\n# SMTP_URL=smtp://utilisateur:motdepasse@smtp.example.com:587\n' \
+      "$DATABASE_URL_VALUE" "$DATABASE_OWNER_URL_VALUE" >"$ENV_FILE"
     echo ".env créé : $ENV_FILE"
   fi
+}
+
+env_file_needs_migration() {
+  ! grep -qF "DATABASE_URL=${DATABASE_URL_VALUE}" "$ENV_FILE" ||
+    ! grep -qF "DATABASE_OWNER_URL=${DATABASE_OWNER_URL_VALUE}" "$ENV_FILE"
+}
+
+# Story 1.9 : un .env EXISTANT (DATABASE_URL en propriétaire, sans
+# DATABASE_OWNER_URL) est migré — les autres lignes (SMTP_URL, etc.) conservées.
+migrate_env_file() {
+  local tmp has_url has_owner line
+  tmp="${ENV_FILE}.tmp"
+  has_url=0
+  has_owner=0
+  : >"$tmp"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      DATABASE_URL=*)
+        has_url=1
+        printf 'DATABASE_URL=%s\n' "$DATABASE_URL_VALUE" >>"$tmp"
+        ;;
+      DATABASE_OWNER_URL=*)
+        has_owner=1
+        printf 'DATABASE_OWNER_URL=%s\n' "$DATABASE_OWNER_URL_VALUE" >>"$tmp"
+        ;;
+      *)
+        printf '%s\n' "$line" >>"$tmp"
+        ;;
+    esac
+  done <"$ENV_FILE"
+  if [ "$has_url" -eq 0 ]; then
+    printf 'DATABASE_URL=%s\n' "$DATABASE_URL_VALUE" >>"$tmp"
+  fi
+  if [ "$has_owner" -eq 0 ]; then
+    printf 'DATABASE_OWNER_URL=%s\n' "$DATABASE_OWNER_URL_VALUE" >>"$tmp"
+  fi
+  mv "$tmp" "$ENV_FILE"
+  echo ".env migré (story 1.9) : DATABASE_URL → rôle ${APP_USER}, DATABASE_OWNER_URL présente."
+}
+
+# Rôle applicatif : créé au niveau du cluster (idempotent). Les GRANT viennent de la
+# migration 0008_rls_roles.sql — sur une base neuve elle s'appliquera ensuite.
+ensure_app_role() {
+  local escaped="${APP_PASSWORD//\'/\'\'}"
+  docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c \
+    "DO \$\$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_USER}') THEN
+         CREATE ROLE ${APP_USER} LOGIN PASSWORD '${escaped}';
+       END IF;
+     END \$\$;" >/dev/null
+  echo "Rôle applicatif ${APP_USER} prêt (migrations via DATABASE_OWNER_URL)."
 }
 
 container_exists() {
@@ -64,8 +121,13 @@ case "${1:-}" in
         "$IMAGE" >/dev/null
     fi
     wait_ready
+    ensure_app_role
     ensure_env_file
-    echo "Postgres Azzel prêt : ${DATABASE_URL_VALUE}"
+    if env_file_needs_migration; then
+      migrate_env_file
+    fi
+    echo "Postgres Azzel prêt : app ${DATABASE_URL_VALUE}"
+    echo "                      migrations ${DATABASE_OWNER_URL_VALUE}"
     echo "Applique ensuite les migrations : pnpm -F @azzel/web db:migrate"
     ;;
   down)

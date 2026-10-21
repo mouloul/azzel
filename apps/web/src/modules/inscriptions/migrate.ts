@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
-import { readDatabaseUrl } from '../iam/env';
+import { readDatabaseOwnerUrl, readEnv } from '../iam/env';
 
 const MODULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -12,6 +12,19 @@ const MIGRATION_DIRS = [
   path.join(MODULES_DIR, 'iam', 'migrations'),
   path.join(MODULES_DIR, 'inscriptions', 'migrations'),
 ];
+
+// Placeholder du mot de passe du rôle applicatif dans 0008_rls_roles.sql :
+// remplacé par AZZEL_APP_PASSWORD (défaut « azzel ») avant exécution.
+const APP_PASSWORD_PLACEHOLDER = "'__AZZEL_APP_PASSWORD__'";
+
+function sqlLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function injectAppPassword(content: string): string {
+  const password = readEnv('AZZEL_APP_PASSWORD') ?? 'azzel';
+  return content.split(APP_PASSWORD_PLACEHOLDER).join(sqlLiteral(password));
+}
 
 export async function applyAllMigrations(sql: postgres.Sql): Promise<string[]> {
   const applied: string[] = [];
@@ -34,7 +47,7 @@ export async function applyAllMigrations(sql: postgres.Sql): Promise<string[]> {
     if (alreadyApplied.length > 0) {
       continue;
     }
-    const content = await readFile(path.join(dir, name), 'utf8');
+    const content = injectAppPassword(await readFile(path.join(dir, name), 'utf8'));
     await sql.begin(async (tx) => {
       await tx.unsafe(content);
       await tx`INSERT INTO schema_migrations (name) VALUES (${name})`;
@@ -45,9 +58,13 @@ export async function applyAllMigrations(sql: postgres.Sql): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-  const databaseUrl = readDatabaseUrl();
+  // Les migrations tournent en propriétaire (DATABASE_OWNER_URL) : 0008 crée le
+  // rôle applicatif, 0009 active FORCE RLS — impossible via la connexion azzel_app.
+  const databaseUrl = readDatabaseOwnerUrl();
   if (!databaseUrl) {
-    console.error('DATABASE_URL absente : définis-la dans .env (voir .env.example).');
+    console.error(
+      'DATABASE_OWNER_URL absente : définis-la dans .env (voir .env.example, story 1.9).',
+    );
     process.exitCode = 1;
     return;
   }

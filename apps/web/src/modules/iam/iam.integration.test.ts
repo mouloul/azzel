@@ -4,8 +4,13 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { applyAllMigrations } from '@/modules/inscriptions/migrate';
+import {
+  closeAzzelTestDb,
+  recreateAzzelTestDb,
+  resolveTestDatabaseUrls,
+  type AzzelTestConnections,
+} from '@/test/integration-db';
 
-import { readDatabaseUrl } from './env';
 import {
   CodeExhaustedError,
   DbUnavailableError,
@@ -14,6 +19,7 @@ import {
 } from './errors';
 import {
   getSession,
+  logout,
   requestLoginCode,
   verifyLoginCode,
   sha256Hex,
@@ -21,58 +27,30 @@ import {
 } from './service';
 import { createIamStore, type IamStore } from './store';
 
-function parseUrl(value: string | null): URL | null {
-  if (!value) {
-    return null;
-  }
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-}
-
-const serverUrl = parseUrl(readDatabaseUrl());
-
-const ALLOWED_TEST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-if (serverUrl !== null && !ALLOWED_TEST_HOSTS.has(serverUrl.hostname)) {
-  throw new Error(
-    `Base de test refusée : DATABASE_URL pointe vers « ${serverUrl.hostname} », seules localhost / 127.0.0.1 / ::1 sont autorisées.`,
-  );
-}
-
-if (serverUrl === null) {
-  console.warn('intégration iam SKIPPÉE — bash scripts/dev-db.sh up pour l’activer');
-}
+const testUrls = resolveTestDatabaseUrls('iam');
 
 function uniqueEmail(): string {
   return `coureur-${randomUUID()}@test.azzel`;
 }
 
-describe.skipIf(serverUrl === null)('iam — intégration Postgres (base azzel_test)', () => {
-  const baseUrl = serverUrl as URL;
+describe.skipIf(testUrls === null)('iam — intégration Postgres (base azzel_test)', () => {
+  const { appUrl, ownerUrl } = testUrls as NonNullable<typeof testUrls>;
+  // sql : propriétaire (fixtures + assertions, bypass RLS) ; app : rôle azzel_app
+  // des stores — le RLS de la story 1.9 s'y applique réellement.
+  let connections: AzzelTestConnections | undefined;
   let sql: postgres.Sql;
+  let app: postgres.Sql;
   let store: IamStore;
 
   beforeAll(async () => {
-    const adminUrl = new URL(baseUrl.toString());
-    adminUrl.pathname = '/postgres';
-    const admin = postgres(adminUrl.toString(), { max: 1 });
-    await admin`DROP DATABASE IF EXISTS azzel_test WITH (FORCE)`;
-    await admin`CREATE DATABASE azzel_test`;
-    await admin.end({ timeout: 5 });
-
-    const testUrl = new URL(baseUrl.toString());
-    testUrl.pathname = '/azzel_test';
-    sql = postgres(testUrl.toString(), { max: 2 });
-    await applyAllMigrations(sql);
-    store = createIamStore(sql);
+    connections = await recreateAzzelTestDb(ownerUrl, appUrl);
+    ({ owner: sql, app } = connections);
+    store = createIamStore(app);
   }, 60_000);
 
   afterAll(async () => {
-    if (sql) {
-      await sql.end({ timeout: 5 });
+    if (connections) {
+      await closeAzzelTestDb(connections);
     }
   });
 
@@ -228,6 +206,23 @@ describe.skipIf(serverUrl === null)('iam — intégration Postgres (base azzel_t
     expect((await getSession(secondSession.token, { store }))?.email).toBe(email);
   });
 
+  it('logout : session révoquée puis introuvable, re-révocation idempotente', async () => {
+    const email = uniqueEmail();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+    const session = await verifyLoginCode(email, capture.getCode(), { store });
+    expect(await getSession(session.token, { store })).not.toBeNull();
+
+    await logout(session.token, { store });
+    expect(await getSession(session.token, { store })).toBeNull();
+
+    // Idempotent : revokeSessionByTokenHash ré-exécuté ne lève pas et ne change rien.
+    await expect(
+      store.revokeSessionByTokenHash(sha256Hex(session.token)),
+    ).resolves.toBeUndefined();
+    expect(await getSession(session.token, { store })).toBeNull();
+  });
+
   it('email jamais demandé : même refus qu’un code erroné, aucun compte', async () => {
     const email = uniqueEmail();
     await expect(verifyLoginCode(email, '123456', { store })).rejects.toBeInstanceOf(
@@ -268,7 +263,7 @@ describe.skipIf(serverUrl === null)('iam — intégration Postgres (base azzel_t
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(7);
+    expect(rows[0]?.count).toBe(9);
   });
 
   it('rôle : coureur par défaut, la session porte le rôle', async () => {

@@ -1,5 +1,6 @@
 import postgres, { type Sql } from 'postgres';
 
+import { withOrg } from '@/db/org-scope';
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
@@ -376,7 +377,7 @@ const COUREUR_SOURCE = `
 `;
 
 async function selectCoureurByAccount(
-  sql: Sql,
+  sql: Queryable,
   accountId: string,
   editionId: string,
   organisationId: string,
@@ -394,84 +395,90 @@ async function selectCoureurByAccount(
 export function createInscriptionsStore(sql: Sql): InscriptionsStore {
   return {
     async findCurrentEdition(organisationId: string): Promise<EditionRecord | null> {
-      return withDb(async () => {
-        const rows = await sql<
-          {
-            id: string;
-            organisation_id: string;
-            slug: string;
-            name: string;
-            race_date: string;
-            registration_closes_at: Date;
-          }[]
-        >`
-          SELECT id, organisation_id, slug, name, race_date::text AS race_date, registration_closes_at
-          FROM edition
-          WHERE organisation_id = ${organisationId}
-          ORDER BY race_date DESC
-          LIMIT 1
-        `;
-        const row = rows[0];
-        if (!row) {
-          return null;
-        }
-        return {
-          id: row.id,
-          organisationId: row.organisation_id,
-          slug: row.slug,
-          nom: row.name,
-          dateCourse: row.race_date,
-          registrationClosesAt: row.registration_closes_at,
-        };
-      });
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<
+            {
+              id: string;
+              organisation_id: string;
+              slug: string;
+              name: string;
+              race_date: string;
+              registration_closes_at: Date;
+            }[]
+          >`
+            SELECT id, organisation_id, slug, name, race_date::text AS race_date, registration_closes_at
+            FROM edition
+            WHERE organisation_id = ${organisationId}
+            ORDER BY race_date DESC
+            LIMIT 1
+          `;
+          const row = rows[0];
+          if (!row) {
+            return null;
+          }
+          return {
+            id: row.id,
+            organisationId: row.organisation_id,
+            slug: row.slug,
+            nom: row.name,
+            dateCourse: row.race_date,
+            registrationClosesAt: row.registration_closes_at,
+          };
+        }),
+      );
     },
 
     async listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]> {
-      return withDb(async () => {
-        const rows = await sql<
-          { id: string; edition_id: string; slug: string; name: string; distance_km: number }[]
-        >`
-          SELECT id, edition_id, slug, name, distance_km::float8 AS distance_km
-          FROM epreuve
-          WHERE edition_id = ${editionId} AND organisation_id = ${organisationId}
-          ORDER BY distance_km DESC
-        `;
-        return rows.map((row) => ({
-          id: row.id,
-          editionId: row.edition_id,
-          slug: row.slug,
-          nom: row.name,
-          distanceKm: row.distance_km,
-        }));
-      });
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<
+            { id: string; edition_id: string; slug: string; name: string; distance_km: number }[]
+          >`
+            SELECT id, edition_id, slug, name, distance_km::float8 AS distance_km
+            FROM epreuve
+            WHERE edition_id = ${editionId} AND organisation_id = ${organisationId}
+            ORDER BY distance_km DESC
+          `;
+          return rows.map((row) => ({
+            id: row.id,
+            editionId: row.edition_id,
+            slug: row.slug,
+            nom: row.name,
+            distanceKm: row.distance_km,
+          }));
+        }),
+      );
     },
 
     async findDocuments(organisationId: string): Promise<DocumentRecord[]> {
-      return withDb(async () => {
-        const rows = await sql<
-          {
-            id: string;
-            organisation_id: string;
-            slug: string;
-            version: string;
-            content: string;
-            updated_at: Date;
-          }[]
-        >`
-          SELECT id, organisation_id, slug, version, content, updated_at
-          FROM document
-          WHERE organisation_id = ${organisationId}
-          ORDER BY slug ASC
-        `;
-        return rows.map((row) => ({
-          id: row.id,
-          organisationId: row.organisation_id,
-          slug: row.slug,
-          version: row.version,
-          content: row.content,
-          updatedAt: row.updated_at,
-        }));
-      });
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<
+            {
+              id: string;
+              organisation_id: string;
+              slug: string;
+              version: string;
+              content: string;
+              updated_at: Date;
+            }[]
+          >`
+            SELECT id, organisation_id, slug, version, content, updated_at
+            FROM document
+            WHERE organisation_id = ${organisationId}
+            ORDER BY slug ASC
+          `;
+          return rows.map((row) => ({
+            id: row.id,
+            organisationId: row.organisation_id,
+            slug: row.slug,
+            version: row.version,
+            content: row.content,
+            updatedAt: row.updated_at,
+          }));
+        }),
+      );
     },
 
     async findCoureurByAccount(
@@ -480,13 +487,15 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       organisationId: string,
     ): Promise<CoureurRecord | null> {
       return withDb(() =>
-        selectCoureurByAccount(sql, accountId, editionId, organisationId),
+        withOrg(sql, organisationId, (tx) =>
+          selectCoureurByAccount(tx, accountId, editionId, organisationId),
+        ),
       );
     },
 
     async upsertCoureur(input: UpsertCoureurInput): Promise<CoureurRecord> {
       return withDb(() =>
-        sql.begin(async (tx) => {
+        withOrg(sql, input.organisationId, async (tx) => {
           const editionRows = await tx<{ registration_closes_at: Date }[]>`
             SELECT registration_closes_at FROM edition WHERE id = ${input.editionId}
           `;
@@ -566,7 +575,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
 
     async acceptDocuments(input: AcceptDocumentsInput): Promise<AcceptancesSnapshot> {
       return withDb(() =>
-        sql.begin(async (tx) => {
+        withOrg(sql, input.organisationId, async (tx) => {
           const editionRows = await tx<{ registration_closes_at: Date }[]>`
             SELECT registration_closes_at FROM edition
             WHERE id = ${input.editionId} AND organisation_id = ${input.organisationId}
@@ -641,15 +650,17 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       editionId: string,
       organisationId: string,
     ): Promise<PreuveRecord | null> {
-      return withDb(async () => {
-        const row = await selectActivePreuve(sql, accountId, editionId, organisationId);
-        return row ? toPreuveRecord(row) : null;
-      });
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const row = await selectActivePreuve(tx, accountId, editionId, organisationId);
+          return row ? toPreuveRecord(row) : null;
+        }),
+      );
     },
 
     async savePreuve(input: SavePreuveInput): Promise<SavePreuveResult> {
       return withDb(() =>
-        sql.begin(async (tx) => {
+        withOrg(sql, input.organisationId, async (tx) => {
           const editionRows = await tx<{ registration_closes_at: Date }[]>`
             SELECT registration_closes_at FROM edition
             WHERE id = ${input.editionId} AND organisation_id = ${input.organisationId}
@@ -734,73 +745,75 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
     },
 
     async listCoureurs(input: ListCoureursInput): Promise<ListCoureursResult> {
-      return withDb(async () => {
-        const search = input.search?.trim() ?? '';
-        const like = search.length > 0 ? `%${escapeLike(search)}%` : null;
-        const rows = await sql<
-          {
-            coureur_id: string;
-            first_name: string;
-            last_name: string;
-            email: string;
-            epreuve_slug: string;
-            epreuve_nom: string;
-            status: string;
-            refusal_reason: string | null;
-            preuve_id: string | null;
-            preuve_created_at: Date | null;
-            decharge_accepted_at: Date | null;
-            reglement_accepted_at: Date | null;
-            created_at: Date;
-            updated_at: Date;
-            total_count: number;
-          }[]
-        >`
-          SELECT c.id AS coureur_id, c.first_name, c.last_name, a.email,
-                 e.slug AS epreuve_slug, e.name AS epreuve_nom,
-                 c.status, c.refusal_reason,
-                 p.id AS preuve_id, p.created_at AS preuve_created_at,
-                 c.decharge_accepted_at, c.reglement_accepted_at,
-                 c.created_at, c.updated_at,
-                 count(*) OVER () AS total_count
-          FROM coureur c
-          JOIN account a ON a.id = c.account_id
-          JOIN epreuve e ON e.id = c.epreuve_id
-          LEFT JOIN preuve p ON p.coureur_id = c.id AND p.status = 'active'
-          WHERE c.edition_id = ${input.editionId}
-            AND c.organisation_id = ${input.organisationId}
-            ${
-              like === null
-                ? sql``
-                : sql`AND (
-                      c.first_name ILIKE ${like}
-                      OR c.last_name ILIKE ${like}
-                      OR a.email ILIKE ${like}
-                    )`
-            }
-          ORDER BY c.created_at DESC
-          LIMIT ${LIST_COUREURS_LIMIT}
-        `;
-        return {
-          items: rows.map((row) => ({
-            coureurId: row.coureur_id,
-            prenom: row.first_name,
-            nom: row.last_name,
-            email: row.email,
-            epreuveSlug: row.epreuve_slug,
-            epreuveNom: row.epreuve_nom,
-            status: row.status,
-            refusalReason: row.refusal_reason,
-            hasActivePreuve: row.preuve_id !== null,
-            preuveDepositedAt: row.preuve_created_at,
-            acceptationsCompletes:
-              row.decharge_accepted_at !== null && row.reglement_accepted_at !== null,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-          })),
-          hasMore: (rows[0]?.total_count ?? 0) > LIST_COUREURS_LIMIT,
-        };
-      });
+      return withDb(async () =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          const search = input.search?.trim() ?? '';
+          const like = search.length > 0 ? `%${escapeLike(search)}%` : null;
+          const rows = await tx<
+            {
+              coureur_id: string;
+              first_name: string;
+              last_name: string;
+              email: string;
+              epreuve_slug: string;
+              epreuve_nom: string;
+              status: string;
+              refusal_reason: string | null;
+              preuve_id: string | null;
+              preuve_created_at: Date | null;
+              decharge_accepted_at: Date | null;
+              reglement_accepted_at: Date | null;
+              created_at: Date;
+              updated_at: Date;
+              total_count: number;
+            }[]
+          >`
+            SELECT c.id AS coureur_id, c.first_name, c.last_name, a.email,
+                   e.slug AS epreuve_slug, e.name AS epreuve_nom,
+                   c.status, c.refusal_reason,
+                   p.id AS preuve_id, p.created_at AS preuve_created_at,
+                   c.decharge_accepted_at, c.reglement_accepted_at,
+                   c.created_at, c.updated_at,
+                   count(*) OVER () AS total_count
+            FROM coureur c
+            JOIN account a ON a.id = c.account_id
+            JOIN epreuve e ON e.id = c.epreuve_id
+            LEFT JOIN preuve p ON p.coureur_id = c.id AND p.status = 'active'
+            WHERE c.edition_id = ${input.editionId}
+              AND c.organisation_id = ${input.organisationId}
+              ${
+                like === null
+                  ? tx``
+                  : tx`AND (
+                        c.first_name ILIKE ${like}
+                        OR c.last_name ILIKE ${like}
+                        OR a.email ILIKE ${like}
+                      )`
+              }
+            ORDER BY c.created_at DESC
+            LIMIT ${LIST_COUREURS_LIMIT}
+          `;
+          return {
+            items: rows.map((row) => ({
+              coureurId: row.coureur_id,
+              prenom: row.first_name,
+              nom: row.last_name,
+              email: row.email,
+              epreuveSlug: row.epreuve_slug,
+              epreuveNom: row.epreuve_nom,
+              status: row.status,
+              refusalReason: row.refusal_reason,
+              hasActivePreuve: row.preuve_id !== null,
+              preuveDepositedAt: row.preuve_created_at,
+              acceptationsCompletes:
+                row.decharge_accepted_at !== null && row.reglement_accepted_at !== null,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at,
+            })),
+            hasMore: (rows[0]?.total_count ?? 0) > LIST_COUREURS_LIMIT,
+          };
+        }),
+      );
     },
 
     async findDossierDetail(input: {
@@ -809,7 +822,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       coureurId: string;
     }): Promise<DossierDetail | null> {
       return withDb(() =>
-        sql.begin(async (tx) => {
+        withOrg(sql, input.organisationId, async (tx) => {
           const coureurRows = await tx<CoureurRow[]>`
             SELECT ${tx.unsafe(COUREUR_COLUMNS)}
             FROM ${tx.unsafe(COUREUR_SOURCE)}
@@ -854,7 +867,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
 
     async decideDossier(input: DecideDossierInput): Promise<CoureurRecord> {
       return withDb(() =>
-        sql.begin(async (tx) => {
+        withOrg(sql, input.organisationId, async (tx) => {
           const lockedRows = await tx<CoureurRow[]>`
             SELECT ${tx.unsafe(COUREUR_COLUMNS)}
             FROM ${tx.unsafe(COUREUR_SOURCE)}
@@ -949,19 +962,21 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       preuveId: string,
       organisationId: string,
     ): Promise<PreuveRecord | null> {
-      return withDb(async () => {
-        const rows = await sql<PreuveRow[]>`
-          SELECT id, organisation_id, coureur_id, storage_key, mime,
-                 size_bytes, sha256, status, created_at
-          FROM preuve
-          WHERE id = ${preuveId}
-            AND organisation_id = ${organisationId}
-            AND status = 'active'
-          LIMIT 1
-        `;
-        const row = rows[0];
-        return row ? toPreuveRecord(row) : null;
-      });
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<PreuveRow[]>`
+            SELECT id, organisation_id, coureur_id, storage_key, mime,
+                   size_bytes, sha256, status, created_at
+            FROM preuve
+            WHERE id = ${preuveId}
+              AND organisation_id = ${organisationId}
+              AND status = 'active'
+            LIMIT 1
+          `;
+          const row = rows[0];
+          return row ? toPreuveRecord(row) : null;
+        }),
+      );
     },
   };
 }

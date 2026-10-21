@@ -1,5 +1,6 @@
 import postgres, { type Sql } from 'postgres';
 
+import { listOrganisationIds, withOrg } from '@/db/org-scope';
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
@@ -64,8 +65,9 @@ function toOutboxRow(row: OutboxDbRow): OutboxRow {
   };
 }
 
-// Insertion DANS la transaction de l'événement métier : si elle échoue, l'événement échoue
-// (cohérence). L'envoi, lui, est toujours hors transaction (worker best effort + rejeu).
+// Insertion DANS la transaction de l'événement métier (déjà withOrg — GUC de
+// l'organisation) : si elle échoue, l'événement échoue (cohérence). L'envoi, lui,
+// est toujours hors transaction (worker best effort + rejeu).
 export async function insertOutboxEmail(
   tx: Queryable,
   input: InsertOutboxInput,
@@ -83,72 +85,104 @@ export async function insertOutboxEmail(
 }
 
 export interface OutboxStore {
-  listOutstanding(limit: number): Promise<OutboxRow[]>;
-  claimOutboxRow(id: string): Promise<boolean>;
-  markOutboxSent(id: string): Promise<void>;
-  markOutboxFailed(id: string, error: string): Promise<void>;
+  // Lecture publique des organisations (sans GUC — exception documentée spec 1.9) :
+  // le worker traite la file de chaque organisation successivement.
+  listOrganisationIds(): Promise<string[]>;
+  listOutstanding(organisationId: string, limit: number): Promise<OutboxRow[]>;
+  claimOutboxRow(organisationId: string, id: string): Promise<boolean>;
+  markOutboxSent(organisationId: string, id: string): Promise<void>;
+  markOutboxFailed(organisationId: string, id: string, error: string): Promise<void>;
   countDeadLetters(): Promise<number>;
 }
 
 export const MAX_LAST_ERROR_LENGTH = 500;
 
+const OUTSTANDING_COLUMNS = `
+  id, organisation_id, destinataire, type, payload, statut,
+  attempts, last_error, next_attempt_at, sent_at, created_at
+`;
+
 export function createOutboxStore(sql: Sql): OutboxStore {
   return {
+    async listOrganisationIds(): Promise<string[]> {
+      return listOrganisationIds(sql);
+    },
+
     // Candidats à l'envoi : pending immédiat, failed seulement après expiration du
     // backoff (next_attempt_at) ; poison exclu (attempts >= MAX_OUTBOX_ATTEMPTS).
     // Les lignes « sent » ne sont jamais re-listées (idempotence).
-    async listOutstanding(limit: number): Promise<OutboxRow[]> {
-      const rows = await sql<OutboxDbRow[]>`
-        SELECT id, organisation_id, destinataire, type, payload, statut,
-               attempts, last_error, next_attempt_at, sent_at, created_at
-        FROM email_outbox
-        WHERE statut IN ('pending', 'failed')
-          AND attempts < ${MAX_OUTBOX_ATTEMPTS}
-          AND (statut = 'pending' OR next_attempt_at IS NULL OR next_attempt_at <= now())
-        ORDER BY created_at ASC
-        LIMIT ${limit}
-      `;
-      return rows.map(toOutboxRow);
+    async listOutstanding(organisationId: string, limit: number): Promise<OutboxRow[]> {
+      return withOrg(sql, organisationId, async (tx) => {
+        const rows = await tx<OutboxDbRow[]>`
+          SELECT ${tx.unsafe(OUTSTANDING_COLUMNS)}
+          FROM email_outbox
+          WHERE statut IN ('pending', 'failed')
+            AND attempts < ${MAX_OUTBOX_ATTEMPTS}
+            AND (statut = 'pending' OR next_attempt_at IS NULL OR next_attempt_at <= now())
+          ORDER BY created_at ASC
+          LIMIT ${limit}
+        `;
+        return rows.map(toOutboxRow);
+      });
     },
 
     // Revendication atomique avant envoi : 0 ligne = déjà prise par un worker
     // concurrent (ou poison) — on saute. attempts est incrémenté ICI, une seule fois.
-    async claimOutboxRow(id: string): Promise<boolean> {
-      const rows = await sql<{ id: string }[]>`
-        UPDATE email_outbox
-        SET statut = 'sending', attempts = attempts + 1
-        WHERE id = ${id} AND statut IN ('pending', 'failed')
-        RETURNING id
-      `;
-      return rows.length > 0;
+    async claimOutboxRow(organisationId: string, id: string): Promise<boolean> {
+      return withOrg(sql, organisationId, async (tx) => {
+        const rows = await tx<{ id: string }[]>`
+          UPDATE email_outbox
+          SET statut = 'sending', attempts = attempts + 1
+          WHERE id = ${id} AND statut IN ('pending', 'failed')
+          RETURNING id
+        `;
+        return rows.length > 0;
+      });
     },
 
-    async markOutboxSent(id: string): Promise<void> {
-      await sql`
-        UPDATE email_outbox
-        SET statut = 'sent', last_error = NULL, next_attempt_at = NULL, sent_at = now()
-        WHERE id = ${id} AND statut = 'sending'
-      `;
+    async markOutboxSent(organisationId: string, id: string): Promise<void> {
+      await withOrg(sql, organisationId, async (tx) => {
+        await tx`
+          UPDATE email_outbox
+          SET statut = 'sent', last_error = NULL, next_attempt_at = NULL, sent_at = now()
+          WHERE id = ${id} AND statut = 'sending'
+        `;
+      });
     },
 
     // Backoff : reprise seulement après now() + min(attempts × 5 min, 1 h).
-    async markOutboxFailed(id: string, error: string): Promise<void> {
+    async markOutboxFailed(
+      organisationId: string,
+      id: string,
+      error: string,
+    ): Promise<void> {
       const message = error.slice(0, MAX_LAST_ERROR_LENGTH);
-      await sql`
-        UPDATE email_outbox
-        SET statut = 'failed', last_error = ${message},
-            next_attempt_at = now() + least(attempts * interval '5 minutes', interval '1 hour')
-        WHERE id = ${id} AND statut = 'sending'
-      `;
+      await withOrg(sql, organisationId, async (tx) => {
+        await tx`
+          UPDATE email_outbox
+          SET statut = 'failed', last_error = ${message},
+              next_attempt_at = now() + least(attempts * interval '5 minutes', interval '1 hour')
+          WHERE id = ${id} AND statut = 'sending'
+        `;
+      });
     },
 
+    // Inspection globale (CLI) : somme des impasses de chaque organisation.
     async countDeadLetters(): Promise<number> {
-      const rows = await sql<{ count: number }[]>`
-        SELECT count(*)::int AS count
-        FROM email_outbox
-        WHERE statut = 'failed' AND attempts >= ${MAX_OUTBOX_ATTEMPTS}
-      `;
-      return rows[0]?.count ?? 0;
+      const organisationIds = await listOrganisationIds(sql);
+      let total = 0;
+      for (const organisationId of organisationIds) {
+        const count = await withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<{ count: number }[]>`
+            SELECT count(*)::int AS count
+            FROM email_outbox
+            WHERE statut = 'failed' AND attempts >= ${MAX_OUTBOX_ATTEMPTS}
+          `;
+          return rows[0]?.count ?? 0;
+        });
+        total += count;
+      }
+      return total;
     },
   };
 }
@@ -158,6 +192,7 @@ function createUnavailableOutboxStore(): OutboxStore {
     throw new DbUnavailableError(new Error('DATABASE_URL absente'));
   };
   return {
+    listOrganisationIds: unavailable,
     listOutstanding: unavailable,
     claimOutboxRow: unavailable,
     markOutboxSent: unavailable,

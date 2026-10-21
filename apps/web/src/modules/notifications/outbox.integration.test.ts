@@ -3,41 +3,24 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { readDatabaseUrl, readSmtpUrl } from '@/modules/iam/env';
+import {
+  closeAzzelTestDb,
+  recreateAzzelTestDb,
+  resolveTestDatabaseUrls,
+  reuseAzzelTestDb,
+  type AzzelTestConnections,
+} from '@/test/integration-db';
+import { readSmtpUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import type { InscriptionFormInput } from '@/modules/inscriptions/domain';
-import { applyAllMigrations } from '@/modules/inscriptions/migrate';
 import { decideDossier, submitInscription } from '@/modules/inscriptions/service';
 import { createInscriptionsStore, type InscriptionsStore } from '@/modules/inscriptions/store';
 
 import { createOutboxStore, type OutboxStore } from './outbox-store';
 import { processOutbox } from './worker';
 
-function parseUrl(value: string | null): URL | null {
-  if (!value) {
-    return null;
-  }
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-}
-
-const serverUrl = parseUrl(readDatabaseUrl());
-
-const ALLOWED_TEST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-if (serverUrl !== null && !ALLOWED_TEST_HOSTS.has(serverUrl.hostname)) {
-  throw new Error(
-    `Base de test refusée : DATABASE_URL pointe vers « ${serverUrl.hostname} », seules localhost / 127.0.0.1 / ::1 sont autorisées.`,
-  );
-}
-
-if (serverUrl === null) {
-  console.warn('intégration notifications SKIPPÉE — bash scripts/dev-db.sh up pour l’activer');
-}
+const testUrls = resolveTestDatabaseUrls('notifications');
 
 // File d’envoi Mailpit locale : assertions via son API http://localhost:8026.
 // Le test n’envoie jamais vers un SMTP distant (hôte SMTP local exigé).
@@ -64,18 +47,25 @@ async function probeMailpit(): Promise<boolean> {
   }
 }
 
+const LOCAL_SMTP_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
 function localSmtpUrl(): URL | null {
-  const parsed = parseUrl(readSmtpUrl());
-  if (parsed === null || !ALLOWED_TEST_HOSTS.has(parsed.hostname)) {
+  const raw = readSmtpUrl();
+  if (!raw) {
     return null;
   }
-  return parsed;
+  try {
+    const parsed = new URL(raw);
+    return LOCAL_SMTP_HOSTS.has(parsed.hostname) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
-const mailpitUp = serverUrl !== null ? await probeMailpit() : false;
+const mailpitUp = testUrls !== null ? await probeMailpit() : false;
 const mailpitReady = mailpitUp && localSmtpUrl() !== null;
 
-if (serverUrl !== null && !mailpitReady) {
+if (testUrls !== null && !mailpitReady) {
   console.warn(
     'intégration Mailpit SKIPPÉE — bash scripts/dev-mail.sh up (et SMTP_URL locale) pour l’activer',
   );
@@ -97,9 +87,12 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
   };
 }
 
-describe.skipIf(serverUrl === null)('notifications — intégration Postgres (base azzel_test)', () => {
-  const baseUrl = serverUrl as URL;
+describe.skipIf(testUrls === null)('notifications — intégration Postgres (base azzel_test)', () => {
+  const { appUrl, ownerUrl } = testUrls as NonNullable<typeof testUrls>;
+  // sql : propriétaire (fixtures + assertions, bypass RLS) ; app : rôle azzel_app.
+  let connections: AzzelTestConnections | undefined;
   let sql: postgres.Sql;
+  let app: postgres.Sql;
   let store: InscriptionsStore;
   let outbox: OutboxStore;
   let organisationId: string;
@@ -107,27 +100,18 @@ describe.skipIf(serverUrl === null)('notifications — intégration Postgres (ba
   const noTrigger = async (): Promise<void> => {};
 
   beforeAll(async () => {
-    const adminUrl = new URL(baseUrl.toString());
-    adminUrl.pathname = '/postgres';
-    const admin = postgres(adminUrl.toString(), { max: 1 });
-    await admin`DROP DATABASE IF EXISTS azzel_test WITH (FORCE)`;
-    await admin`CREATE DATABASE azzel_test`;
-    await admin.end({ timeout: 5 });
-
-    const testUrl = new URL(baseUrl.toString());
-    testUrl.pathname = '/azzel_test';
-    sql = postgres(testUrl.toString(), { max: 2 });
-    await applyAllMigrations(sql);
-    store = createInscriptionsStore(sql);
-    outbox = createOutboxStore(sql);
+    connections = await recreateAzzelTestDb(ownerUrl, appUrl);
+    ({ owner: sql, app } = connections);
+    store = createInscriptionsStore(app);
+    outbox = createOutboxStore(app);
 
     const organisations = await sql`SELECT id FROM organisation WHERE slug = 'ait-aissi'`;
     organisationId = organisations[0]?.id as string;
   }, 60_000);
 
   afterAll(async () => {
-    if (sql) {
-      await sql.end({ timeout: 5 });
+    if (connections) {
+      await closeAzzelTestDb(connections);
     }
   });
 
@@ -347,8 +331,8 @@ describe.skipIf(serverUrl === null)('notifications — intégration Postgres (ba
     const rows = (await outboxRows()).filter((row) => row.destinataire === session.email);
     const id = rows[0]?.id as string;
 
-    const first = await outbox.claimOutboxRow(id);
-    const second = await outbox.claimOutboxRow(id);
+    const first = await outbox.claimOutboxRow(organisationId, id);
+    const second = await outbox.claimOutboxRow(organisationId, id);
     expect(first).toBe(true);
     expect(second).toBe(false);
 
@@ -468,26 +452,29 @@ describe.skipIf(serverUrl === null)('notifications — intégration Postgres (ba
 });
 
 describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi réel, UI http://localhost:8026)', () => {
-  const baseUrl = serverUrl as URL;
+  const { appUrl, ownerUrl } = testUrls as NonNullable<typeof testUrls>;
+  // sql : propriétaire (fixtures) ; app : rôle azzel_app. La base azzel_test a été
+  // créée et migrée par le describe précédent — on s'y reconnecte sans la recréer.
+  let connections: AzzelTestConnections | undefined;
   let sql: postgres.Sql;
+  let app: postgres.Sql;
   let store: InscriptionsStore;
   let outbox: OutboxStore;
   let organisationId: string;
 
   beforeAll(async () => {
-    const testUrl = new URL(baseUrl.toString());
-    testUrl.pathname = '/azzel_test';
-    sql = postgres(testUrl.toString(), { max: 2 });
-    store = createInscriptionsStore(sql);
-    outbox = createOutboxStore(sql);
+    connections = await reuseAzzelTestDb(ownerUrl, appUrl);
+    ({ owner: sql, app } = connections);
+    store = createInscriptionsStore(app);
+    outbox = createOutboxStore(app);
     const organisations = await sql`SELECT id FROM organisation WHERE slug = 'ait-aissi'`;
     organisationId = organisations[0]?.id as string;
     await mailpitPurge();
   }, 60_000);
 
   afterAll(async () => {
-    if (sql) {
-      await sql.end({ timeout: 5 });
+    if (connections) {
+      await closeAzzelTestDb(connections);
     }
   });
 

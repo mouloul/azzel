@@ -10,10 +10,14 @@ vi.mock('@/modules/notifications/worker', async () => {
   return createSilentOutboxWorker();
 });
 
-import { readDatabaseUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
+import {
+  closeAzzelTestDb,
+  recreateAzzelTestDb,
+  resolveTestDatabaseUrls,
+  type AzzelTestConnections,
+} from '@/test/integration-db';
 
-import { applyAllMigrations } from './migrate';
 import {
   DecisionInvalidError,
   DossierNotFoundError,
@@ -37,30 +41,7 @@ import {
 import { createInscriptionsStore, type InscriptionsStore } from './store';
 import type { InscriptionFormInput } from './domain';
 
-function parseUrl(value: string | null): URL | null {
-  if (!value) {
-    return null;
-  }
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-}
-
-const serverUrl = parseUrl(readDatabaseUrl());
-
-const ALLOWED_TEST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
-if (serverUrl !== null && !ALLOWED_TEST_HOSTS.has(serverUrl.hostname)) {
-  throw new Error(
-    `Base de test refusée : DATABASE_URL pointe vers « ${serverUrl.hostname} », seules localhost / 127.0.0.1 / ::1 sont autorisées.`,
-  );
-}
-
-if (serverUrl === null) {
-  console.warn('intégration dossiers admin SKIPPÉE — bash scripts/dev-db.sh up pour l’activer');
-}
+const testUrls = resolveTestDatabaseUrls('dossiers admin');
 
 function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionFormInput {
   return {
@@ -83,11 +64,14 @@ function jpegBytes(size: number): Uint8Array {
   return bytes;
 }
 
-describe.skipIf(serverUrl === null)(
+describe.skipIf(testUrls === null)(
   'dossiers admin — intégration Postgres (base azzel_test)',
   () => {
-    const baseUrl = serverUrl as URL;
+    const { appUrl, ownerUrl } = testUrls as NonNullable<typeof testUrls>;
+    // sql : propriétaire (fixtures + assertions, bypass RLS) ; app : rôle azzel_app.
+    let connections: AzzelTestConnections | undefined;
     let sql: postgres.Sql;
+    let app: postgres.Sql;
     let store: InscriptionsStore;
     let storageDir = '';
     let proofStore: LocalDiskProofStore;
@@ -98,18 +82,9 @@ describe.skipIf(serverUrl === null)(
       // Répertoire temporaire posé avant toute autre chose : afterAll reste sûr si la
       // suite échoue plus loin (base injoignable, etc.).
       storageDir = mkdtempSync(path.join(tmpdir(), 'azzel-admin-it-'));
-      const adminUrl = new URL(baseUrl.toString());
-      adminUrl.pathname = '/postgres';
-      const admin = postgres(adminUrl.toString(), { max: 1 });
-      await admin`DROP DATABASE IF EXISTS azzel_test WITH (FORCE)`;
-      await admin`CREATE DATABASE azzel_test`;
-      await admin.end({ timeout: 5 });
-
-      const testUrl = new URL(baseUrl.toString());
-      testUrl.pathname = '/azzel_test';
-      sql = postgres(testUrl.toString(), { max: 2 });
-      await applyAllMigrations(sql);
-      store = createInscriptionsStore(sql);
+      connections = await recreateAzzelTestDb(ownerUrl, appUrl);
+      ({ owner: sql, app } = connections);
+      store = createInscriptionsStore(app);
       proofStore = new LocalDiskProofStore(storageDir);
 
       const organisations = await sql`SELECT id FROM organisation WHERE slug = 'ait-aissi'`;
@@ -119,8 +94,8 @@ describe.skipIf(serverUrl === null)(
     }, 60_000);
 
     afterAll(async () => {
-      if (sql) {
-        await sql.end({ timeout: 5 });
+      if (connections) {
+        await closeAzzelTestDb(connections);
       }
       if (storageDir) {
         rmSync(storageDir, { recursive: true, force: true });
@@ -224,7 +199,11 @@ describe.skipIf(serverUrl === null)(
       const row = await coureurRow(coureurId);
       expect(row?.status).toBe('validé');
       expect(row?.refusal_reason).toBeNull();
-      expect((row?.updated_at as Date).getTime()).toBeGreaterThanOrEqual(before.getTime() - 5);
+      // Marge d'horloge 1 s : updated_at vient de now() côté Postgres (VM Docker),
+      // dont l'horloge peut dériver légèrement de celle de l'hôte.
+      expect((row?.updated_at as Date).getTime()).toBeGreaterThanOrEqual(
+        before.getTime() - 1000,
+      );
       const trace = await sql`
         SELECT decided_by, decided_at, a.email FROM coureur c
         JOIN account a ON a.id = c.decided_by WHERE c.id = ${coureurId}

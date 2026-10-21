@@ -79,6 +79,28 @@ export function readDatabaseUrl(): string | null {
   return readEnv('DATABASE_URL');
 }
 
+// Connexion propriétaire (rôle `azzel`) : migrations et création des bases de test.
+// Défaut : même hôte/port/base que DATABASE_URL, utilisateur propriétaire `azzel`
+// (mot de passe AZZEL_OWNER_PASSWORD, défaut dev « azzel ») — story 1.9.
+export function readDatabaseOwnerUrl(): string | null {
+  const explicit = readEnv('DATABASE_OWNER_URL');
+  if (explicit) {
+    return explicit;
+  }
+  const appUrl = readEnv('DATABASE_URL');
+  if (!appUrl) {
+    return null;
+  }
+  try {
+    const url = new URL(appUrl);
+    url.username = 'azzel';
+    url.password = readEnv('AZZEL_OWNER_PASSWORD') ?? 'azzel';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function readSmtpUrl(): string | null {
   return readEnv('SMTP_URL');
 }

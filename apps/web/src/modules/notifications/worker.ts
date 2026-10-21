@@ -52,9 +52,11 @@ function contentFor(row: OutboxRow): { subject: string; text: string } {
   );
 }
 
-// Worker best effort : liste les candidats (pending + failed hors backoff/poison),
-// revendique chaque ligne atomiquement (statut sending — 0 ligne = déjà prise, on
-// saute), envoie, marque sent/failed. N'échoue jamais — erreurs avalées + log.
+// Worker best effort : énumère les organisations (lecture publique), liste les
+// candidats de chacune (pending + failed hors backoff/poison, GUC posé par le
+// store), fusionne par created_at, revendique chaque ligne atomiquement dans SON
+// organisation (statut sending — 0 ligne = déjà prise, on saute), envoie, marque
+// sent/failed. N'échoue jamais — erreurs avalées + log.
 export async function processOutbox(
   limit: number = DEFAULT_OUTBOX_LIMIT,
   deps: ProcessOutboxDeps = {},
@@ -75,19 +77,44 @@ export async function processOutbox(
   }
   const send: SendNotificationFn =
     deps.send ?? ((to, subject, text) => sendPlainTextEmail({ to, subject, text }));
-  let rows: OutboxRow[];
+  const boundedLimit = clampOutboxLimit(limit);
+  let organisationIds: string[];
   try {
-    rows = await store.listOutstanding(clampOutboxLimit(limit));
+    organisationIds = await store.listOrganisationIds();
   } catch (error) {
     summary.storeError = errorMessage(error);
-    console.error('[notifications] lecture de la file d’envoi impossible :', error);
+    console.error('[notifications] lecture des organisations impossible :', error);
     return summary;
   }
+  const collected: OutboxRow[] = [];
+  const storeErrors: string[] = [];
+  for (const organisationId of organisationIds) {
+    let rows: OutboxRow[];
+    try {
+      rows = await store.listOutstanding(organisationId, boundedLimit);
+    } catch (error) {
+      // Une organisation malade n'arrête pas la boucle : erreur accumulée, on
+      // continue sur les organisations restantes (les lignes déjà collectées
+      // restent traitées).
+      const message = errorMessage(error);
+      storeErrors.push(`${organisationId}: ${message}`);
+      console.error(
+        '[notifications] lecture de la file d’envoi impossible pour %s :',
+        organisationId,
+        error,
+      );
+      continue;
+    }
+    collected.push(...rows);
+  }
+  summary.storeError = storeErrors.length > 0 ? storeErrors.join(' ; ') : null;
+  const rows = collected.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .slice(0, boundedLimit);
   summary.processed = rows.length;
   for (const row of rows) {
     let claimed = false;
     try {
-      claimed = await store.claimOutboxRow(row.id);
+      claimed = await store.claimOutboxRow(row.organisationId, row.id);
     } catch (error) {
       console.error('[notifications] revendication de %s impossible :', row.id, error);
       continue;
@@ -98,7 +125,7 @@ export async function processOutbox(
     try {
       const content = contentFor(row);
       await send(row.destinataire, content.subject, content.text);
-      await store.markOutboxSent(row.id);
+      await store.markOutboxSent(row.organisationId, row.id);
       summary.sent += 1;
     } catch (error) {
       summary.failed += 1;
@@ -109,7 +136,7 @@ export async function processOutbox(
         error,
       );
       try {
-        await store.markOutboxFailed(row.id, errorMessage(error));
+        await store.markOutboxFailed(row.organisationId, row.id, errorMessage(error));
       } catch (markError) {
         console.error('[notifications] marquage failed de %s impossible :', row.id, markError);
       }
