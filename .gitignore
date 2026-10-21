@@ -18,6 +18,10 @@ android/
 *.log
 coverage/
 
+# Données coureurs (preuves de paiement CCP — STORAGE_DIR)
+/data/
+apps/web/data/
+
 # Environnement
 .env
 .env.*

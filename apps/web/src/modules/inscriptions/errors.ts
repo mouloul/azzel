@@ -3,6 +3,7 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 import { DbUnavailableError, UnauthenticatedError } from '@/modules/iam/errors';
 
 import { formatDateFrUtc, type FieldErrors } from './domain';
+import { ACCEPTED_PROOF_FORMATS_LABEL, MAX_PROOF_BYTES, formatKiloBytes } from './proof-format';
 
 export { DbUnavailableError, UnauthenticatedError };
 
@@ -59,6 +60,27 @@ export class BodyTooLargeError extends Error {
   constructor() {
     super('corps de requête trop volumineux');
     this.name = 'BodyTooLargeError';
+  }
+}
+
+export class ProofFormatError extends Error {
+  constructor() {
+    super('format de preuve non accepté');
+    this.name = 'ProofFormatError';
+  }
+}
+
+export class ProofTooLargeError extends Error {
+  constructor(readonly sizeBytes: number) {
+    super('preuve trop volumineuse après compression');
+    this.name = 'ProofTooLargeError';
+  }
+}
+
+export class NoEditionError extends Error {
+  constructor() {
+    super('aucune édition configurée');
+    this.name = 'NoEditionError';
   }
 }
 
@@ -201,6 +223,58 @@ export function toAcceptancesApiError(error: unknown): ApiError {
     prefix: 'acceptances',
     unauthenticatedAction: 'Reconnecte-toi pour accepter les documents.',
     dossierValideMessage: 'Ton dossier a déjà été validé : les acceptations ne peuvent plus changer.',
+    dossierValideAction: 'Contacte l’organisation pour toute modification.',
+  });
+}
+
+export function toPreuveApiError(error: unknown): ApiError {
+  if (error instanceof ProofFormatError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'preuve.format',
+        message: `Ce format n’est pas accepté. Formats acceptés : ${ACCEPTED_PROOF_FORMATS_LABEL}.`,
+        action: 'Prends ton reçu en photo (JPEG, PNG, WebP) ou exporte-le en PDF, puis renvoie-le.',
+      }),
+    };
+  }
+  if (error instanceof ProofTooLargeError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'preuve.too_large',
+        message: `Ta preuve pèse encore trop lourd après compression (${formatKiloBytes(
+          error.sizeBytes,
+        )} pour ${formatKiloBytes(MAX_PROOF_BYTES)} autorisés).`,
+        action: 'Reprends la photo de plus près, ou exporte un PDF allégé, puis renvoie-le.',
+      }),
+    };
+  }
+  if (error instanceof NoCoureurError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'preuve.no_coureur',
+        message: 'Aucune inscription à ton nom pour cette édition.',
+        action: 'Complète d’abord ton inscription, puis dépose ta preuve de paiement.',
+      }),
+    };
+  }
+  if (error instanceof NoEditionError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'preuve.no_edition',
+        message: 'Aucune édition n’est configurée : le dépôt de preuve est impossible.',
+        action: 'Réessaie dans un instant ou contacte l’organisation.',
+      }),
+    };
+  }
+  return sharedApiError(error, {
+    prefix: 'preuve',
+    unauthenticatedAction: 'Reconnecte-toi pour déposer ta preuve de paiement.',
+    dossierValideMessage:
+      'Ton dossier a déjà été validé : la preuve de paiement ne peut plus changer ici.',
     dossierValideAction: 'Contacte l’organisation pour toute modification.',
   });
 }

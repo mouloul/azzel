@@ -93,6 +93,37 @@ export interface UpsertCoureurInput {
   categorieAge: string;
 }
 
+export interface PreuveRecord {
+  id: string;
+  organisationId: string;
+  coureurId: string;
+  storageKey: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  status: string;
+  createdAt: Date;
+}
+
+export interface StoredProofFile {
+  storageKey: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
+export interface SavePreuveInput {
+  organisationId: string;
+  accountId: string;
+  editionId: string;
+  file: StoredProofFile;
+}
+
+export interface SavePreuveResult {
+  preuve: PreuveRecord;
+  replaced: PreuveRecord | null;
+}
+
 export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;
   listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]>;
@@ -104,6 +135,63 @@ export interface InscriptionsStore {
   ): Promise<CoureurRecord | null>;
   upsertCoureur(input: UpsertCoureurInput): Promise<CoureurRecord>;
   acceptDocuments(input: AcceptDocumentsInput): Promise<AcceptancesSnapshot>;
+  findActivePreuveByAccount(
+    accountId: string,
+    editionId: string,
+    organisationId: string,
+  ): Promise<PreuveRecord | null>;
+  savePreuve(input: SavePreuveInput): Promise<SavePreuveResult>;
+}
+
+interface PreuveRow {
+  id: string;
+  organisation_id: string;
+  coureur_id: string;
+  storage_key: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string;
+  status: string;
+  created_at: Date;
+}
+
+function toPreuveRecord(row: PreuveRow): PreuveRecord {
+  return {
+    id: row.id,
+    organisationId: row.organisation_id,
+    coureurId: row.coureur_id,
+    storageKey: row.storage_key,
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    sha256: row.sha256,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+type Queryable = Sql | postgres.TransactionSql;
+
+async function selectActivePreuve(
+  sql: Queryable,
+  accountId: string,
+  editionId: string,
+  organisationId: string,
+  forUpdate = false,
+): Promise<PreuveRow | null> {
+  const rows = await sql<PreuveRow[]>`
+    SELECT p.id, p.organisation_id, p.coureur_id, p.storage_key, p.mime,
+           p.size_bytes, p.sha256, p.status, p.created_at
+    FROM preuve p
+    JOIN coureur c ON c.id = p.coureur_id
+    WHERE c.account_id = ${accountId}
+      AND c.edition_id = ${editionId}
+      AND c.organisation_id = ${organisationId}
+      AND p.status = 'active'
+    LIMIT 1
+    ${forUpdate ? sql`FOR UPDATE OF p` : sql``}
+  `;
+  const row = rows[0];
+  return row ?? null;
 }
 
 interface CoureurRow {
@@ -458,6 +546,88 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         }),
       );
     },
+
+    async findActivePreuveByAccount(
+      accountId: string,
+      editionId: string,
+      organisationId: string,
+    ): Promise<PreuveRecord | null> {
+      return withDb(async () => {
+        const row = await selectActivePreuve(sql, accountId, editionId, organisationId);
+        return row ? toPreuveRecord(row) : null;
+      });
+    },
+
+    async savePreuve(input: SavePreuveInput): Promise<SavePreuveResult> {
+      return withDb(() =>
+        sql.begin(async (tx) => {
+          const editionRows = await tx<{ registration_closes_at: Date }[]>`
+            SELECT registration_closes_at FROM edition
+            WHERE id = ${input.editionId} AND organisation_id = ${input.organisationId}
+          `;
+          const edition = editionRows[0];
+          if (!edition) {
+            throw new Error('édition introuvable pour le dépôt de preuve');
+          }
+          if (!isRegistrationOpen(edition.registration_closes_at)) {
+            throw new RegistrationClosedError(edition.registration_closes_at);
+          }
+          const coureurRows = await tx<{ id: string; status: string }[]>`
+            SELECT id, status FROM coureur
+            WHERE account_id = ${input.accountId}
+              AND edition_id = ${input.editionId}
+              AND organisation_id = ${input.organisationId}
+            FOR UPDATE
+          `;
+          const coureur = coureurRows[0];
+          if (!coureur) {
+            throw new NoCoureurError();
+          }
+          if (coureur.status !== COUREUR_STATUS_EN_CONSTITUTION) {
+            throw new DossierValidatedError();
+          }
+          const existing = await selectActivePreuve(
+            tx,
+            input.accountId,
+            input.editionId,
+            input.organisationId,
+            true,
+          );
+          if (existing && existing.sha256 === input.file.sha256) {
+            return { preuve: toPreuveRecord(existing), replaced: null };
+          }
+          let replaced: PreuveRecord | null = null;
+          if (existing) {
+            const replacedRows = await tx<PreuveRow[]>`
+              UPDATE preuve SET status = 'replaced'
+              WHERE id = ${existing.id} AND status = 'active'
+              RETURNING id, organisation_id, coureur_id, storage_key, mime,
+                        size_bytes, sha256, status, created_at
+            `;
+            const replacedRow = replacedRows[0];
+            if (replacedRow) {
+              replaced = toPreuveRecord(replacedRow);
+            }
+          }
+          const insertedRows = await tx<PreuveRow[]>`
+            INSERT INTO preuve (
+              organisation_id, coureur_id, storage_key, mime, size_bytes, sha256, status
+            )
+            VALUES (
+              ${input.organisationId}, ${coureur.id}, ${input.file.storageKey},
+              ${input.file.mime}, ${input.file.sizeBytes}, ${input.file.sha256}, 'active'
+            )
+            RETURNING id, organisation_id, coureur_id, storage_key, mime,
+                      size_bytes, sha256, status, created_at
+          `;
+          const inserted = insertedRows[0];
+          if (!inserted) {
+            throw new Error('insertion de la preuve impossible');
+          }
+          return { preuve: toPreuveRecord(inserted), replaced };
+        }),
+      );
+    },
   };
 }
 
@@ -472,6 +642,8 @@ function createUnavailableStore(): InscriptionsStore {
     findCoureurByAccount: unavailable,
     upsertCoureur: unavailable,
     acceptDocuments: unavailable,
+    findActivePreuveByAccount: unavailable,
+    savePreuve: unavailable,
   };
 }
 

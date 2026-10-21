@@ -6,6 +6,8 @@ import { requireSession } from '@/modules/iam/session';
 
 import { AGE_CATEGORY_LABELS, COUREUR_STATUS_EN_CONSTITUTION, formatDateFrUtc, type AgeCategory } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
+import { formatKiloBytes } from '@/modules/inscriptions/proof-format';
+import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
 import { getInscriptionState } from '@/modules/inscriptions/service';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +41,16 @@ export default async function EspaceCoureurPage() {
     state = await getInscriptionState(session);
   } catch (error) {
     failure = toInscriptionsApiError(error);
+  }
+
+  let preuveState: PreuveState | null = null;
+  let preuveIndisponible = false;
+  if (state !== null) {
+    try {
+      preuveState = await getPreuveState(session);
+    } catch {
+      preuveIndisponible = true;
+    }
   }
 
   return (
@@ -112,6 +124,33 @@ export default async function EspaceCoureurPage() {
               ) : (
                 <p className="mono">Décharge + règlement : à accepter</p>
               )}
+              {preuveIndisponible ? (
+                <p className="mono">Preuve de paiement : état indisponible — réessaie plus tard.</p>
+              ) : preuveState?.preuve != null ? (
+                <>
+                  <p className="mono">
+                    Preuve de paiement : déposée le{' '}
+                    {formatLocalDateTime(preuveState.preuve.depositedAt)} ·{' '}
+                    {formatKiloBytes(preuveState.preuve.sizeBytes)} · remplaçable
+                  </p>
+                  {state.edition.registrationOpen &&
+                  state.coureur.status === COUREUR_STATUS_EN_CONSTITUTION ? (
+                    <div className="auth-alt">
+                      <a className="btn-contour" href="/preuve">
+                        Remplacer ma preuve de paiement
+                      </a>
+                    </div>
+                  ) : null}
+                </>
+              ) : preuveState !== null &&
+                state.edition.registrationOpen &&
+                state.coureur.status === COUREUR_STATUS_EN_CONSTITUTION ? (
+                <div className="auth-alt">
+                  <a className="btn-action" href="/preuve">
+                    Déposer ma preuve de paiement CCP
+                  </a>
+                </div>
+              ) : null}
               <p className="meta">
                 Clôture des inscriptions :{' '}
                 {formatLocalDateTime(state.edition.registrationClosesAt)}

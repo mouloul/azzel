@@ -124,6 +124,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
       '0002_inscriptions.sql',
       '0003_documents.sql',
       '0004_coureur_checks.sql',
+      '0005_preuve.sql',
     ]);
 
     const editions = await sql`
@@ -172,7 +173,7 @@ describe.skipIf(serverUrl === null)('inscriptions — intégration Postgres (bas
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(4);
+    expect(rows[0]?.count).toBe(5);
   });
 
   it('inscription complète : coureur créé, rattaché édition/épreuve/organisation', async () => {
