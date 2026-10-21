@@ -31,6 +31,9 @@ body{
 .mode-radio{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .sprite{position:absolute;width:0;height:0;overflow:hidden}
 svg{display:block}
+.iconbtn svg,.assist svg,.drop svg,.perk svg,.warn svg,.step .chev,.shortcut .ic svg,
+.sync svg,.fresh svg,.rule .glyph svg,.offline-band svg{
+  fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 a{color:inherit}
 
 .topline{height:10px;background-color:var(--brume);
@@ -149,6 +152,11 @@ a{color:inherit}
 .iconbtn svg{width:17px;height:17px}
 .badge-off{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;font-weight:700;color:var(--p-action);
   border:1px solid var(--p-action);border-radius:999px;padding:4px 8px;white-space:nowrap}
+.offline-band{display:flex;align-items:center;gap:10px;background:var(--p-surface);border:1px solid var(--p-line);
+  border-left:3px solid var(--p-action);border-radius:14px;padding:9px 12px;flex:none}
+.offline-band svg{width:17px;height:17px;color:var(--p-action);flex:none}
+.offline-band b{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;color:var(--p-action)}
+.offline-band small{display:block;font-size:11px;line-height:1.35;color:var(--p-text2);margin-top:1px}
 
 .body{flex:1;min-height:0;overflow:hidden;padding:0 16px;display:flex;flex-direction:column;gap:10px}
 .body.full{padding:0;gap:0}
@@ -234,8 +242,8 @@ a{color:inherit}
     repeating-linear-gradient(45deg,var(--p-action) 0 3px,transparent 3px 8px),
     repeating-linear-gradient(-45deg,var(--p-action) 0 3px,transparent 3px 8px);
   opacity:.5}
-.num{font-weight:800;font-size:57px;line-height:1;letter-spacing:-.02em}
-.num small{font-size:15px;color:var(--p-action);vertical-align:top;margin-right:2px;letter-spacing:0}
+.num{font-weight:800;font-size:68px;line-height:1;letter-spacing:-.02em}
+.num small{font-size:16px;color:var(--p-action);vertical-align:top;margin-right:2px;letter-spacing:0}
 .d-name{font-size:17px;font-weight:800;margin-top:3px}
 .d-course{font-family:var(--mono);font-size:10.5px;line-height:1.7;color:var(--p-text2);margin-top:5px}
 .d-course b{color:var(--p-text)}
@@ -571,7 +579,7 @@ footer .sig svg{width:28px;height:16px;color:var(--encre)}
             <div class="welcome-actions">
               <div class="btn">Créer mon accès</div>
               <div class="btn line">J'ai déjà un compte</div>
-              <p class="tiny">ZÉRO PAPIER · HORS-LIGNE PRÊT · ⵣ</p>
+              <p class="tiny">ZÉRO PAPIER · HORS-LIGNE PRÊT</p>
             </div>
           </div>
           <div class="homebar"><i></i></div>
@@ -625,7 +633,7 @@ footer .sig svg{width:28px;height:16px;color:var(--encre)}
     <div class="section-head">
       <span class="n">02</span>
       <h2 id="s2">Préparer</h2>
-      <span class="count">5 écrans</span>
+      <span class="count">4 écrans</span>
       <p>Le dossier se boucle seul, le dossard se télécharge, le suivi s'active en connaissance de cause. Rien ne dépend du réseau.</p>
     </div>
     <div class="screens">
@@ -685,9 +693,12 @@ footer .sig svg{width:28px;height:16px;color:var(--encre)}
           <div class="status"><span>10:42</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
           <header class="appbar">
             <h2>Mon dossard</h2>
-            <span class="badge-off">HORS-LIGNE PRÊT</span>
           </header>
           <div class="body">
+            <div class="offline-band">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg>
+              <div><b>HORS-LIGNE PRÊT</b><small>Ton dossard marche sans réseau.</small></div>
+            </div>
             <div class="card dossard-card">
               <div class="frise" aria-hidden="true"></div>
               <p class="num"><small>N°</small>217</p>
@@ -795,10 +806,22 @@ footer .sig svg{width:28px;height:16px;color:var(--encre)}
         </figcaption>
       </figure>
 
+    </div>
+  </section>
+
+  <section aria-labelledby="s3">
+    <div class="section-head">
+      <span class="n">03</span>
+      <h2 id="s3">Courir</h2>
+      <span class="count">4 écrans</span>
+      <p>Avant le départ, la batterie ; le jour J, la carte et la file hors-ligne disent la vérité. Après, le classement reste provisoire et la fraîcheur s'affiche.</p>
+    </div>
+    <div class="screens">
+
       <figure class="screen">
         <div class="phone">
           <div class="notch"></div>
-          <div class="status"><span>10:46</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <div class="status"><span>07:05</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
           <header class="appbar">
             <span class="iconbtn" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></span>
             <h2>Avant le départ</h2>
@@ -829,18 +852,6 @@ footer .sig svg{width:28px;height:16px;color:var(--encre)}
         </figcaption>
       </figure>
 
-    </div>
-  </section>
-
-  <section aria-labelledby="s3">
-    <div class="section-head">
-      <span class="n">03</span>
-      <h2 id="s3">Courir</h2>
-      <span class="count">3 écrans</span>
-      <p>Le jour J, la carte et la file hors-ligne disent la vérité. Après, le classement reste provisoire et la fraîcheur s'affiche.</p>
-    </div>
-    <div class="screens">
-
       <figure class="screen">
         <div class="phone">
           <div class="notch"></div>
@@ -850,7 +861,7 @@ footer .sig svg{width:28px;height:16px;color:var(--encre)}
             <span class="map-live" style="position:static;border:0;padding:0;background:transparent"><i></i>EN DIRECT</span>
           </header>
           <div class="body">
-            <div class="sync"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg><span>◷ 3 positions en attente — la file est sûre</span></div>
+            <div class="sync"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg><span>3 positions en attente — la file est sûre</span></div>
             <div class="map">
               <svg viewBox="0 0 300 248" preserveAspectRatio="none" aria-hidden="true">
                 <path class="ct" d="M-20 34C40 14 80 58 132 38S224 4 320 26"/>
