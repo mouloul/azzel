@@ -1,6 +1,10 @@
 import type { SessionRecord } from '@/modules/iam/store';
 
 import {
+  AGE_CATEGORY_LABELS,
+  COUREUR_STATUS_REFUSE,
+  COUREUR_STATUS_VALIDE,
+  canDepositPreuve,
   deriveAgeAndCategory,
   documentTitle,
   hasFieldErrors,
@@ -303,6 +307,177 @@ export async function acceptDocuments(
       version: snapshot.reglementVersion,
     },
   };
+}
+
+export const CHECKLIST_VALIDATION_EN_ATTENTE = 'En attente de validation par l’organisation';
+
+export const CHECKLIST_PREUVE_INDISPONIBLE = 'Indisponible (réessaie plus tard)';
+
+export type ChecklistPieceId =
+  | 'email'
+  | 'epreuve'
+  | 'decharge'
+  | 'reglement'
+  | 'preuve'
+  | 'validation';
+
+export interface ChecklistPiece {
+  id: ChecklistPieceId;
+  libelle: string;
+  fait: boolean;
+  actionLabel?: string;
+  actionHref?: string;
+  texteSecondaire?: string;
+  motifRefus?: string;
+}
+
+export interface ChecklistRecap {
+  epreuve: string;
+  distanceKm: number;
+  categorieAge: string;
+  tshirt: string;
+  contactUrgenceNom: string;
+  contactUrgenceTelephone: string;
+  dateCourse: string;
+}
+
+export interface ChecklistState {
+  edition: EditionSummary | null;
+  pieces: ChecklistPiece[];
+  recap: ChecklistRecap | null;
+}
+
+function checklistPiece(
+  id: ChecklistPieceId,
+  libelle: string,
+  fait: boolean,
+  extras: {
+    action?: { label: string; href?: string } | null;
+    texteSecondaire?: string | null;
+    motifRefus?: string | null;
+  } = {},
+): ChecklistPiece {
+  const action = extras.action;
+  return {
+    id,
+    libelle,
+    fait,
+    ...(action != null ? { actionLabel: action.label } : {}),
+    ...(action?.href != null ? { actionHref: action.href } : {}),
+    ...(extras.texteSecondaire != null ? { texteSecondaire: extras.texteSecondaire } : {}),
+    ...(extras.motifRefus != null ? { motifRefus: extras.motifRefus } : {}),
+  };
+}
+
+export async function getChecklistState(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<ChecklistState> {
+  const store = deps.store ?? getInscriptionsStore();
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    return { edition: null, pieces: [], recap: null };
+  }
+  const [coureurSettled, preuveSettled] = await Promise.allSettled([
+    store.findCoureurByAccount(session.accountId, edition.id, session.organisationId),
+    store.findActivePreuveByAccount(session.accountId, edition.id, session.organisationId),
+  ]);
+  if (coureurSettled.status === 'rejected') {
+    throw coureurSettled.reason;
+  }
+  const coureur = coureurSettled.value;
+  const preuve = preuveSettled.status === 'fulfilled' ? preuveSettled.value : null;
+  const preuveIndisponible = preuveSettled.status === 'rejected';
+
+  const inscriptionsOuvertes = isRegistrationOpen(edition.registrationClosesAt);
+  const neutraliseSiFermees = (
+    action: { label: string; href?: string } | null,
+  ): { label: string; href?: string } | null => {
+    if (action === null || action.href == null || inscriptionsOuvertes) {
+      return action;
+    }
+    return { label: 'Inscriptions fermées' };
+  };
+
+  const dechargeFait =
+    coureur !== null &&
+    coureur.dechargeAcceptedAt !== null &&
+    coureur.dechargeVersion !== null;
+  const reglementFait =
+    coureur !== null &&
+    coureur.reglementAcceptedAt !== null &&
+    coureur.reglementVersion !== null;
+  const refuse = coureur !== null && coureur.status === COUREUR_STATUS_REFUSE;
+  const validationFait = coureur !== null && coureur.status === COUREUR_STATUS_VALIDE;
+  const peutDeposer = coureur === null || canDepositPreuve(coureur.status);
+
+  let actionPreuve: { label: string; href?: string } | null = null;
+  if (!preuveIndisponible) {
+    actionPreuve = neutraliseSiFermees(
+      preuve !== null
+        ? peutDeposer
+          ? { label: 'Remplacer ma preuve de paiement', href: '/preuve' }
+          : null
+        : peutDeposer
+          ? { label: 'Dépose ta preuve de paiement CCP', href: '/preuve' }
+          : null,
+    );
+  }
+
+  const pieces: ChecklistPiece[] = [
+    checklistPiece('email', 'Email vérifié', true),
+    checklistPiece('epreuve', 'Épreuve choisie', coureur !== null, {
+      action: neutraliseSiFermees(
+        coureur === null
+          ? { label: `M’inscrire à l’édition ${edition.slug}`, href: '/inscription' }
+          : inscriptionsOuvertes
+            ? { label: 'Modifier mon inscription', href: '/inscription' }
+            : null,
+      ),
+    }),
+    checklistPiece('decharge', 'Décharge acceptée', dechargeFait, {
+      action: dechargeFait
+        ? null
+        : { label: 'Accepter la décharge et le règlement', href: '/acceptations' },
+    }),
+    checklistPiece('reglement', 'Règlement accepté', reglementFait, {
+      action: reglementFait
+        ? null
+        : { label: 'Les deux documents s’acceptent ensemble' },
+    }),
+    checklistPiece('preuve', 'Preuve de paiement CCP déposée', preuve !== null, {
+      action: preuveIndisponible ? null : actionPreuve,
+      texteSecondaire: preuveIndisponible ? CHECKLIST_PREUVE_INDISPONIBLE : null,
+    }),
+    checklistPiece('validation', 'Dossier validé', validationFait, {
+      action: neutraliseSiFermees(
+        refuse && coureur !== null && canDepositPreuve(coureur.status)
+          ? { label: 'Déposer une nouvelle preuve', href: '/preuve' }
+          : null,
+      ),
+      texteSecondaire:
+        coureur !== null && !validationFait && !refuse
+          ? CHECKLIST_VALIDATION_EN_ATTENTE
+          : null,
+      motifRefus: refuse ? coureur.refusalReason : null,
+    }),
+  ];
+
+  const recap: ChecklistRecap | null =
+    coureur === null
+      ? null
+      : {
+          epreuve: coureur.epreuveNom,
+          distanceKm: coureur.distanceKm,
+          categorieAge:
+            AGE_CATEGORY_LABELS[coureur.categorieAge as AgeCategory] ?? coureur.categorieAge,
+          tshirt: coureur.tailleTshirt,
+          contactUrgenceNom: coureur.contactUrgenceNom,
+          contactUrgenceTelephone: coureur.contactUrgenceTelephone,
+          dateCourse: edition.dateCourse,
+        };
+
+  return { edition: toEditionSummary(edition), pieces, recap };
 }
 
 export interface DossierListEntry {

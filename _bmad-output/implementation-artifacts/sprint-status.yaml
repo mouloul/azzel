@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-20-2026 22:35
-last_updated: 10-21-2026 15:40
+last_updated: 10-21-2026 16:08
 project: Azzel
 project_key: NOKEY
 tracking_system: file-system
@@ -43,7 +43,7 @@ development_status:
   1-4-acceptation-décharge-et-règlement-intérieur: review
   1-5-télversement-de-la-preuve-de-paiement-ccp: review
   1-6-validation-ou-refus-du-dossier-par-l-organisateur: review
-  1-7-checklist-de-dossier-self-service: backlog
+  1-7-checklist-de-dossier-self-service: review
   1-8-notifications-de-statut-par-email: backlog
   1-9-socle-multi-organisation-schéma-rls: backlog
   epic-1-retrospective: optional

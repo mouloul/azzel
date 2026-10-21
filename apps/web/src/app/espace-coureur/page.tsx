@@ -5,11 +5,21 @@ import { LogoutButton } from '@/components/logout-button';
 import { readEnv } from '@/modules/iam/env';
 import { requireSession } from '@/modules/iam/session';
 
-import { AGE_CATEGORY_LABELS, COUREUR_STATUS_EN_CONSTITUTION, COUREUR_STATUS_REFUSE, canDepositPreuve, formatDateFrUtc, type AgeCategory } from '@/modules/inscriptions/domain';
+import { formatDateFrUtc } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
-import { formatKiloBytes } from '@/modules/inscriptions/proof-format';
-import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
-import { getInscriptionState } from '@/modules/inscriptions/service';
+import {
+  getChecklistState,
+  type ChecklistPiece,
+  type ChecklistRecap,
+  type EditionSummary,
+} from '@/modules/inscriptions/service';
+
+import {
+  BANDEAU_DOSSIER_VALIDE,
+  compteurPieces,
+  estComplet,
+  etatPiece,
+} from './checklist-view';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,22 +46,12 @@ export default async function EspaceCoureurPage() {
   }
   const session = result.session;
 
-  let state: Awaited<ReturnType<typeof getInscriptionState>> | null = null;
+  let state: Awaited<ReturnType<typeof getChecklistState>> | null = null;
   let failure: ReturnType<typeof toInscriptionsApiError> | null = null;
   try {
-    state = await getInscriptionState(session);
+    state = await getChecklistState(session);
   } catch (error) {
     failure = toInscriptionsApiError(error);
-  }
-
-  let preuveState: PreuveState | null = null;
-  let preuveIndisponible = false;
-  if (state !== null) {
-    try {
-      preuveState = await getPreuveState(session);
-    } catch {
-      preuveIndisponible = true;
-    }
   }
 
   return (
@@ -76,135 +76,127 @@ export default async function EspaceCoureurPage() {
 
       {failure !== null && (
         <article className="card">
-          <p className="surtitre">Inscription</p>
-          <h2>Inscription indisponible</h2>
+          <p className="surtitre">Dossier</p>
+          <h2>Checklist indisponible</h2>
           <div role="alert" aria-live="assertive" className="error-box">
             <p className="error-message">{failure.envelope.error.message}</p>
             <p className="error-action">{failure.envelope.error.action}</p>
           </div>
+          <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
+          </div>
         </article>
       )}
 
-      {state?.edition && (
+      {state !== null && state.edition === null && (
         <article className="card">
-          <p className="surtitre">Inscription</p>
-          <h2>{state.edition.nom}</h2>
-          {state.coureur ? (
-            <>
-              <p>
-                Ton épreuve :{' '}
-                <strong>
-                  {state.coureur.epreuveNom} ({state.coureur.distanceKm} km)
-                </strong>
-              </p>
-              <p>
-                Catégorie : {AGE_CATEGORY_LABELS[state.coureur.categorie as AgeCategory]} —{' '}
-                {state.coureur.age} ans le jour de la course
-              </p>
-              <p>T-shirt : {state.coureur.tailleTshirt}</p>
-              <p>
-                Contact d’urgence : {state.coureur.contactUrgenceNom} ·{' '}
-                {state.coureur.contactUrgenceTelephone}
-              </p>
-              <p className="mono">Dossier : {state.coureur.status}</p>
-              {state.coureur.status === COUREUR_STATUS_REFUSE &&
-              state.coureur.refusalReason !== null ? (
-                <div role="alert" aria-live="assertive" className="error-box">
-                  <p className="error-message">Ton dossier a été refusé.</p>
-                  <p className="error-action">Motif : {state.coureur.refusalReason}</p>
-                  {state.edition.registrationOpen ? (
-                    <div className="auth-alt">
-                      <a className="btn-action" href="/preuve">
-                        Déposer une nouvelle preuve
-                      </a>
-                    </div>
-                  ) : null}
-                  <div className="auth-alt">
-                    <AssistanceButton phone={assistancePhone} />
-                  </div>
-                </div>
-              ) : null}
-              {state.coureur.dechargeAccepte !== null &&
-              state.coureur.reglementAccepte !== null ? (
-                <p className="mono">
-                  Décharge + règlement : acceptés le{' '}
-                  {formatLocalDateTime(state.coureur.dechargeAccepte.acceptedAt)} (décharge{' '}
-                  {state.coureur.dechargeAccepte.version} · règlement{' '}
-                  {state.coureur.reglementAccepte.version})
-                </p>
-              ) : state.edition.registrationOpen &&
-                state.coureur.status === COUREUR_STATUS_EN_CONSTITUTION ? (
-                <div className="auth-alt">
-                  <a className="btn-contour" href="/acceptations">
-                    Accepter la décharge et le règlement
-                  </a>
-                </div>
-              ) : (
-                <p className="mono">Décharge + règlement : à accepter</p>
-              )}
-              {preuveIndisponible ? (
-                <p className="mono">Preuve de paiement : état indisponible — réessaie plus tard.</p>
-              ) : preuveState?.preuve != null ? (
-                <>
-                  <p className="mono">
-                    Preuve de paiement : déposée le{' '}
-                    {formatLocalDateTime(preuveState.preuve.depositedAt)} ·{' '}
-                    {formatKiloBytes(preuveState.preuve.sizeBytes)} · remplaçable
-                  </p>
-                  {state.edition.registrationOpen &&
-                  canDepositPreuve(state.coureur.status) ? (
-                    <div className="auth-alt">
-                      <a className="btn-contour" href="/preuve">
-                        Remplacer ma preuve de paiement
-                      </a>
-                    </div>
-                  ) : null}
-                </>
-              ) : preuveState !== null &&
-                state.edition.registrationOpen &&
-                canDepositPreuve(state.coureur.status) ? (
-                <div className="auth-alt">
-                  <a className="btn-action" href="/preuve">
-                    Déposer ma preuve de paiement CCP
-                  </a>
-                </div>
-              ) : null}
-              <p className="meta">
-                Clôture des inscriptions :{' '}
-                {formatLocalDateTime(state.edition.registrationClosesAt)}
-              </p>
-              {state.edition.registrationOpen ? (
-                <div className="auth-alt">
-                  <a className="btn-contour" href="/inscription">
-                    Modifier mon inscription
-                  </a>
-                </div>
-              ) : (
-                <p className="hint">
-                  Les inscriptions sont fermées : les modifications en ligne ne sont plus
-                  possibles.
-                </p>
-              )}
-            </>
-          ) : state.edition.registrationOpen ? (
-            <>
-              <p className="lead">
-                Course le {formatDateFrUtc(state.edition.dateCourse)} : choisis ton épreuve,
-                complète ton dossier et réserve ta place.
-              </p>
-              <a className="btn-action" href="/inscription">
-                M’inscrire à l’édition {state.edition.slug}
-              </a>
-              <p className="meta">
-                Clôture des inscriptions :{' '}
-                {formatLocalDateTime(state.edition.registrationClosesAt)}
-              </p>
-            </>
-          ) : (
-            <p className="hint">Les inscriptions à cette édition sont fermées.</p>
-          )}
+          <p className="surtitre">Dossier</p>
+          <h2>Aucune édition disponible</h2>
+          <p className="hint">
+            Aucune édition n’est configurée pour le moment. Réessaie plus tard.
+          </p>
+          <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
+          </div>
         </article>
       )}
+
+      {state !== null && state.edition !== null && (
+        <ChecklistCard
+          edition={state.edition}
+          pieces={state.pieces}
+          recap={state.recap}
+          assistancePhone={assistancePhone}
+        />
+      )}
     </section>
+  );
+}
+
+function ChecklistCard({
+  edition,
+  pieces,
+  recap,
+  assistancePhone,
+}: {
+  edition: EditionSummary;
+  pieces: ChecklistPiece[];
+  recap: ChecklistRecap | null;
+  assistancePhone: string;
+}) {
+  const complet = estComplet(pieces);
+
+  return (
+    <article className="card">
+      <p className="surtitre">Dossier</p>
+      <h2>Ton dossier — {edition.nom}</h2>
+      <p className="checklist-compteur" aria-live="polite">
+        {compteurPieces(pieces)}
+      </p>
+      {complet && (
+        <div role="status" className="checklist-bandeau">
+          <p className="checklist-bandeau-texte">{BANDEAU_DOSSIER_VALIDE}</p>
+        </div>
+      )}
+      <ol role="list" className="checklist">
+        {pieces.map((piece) => {
+          const etat = etatPiece(piece);
+          return (
+            <li
+              key={piece.id}
+              className={
+                piece.fait ? 'checklist-item checklist-item--fait' : 'checklist-item'
+              }
+            >
+              <p className="checklist-entete">
+                <span className="checklist-puce" aria-hidden="true" />
+                <span className="checklist-libelle">{piece.libelle}</span>
+                <span className={etat.classe}>{etat.texte}</span>
+              </p>
+              {piece.motifRefus != null && (
+                <div role="alert" aria-live="assertive" className="error-box">
+                  <p className="error-message">Ton dossier a été refusé.</p>
+                  <p className="error-action">Motif : {piece.motifRefus}</p>
+                </div>
+              )}
+              {piece.actionLabel != null && piece.actionHref != null && (
+                <a className="checklist-action" href={piece.actionHref}>
+                  {piece.actionLabel}
+                </a>
+              )}
+              {piece.actionLabel != null && piece.actionHref == null && (
+                <span className="checklist-action-inactive">{piece.actionLabel}</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {recap !== null && (
+        <div className="recap">
+          <p className="recap-titre">Récapitulatif</p>
+          <p>
+            Épreuve : <strong>{recap.epreuve} ({recap.distanceKm} km)</strong>
+          </p>
+          <p>Catégorie : {recap.categorieAge}</p>
+          <p>T-shirt : {recap.tshirt}</p>
+          <p>
+            Contact d’urgence : {recap.contactUrgenceNom} · {recap.contactUrgenceTelephone}
+          </p>
+          <p>Course le {formatDateFrUtc(recap.dateCourse)}</p>
+        </div>
+      )}
+      <p className="meta">
+        Clôture des inscriptions : {formatLocalDateTime(edition.registrationClosesAt)}
+      </p>
+      {!edition.registrationOpen && (
+        <p className="hint">
+          Les inscriptions sont fermées : la checklist reste consultable, chaque page
+          gère son propre état.
+        </p>
+      )}
+      <div className="auth-alt">
+        <AssistanceButton phone={assistancePhone} />
+      </div>
+    </article>
   );
 }

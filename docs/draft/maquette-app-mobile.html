@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel — Maquette de l'app mobile coureur</title>
+<style>
+:root{
+  --brume:#EDF2EB;
+  --surface:#FAFCF8;
+  --encre:#16281C;
+  --encre2:#4A6252;
+  --sapin:#345E4A;
+  --sapin-ink:#EFF8F2;
+  --filet:rgba(22,40,28,.14);
+  --danger:#B3261E;
+  --attention:#8A5A00;
+  --rond:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(1200px 520px at 12% -8%, rgba(52,94,74,.10), transparent 62%),
+    var(--brume);
+  color:var(--encre);
+  font-family:var(--rond);
+  -webkit-font-smoothing:antialiased;
+}
+.mode-radio{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+svg{display:block}
+a{color:inherit}
+
+.topline{height:10px;background-color:var(--brume);
+  background-image:
+    repeating-linear-gradient(45deg,var(--sapin) 0 3px,transparent 3px 9px),
+    repeating-linear-gradient(-45deg,var(--sapin) 0 3px,transparent 3px 9px);
+  opacity:.5}
+.page-wrap{max-width:1520px;margin:0 auto;padding:0 40px 56px}
+
+.masthead{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:56px;align-items:end;
+  padding:42px 0 46px;border-bottom:1px solid var(--filet)}
+.brandline{display:flex;align-items:center;gap:12px;margin-bottom:34px}
+.brand-symbol{width:40px;height:22px;color:var(--encre);flex:none}
+.brand-name{font-size:25px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.brand-sub{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--encre2);margin-left:2px}
+.kicker{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--sapin)}
+.masthead h1{font-size:clamp(42px,4.6vw,72px);line-height:1.02;font-weight:800;letter-spacing:-.025em;margin:16px 0 20px;max-width:19ch}
+.masthead h1 span{color:var(--sapin)}
+.dek{font-size:16.5px;line-height:1.7;color:var(--encre2);max-width:62ch}
+.meta-line{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.meta-line span{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--encre2);
+  border:1px solid var(--filet);border-radius:999px;padding:7px 12px;background:rgba(250,252,248,.6)}
+
+.fiche{background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:22px 24px}
+.fiche .kicker{margin-bottom:14px}
+.fiche dl{display:flex;flex-direction:column;gap:0}
+.fiche dl div{display:flex;justify-content:space-between;gap:18px;padding:9px 0;border-bottom:1px dashed var(--filet)}
+.fiche dl div:last-child{border-bottom:none}
+.fiche dt{font-size:12px;color:var(--encre2);flex:none}
+.fiche dd{font-size:12.5px;font-weight:700;text-align:right}
+.mode-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--filet)}
+.mode-row>span{font-size:12.5px;font-weight:700}
+.seg{display:inline-flex;background:var(--brume);border:1px solid var(--filet);border-radius:999px;padding:4px;gap:2px}
+.seg label{padding:8px 16px;border-radius:999px;font-size:12.5px;font-weight:800;color:var(--encre2);cursor:pointer;user-select:none;transition:background .15s,color .15s}
+#mode-light:checked ~ .page-wrap .seg label[for="mode-light"],
+#mode-dark:checked ~ .page-wrap .seg label[for="mode-dark"]{background:var(--sapin);color:var(--sapin-ink)}
+#mode-light:focus-visible ~ .page-wrap .seg label[for="mode-light"],
+#mode-dark:focus-visible ~ .page-wrap .seg label[for="mode-dark"]{outline:2px solid var(--sapin);outline-offset:2px}
+
+.section-head{display:flex;align-items:flex-start;gap:18px;margin:54px 0 26px;padding-top:22px;border-top:1px solid var(--filet)}
+.section-head .n{font-family:var(--mono);font-size:12px;color:var(--sapin);padding-top:8px}
+.section-head h2{font-size:29px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.section-head p{margin-left:auto;max-width:46ch;font-size:14px;line-height:1.65;color:var(--encre2);padding-top:4px}
+.section-head .count{font-family:var(--mono);font-size:11px;color:var(--encre2);border:1px solid var(--filet);border-radius:999px;padding:6px 10px;white-space:nowrap;margin-top:2px}
+
+.screens{display:flex;flex-wrap:wrap;gap:38px 30px}
+.screen{width:318px;display:flex;flex-direction:column;gap:15px}
+.screen figcaption{display:grid;grid-template-columns:30px 1fr;column-gap:4px;row-gap:3px;padding:0 4px}
+.screen .sc-num{font-family:var(--mono);font-size:11px;color:var(--sapin);padding-top:2px}
+.screen figcaption b{font-size:13.5px;font-weight:800;line-height:1.3}
+.screen figcaption span:last-child{grid-column:2;font-size:12.5px;line-height:1.55;color:var(--encre2)}
+
+.phone{
+  --p-bg:#EDF2EB;
+  --p-surface:#FAFCF8;
+  --p-raise:#FFFFFF;
+  --p-text:#16281C;
+  --p-text2:#4A6252;
+  --p-action:#345E4A;
+  --p-action-ink:#EFF8F2;
+  --p-ok:#187A3C;
+  --p-ok-ink:#FFFFFF;
+  --p-danger:#B3261E;
+  --p-danger-ink:#FFFFFF;
+  --p-att:#8A5A00;
+  --p-att-ink:#FFFFFF;
+  --p-sync:#6B5A33;
+  --p-sync-ink:#FFFFFF;
+  --p-syok:#2E6570;
+  --p-syok-ink:#FFFFFF;
+  --p-line:rgba(22,40,28,.22);
+  --p-map-a:#E3EBE1;
+  --p-map-b:#F6F8F4;
+  width:318px;height:690px;flex:none;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+  background:var(--p-bg);color:var(--p-text);
+  border:8px solid #0A120D;border-radius:44px;
+  box-shadow:0 32px 64px -28px rgba(22,40,28,.45), 0 2px 0 rgba(255,255,255,.35) inset;
+  font-family:var(--rond);
+}
+#mode-dark:checked ~ .page-wrap .phone{
+  --p-bg:#101A14;
+  --p-surface:#1B281F;
+  --p-raise:#223026;
+  --p-text:#E8F0E9;
+  --p-text2:#A9C0AE;
+  --p-action:#8FD4A8;
+  --p-action-ink:#0C2415;
+  --p-ok:#62D288;
+  --p-ok-ink:#07290F;
+  --p-danger:#FF7268;
+  --p-danger-ink:#340905;
+  --p-att:#F0B445;
+  --p-att-ink:#302205;
+  --p-sync:#C4A366;
+  --p-sync-ink:#291D04;
+  --p-syok:#74C7D6;
+  --p-syok-ink:#06262C;
+  --p-line:rgba(232,240,233,.2);
+  --p-map-a:#17241C;
+  --p-map-b:#0E1712;
+}
+.phone .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:92px;height:21px;
+  border-radius:12px;background:#0A120D;z-index:6}
+
+.status{display:flex;align-items:center;justify-content:space-between;height:34px;padding:7px 20px 0;
+  font-family:var(--mono);font-size:11px;color:var(--p-text);flex:none}
+.status .sys{display:flex;align-items:center;gap:5px;color:var(--p-text)}
+.status .si{width:13px;height:11px;color:var(--p-text)}
+
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 10px;flex:none;min-height:44px}
+.appbar h2{font-size:21px;font-weight:800;letter-spacing:-.015em;line-height:1.15;flex:1;min-width:0}
+.appbar .spacer{width:34px;flex:none}
+.appbar .count{font-family:var(--mono);font-size:11.5px;color:var(--p-text2);white-space:nowrap}
+.iconbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--p-line);display:flex;align-items:center;justify-content:center;flex:none;color:var(--p-text)}
+.iconbtn svg{width:17px;height:17px}
+.badge-off{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;font-weight:700;color:var(--p-action);
+  border:1px solid var(--p-action);border-radius:999px;padding:4px 8px;white-space:nowrap}
+
+.body{flex:1;min-height:0;overflow:hidden;padding:0 16px;display:flex;flex-direction:column;gap:10px}
+.body.full{padding:0;gap:0}
+.body.center-gap{gap:12px}
+
+.eyebrow{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--p-text2)}
+.ah1{font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.12}
+.ah2{font-size:22px;font-weight:800;letter-spacing:-.015em;line-height:1.18}
+.ah3{font-size:18px;font-weight:800;letter-spacing:-.01em;line-height:1.25}
+.lead{font-size:13.5px;line-height:1.65;color:var(--p-text2)}
+.muted{font-size:12.5px;line-height:1.6;color:var(--p-text2)}
+.tiny{font-family:var(--mono);font-size:9.5px;line-height:1.6;color:var(--p-text2);letter-spacing:.02em}
+.mono{font-family:var(--mono)}
+.lnk{color:var(--p-action);font-weight:800;text-decoration:none}
+
+.card{background:var(--p-surface);border:1px solid var(--p-line);border-radius:22px;padding:14px;flex:none}
+.card.inner{border-radius:16px;padding:12px}
+.card.flat{border-radius:16px}
+.row{display:flex;align-items:center;gap:10px}
+.row.between{justify-content:space-between}
+.grow{flex:1;min-width:0}
+
+.btn{height:46px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--p-action);color:var(--p-action-ink);font-size:14px;font-weight:800;text-align:center;flex:none}
+.btn.line{background:transparent;border:2px solid var(--p-action);color:var(--p-text)}
+.btn.small{height:40px;font-size:13px}
+.btn svg{width:17px;height:17px}
+.assist{display:flex;align-items:center;justify-content:center;gap:7px;font-size:11.5px;color:var(--p-text2);text-align:center;flex:none}
+.assist b{color:var(--p-text);font-weight:800}
+.assist svg{width:14px;height:14px;color:var(--p-action)}
+
+.tabs{margin-top:auto;border-top:1px solid var(--p-line);display:flex;align-items:flex-start;justify-content:space-around;
+  padding:9px 6px 1px;background:var(--p-bg);flex:none}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:9.5px;font-weight:700;color:var(--p-text2);letter-spacing:.01em}
+.tab svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--p-action)}
+.homebar{height:20px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--p-bg)}
+.homebar i{display:block;width:108px;height:4px;border-radius:2px;background:var(--p-text);opacity:.28}
+
+.welcome{display:flex;flex-direction:column;height:100%}
+.welcome-top{padding:12px 20px 0;display:flex;flex-direction:column;gap:10px}
+.welcome-brand{display:flex;align-items:center;gap:9px}
+.welcome-brand .brand-symbol{width:32px;height:18px;color:var(--p-text)}
+.welcome-brand b{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.welcome h1{font-size:37px;line-height:1.04;font-weight:800;letter-spacing:-.03em;margin-top:12px}
+.welcome h1 span{color:var(--p-action)}
+.welcome .lead{font-size:13px;line-height:1.6;max-width:31ch}
+.welcome-art{flex:1;min-height:140px;position:relative;margin-top:4px}
+.welcome-art svg{position:absolute;inset:0;width:100%;height:100%}
+.welcome-actions{padding:0 20px 14px;display:flex;flex-direction:column;gap:9px}
+.welcome-actions .tiny{text-align:center;letter-spacing:.1em;margin-top:3px}
+
+.field{display:flex;flex-direction:column;gap:6px;flex:none}
+.field>span{font-size:11px;font-weight:800;color:var(--p-text2)}
+.input{height:46px;border:1px solid var(--p-line);background:var(--p-surface);border-radius:14px;
+  display:flex;align-items:center;padding:0 14px;font-size:13.5px;color:var(--p-text)}
+.input.mono{font-family:var(--mono);font-size:13px}
+.otp{display:flex;gap:5px}
+.otp i{flex:1;height:44px;border:1px solid var(--p-line);background:var(--p-surface);border-radius:11px;
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:17px;font-style:normal;font-weight:700}
+.otp i.focus{border:2px solid var(--p-action);color:var(--p-action)}
+
+.progress{display:flex;gap:5px;flex:none;padding:2px 1px}
+.progress i{height:5px;flex:1;border-radius:3px;background:var(--p-line)}
+.progress i.on{background:var(--p-ok)}
+
+.check{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--p-line)}
+.check:last-child{border-bottom:none;padding-bottom:1px}
+.puce{flex:none;width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--p-ok);color:var(--p-ok-ink);font-size:11px;font-weight:800;margin-top:1px}
+.puce.todo{background:transparent;border:2px solid var(--p-text2);color:transparent}
+.check b{display:block;font-size:13.5px;line-height:1.45}
+.check small{display:block;font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--p-text2);margin-top:2px}
+.check .lnk{display:inline-block;margin-top:5px;font-size:12.5px}
+.drop{border:1.5px dashed var(--p-line);border-radius:14px;padding:9px 10px;margin-top:7px;display:flex;align-items:center;gap:9px;color:var(--p-action)}
+.drop svg{width:16px;height:16px;flex:none}
+.drop span{font-size:11.5px;font-weight:800;line-height:1.35}
+
+.dossard-card{position:relative;text-align:center;padding:14px 14px 12px;overflow:hidden}
+.frise{height:9px;margin:-14px -14px 12px;border-radius:2px;
+  background-color:var(--p-surface);
+  background-image:
+    repeating-linear-gradient(45deg,var(--p-action) 0 3px,transparent 3px 8px),
+    repeating-linear-gradient(-45deg,var(--p-action) 0 3px,transparent 3px 8px);
+  opacity:.5}
+.num{font-weight:800;font-size:57px;line-height:1;letter-spacing:-.02em}
+.num small{font-size:15px;color:var(--p-action);vertical-align:top;margin-right:2px;letter-spacing:0}
+.d-name{font-size:17px;font-weight:800;margin-top:3px}
+.d-course{font-family:var(--mono);font-size:10.5px;line-height:1.7;color:var(--p-text2);margin-top:5px}
+.d-course b{color:var(--p-text)}
+.qr-wrap{display:flex;justify-content:center;align-items:center;height:164px;margin:3px 0 2px}
+.qr{position:relative;width:176px;height:176px;background:#FFFFFF;border-radius:16px;transform:scale(.9);flex:none}
+.qm{position:absolute;left:8px;top:8px;width:8px;height:8px;background:#16281C;
+  box-shadow:
+    48px 0 0 0 #16281C,64px 0 0 0 #16281C,80px 0 0 0 #16281C,96px 0 0 0 #16281C,
+    56px 8px 0 0 #16281C,72px 8px 0 0 #16281C,88px 8px 0 0 #16281C,
+    48px 16px 0 0 #16281C,56px 16px 0 0 #16281C,80px 16px 0 0 #16281C,104px 16px 0 0 #16281C,
+    64px 24px 0 0 #16281C,96px 24px 0 0 #16281C,
+    48px 32px 0 0 #16281C,72px 32px 0 0 #16281C,88px 32px 0 0 #16281C,104px 32px 0 0 #16281C,
+    8px 40px 0 0 #16281C,24px 40px 0 0 #16281C,40px 40px 0 0 #16281C,64px 40px 0 0 #16281C,80px 40px 0 0 #16281C,96px 40px 0 0 #16281C,112px 40px 0 0 #16281C,128px 40px 0 0 #16281C,144px 40px 0 0 #16281C,
+    16px 48px 0 0 #16281C,32px 48px 0 0 #16281C,48px 48px 0 0 #16281C,72px 48px 0 0 #16281C,88px 48px 0 0 #16281C,120px 48px 0 0 #16281C,136px 48px 0 0 #16281C,
+    8px 56px 0 0 #16281C,40px 56px 0 0 #16281C,56px 56px 0 0 #16281C,80px 56px 0 0 #16281C,104px 56px 0 0 #16281C,128px 56px 0 0 #16281C,144px 56px 0 0 #16281C,
+    24px 64px 0 0 #16281C,48px 64px 0 0 #16281C,64px 64px 0 0 #16281C,96px 64px 0 0 #16281C,112px 64px 0 0 #16281C,136px 64px 0 0 #16281C,
+    16px 72px 0 0 #16281C,40px 72px 0 0 #16281C,72px 72px 0 0 #16281C,88px 72px 0 0 #16281C,120px 72px 0 0 #16281C,144px 72px 0 0 #16281C,
+    8px 80px 0 0 #16281C,32px 80px 0 0 #16281C,56px 80px 0 0 #16281C,80px 80px 0 0 #16281C,104px 80px 0 0 #16281C,128px 80px 0 0 #16281C,
+    24px 88px 0 0 #16281C,48px 88px 0 0 #16281C,64px 88px 0 0 #16281C,96px 88px 0 0 #16281C,136px 88px 0 0 #16281C,
+    16px 96px 0 0 #16281C,40px 96px 0 0 #16281C,72px 96px 0 0 #16281C,112px 96px 0 0 #16281C,144px 96px 0 0 #16281C,
+    8px 104px 0 0 #16281C,56px 104px 0 0 #16281C,88px 104px 0 0 #16281C,120px 104px 0 0 #16281C,136px 104px 0 0 #16281C,
+    32px 112px 0 0 #16281C,48px 112px 0 0 #16281C,80px 112px 0 0 #16281C,104px 112px 0 0 #16281C,128px 112px 0 0 #16281C,
+    48px 120px 0 0 #16281C,64px 120px 0 0 #16281C,96px 120px 0 0 #16281C,112px 120px 0 0 #16281C,136px 120px 0 0 #16281C,152px 120px 0 0 #16281C,
+    56px 128px 0 0 #16281C,72px 128px 0 0 #16281C,104px 128px 0 0 #16281C,128px 128px 0 0 #16281C,144px 128px 0 0 #16281C,
+    48px 136px 0 0 #16281C,80px 136px 0 0 #16281C,96px 136px 0 0 #16281C,120px 136px 0 0 #16281C,152px 136px 0 0 #16281C,
+    64px 144px 0 0 #16281C,88px 144px 0 0 #16281C,112px 144px 0 0 #16281C,136px 144px 0 0 #16281C,
+    48px 152px 0 0 #16281C,72px 152px 0 0 #16281C,104px 152px 0 0 #16281C,128px 152px 0 0 #16281C,144px 152px 0 0 #16281C}
+.qf{position:absolute;width:38px;height:38px;border:7px solid #16281C}
+.qf::after{content:"";position:absolute;left:4px;top:4px;width:16px;height:16px;background:#16281C;border-radius:4px}
+.qf.tl{left:8px;top:8px}.qf.tr{right:8px;top:8px}.qf.bl{left:8px;bottom:8px}
+.d-hint{font-size:11px;line-height:1.55;color:var(--p-text2);text-align:center}
+.d-hint b{color:var(--p-text)}
+
+.shortcut{display:flex;align-items:center;gap:9px;border:1px solid var(--p-line);border-radius:16px;padding:9px 11px;background:transparent}
+.shortcut .ic{flex:none;width:30px;height:30px;border-radius:10px;background:var(--p-action);color:var(--p-action-ink);
+  display:flex;align-items:center;justify-content:center}
+.shortcut .ic svg{width:16px;height:16px}
+.shortcut b{display:block;font-size:11.5px}
+.shortcut small{display:block;font-size:10.5px;color:var(--p-text2);margin-top:1px;line-height:1.4}
+
+.toggle{width:42px;height:25px;border-radius:999px;background:var(--p-line);position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--p-text2)}
+.toggle.off{background:var(--p-line)}
+.toggle.off::after{background:var(--p-surface);border:1px solid var(--p-line)}
+.opt-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--p-line)}
+.opt-row b{display:block;font-size:13.5px}
+.opt-row small{display:block;font-size:10.5px;color:var(--p-text2);margin-top:2px;line-height:1.4}
+
+.perks{display:flex;flex-direction:column;gap:0}
+.perk{display:flex;align-items:flex-start;gap:9px;padding:7px 0}
+.perk svg{width:15px;height:15px;color:var(--p-action);flex:none;margin-top:1px}
+.perk b{display:block;font-size:11.5px}
+.perk small{display:block;font-size:10.5px;color:var(--p-text2);margin-top:1px;line-height:1.4}
+
+.warn{display:flex;gap:10px;background:var(--p-surface);border:1px solid var(--p-line);border-left:3px solid var(--p-att);
+  border-radius:14px;padding:11px 12px}
+.warn svg{width:18px;height:18px;color:var(--p-att);flex:none;margin-top:1px}
+.warn b{display:block;font-size:12.5px;line-height:1.4;color:var(--p-text)}
+.warn small{display:block;font-size:11px;line-height:1.5;color:var(--p-text2);margin-top:3px}
+
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--p-line)}
+.step:last-child{border-bottom:none;padding-bottom:0}
+.step .n{width:23px;height:23px;border-radius:50%;background:var(--p-bg);border:1px solid var(--p-line);
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10.5px;flex:none}
+.step span{font-size:12.5px;font-weight:700}
+.step .chev{margin-left:auto;width:14px;height:14px;color:var(--p-text2)}
+.step.final{background:var(--p-action);color:var(--p-action-ink);border-radius:12px;border-bottom:none;padding:9px 10px;margin-top:7px}
+.step.final .n{background:transparent;border-color:var(--p-action-ink);color:var(--p-action-ink)}
+.step.final .chev{color:var(--p-action-ink)}
+
+.battery{display:flex;align-items:center;gap:10px}
+.battery .cell{width:76px;height:34px;border:2px solid var(--p-text2);border-radius:9px;padding:3px}
+.battery .cell i{display:block;height:100%;width:100%;border-radius:5px;background:var(--p-action)}
+.battery .cap{width:4px;height:12px;border-radius:0 2px 2px 0;background:var(--p-text2);margin-left:-7px}
+.battery b{font-size:31px;font-weight:800;letter-spacing:-.02em;margin-left:2px}
+.battery small{font-family:var(--mono);font-size:9.5px;color:var(--p-text2);text-transform:uppercase;letter-spacing:.08em}
+
+.quote{margin-top:auto;border-top:1px solid var(--p-line);padding-top:11px}
+.quote p{font-size:12.5px;line-height:1.55;font-style:italic}
+.quote small{display:block;font-family:var(--mono);font-size:9px;line-height:1.5;color:var(--p-text2);margin-top:5px}
+
+.sync{display:flex;align-items:center;gap:7px;border-radius:8px;padding:8px 10px;
+  background:var(--p-sync);color:var(--p-sync-ink);font-family:var(--mono);font-size:10.5px;font-weight:700;flex:none}
+.sync svg{width:13px;height:13px;flex:none}
+
+.map{position:relative;height:248px;border-radius:22px;overflow:hidden;border:1px solid var(--p-line);flex:none;
+  background:linear-gradient(155deg,var(--p-map-a),var(--p-map-b))}
+.map svg{position:absolute;inset:0;width:100%;height:100%}
+.map .ct{fill:none;stroke:var(--p-text);stroke-width:1;opacity:.15}
+.map .trail-under{fill:none;stroke:var(--p-surface);stroke-width:6;stroke-linecap:round}
+.map .trail{fill:none;stroke:var(--p-action);stroke-width:2.6;stroke-linecap:round}
+.map .cp{fill:var(--p-surface);stroke:var(--p-action);stroke-width:2}
+.map .cpl{font-family:var(--mono);font-size:8px;fill:var(--p-text2)}
+.map .pos-ring{fill:var(--p-action);opacity:.22;animation:pulse 2.4s ease-in-out infinite}
+.map .pos{fill:var(--p-action);stroke:var(--p-surface);stroke-width:2.5}
+.map .pos-badge{fill:var(--p-action)}
+.map .pos-t{font-family:var(--mono);font-size:9px;font-weight:700;fill:var(--p-action-ink);text-anchor:middle}
+.map .fin{fill:var(--p-text);opacity:.65}
+.map-tag{position:absolute;top:10px;left:10px;background:var(--p-surface);border:1px solid var(--p-line);
+  border-radius:999px;padding:5px 9px;font-family:var(--mono);font-size:9px;color:var(--p-text2)}
+.map-live{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:5px;background:var(--p-surface);
+  border:1px solid var(--p-line);border-radius:999px;padding:5px 8px;font-family:var(--mono);font-size:8.5px;color:var(--p-danger);font-weight:700}
+.map-live i{width:6px;height:6px;border-radius:50%;background:var(--p-danger);animation:pulse 1.5s infinite}
+.map-fresh{position:absolute;left:10px;bottom:9px;font-family:var(--mono);font-size:8.5px;color:var(--p-text2)}
+@keyframes pulse{0%,100%{opacity:.4;transform:scale(.9)}50%{opacity:1;transform:scale(1.12)}}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:none}
+.stat{background:var(--p-surface);border:1px solid var(--p-line);border-radius:16px;padding:9px 10px}
+.stat b{display:block;font-size:16px;font-weight:800;line-height:1.2;letter-spacing:-.01em}
+.stat small{display:block;font-family:var(--mono);font-size:8.5px;color:var(--p-text2);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.fresh{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9px;line-height:1.5;color:var(--p-text2);flex:none}
+.fresh svg{width:12px;height:12px;flex:none}
+
+.time{font-family:var(--mono);font-size:39px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.res-stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.res-stat{background:var(--p-bg);border:1px solid var(--p-line);border-radius:14px;padding:10px 11px}
+.res-stat b{display:block;font-size:20px;font-weight:800;line-height:1.1}
+.res-stat small{display:block;font-family:var(--mono);font-size:8.5px;color:var(--p-text2);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+
+.info-card{padding:11px 13px}
+.info-card h4{font-size:12px;font-weight:800;margin-bottom:3px}
+.info-card p{font-size:11px;line-height:1.5;color:var(--p-text2)}
+.info-card p b{color:var(--p-text)}
+.info-card .mono{font-size:10px;color:var(--p-text)}
+.info-card .quote-mini{font-size:11px;font-style:italic;line-height:1.45;color:var(--p-text);margin-top:4px}
+.info-card .quote-mini small{display:block;font-style:normal;font-family:var(--mono);font-size:8px;color:var(--p-text2);margin-top:2px}
+
+.legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:22px;padding:14px 16px;
+  border:1px dashed var(--filet);border-radius:16px;font-size:12px;color:var(--encre2)}
+.legend b{color:var(--encre)}
+.legend .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+
+.system{display:grid;grid-template-columns:1.2fr .8fr;gap:26px;margin-top:8px}
+.panel{background:var(--surface);border:1px solid var(--filet);border-radius:24px;padding:24px}
+.panel h3{font-size:16px;font-weight:800;margin-bottom:4px}
+.panel .sub{font-size:12.5px;line-height:1.6;color:var(--encre2);margin-bottom:18px}
+.swatches{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.sw{border:1px solid var(--filet);border-radius:14px;overflow:hidden;background:var(--brume)}
+.sw i{display:block;height:46px}
+.sw div{padding:8px 9px}
+.sw b{display:block;font-size:11px;font-weight:800}
+.sw small{display:block;font-family:var(--mono);font-size:8.5px;color:var(--encre2);margin-top:2px}
+.sw.light i{border-bottom:1px solid var(--filet)}
+.type-sample .big{font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.type-sample .mono-line{font-family:var(--mono);font-size:15px;margin-top:10px}
+.type-sample p{font-size:13px;line-height:1.65;color:var(--encre2);margin-top:10px}
+.rules{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rule{border:1px solid var(--filet);border-radius:16px;padding:14px}
+.rule .glyph{color:var(--sapin);margin-bottom:9px}
+.rule .glyph svg{width:18px;height:18px}
+.rule b{display:block;font-size:12px;margin-bottom:4px}
+.rule p{font-size:11.5px;line-height:1.55;color:var(--encre2)}
+
+footer{margin-top:54px;border-top:1px solid var(--filet);padding-top:20px;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+footer p{font-family:var(--mono);font-size:10.5px;line-height:1.7;color:var(--encre2);max-width:70ch}
+footer .sig{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800}
+footer .sig svg{width:28px;height:16px;color:var(--encre)}
+
+@media (max-width:1180px){
+  .masthead{grid-template-columns:1fr;gap:30px}
+  .system{grid-template-columns:1fr}
+  .section-head p{display:none}
+}
+@media (max-width:900px){
+  .page-wrap{padding:0 22px 44px}
+  .screens{gap:30px 22px}
+  .swatches{grid-template-columns:repeat(2,1fr)}
+  .rules{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+
+<input class="mode-radio" type="radio" name="screen-mode" id="mode-light" checked>
+<input class="mode-radio" type="radio" name="screen-mode" id="mode-dark">
+
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="i-symbol" viewBox="0 0 1071 571">
+    <g transform="scale(1) translate(-233,-216)" fill-rule="evenodd">
+      <path fill="currentColor" d="M1171.6,777.8C1170.8,776.5 1164.6,766.3 1157.7,755.0C1143.6,731.7 1127.1,704.9 1091.5,647.5C1077.8,625.5 1062.6,601.0 1057.7,593.0C1052.8,585.0 1042.8,569.1 1035.5,557.5C1028.2,546.0 1013.4,522.3 1002.5,505.0C945.5,414.3 921.8,377.0 921.1,377.0C920.7,377.0 917.8,380.5 914.8,384.8C908.5,393.5 850.1,477.7 842.7,488.6L837.9,495.7L821.9,498.4C797.4,502.6 760.4,512.2 733.0,521.5L722.5,525.0L720.3,522.3C719.0,520.7 718.0,518.9 718.0,518.2C718.0,514.3 828.5,354.5 918.0,229.0C920.6,225.4 923.3,222.4 924.2,222.2C925.2,222.0 933.4,233.4 949.7,257.7C962.9,277.4 981.9,305.6 992.0,320.5C1054.9,413.8 1077.2,447.0 1135.7,534.3C1232.3,678.4 1298.0,776.8 1298.6,778.5C1299.1,779.8 1291.8,780.0 1236.1,780.0L1173.0,780.0L1171.6,777.8ZM255.0,728.8C255.1,727.4 256.1,725.9 345.3,596.0C377.2,549.5 411.7,499.4 421.9,484.5C444.1,452.1 509.3,357.6 534.3,321.7C544.1,307.5 552.7,296.1 553.4,296.3C555.2,296.8 563.9,310.4 688.0,507.0C702.3,529.7 742.9,594.7 749.9,606.3C751.6,609.1 751.9,610.1 750.8,610.5C748.3,611.4 710.5,615.9 684.0,618.4C669.4,619.8 655.2,621.2 652.4,621.5L647.3,622.1L626.0,587.8C549.4,464.8 548.8,463.8 547.5,465.2C546.2,466.6 440.1,621.1 420.1,650.7L414.5,659.0L407.5,661.1C356.4,676.1 310.2,696.8 262.7,725.9C255.2,730.4 255.0,730.5 255.0,728.8Z"/>
+      <path fill="#C8742B" d="M243.4,777.7C288.5,738.8 351.0,706.9 428.3,683.4C484.0,666.5 536.1,657.1 655.5,642.5C694.7,637.7 724.3,633.6 749.5,629.4C818.3,618.0 864.6,601.7 866.0,588.4C866.5,584.0 865.8,582.5 861.6,578.4C855.2,572.3 841.4,567.3 808.1,559.0C775.4,550.8 769.7,548.9 765.2,544.4C759.7,538.9 762.0,534.9 774.5,529.0C796.4,518.5 845.7,508.5 900.4,503.5C923.4,501.4 923.8,501.7 903.0,506.0C852.1,516.4 824.0,525.7 824.0,532.0C824.0,535.5 832.7,538.5 857.0,543.5C907.9,554.0 929.4,561.0 945.8,572.7C954.6,578.9 958.0,584.5 958.0,592.4C957.9,600.5 955.5,605.6 947.8,613.7C928.8,633.4 886.2,651.7 818.5,669.1C793.5,675.5 737.8,687.8 696.5,696.0C578.4,719.5 519.8,740.0 465.0,776.9L457.5,782.0L348.0,782.0L238.5,782.0L243.4,777.7Z"/>
+    </g>
+  </symbol>
+  <symbol id="i-dossard" viewBox="0 0 24 24">
+    <rect x="3.5" y="3.5" width="6" height="6" rx="1.4"/>
+    <rect x="14.5" y="3.5" width="6" height="6" rx="1.4"/>
+    <rect x="3.5" y="14.5" width="6" height="6" rx="1.4"/>
+    <path d="M14.5 14.5h2.4v2.4h-2.4zM19 14.5h1.5M14.5 19v1.5M18 18h2.5v2.5H18z"/>
+  </symbol>
+  <symbol id="i-dossier" viewBox="0 0 24 24">
+    <path d="M8 4.5h8M9 3h6a1.5 1.5 0 0 1 1.5 1.5V6H7.5V4.5A1.5 1.5 0 0 1 9 3Z"/>
+    <path d="M7.5 4.8H6a1.5 1.5 0 0 0-1.5 1.5v13A1.5 1.5 0 0 0 6 20.8h12a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 18 4.8h-1.5"/>
+    <path d="m8.5 13 2.3 2.3 4.7-5"/>
+  </symbol>
+  <symbol id="i-route" viewBox="0 0 24 24">
+    <circle cx="6" cy="18" r="2.2"/>
+    <circle cx="18" cy="6" r="2.2"/>
+    <path d="M8.2 18h3.3a3 3 0 0 0 0-6H12a3 3 0 0 1 0-6h3.8"/>
+  </symbol>
+  <symbol id="i-info" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.5"/>
+    <path d="M12 11v5M12 8.2v.2"/>
+  </symbol>
+  <symbol id="i-back" viewBox="0 0 24 24">
+    <path d="M14.5 5.5 8 12l6.5 6.5"/>
+  </symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24">
+    <path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>
+  </symbol>
+  <symbol id="i-up" viewBox="0 0 24 24">
+    <path d="M12 16V4M7.5 8.5 12 4l4.5 4.5"/>
+    <path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>
+  </symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24">
+    <path d="M5 4.5h3l1.5 4-2 1.5a13 13 0 0 0 6.5 6.5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 6.1 1.5 1.5 0 0 1 5 4.5Z"/>
+  </symbol>
+  <symbol id="i-share" viewBox="0 0 24 24">
+    <circle cx="6" cy="12" r="2.2"/>
+    <circle cx="17.5" cy="6" r="2.2"/>
+    <circle cx="17.5" cy="18" r="2.2"/>
+    <path d="m8 11 7.5-4M8 13l7.5 4"/>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24">
+    <path d="m5 12.5 4.5 4.5L19 7"/>
+  </symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24">
+    <path d="M13 3 5.5 13.5H11l-1 7.5L18.5 10H13l0-7Z"/>
+  </symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24">
+    <path d="M12 21s6.5-6.2 6.5-11a6.5 6.5 0 1 0-13 0C5.5 14.8 12 21 12 21Z"/>
+    <circle cx="12" cy="10" r="2.3"/>
+  </symbol>
+  <symbol id="i-warning" viewBox="0 0 24 24">
+    <path d="M12 3.5 21 20H3L12 3.5Z"/>
+    <path d="M12 9.5v4.5M12 17.2v.2"/>
+  </symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24">
+    <rect x="5" y="10.5" width="14" height="9.5" rx="2"/>
+    <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.5"/>
+    <path d="M12 7.5V12l3 2"/>
+  </symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24">
+    <rect x="2.5" y="8.5" width="17" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <rect x="4.5" y="10.5" width="11" height="4" rx="1" fill="currentColor"/>
+    <path d="M21.2 11v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-signal" viewBox="0 0 16 12">
+    <rect x="1" y="8" width="2.4" height="3" rx=".6" fill="currentColor"/>
+    <rect x="4.9" y="5.8" width="2.4" height="5.2" rx=".6" fill="currentColor"/>
+    <rect x="8.8" y="3.6" width="2.4" height="7.4" rx=".6" fill="currentColor"/>
+    <rect x="12.7" y="1.4" width="2.4" height="9.6" rx=".6" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-wifi" viewBox="0 0 16 12">
+    <path d="M2 4.3a9 9 0 0 1 12 0M4.4 6.8a5.6 5.6 0 0 1 7.2 0M6.8 9.3a2.2 2.2 0 0 1 2.4 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div class="page-wrap">
+
+  <header class="masthead">
+    <div>
+      <div class="brandline">
+        <svg class="brand-symbol" viewBox="0 0 1071 571" aria-hidden="true"><use href="#i-symbol"/></svg>
+        <span class="brand-name">Azzel</span>
+        <span class="brand-sub">L'APP COUREUR</span>
+      </div>
+      <p class="kicker">Maquette · Application mobile · 2e édition</p>
+      <h1>Le dossard dans la poche, la course <span>dans le village</span>.</h1>
+      <p class="dek">Ouverture, dossier, e-dossard hors-ligne, suivi GPS, jour J et résultats. Dix écrans, deux thèmes, l'essentiel sans réseau — d'après le système Vert Djurdjura d'Azzel.</p>
+      <div class="meta-line">
+        <span>26.03.2027</span>
+        <span>Yakouren · Kabylie</span>
+        <span>Longue 35 km · Moyenne 10–15 km</span>
+        <span>Offline-first</span>
+      </div>
+    </div>
+    <aside class="fiche">
+      <p class="kicker">Repères</p>
+      <dl>
+        <div><dt>Surface</dt><dd>App native coureur (Expo)</dd></div>
+        <div><dt>Parcours</dt><dd>UJ-1 · Yacine, 28 ans</dd></div>
+        <div><dt>Palette</dt><dd>Vert Djurdjura</dd></div>
+        <div><dt>Sources</dt><dd>DESIGN.md · EXPERIENCE.md</dd></div>
+      </dl>
+      <div class="mode-row">
+        <span>Thème des écrans</span>
+        <div class="seg">
+          <label for="mode-light">Clair</label>
+          <label for="mode-dark">Sombre</label>
+        </div>
+      </div>
+    </aside>
+  </header>
+
+  <section aria-labelledby="s1">
+    <div class="section-head">
+      <span class="n">01</span>
+      <h2 id="s1">Entrer</h2>
+      <span class="count">2 écrans</span>
+      <p>La promesse tient en une phrase, l'accès en deux champs. Aucun compte à créer sur l'app si le coureur en a déjà un sur le web.</p>
+    </div>
+    <div class="screens">
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <div class="body full welcome">
+            <div class="welcome-top">
+              <div class="welcome-brand">
+                <svg class="brand-symbol" viewBox="0 0 1071 571" aria-hidden="true"><use href="#i-symbol"/></svg>
+                <b>Azzel</b>
+              </div>
+              <p class="eyebrow">2e édition · 26 mars 2027</p>
+              <h1>Ta course.<br>Ton village.<br><span>Ton dossard.</span></h1>
+              <p class="lead">Trail d'Ait-Aissi — Yakouren, Kabylie.<br>Longue 35 km · Moyenne 10–15 km.</p>
+            </div>
+            <div class="welcome-art" aria-hidden="true">
+              <svg viewBox="0 0 320 190" preserveAspectRatio="none">
+                <path d="M0 190V143l45-41 38 30 44-66 37 52 43-72 45 61 36-31 32 38v76Z" fill="var(--p-action)" opacity=".13"/>
+                <path d="M0 190v-25l54-36 36 24 46-54 40 42 46-48 44 52 34-22 20 24v43Z" fill="var(--p-action)" opacity=".22"/>
+                <path d="M0 190v-12l62-24 44 16 48-30 42 24 46-26 46 28 32-14v38Z" fill="var(--p-action)" opacity=".38"/>
+                <path d="M18 186c52-14 54-38 96-46s44-30 82-38 44-26 78-34" fill="none" stroke="var(--p-action)" stroke-width="1.5" stroke-linecap="round" opacity=".65" stroke-dasharray="4 5"/>
+              </svg>
+            </div>
+            <div class="welcome-actions">
+              <div class="btn">Créer mon accès</div>
+              <div class="btn line">J'ai déjà un compte</div>
+              <p class="tiny">ZÉRO PAPIER · HORS-LIGNE PRÊT · ⵣ</p>
+            </div>
+          </div>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">01</span><b>Bienvenue</b>
+          <span>La course, le village, le dossard. Un seul bouton d'action, l'alternative en contour.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <span class="iconbtn" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></span>
+            <h2>Connexion</h2>
+            <span class="spacer"></span>
+          </header>
+          <div class="body center-gap">
+            <p class="eyebrow">Espace coureur</p>
+            <h3 class="ah2">Ton accès,<br>même compte partout.</h3>
+            <p class="muted">Le web et l'app partagent le même accès. Un code à 6 chiffres, pas de mot de passe à retenir.</p>
+            <div class="field">
+              <span>Email</span>
+              <div class="input">yacine.b@exemple.dz</div>
+            </div>
+            <div class="field">
+              <span>Code à 6 chiffres</span>
+              <div class="otp" role="img" aria-label="Code à six chiffres saisi">
+                <i>4</i><i>8</i><i>2</i><i>1</i><i>3</i><i class="focus">6</i>
+              </div>
+            </div>
+            <p class="tiny">CODE VALABLE 10 MIN · RENVOI DANS 00:42</p>
+            <div class="btn" style="margin-top:6px">Se connecter</div>
+            <div class="assist"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg><span>Un souci ? <b>Appeler l'équipe</b></span></div>
+            <p class="tiny" style="text-align:center">UNE CONNEXION AILLEURS DÉCONNECTE CET APPAREIL.<br>LA BOÎTE D'ENVOI, ELLE, RESTE.</p>
+          </div>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">02</span><b>Connexion</b>
+          <span>Email + code OTP. L'assistance humaine reste à un geste, la session unique est annoncée.</span>
+        </figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <section aria-labelledby="s2">
+    <div class="section-head">
+      <span class="n">02</span>
+      <h2 id="s2">Préparer</h2>
+      <span class="count">5 écrans</span>
+      <p>Le dossier se boucle seul, le dossard se télécharge, le suivi s'active en connaissance de cause. Rien ne dépend du réseau.</p>
+    </div>
+    <div class="screens">
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>10:38</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <h2>Mon dossier</h2>
+            <span class="count">2 / 3 pièces</span>
+          </header>
+          <div class="body">
+            <div class="progress" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></div>
+            <div class="card">
+              <div class="check">
+                <span class="puce">✓</span>
+                <div><b>Décharge signée</b><small>signée le 12.02.2027 · version conservée</small></div>
+              </div>
+              <div class="check">
+                <span class="puce">✓</span>
+                <div><b>Règlement intérieur accepté</b><small>accepté le 12.02.2027 · version conservée</small></div>
+              </div>
+              <div class="check">
+                <span class="puce todo">·</span>
+                <div>
+                  <b>Preuve de paiement CCP</b>
+                  <small>image ou PDF · compressée ≤ 300 Ko</small>
+                  <a class="lnk" href="#">Dépose ta preuve de paiement CCP →</a>
+                  <div class="drop"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-up"/></svg><span>Choisir un fichier</span></div>
+                </div>
+              </div>
+            </div>
+            <p class="muted">Ton e-dossard sera prêt <b style="color:var(--p-text)">dès que les trois pièces sont validées</b>.</p>
+            <div class="card flat">
+              <p style="font-size:12px">Un souci avec une pièce ?</p>
+              <div class="assist" style="justify-content:flex-start;margin-top:7px"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg><span><b>Appeler l'équipe — +213 …</b></span></div>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Navigation de l'app">
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossard"/></svg>Dossard</span>
+            <span class="tab on"><svg viewBox="0 0 24 24"><use href="#i-dossier"/></svg>Dossier</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-route"/></svg>Suivi</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg>Infos</span>
+          </nav>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">03</span><b>Mon dossier</b>
+          <span>2 / 3 pièces. La pièce manquante nomme l'action et ouvre le dépôt. Assistance visible.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>10:42</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <h2>Mon dossard</h2>
+            <span class="badge-off">HORS-LIGNE PRÊT</span>
+          </header>
+          <div class="body">
+            <div class="card dossard-card">
+              <div class="frise" aria-hidden="true"></div>
+              <p class="num"><small>N°</small>217</p>
+              <p class="d-name">Yacine B.</p>
+              <p class="d-course">Trail d'Ait-Aissi 2027<br><b>Longue — 35 km</b></p>
+              <div class="qr-wrap">
+                <div class="qr" role="img" aria-label="QR du dossard — jeton unique par édition (maquette stylisée, non scannable)">
+                  <div class="qm" aria-hidden="true"></div><span class="qf tl" aria-hidden="true"></span><span class="qf tr" aria-hidden="true"></span><span class="qf bl" aria-hidden="true"></span>
+                </div>
+              </div>
+              <p class="d-hint">Présente ton code aux postes de contrôle.<br><b>L'équipe est à chaque col.</b></p>
+            </div>
+            <div class="shortcut">
+              <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-bolt"/></svg></span>
+              <div><b>Raccourci système</b><small>Ton dossard en un geste, même écran verrouillé.</small></div>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Navigation de l'app">
+            <span class="tab on"><svg viewBox="0 0 24 24"><use href="#i-dossard"/></svg>Dossard</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossier"/></svg>Dossier</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-route"/></svg>Suivi</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg>Infos</span>
+          </nav>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">04</span><b>Mon dossard</b>
+          <span>Le QR sur carte blanche, lisible 30 jours sans réseau. Le numéro est le héros.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>10:43</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <h2>Suivi</h2>
+            <span class="count">OPT-IN</span>
+          </header>
+          <div class="body">
+            <h3 class="ah2">Sois vu sur la carte.</h3>
+            <p class="lead">Pendant la course, ta position apparaît sur la carte publique — anonyme, sous ton seul numéro de dossard.</p>
+            <div class="card">
+              <div class="opt-row">
+                <div><b>Suivi en course</b><small>Désactivé : rien n'est enregistré.</small></div>
+                <span class="toggle off" aria-hidden="true"></span>
+              </div>
+              <div class="perks">
+                <div class="perk"><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg><div><b>Toutes les 5 à 10 min</b><small>Une position utile, pas un mouchard.</small></div></div>
+                <div class="perk"><svg viewBox="0 0 24 24"><use href="#i-pin"/></svg><div><b>Précision équilibrée</b><small>Assez pour te suivre, assez pour ta batterie.</small></div></div>
+                <div class="perk"><svg viewBox="0 0 24 24"><use href="#i-battery"/></svg><div><b>Batterie préservée</b><small>Le suivi s'arrête à l'arrivée.</small></div></div>
+              </div>
+            </div>
+            <div class="btn">Activer le suivi</div>
+            <div class="btn line small">Plus tard</div>
+            <p class="tiny" style="text-align:center">COMMENT MÉNAGER TA BATTERIE →</p>
+          </div>
+          <nav class="tabs" aria-label="Navigation de l'app">
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossard"/></svg>Dossard</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossier"/></svg>Dossier</span>
+            <span class="tab on"><svg viewBox="0 0 24 24"><use href="#i-route"/></svg>Suivi</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg>Infos</span>
+          </nav>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">05</span><b>Suivi GPS</b>
+          <span>Opt-in explicite. Désactivé, rien n'est enregistré ; l'anonymat tient au dossard.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>10:44</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <span class="iconbtn" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></span>
+            <h2>Localisation</h2>
+            <span class="spacer"></span>
+          </header>
+          <div class="body center-gap">
+            <p class="eyebrow">Réglage iOS</p>
+            <h3 class="ah2">iOS peut couper le suivi.</h3>
+            <div class="warn">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-warning"/></svg>
+              <div><b>« Autoriser une fois » ne suffit pas.</b><small>Le suivi s'arrête dès que tu quittes l'app. Choisis « Toujours » pour toute la course.</small></div>
+            </div>
+            <div class="card" style="padding:4px 14px">
+              <div class="steps">
+                <div class="step"><span class="n">1</span><span>Ouvrir Réglages</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+                <div class="step"><span class="n">2</span><span>Descendre jusqu'à Azzel</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+                <div class="step"><span class="n">3</span><span>Localisation</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+                <div class="step final"><span class="n">✓</span><span>Choisir « Toujours »</span></div>
+              </div>
+            </div>
+            <div class="btn line">Ouvrir les Réglages</div>
+            <div class="assist"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg><span>Un doute ? <b>Appeler l'équipe</b></span></div>
+            <p class="tiny" style="text-align:center">LE SUIVI EST OPTIONNEL. REFUSÉ, IL RESTE SILENCIEUSEMENT INACTIF.</p>
+          </div>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">06</span><b>Permission iOS</b>
+          <span>Le piège « Autoriser une fois » désamorcé : chemin complet et bouton vers les Réglages.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>10:46</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <span class="iconbtn" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></span>
+            <h2>Avant le départ</h2>
+            <span class="spacer"></span>
+          </header>
+          <div class="body center-gap">
+            <div class="battery" aria-label="Batterie à 100 pour cent">
+              <span class="cell"><i></i></span><span class="cap"></span><b>100 %</b>
+            </div>
+            <h3 class="ah2">Pars à 100 %.</h3>
+            <p class="lead">Trois gestes simples, et ton suivi tient toute la matinée.</p>
+            <div class="card">
+              <div class="step"><span class="n">1</span><span>Charge ton téléphone la veille.</span></div>
+              <div class="step"><span class="n">2</span><span>Ne ferme pas Azzel : le suivi s'arrête si l'app est tuée.</span></div>
+              <div class="step"><span class="n">3</span><span>Une powerbank est en vente au village.</span></div>
+            </div>
+            <div class="quote">
+              <p>« Un point après l'autre, et l'ouvrage est parfait. »</p>
+              <small>SAGESSE KABYLE · HANOTEAU, 1867</small>
+            </div>
+            <div class="btn">Compris</div>
+          </div>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">07</span><b>Pédagogie batterie</b>
+          <span>Trois puces concrètes, pas de dramatisation. Le proverbe conclut, il ne décore pas.</span>
+        </figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <section aria-labelledby="s3">
+    <div class="section-head">
+      <span class="n">03</span>
+      <h2 id="s3">Courir</h2>
+      <span class="count">3 écrans</span>
+      <p>Le jour J, la carte et la file hors-ligne disent la vérité. Après, le classement reste provisoire et la fraîcheur s'affiche.</p>
+    </div>
+    <div class="screens">
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>10:42</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <h2>En course</h2>
+            <span class="map-live" style="position:static;border:0;padding:0;background:transparent"><i></i>EN DIRECT</span>
+          </header>
+          <div class="body">
+            <div class="sync"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg><span>◷ 3 positions en attente — la file est sûre</span></div>
+            <div class="map">
+              <svg viewBox="0 0 300 248" preserveAspectRatio="none" aria-hidden="true">
+                <path class="ct" d="M-20 34C40 14 80 58 132 38S224 4 320 26"/>
+                <path class="ct" d="M-20 72C48 52 86 96 146 74S246 44 320 66"/>
+                <path class="ct" d="M-20 112C32 88 92 132 158 108S250 82 320 104"/>
+                <path class="ct" d="M-20 152C58 130 100 174 168 150S258 124 320 146"/>
+                <path class="ct" d="M-20 194C42 172 104 212 180 188S270 162 320 184"/>
+                <path class="ct" d="M-20 234C68 212 112 252 192 228S280 202 320 224"/>
+                <path class="ct" d="M-10 58C18 114 6 152 30 202"/>
+                <path class="ct" d="M108 18C94 70 122 100 116 144S138 212 130 256"/>
+                <path class="ct" d="M226 12C210 68 242 110 232 158S258 216 248 258"/>
+                <path class="trail-under" d="M26 228C60 198 52 172 94 158S126 120 164 110S198 72 236 60S272 38 292 28"/>
+                <path class="trail" d="M26 228C60 198 52 172 94 158S126 120 164 110S198 72 236 60S272 38 292 28"/>
+                <circle class="fin" cx="26" cy="228" r="4"/>
+                <circle class="cp" cx="94" cy="158" r="6"/>
+                <text class="cpl" x="94" y="176" text-anchor="middle">CP1</text>
+                <circle class="cp" cx="164" cy="110" r="6"/>
+                <text class="cpl" x="164" y="128" text-anchor="middle">CP2</text>
+                <circle class="cp" cx="236" cy="60" r="6"/>
+                <text class="cpl" x="236" y="78" text-anchor="middle">CP3</text>
+                <circle class="pos-ring" cx="196" cy="94" r="14"/>
+                <circle class="pos" cx="196" cy="94" r="6.5"/>
+                <rect class="pos-badge" x="176" y="64" width="40" height="18" rx="9"/>
+                <text class="pos-t" x="196" y="77">217</text>
+              </svg>
+              <span class="map-tag">DJURDJURA-OUEST · CP2</span>
+              <span class="map-fresh">dernière position · 10:41</span>
+            </div>
+            <div class="stats">
+              <div class="stat"><b>12,4 km</b><small>Distance</small></div>
+              <div class="stat"><b>640 m</b><small>Dénivelé +</small></div>
+              <div class="stat"><b class="mono">10:42</b><small>CP2</small></div>
+            </div>
+            <p class="fresh"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg><span>synchronisé il y a 3 min · seule ta position de dossard est partagée</span></p>
+          </div>
+          <nav class="tabs" aria-label="Navigation de l'app">
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossard"/></svg>Dossard</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossier"/></svg>Dossier</span>
+            <span class="tab on"><svg viewBox="0 0 24 24"><use href="#i-route"/></svg>Suivi</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg>Infos</span>
+          </nav>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">08</span><b>Jour J</b>
+          <span>La carte publique, les checkpoints, la file hors-ligne visible. La fraîcheur est dite.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>14:18</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <h2>Résultats</h2>
+            <span class="badge-off">PROVISOIRE</span>
+          </header>
+          <div class="body center-gap">
+            <p class="eyebrow">Longue · 35 km</p>
+            <h3 class="ah2">Tu l'as fait.</h3>
+            <div class="card">
+              <p class="time">4:12:38</p>
+              <div class="res-stats" style="margin-top:11px">
+                <div class="res-stat"><b>34<sup style="font-size:11px">e</sup> <span style="font-size:11px;color:var(--p-text2)">/ 189</span></b><small>Scratch</small></div>
+                <div class="res-stat"><b>12<sup style="font-size:11px">e</sup> <span style="font-size:11px;color:var(--p-text2)">/ 41</span></b><small>Catégorie</small></div>
+              </div>
+            </div>
+            <p class="fresh"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg><span>classement provisoire · synchronisé il y a 3 min</span></p>
+            <div class="btn">Partager mes résultats</div>
+            <p class="tiny" style="text-align:center">VOIR LE CLASSEMENT COMPLET →</p>
+            <div class="quote">
+              <p>« Il franchit les cols et bannit la crainte de son cœur. »</p>
+              <small>SAGESSE KABYLE · HANOTEAU, 1867</small>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Navigation de l'app">
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossard"/></svg>Dossard</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossier"/></svg>Dossier</span>
+            <span class="tab on"><svg viewBox="0 0 24 24"><use href="#i-route"/></svg>Suivi</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg>Infos</span>
+          </nav>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">09</span><b>Résultats</b>
+          <span>Le temps en mono, le rang en grand, la fraîcheur et le caractère provisoire en clair.</span>
+        </figcaption>
+      </figure>
+
+      <figure class="screen">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>14:20</span><span class="sys" aria-hidden="true"><svg class="si"><use href="#i-signal"/></svg><svg class="si"><use href="#i-wifi"/></svg><svg class="si"><use href="#i-battery"/></svg></span></div>
+          <header class="appbar">
+            <h2>Infos pratiques</h2>
+            <span class="spacer"></span>
+          </header>
+          <div class="body" style="gap:8px">
+            <div class="card info-card">
+              <h4>Départs</h4>
+              <p><b>Longue</b> · 07:30 <span class="mono">·</span> <b>Moyenne</b> · 08:15</p>
+              <p>Stade Agni Lhoudh, Yakouren.</p>
+            </div>
+            <div class="card info-card">
+              <h4>Retrait des dossards</h4>
+              <p>Samedi 14:00 – 18:00 · Stade Agni Lhoudh.</p>
+              <p>Zéro papier : ton e-dossard suffit.</p>
+            </div>
+            <div class="card info-card">
+              <h4>Ravitaillements</h4>
+              <p>3 points sur la Longue. Eau, fruits secs, sourire du village.</p>
+              <p class="quote-mini">« Aman d laman — l'eau, c'est la confiance. »<small>SAGESSE KABYLE</small></p>
+            </div>
+            <div class="card info-card">
+              <h4>Un souci ?</h4>
+              <p>L'équipe répond, avant comme pendant la course.</p>
+              <div class="btn small" style="margin-top:8px">Appeler l'équipe — +213 …</div>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Navigation de l'app">
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossard"/></svg>Dossard</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-dossier"/></svg>Dossier</span>
+            <span class="tab"><svg viewBox="0 0 24 24"><use href="#i-route"/></svg>Suivi</span>
+            <span class="tab on"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg>Infos</span>
+          </nav>
+          <div class="homebar"><i></i></div>
+        </div>
+        <figcaption>
+          <span class="sc-num">10</span><b>Infos pratiques</b>
+          <span>Départs, retrait, ravitaillements, contact. L'eau porte le proverbe, pas une section décorative.</span>
+        </figcaption>
+      </figure>
+
+    </div>
+
+    <p class="legend">
+      <span><span class="dot" style="background:var(--sapin)"></span><b>Action</b> — une seule par écran</span>
+      <span><span class="dot" style="background:#187A3C"></span><b>Succès</b> — dossier validé</span>
+      <span><span class="dot" style="background:#8A5A00"></span><b>Attention</b> — avertissement, jamais punition</span>
+      <span><span class="dot" style="background:#6B5A33"></span><b>Sync en attente</b> — la file est sûre</span>
+      <span><b>Sombre</b> — bascule dans la fiche, en haut de page</span>
+    </p>
+  </section>
+
+  <section aria-labelledby="s4">
+    <div class="section-head">
+      <span class="n">04</span>
+      <h2 id="s4">Repères de charte</h2>
+      <span class="count">Vert Djurdjura</span>
+      <p>Le système tient en peu de pièces : une couleur de marque, deux fontes système, des coins ronds et des seuils décoratifs.</p>
+    </div>
+
+    <div class="system">
+      <div class="panel">
+        <h3>Couleurs</h3>
+        <p class="sub">Mode clair. Chaque rôle possède sa paire sombre — active la bascule pour la voir à l'œuvre.</p>
+        <div class="swatches">
+          <div class="sw light"><i style="background:#EDF2EB"></i><div><b>Brume</b><small>#EDF2EB</small></div></div>
+          <div class="sw light"><i style="background:#FAFCF8"></i><div><b>Surface</b><small>#FAFCF8</small></div></div>
+          <div class="sw light"><i style="background:#16281C"></i><div><b>Encre</b><small>#16281C</small></div></div>
+          <div class="sw"><i style="background:#4A6252"></i><div><b>Encre 2</b><small>#4A6252</small></div></div>
+          <div class="sw"><i style="background:#345E4A"></i><div><b>Sapin</b><small>#345E4A</small></div></div>
+          <div class="sw"><i style="background:#187A3C"></i><div><b>Succès</b><small>#187A3C</small></div></div>
+          <div class="sw"><i style="background:#B3261E"></i><div><b>Danger</b><small>#B3261E</small></div></div>
+          <div class="sw"><i style="background:#8A5A00"></i><div><b>Attention</b><small>#8A5A00</small></div></div>
+          <div class="sw"><i style="background:#6B5A33"></i><div><b>Sync attente</b><small>#6B5A33</small></div></div>
+          <div class="sw"><i style="background:#2E6570"></i><div><b>Sync envoyé</b><small>#2E6570</small></div></div>
+        </div>
+      </div>
+
+      <div class="panel type-sample">
+        <h3>Typographie</h3>
+        <p class="sub">Zéro webfont. La ronde humaniste porte la voix, le mono distingue l'heure et la machine.</p>
+        <p class="big">Ta course.<br>Ton dossard.</p>
+        <p class="mono-line">N° 217 · 10:42:07</p>
+        <p>Corps 15 px minimum pour les contenus critiques. Fraîcheur, dossards et horaires en mono. Les capitales ne servent qu'aux surtitres.</p>
+      </div>
+    </div>
+
+    <div class="system" style="margin-top:26px">
+      <div class="panel">
+        <h3>Règles d'écran</h3>
+        <p class="sub">Ce que les dix écrans ne font jamais.</p>
+        <div class="rules">
+          <div class="rule">
+            <span class="glyph"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg></span>
+            <b>Une action par vue</b>
+            <p>Le plein pour avancer, le contour pour l'alternative. Pas de faux choix.</p>
+          </div>
+          <div class="rule">
+            <span class="glyph"><svg viewBox="0 0 24 24"><use href="#i-pin"/></svg></span>
+            <b>Cibles ≥ 48 px</b>
+            <p>Gros éléments tactiles, 8 px d'écart, aucune action critique collée au bord.</p>
+          </div>
+          <div class="rule">
+            <span class="glyph"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg></span>
+            <b>L'anonymat tient au dossard</b>
+            <p>Jamais de nom sur la carte publique. La position > 1 h est estompée.</p>
+          </div>
+          <div class="rule">
+            <span class="glyph"><svg viewBox="0 0 24 24"><use href="#i-bolt"/></svg></span>
+            <b>Hors-ligne d'abord</b>
+            <p>E-dossard 30 jours, file locale visible, aucune suppression côté appareil.</p>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Détails tenus</h3>
+        <p class="sub">Ce qui donne le sérieux sans la froideur.</p>
+        <div class="rules" style="grid-template-columns:1fr">
+          <div class="rule">
+            <b>Frise kabyle</b>
+            <p>Monochrome sapin, 9 px, en seuil de carte. Décorative, jamais derrière du texte ni cliquable.</p>
+          </div>
+          <div class="rule">
+            <b>Glyphe pilier</b>
+            <p>Le ⵣ Yaz, tala, tabzimt et ingel restent discrets. L'identité se respire, ne s'expose pas.</p>
+          </div>
+          <div class="rule">
+            <b>Citation kabyle</b>
+            <p>Uniquement la batterie, le départ, l'arrivée et les ravitaillements. Source Hanoteau 1867 toujours notée.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Maquette statique · dix écrans, deux thèmes · aucune requête réseau, aucun script.
+      Données de démonstration (dossard 217, Yacine B., 12,4 km) — aucune donnée réelle.
+      Fondée sur DESIGN.md (Vert Djurdjura) et EXPERIENCE.md (UJ-1), avec le symbole de la charte Aït Aïssi.</p>
+    <span class="sig"><svg viewBox="0 0 1071 571" aria-hidden="true"><use href="#i-symbol"/></svg>Azzel · 21.10.2026</span>
+  </footer>
+
+</div>
+</body>
+</html>

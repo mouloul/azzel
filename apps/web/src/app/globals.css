@@ -513,6 +513,96 @@ main {
   color: var(--az-texte-2);
 }
 
+.checklist-compteur {
+  margin: 0;
+  font-family: var(--az-font-meta-lg);
+  font-size: var(--az-font-size-meta-lg);
+  font-weight: var(--az-font-weight-meta-lg);
+  color: var(--az-texte);
+}
+
+.checklist-bandeau {
+  padding: var(--az-space-3) var(--az-space-4);
+  border-left: 4px solid var(--az-succes);
+  background: color-mix(in srgb, var(--az-succes) 12%, transparent);
+  border-radius: var(--az-radius-sm);
+}
+
+.checklist-bandeau .checklist-bandeau-texte {
+  margin: 0;
+  font-weight: 700;
+  color: var(--az-succes);
+}
+
+.checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+.checklist-item {
+  display: grid;
+  gap: var(--az-space-2);
+  padding: var(--az-space-3) var(--az-space-4);
+  background: var(--az-bg);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+}
+
+.checklist-entete {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--az-space-2);
+}
+
+.checklist-puce {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  border-radius: var(--az-radius-full);
+  background: var(--az-filet);
+}
+
+.checklist-item--fait .checklist-puce {
+  background: var(--az-succes);
+}
+
+.checklist-libelle {
+  font-weight: 700;
+}
+
+.checklist-etat {
+  margin-left: auto;
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  font-weight: var(--az-font-weight-meta);
+  color: var(--az-texte-2);
+}
+
+.checklist-etat--fait {
+  color: var(--az-succes);
+  font-weight: 700;
+}
+
+.checklist-etat--refuse {
+  color: var(--az-danger);
+  font-weight: 700;
+}
+
+.checklist-action {
+  color: var(--az-action);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.checklist-action-inactive {
+  color: var(--az-texte-2);
+}
+
 .header-actions {
   display: flex;
   align-items: center;
