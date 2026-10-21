@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "db:migrate": "tsx src/modules/iam/migrate.ts",
+    "db:migrate": "tsx src/modules/inscriptions/migrate.ts",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"

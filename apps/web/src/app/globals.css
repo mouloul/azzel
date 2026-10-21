@@ -148,12 +148,14 @@ main {
 }
 
 .btn-contour {
+  display: inline-block;
   padding: var(--az-space-2) var(--az-space-4);
   background: transparent;
   border: 2px solid var(--az-action);
   color: var(--az-texte);
   font: inherit;
   font-weight: 700;
+  text-decoration: none;
   border-radius: var(--az-radius-full);
   cursor: pointer;
 }
@@ -198,6 +200,14 @@ main {
 .auth {
   max-width: 30rem;
   padding: var(--az-space-7) var(--az-space-gutter);
+}
+
+.auth-wide {
+  max-width: 42rem;
+}
+
+.auth .card + .card {
+  margin-top: var(--az-space-5);
 }
 
 .auth .card {
@@ -249,6 +259,95 @@ main {
   font-size: 16px;
   border: 1px solid var(--az-filet);
   border-radius: var(--az-radius-sm);
+}
+
+.field select {
+  min-height: 48px;
+  width: 100%;
+  padding: var(--az-space-2) var(--az-space-4);
+  background: var(--az-bg);
+  color: var(--az-texte);
+  font: inherit;
+  font-size: 16px;
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+}
+
+.fieldset {
+  margin: 0;
+  padding: var(--az-space-4);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+  display: grid;
+  gap: var(--az-space-4);
+}
+
+.fieldset legend {
+  padding: 0 var(--az-space-2);
+  font-weight: 700;
+}
+
+.option-group {
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--az-space-3);
+  min-height: 48px;
+  padding: var(--az-space-2) var(--az-space-3);
+  background: var(--az-bg);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+}
+
+.option:has(input[type='radio']:checked) {
+  border-color: var(--az-action);
+}
+
+.option input[type='radio'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: auto;
+  margin: 0;
+  accent-color: var(--az-action);
+}
+
+.option .option-label {
+  font-weight: 700;
+}
+
+.option .meta {
+  margin-left: auto;
+}
+
+.field-error {
+  margin: 0;
+  color: var(--az-danger);
+  font-weight: 600;
+}
+
+.recap {
+  display: grid;
+  gap: var(--az-space-1);
+  padding: var(--az-space-3) var(--az-space-4);
+  border-left: 4px solid var(--az-action);
+  background: color-mix(in srgb, var(--az-action) 8%, transparent);
+  border-radius: var(--az-radius-sm);
+}
+
+.recap p {
+  margin: 0;
+}
+
+.recap .recap-titre {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--az-letter-spacing-surtitre);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
 }
 
 .field input.code-input {
