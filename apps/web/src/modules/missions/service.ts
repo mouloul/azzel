@@ -248,6 +248,10 @@ export interface MissionsAdminState {
 export interface MissionVolontaireView {
   id: string;
   secteurNom: string;
+  /** Repère terrain du secteur (fiche hors-ligne 3.3) — null si secteur inconnu. */
+  secteurLieu: string | null;
+  /** Contact PC du secteur — null si non renseigné (bouton tel: absent). */
+  secteurContact: string | null;
   type: MissionType;
   typeLabel: string;
   titre: string;
@@ -362,6 +366,8 @@ export async function getMissionsVolontaireState(
     return {
       id: mission.id,
       secteurNom: secteur?.nom ?? '—',
+      secteurLieu: secteur?.lieu ?? null,
+      secteurContact: secteur?.contact ?? null,
       type: mission.type,
       typeLabel: LIBELLES_MISSION_TYPE[mission.type],
       titre: mission.titre,

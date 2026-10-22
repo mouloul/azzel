@@ -1,7 +1,283 @@
-/* Espace volontaire (story 3.2) — tes missions + couverture générale.
-   Fichier propre à la page /volontaires : la PWA 3.3/3.4 greffera ses styles
-   terrain (operationsTokens) par-dessus sans toucher à la vitrine. */
-.volontaires-mes-missions{list-style:none;margin:0 0 var(--az-space-3);padding:0;display:grid;gap:var(--az-space-2)}
-.volontaires-mes-missions li{display:grid;gap:2px;padding:var(--az-space-2);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm)}
-.volontaires-titre{font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);font-weight:var(--az-font-weight-meta);letter-spacing:var(--az-letter-spacing-eyebrow);text-transform:uppercase;color:var(--az-texte-2);margin:var(--az-space-3) 0 var(--az-space-1)}
-.volontaires-consignes summary{cursor:pointer;font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
+/* Espace volontaire (stories 3.2/3.3) — surface terrain, palette operationsTokens.
+   Fichier propre à la page /volontaires : les variables --az-* basculent
+   automatiquement en sombre ([data-theme="dark"] dans tokens-synchronises.css).
+   Règles terrain : une colonne, cibles ≥ 48 px, gaps ≥ 8 px, frappe ≥ 15 px
+   sur les contenus critiques, aucune dépendance au survol. */
+
+/* --- Gabarit une colonne --------------------------------------------------- */
+
+.volontaires-pwa {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: var(--az-space-4) var(--az-space-3) calc(var(--az-space-7) + var(--az-space-4));
+  display: grid;
+  gap: var(--az-space-3);
+}
+
+.volontaires-entete {
+  display: grid;
+  gap: var(--az-space-2);
+  justify-items: start;
+}
+
+.volontaires-entete h1 {
+  margin: 0;
+}
+
+.volontaires-entete .lead {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+}
+
+.volontaires-surtitre {
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-meta);
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: var(--az-letter-spacing-eyebrow);
+  text-transform: uppercase;
+  color: var(--az-texte-2);
+  margin: 0;
+}
+
+.volontaires-titre {
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-meta-lg);
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: var(--az-letter-spacing-eyebrow);
+  text-transform: uppercase;
+  color: var(--az-texte-2);
+  margin: var(--az-space-3) 0 var(--az-space-1);
+}
+
+/* --- Badge d'état (role="status") ------------------------------------------ */
+
+.volontaires-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-2);
+  min-height: 32px;
+  padding: var(--az-space-1) var(--az-space-3);
+  border-radius: var(--az-radius-full);
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta-lg);
+  font-weight: var(--az-font-weight-meta);
+  border: 1px solid var(--az-succes);
+  color: var(--az-succes);
+}
+
+.volontaires-badge--hors-ligne {
+  background: var(--az-succes);
+  color: var(--az-succes-encre);
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.06em;
+}
+
+.volontaires-badge-point {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--az-radius-full);
+  background: currentColor;
+}
+
+.volontaires-fraicheur {
+  margin: 0;
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta-lg);
+  color: var(--az-texte-2);
+}
+
+/* --- Bandeau invitation mode sombre (première ouverture) ------------------- */
+
+.volontaires-bandeau-sombre {
+  display: grid;
+  gap: var(--az-space-2);
+  width: 100%;
+  padding: var(--az-space-3);
+  border: 1px solid var(--az-attention);
+  border-radius: var(--az-radius-md);
+  background: var(--az-surface);
+}
+
+.volontaires-bandeau-texte {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+}
+
+.volontaires-bandeau-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2);
+}
+
+.volontaires-bandeau-actions .btn-action,
+.volontaires-bandeau-actions .btn-contour {
+  min-height: 48px;
+  font-size: var(--az-font-size-body-lg);
+}
+
+/* --- Fiche mission (une par mission affectée) ------------------------------ */
+
+.volontaires-fiches {
+  display: grid;
+  gap: var(--az-space-3);
+}
+
+.volontaires-fiche {
+  display: grid;
+  gap: var(--az-space-3);
+  padding: var(--az-space-4);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-md);
+  background: var(--az-surface);
+}
+
+.volontaires-fiche-titre {
+  margin: 0;
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  color: var(--az-texte);
+}
+
+.volontaires-fiche-role {
+  color: var(--az-action);
+}
+
+.volontaires-fiche-details {
+  display: grid;
+  gap: var(--az-space-2);
+  margin: 0;
+}
+
+.volontaires-fiche-detail {
+  display: grid;
+  gap: 2px;
+}
+
+.volontaires-fiche-valeur {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  color: var(--az-texte);
+}
+
+/* Gros bouton tel: du contact PC — cible ≥ 48 px, frappe ≥ 15 px. */
+.volontaires-tel {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  min-height: 64px;
+  padding: var(--az-space-3);
+  border-radius: var(--az-radius);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  text-decoration: none;
+  font-weight: var(--az-font-weight-surtitre);
+}
+
+.volontaires-tel-libelle {
+  font-size: var(--az-font-size-body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.volontaires-tel-numero {
+  font-family: var(--az-font-meta);
+  font-size: 20px;
+  font-weight: var(--az-font-weight-surtitre);
+}
+
+.volontaires-consignes-bloc {
+  display: grid;
+  gap: var(--az-space-1);
+  padding-top: var(--az-space-2);
+  border-top: 1px solid var(--az-filet);
+}
+
+.volontaires-consignes-liste {
+  margin: 0;
+  padding-left: var(--az-space-4);
+  display: grid;
+  gap: var(--az-space-1);
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  color: var(--az-texte);
+}
+
+/* --- Toutes les missions (couverture générale) ----------------------------- */
+
+.volontaires-toutes-missions {
+  list-style: none;
+  margin: 0 0 var(--az-space-3);
+  padding: 0;
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+.volontaires-mission-courte {
+  display: grid;
+  gap: 2px;
+  padding: var(--az-space-2) var(--az-space-3);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+}
+
+.volontaires-mission-titre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+}
+
+.volontaires-chip {
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  padding: 2px var(--az-space-2);
+  border-radius: var(--az-radius-full);
+  background: var(--az-bg);
+  color: var(--az-texte-2);
+}
+
+/* --- États d'attente / actions ---------------------------------------------- */
+
+.volontaires-attente {
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+}
+
+.volontaires-actions-bas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2);
+  margin-top: var(--az-space-2);
+}
+
+.volontaires-actions-bas .btn-contour {
+  min-height: 48px;
+}
+
+/* Barre d'assistance toujours visible, même au milieu des fiches. */
+.volontaires-barre-assistance {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  padding: var(--az-space-2) 0;
+  margin-top: calc(-1 * var(--az-space-2));
+  background: var(--az-bg);
+  border-top: 1px solid var(--az-filet);
+}
+
+.volontaires-barre-assistance .btn-contour {
+  min-height: 48px;
+  font-size: var(--az-font-size-body-lg);
+}
+
+[data-theme="dark"] .volontaires-barre-assistance {
+  background: var(--az-surface);
+}

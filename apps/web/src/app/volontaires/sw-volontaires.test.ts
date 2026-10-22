@@ -1,0 +1,333 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+// Story 3.3 — test comportemental du service worker volontaires : le source
+// public/sw-volontaires.js est chargé avec des globales maison (self/caches/
+// fetch, style du stub IndexedDB de idb-volontaires.test.ts) et ses
+// événements install/activate/fetch sont déclenchés pour vérifier les
+// comportements critiques : anti-empoisonnement (jamais de réponse redirigée
+// en cache), première visite complète, replis hors-ligne (état → cache puis
+// 503 ; navigation → shell puis page d'explication), périmètre strict
+// (vitrine et origines étrangères jamais interceptées).
+
+const ORIGINE = 'https://azzel.exemple.dz';
+const SOURCE = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../public/sw-volontaires.js'),
+  'utf8',
+);
+
+const VERSION = 'v1';
+const CACHE_SHELL = `az-volontaires-shell-${VERSION}`;
+const CACHE_STATIQUES = `az-volontaires-statiques-${VERSION}`;
+const CACHE_ETAT = `az-volontaires-etat-${VERSION}`;
+
+type Reponse = {
+  status: number;
+  ok: boolean;
+  redirected: boolean;
+  url: string;
+  clone(): Reponse;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+};
+
+function reponseFactice(
+  corps: string,
+  {
+    status = 200,
+    redirected = false,
+    url = ORIGINE + '/volontaires',
+  }: { status?: number; redirected?: boolean; url?: string } = {},
+): Reponse {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    redirected,
+    url,
+    clone() {
+      return reponseFactice(corps, { status, redirected, url });
+    },
+    text: async () => corps,
+    json: async () => JSON.parse(corps) as unknown,
+  };
+}
+
+interface Requete {
+  method: string;
+  url: string;
+  mode?: string;
+}
+
+type FetchSw = (entree: string | Requete) => Promise<Reponse>;
+
+class CacheFactice {
+  stock = new Map<string, Reponse>();
+
+  constructor(private readonly fetchSw: FetchSw) {}
+
+  async put(cle: string | Requete, reponse: Reponse): Promise<void> {
+    this.stock.set(typeof cle === 'string' ? cle : cle.url, reponse);
+  }
+
+  async match(cle: string | Requete): Promise<Reponse | undefined> {
+    return this.stock.get(typeof cle === 'string' ? cle : cle.url);
+  }
+
+  async addAll(urls: string[]): Promise<void> {
+    for (const url of urls) {
+      this.stock.set(url, await this.fetchSw(url));
+    }
+  }
+}
+
+interface ContexteSw {
+  listeners: Map<string, (event: never) => void>;
+  cachesParNom: Map<string, CacheFactice>;
+}
+
+function chargerServiceWorker(fetchSw: FetchSw): ContexteSw {
+  const listeners = new Map<string, (event: never) => void>();
+  const cachesParNom = new Map<string, CacheFactice>();
+
+  const self = {
+    addEventListener: (type: string, handler: (event: never) => void) => {
+      listeners.set(type, handler);
+    },
+    skipWaiting: async () => undefined,
+    clients: { claim: async () => undefined },
+    location: { origin: ORIGINE },
+  };
+
+  const caches = {
+    open: async (nom: string) => {
+      let cache = cachesParNom.get(nom);
+      if (!cache) {
+        cache = new CacheFactice(fetchSw);
+        cachesParNom.set(nom, cache);
+      }
+      return cache;
+    },
+    match: async (cle: string | Requete, opts?: { cacheName?: string }) => {
+      const cache = opts?.cacheName !== undefined ? cachesParNom.get(opts.cacheName) : undefined;
+      return cache?.match(cle);
+    },
+    keys: async () => [...cachesParNom.keys()],
+    delete: async (nom: string) => cachesParNom.delete(nom),
+  };
+
+  const script = new Function('self', 'caches', 'fetch', 'Response', 'URL', SOURCE);
+  script(self, caches, fetchSw, Response, URL);
+  return { listeners, cachesParNom };
+}
+
+function requete(url: string, mode?: 'navigate'): Requete {
+  return { method: 'GET', url, mode };
+}
+
+async function declencherInstall(ctx: ContexteSw): Promise<void> {
+  const handler = ctx.listeners.get('install') as (event: {
+    waitUntil: (promesse: Promise<void>) => void;
+  }) => void;
+  let attente: Promise<void> | undefined;
+  handler({ waitUntil: (promesse) => (attente = promesse) });
+  await attente;
+}
+
+async function declencherActivate(ctx: ContexteSw): Promise<void> {
+  const handler = ctx.listeners.get('activate') as (event: {
+    waitUntil: (promesse: Promise<void>) => void;
+  }) => void;
+  let attente: Promise<void> | undefined;
+  handler({ waitUntil: (promesse) => (attente = promesse) });
+  await attente;
+}
+
+async function declencherFetch(
+  ctx: ContexteSw,
+  request: Requete,
+): Promise<{ intercepte: boolean; reponse?: Response }> {
+  const handler = ctx.listeners.get('fetch') as (event: {
+    request: Requete;
+    respondWith: (promesse: Promise<Response>) => void;
+  }) => void;
+  let promesseReponse: Promise<Response> | undefined;
+  handler({
+    request,
+    respondWith: (promesse) => (promesseReponse = promesse),
+  });
+  if (promesseReponse === undefined) {
+    return { intercepte: false };
+  }
+  return { intercepte: true, reponse: await promesseReponse };
+}
+
+const SHELL_HTML = `<!doctype html><html><head>
+<link rel="stylesheet" href="/_next/static/chunks/styles.css">
+<script src="/_next/static/chunks/app.js"></script>
+</head><body>shell volontaires</body></html>`;
+
+const ETAT_JSON = JSON.stringify({
+  editionNom: 'Édition 2027',
+  assistancePhone: '+213 555 010 200',
+  mesMissions: [],
+  missions: [],
+  generéA: '2026-10-22T08:00:00.000Z',
+});
+
+const HORS_LIGNE: FetchSw = async () => {
+  throw new TypeError('fetch failed');
+};
+
+describe('sw-volontaires — install', () => {
+  it('précache le shell ET ses sous-resources /_next (première visite complète)', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(SHELL_HTML, {
+        url: ORIGINE + (typeof entree === 'string' ? entree : entree.url),
+      }),
+    );
+    await declencherInstall(ctx);
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.has('/volontaires')).toBe(true);
+    const statiques = ctx.cachesParNom.get(CACHE_STATIQUES)?.stock ?? new Map();
+    expect(statiques.has('/_next/static/chunks/styles.css')).toBe(true);
+    expect(statiques.has('/_next/static/chunks/app.js')).toBe(true);
+  });
+
+  it('shell redirigé (session expirée / portail captif) : rien de mis en cache, install échoue', async () => {
+    const ctx = chargerServiceWorker(async () =>
+      reponseFactice('page de connexion', {
+        redirected: true,
+        url: ORIGINE + '/connexion-volontaire',
+      }),
+    );
+    await expect(declencherInstall(ctx)).rejects.toThrow(/précacheable/);
+    expect(ctx.cachesParNom.size).toBe(0);
+  });
+});
+
+describe('sw-volontaires — activate', () => {
+  it('nettoie uniquement les anciens caches az-volontaires-*', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    ctx.cachesParNom.set('az-volontaires-shell-v0', new CacheFactice(HORS_LIGNE));
+    ctx.cachesParNom.set(CACHE_SHELL, new CacheFactice(HORS_LIGNE));
+    ctx.cachesParNom.set('autre-cache', new CacheFactice(HORS_LIGNE));
+    await declencherActivate(ctx);
+    expect(ctx.cachesParNom.has('az-volontaires-shell-v0')).toBe(false);
+    expect(ctx.cachesParNom.has(CACHE_SHELL)).toBe(true);
+    expect(ctx.cachesParNom.has('autre-cache')).toBe(true);
+  });
+});
+
+describe('sw-volontaires — fetch hors périmètre', () => {
+  it('navigation vitrine /parcours : jamais respondWith', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const resultat = await declencherFetch(ctx, requete(ORIGINE + '/parcours', 'navigate'));
+    expect(resultat.intercepte).toBe(false);
+  });
+
+  it('requête cross-origin : ignorée avant toute inspection de pathname', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const resultat = await declencherFetch(ctx, requete('https://pirate.exemple/volontaires'));
+    expect(resultat.intercepte).toBe(false);
+  });
+
+  it('méthode non GET : jamais respondWith', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const resultat = await declencherFetch(ctx, { method: 'POST', url: ORIGINE + '/api/volontaires/etat' });
+    expect(resultat.intercepte).toBe(false);
+  });
+});
+
+describe('sw-volontaires — GET /api/volontaires/etat', () => {
+  it('réponse redirigée (connexion) : rendue mais JAMAIS mise en cache', async () => {
+    const ctx = chargerServiceWorker(async () =>
+      reponseFactice('page de connexion', {
+        redirected: true,
+        url: ORIGINE + '/connexion-volontaire',
+      }),
+    );
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
+    expect(reponse?.status).toBe(200);
+    expect(await reponse?.text()).toBe('page de connexion');
+    expect(ctx.cachesParNom.get(CACHE_ETAT)?.stock.size ?? 0).toBe(0);
+  });
+
+  it('hors-ligne : repli sur l’état en cache', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/api/volontaires/etat', reponseFactice(ETAT_JSON));
+    ctx.cachesParNom.set(CACHE_ETAT, cache);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
+    expect(await reponse?.text()).toBe(ETAT_JSON);
+  });
+
+  it('hors-ligne sans cache : enveloppe 503 propre (jamais de promesse rejetée)', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
+    expect(reponse).toBeDefined();
+    const corps = JSON.parse(await (reponse as Response).text()) as { error: { code: string } };
+    expect(reponse?.status).toBe(503);
+    expect(corps.error.code).toBe('volontaires.hors_ligne');
+  });
+});
+
+describe('sw-volontaires — navigations /volontaires', () => {
+  it('hors-ligne : shell en cache servi', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(await reponse?.text()).toBe(SHELL_HTML);
+  });
+
+  it('hors-ligne sans shell : page d’explication, jamais d’écran blanc', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(reponse?.status).toBe(200);
+    expect(await reponse?.text()).toContain('Ta fiche n’est pas encore dans la poche');
+  });
+
+  it('5xx en ligne : le shell en cache vaut mieux que l’erreur serveur', async () => {
+    const ctx = chargerServiceWorker(async () => reponseFactice('boom', { status: 502 }));
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(await reponse?.text()).toBe(SHELL_HTML);
+  });
+
+  it('réponse redirigée en ligne : rendue telle quelle, shell non empoisonné', async () => {
+    const ctx = chargerServiceWorker(async () =>
+      reponseFactice('page de connexion', {
+        redirected: true,
+        url: ORIGINE + '/connexion-volontaire',
+      }),
+    );
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(await reponse?.text()).toBe('page de connexion');
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.size ?? 0).toBe(0);
+  });
+});
+
+describe('sw-volontaires — statiques cache-first', () => {
+  it('hors-ligne sans entrée : 503 propre, jamais de promesse rejetée', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/_next/static/chunks/app.js'));
+    expect(reponse?.status).toBe(503);
+  });
+
+  it('en ligne : réponse saine mise en cache puis servie du cache', async () => {
+    let appels = 0;
+    const ctx = chargerServiceWorker(async () => {
+      appels += 1;
+      return reponseFactice('console.log(1)', { url: ORIGINE + '/_next/static/chunks/app.js' });
+    });
+    const premiere = await declencherFetch(ctx, requete(ORIGINE + '/_next/static/chunks/app.js'));
+    expect(await premiere.reponse?.text()).toBe('console.log(1)');
+    const seconde = await declencherFetch(ctx, requete(ORIGINE + '/_next/static/chunks/app.js'));
+    expect(await seconde.reponse?.text()).toBe('console.log(1)');
+    expect(appels).toBe(1);
+  });
+});

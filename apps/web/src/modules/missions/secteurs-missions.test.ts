@@ -521,6 +521,34 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
     expect(state.missions[1]?.typeLabel).toBe('Scan checkpoint');
   });
 
+  it('fiche 3.3 : lieu et contact du secteur portés sur chaque mission, null si absents', async () => {
+    const avecContact: SecteurRecord = { ...SECTEUR, contact: '+213 555 010 203' };
+    const state = await getMissionsVolontaireState(SESSION_VOLONTAIRE as SessionRecord, {
+      store: storeFactice({
+        listMissionsEtat: async () => ({
+          ...etat,
+          secteurs: [avecContact],
+        }),
+        findVolontaireIdByAccount: async () => '00000000-0000-0000-0000-0000000000b1',
+      }),
+    });
+    // Contact renseigné → présent (gros bouton tel:) ; lieu toujours porté.
+    expect(state.mesMissions[0]).toMatchObject({
+      secteurNom: 'Village',
+      secteurLieu: 'Place du village',
+      secteurContact: '+213 555 010 203',
+    });
+    // Sans contact : null — jamais de chaîne vide, jamais de lien mort.
+    const sansContact = await getMissionsVolontaireState(SESSION_VOLONTAIRE as SessionRecord, {
+      store: storeFactice({
+        listMissionsEtat: async () => etat,
+        findVolontaireIdByAccount: async () => '00000000-0000-0000-0000-0000000000b1',
+      }),
+    });
+    expect(sansContact.mesMissions[0]?.secteurContact).toBeNull();
+    expect(sansContact.mesMissions[0]?.secteurLieu).toBe('Place du village');
+  });
+
   it('sans édition : états vides sans erreur', async () => {
     const store = storeFactice({ findCurrentEdition: async () => null });
     await expect(

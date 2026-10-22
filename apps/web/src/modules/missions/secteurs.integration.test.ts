@@ -337,6 +337,12 @@ describe.skipIf(testUrls === null)(
         'Scan PK 12',
       ]);
       expect(state.mesMissions[0]?.secteurNom).toBeTruthy();
+      // Fiche 3.3 : lieu terrain + contact PC portés (null quand non renseigné
+      // — le contact du village a été effacé plus tôt dans la suite).
+      const scan = state.mesMissions.find((m) => m.titre === 'Scan PK 12');
+      expect(scan).toMatchObject({ secteurLieu: 'Carrefour PK 10', secteurContact: null });
+      const accueil = state.mesMissions.find((m) => m.titre === 'Accueil village');
+      expect(accueil).toMatchObject({ secteurLieu: 'Place centrale, Aït Aïssi' });
       // Toutes les missions visibles avec leur couverture — tout est couvert.
       expect(state.missions.every((m) => m.couverture === 'couverte')).toBe(true);
 
