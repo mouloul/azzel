@@ -1,0 +1,615 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import type { SessionRecord } from '@/modules/iam/store';
+
+import {
+  LIBELLES_COUVERTURE,
+  LIBELLES_MISSION_TYPE,
+  MAX_LIEU_LENGTH,
+  MAX_TITRE_LENGTH,
+  MAX_CONSIGNES_LENGTH,
+  MISSION_TYPES,
+  chevauche,
+  couverture,
+  datetimeLocalVersIso,
+  estHorodatageValide,
+  estUuidValide,
+  isoVersDatetimeLocal,
+  normalizeMissionInput,
+  normalizeSecteurInput,
+  validateMissionInput,
+  validateSecteurInput,
+  type Intervalle,
+  type SecteurFieldErrors,
+} from './domain';
+import {
+  AucuneEditionError,
+  InvalidAffectationError,
+  InvalidMissionFieldsError,
+  InvalidSecteurFieldsError,
+  MissionNotFoundError,
+  SecteurNomDupliqueError,
+  SecteurNotFoundError,
+  SecteurOccupeError,
+  toMissionsApiError,
+  VolontaireNotFoundError,
+} from './errors';
+import {
+  affecterVolontaire,
+  createSecteur,
+  createMission,
+  deleteMission,
+  deleteSecteur,
+  getMissionsAdminState,
+  getMissionsVolontaireState,
+  updateMission,
+  updateSecteur,
+  type MissionsServiceDeps,
+} from './service';
+import type { MissionsStore, MissionConflitRecord, SecteurRecord } from './store';
+
+// Story 3.2 — tests unitaires secteurs/missions : validation (types fermés,
+// horaires), couverture dérivée, chevauchement d'intervalles, libellés FR,
+// assemblage des états admin/volontaire et affectation avec avertissement.
+// Les comportements base (RLS, contraintes, cascade) vivent dans
+// secteurs.integration.test.ts.
+
+const DEBUT = new Date('2027-05-16T06:00:00.000Z');
+const FIN = new Date('2027-05-16T12:00:00.000Z');
+
+function intervalle(debut: string, fin: string): Intervalle {
+  return { debut: new Date(debut), fin: new Date(fin) };
+}
+
+describe('types de mission — liste fermée et libellés FR', () => {
+  it('exactement 6 types fermés, dans l’ordre du CHECK SQL', () => {
+    expect(MISSION_TYPES).toEqual([
+      'scan_checkpoint',
+      'accueil',
+      'securite_troncon',
+      'securite_arrivee',
+      'distribution_dossards',
+      'communication',
+    ]);
+  });
+
+  it('chaque type a un libellé français affichable, aucun vide', () => {
+    for (const type of MISSION_TYPES) {
+      expect(LIBELLES_MISSION_TYPE[type].length).toBeGreaterThan(0);
+    }
+    expect(LIBELLES_MISSION_TYPE.securite_troncon).toBe('Sécurité tronçon');
+    expect(LIBELLES_MISSION_TYPE.distribution_dossards).toBe('Distribution des dossards');
+  });
+});
+
+describe('couverture — dérivée du nombre d’affectations, jamais stockée', () => {
+  it('0 affectation → vacante ; ≥ 1 → couverte', () => {
+    expect(couverture(0)).toBe('vacante');
+    expect(couverture(1)).toBe('couverte');
+    expect(couverture(3)).toBe('couverte');
+  });
+
+  it('chaque état a un libellé affichable', () => {
+    expect(LIBELLES_COUVERTURE.couverte).toBe('Couverte');
+    expect(LIBELLES_COUVERTURE.vacante).toBe('Vacante');
+  });
+});
+
+describe('chevauche — intervalles a.debut < b.fin AND b.debut < a.fin', () => {
+  it('chevauchements détectés (partiel, inclusion, frontière commune exclue)', () => {
+    const a = intervalle('2027-05-16T06:00:00Z', '2027-05-16T12:00:00Z');
+    expect(chevauche(a, intervalle('2027-05-16T10:00:00Z', '2027-05-16T14:00:00Z'))).toBe(true);
+    expect(chevauche(a, intervalle('2027-05-16T05:00:00Z', '2027-05-16T13:00:00Z'))).toBe(true);
+    expect(chevauche(a, intervalle('2027-05-16T07:00:00Z', '2027-05-16T08:00:00Z'))).toBe(true);
+    // fin de b == début de a : pas de chevauchement (strict <).
+    expect(chevauche(a, intervalle('2027-05-16T04:00:00Z', '2027-05-16T06:00:00Z'))).toBe(false);
+    expect(chevauche(a, intervalle('2027-05-16T12:00:00Z', '2027-05-16T18:00:00Z'))).toBe(false);
+    expect(chevauche(a, intervalle('2027-05-16T14:00:00Z', '2027-05-16T18:00:00Z'))).toBe(false);
+  });
+
+  it('symétrique : chevauche(a, b) === chevauche(b, a)', () => {
+    const a = intervalle('2027-05-16T06:00:00Z', '2027-05-16T12:00:00Z');
+    const b = intervalle('2027-05-16T11:00:00Z', '2027-05-16T15:00:00Z');
+    expect(chevauche(a, b)).toBe(chevauche(b, a));
+  });
+});
+
+describe('validateSecteurInput — nom, lieu, contact téléphone facultatif', () => {
+  it('nom + lieu valides, contact vide ou téléphone acceptés', () => {
+    expect(validateSecteurInput(normalizeSecteurInput({ nom: 'Village', lieu: 'Place' }))).toEqual({});
+    expect(
+      validateSecteurInput(
+        normalizeSecteurInput({ nom: 'Village', lieu: 'Place', contact: '+213 555 010 203' }),
+      ),
+    ).toEqual({});
+  });
+
+  it('nom manquant/trop long, lieu manquant/trop long, contact invalide → erreurs champ', () => {
+    expect(
+      validateSecteurInput(normalizeSecteurInput({ nom: '', lieu: 'Place' })).nom,
+    ).toContain('obligatoire');
+    expect(
+      validateSecteurInput(normalizeSecteurInput({ nom: 'x'.repeat(121), lieu: 'Place' })).nom,
+    ).toContain('120');
+    expect(
+      validateSecteurInput(normalizeSecteurInput({ nom: 'V', lieu: '' })).lieu,
+    ).toContain('obligatoire');
+    expect(
+      validateSecteurInput(normalizeSecteurInput({ nom: 'V', lieu: 'x'.repeat(201) })).lieu,
+    ).toContain(`${MAX_LIEU_LENGTH}`);
+    expect(
+      validateSecteurInput(normalizeSecteurInput({ nom: 'V', lieu: 'P', contact: 'abc' })).contact,
+    ).toContain('téléphone');
+  });
+});
+
+describe('validateMissionInput — type fermé, horaires, consignes', () => {
+  const base = {
+    secteurId: '00000000-0000-0000-0000-00000000e5e1',
+    type: 'scan_checkpoint',
+    titre: 'Scan PK 12',
+    debutLe: '2027-05-16T06:00:00.000Z',
+    finLe: '2027-05-16T12:00:00.000Z',
+  };
+
+  it('mission complète valide, consignes facultatives', () => {
+    expect(validateMissionInput(normalizeMissionInput(base))).toEqual({});
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, consignes: 'Arrive 15 min avant.' })),
+    ).toEqual({});
+  });
+
+  it('type hors liste fermée → erreur type (aucun type personnalisé)', () => {
+    const errors = validateMissionInput(normalizeMissionInput({ ...base, type: 'cuisine' }));
+    expect(errors.type).toContain('parmi la liste');
+  });
+
+  it('fin avant/égale au début → erreur finLe', () => {
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, finLe: '2027-05-16T05:00:00.000Z' }))
+        .finLe,
+    ).toContain('après le début');
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, finLe: base.debutLe })).finLe,
+    ).toContain('après le début');
+  });
+
+  it('horodatages absents/illisibles → erreurs debutLe/finLe', () => {
+    const errors = validateMissionInput(
+      normalizeMissionInput({ ...base, debutLe: '', finLe: 'pas-une-date' }),
+    );
+    expect(errors.debutLe).toBeTruthy();
+    expect(errors.finLe).toBeTruthy();
+  });
+
+  it('estHorodatageValide : RFC3339 STRICT en Z — refus des formes ambiguës', () => {
+    // Acceptés : secondes et fractions facultatives, toujours Z.
+    expect(estHorodatageValide('2027-05-16T06:00Z')).toBe(true);
+    expect(estHorodatageValide('2027-05-16T06:00:00Z')).toBe(true);
+    expect(estHorodatageValide('2027-05-16T06:00:00.000Z')).toBe(true);
+    // Refusés : année seule, sans Z (interprété en heure locale serveur),
+    // décalage explicite, espace au lieu de T, date impossible.
+    expect(estHorodatageValide('2027')).toBe(false);
+    expect(estHorodatageValide('2027-05-16T06:00')).toBe(false);
+    expect(estHorodatageValide('2027-05-16T06:00:00')).toBe(false);
+    expect(estHorodatageValide('2027-05-16T06:00:00+02:00')).toBe(false);
+    expect(estHorodatageValide('2027-05-16 06:00:00Z')).toBe(false);
+    expect(estHorodatageValide('16/05/2027')).toBe(false);
+    expect(estHorodatageValide('2027-13-45T99:99:00Z')).toBe(false);
+    expect(estHorodatageValide('')).toBe(false);
+  });
+
+  it('helpers datetime-local : aller-retour UTC → locale → UTC (même instant)', () => {
+    for (const iso of [
+      '2027-05-16T06:00:00.000Z',
+      '2027-12-31T23:59:00.000Z',
+      '2027-01-01T00:01:00.000Z',
+      '2027-05-16T22:30:00.000Z',
+    ]) {
+      expect(datetimeLocalVersIso(isoVersDatetimeLocal(iso))).toBe(iso);
+    }
+  });
+
+  it('isoVersDatetimeLocal : valeur d’input datetime-local bien formée ; invalide → vide', () => {
+    expect(isoVersDatetimeLocal('2027-05-16T06:05:07.000Z')).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/,
+    );
+    expect(isoVersDatetimeLocal('pas-une-date')).toBe('');
+    expect(datetimeLocalVersIso('nimporte')).toBe('');
+    expect(datetimeLocalVersIso('')).toBe('');
+  });
+
+  it('estUuidValide : UUID canoniques acceptés, le reste refusé', () => {
+    expect(estUuidValide('00000000-0000-0000-0000-0000000000f1')).toBe(true);
+    expect(estUuidValide('ABCDEF12-3456-7890-ABCD-EF1234567890')).toBe(true);
+    expect(estUuidValide('pas-un-uuid')).toBe(false);
+    expect(estUuidValide('')).toBe(false);
+    expect(estUuidValide('00000000-0000-0000-0000-0000000000f1x')).toBe(false);
+  });
+
+  it('titre manquant/trop long, secteur absent, consignes > 5000 → erreurs champ', () => {
+    expect(validateMissionInput(normalizeMissionInput({ ...base, titre: '' })).titre).toContain(
+      'obligatoire',
+    );
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, titre: 'x'.repeat(121) })).titre,
+    ).toContain(`${MAX_TITRE_LENGTH}`);
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, secteurId: '' })).secteurId,
+    ).toContain('Choisis');
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, consignes: 'x'.repeat(5001) }))
+        .consignes,
+    ).toContain(`${MAX_CONSIGNES_LENGTH}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Service — store factice.
+// ---------------------------------------------------------------------------
+
+const SESSION_ORGANISATEUR = {
+  accountId: 'account-admin',
+  organisationId: '00000000-0000-0000-0000-000000000001',
+  email: 'organisateur@exemple.dz',
+  role: 'organisateur',
+  createdAt: new Date('2026-10-01T10:00:00.000Z'),
+} as const satisfies SessionRecord;
+
+const SESSION_VOLONTAIRE = {
+  accountId: 'account-volontaire',
+  organisationId: '00000000-0000-0000-0000-000000000001',
+  email: 'kahina@exemple.dz',
+  role: 'volontaire',
+  createdAt: new Date('2026-10-01T10:00:00.000Z'),
+} as const satisfies SessionRecord;
+
+const EDITION = { id: 'edition-2027', nom: 'Édition 2027' };
+
+const SECTEUR: SecteurRecord = {
+  id: '00000000-0000-0000-0000-00000000e5e1',
+  editionId: EDITION.id,
+  nom: 'Village',
+  lieu: 'Place du village',
+  contact: null,
+  createdAt: new Date('2026-10-01T10:00:00.000Z'),
+};
+
+function storeFactice(overrides: Partial<MissionsStore> = {}): MissionsStore {
+  const indisponible = (): never => {
+    throw new Error('méthode non prévue par ce store factice');
+  };
+  return {
+    importVolontaires: indisponible,
+    listVolontaires: async () => [],
+    renvoyerInvitation: indisponible,
+    findCurrentEdition: async () => EDITION,
+    createSecteur: indisponible,
+    updateSecteur: indisponible,
+    deleteSecteur: indisponible,
+    createMission: indisponible,
+    updateMission: indisponible,
+    deleteMission: indisponible,
+    listMissionsEtat: indisponible,
+    findVolontaireIdByAccount: indisponible,
+    affecter: indisponible,
+    desaffecter: indisponible,
+    ...overrides,
+  };
+}
+
+describe('createSecteur — validation puis store', () => {
+  it('champs invalides → InvalidSecteurFieldsError → 400 avec fields', async () => {
+    await expect(
+      createSecteur(SESSION_ORGANISATEUR as SessionRecord, { nom: '', lieu: '' }),
+    ).rejects.toBeInstanceOf(InvalidSecteurFieldsError);
+    const apiError = toMissionsApiError(new InvalidSecteurFieldsError({ nom: 'obligatoire' }));
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields).toEqual({ nom: 'obligatoire' });
+  });
+
+  it('nom dupliqué (UNIQUE édition) → 409 secteur_duplique avec field nom', () => {
+    const apiError = toMissionsApiError(new SecteurNomDupliqueError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('admin.missions.secteur_duplique');
+    expect((apiError.fields as SecteurFieldErrors | undefined)?.nom).toBeTruthy();
+  });
+
+  it('nominal : édition courante résolue localement, secteur rattaché', async () => {
+    const createSecteurStore = vi.fn(async () => SECTEUR);
+    const secteur = await createSecteur(SESSION_ORGANISATEUR as SessionRecord, {
+      nom: 'Village',
+      lieu: 'Place du village',
+    }, { store: storeFactice({ createSecteur: createSecteurStore }) });
+    expect(secteur).toMatchObject({
+      id: '00000000-0000-0000-0000-00000000e5e1',
+      nom: 'Village',
+    });
+    expect(createSecteurStore).toHaveBeenCalledWith(
+      expect.objectContaining({ editionId: EDITION.id, nom: 'Village' }),
+    );
+  });
+});
+
+describe('createMission — validation puis store', () => {
+  const CORPS = {
+    secteurId: '00000000-0000-0000-0000-00000000e5e1',
+    type: 'accueil',
+    titre: 'Accueil village',
+    debutLe: DEBUT.toISOString(),
+    finLe: FIN.toISOString(),
+  };
+
+  it('type hors liste → InvalidMissionFieldsError → 400 fields.type', async () => {
+    await expect(
+      createMission(SESSION_ORGANISATEUR as SessionRecord, { ...CORPS, type: 'cuisine' }),
+    ).rejects.toBeInstanceOf(InvalidMissionFieldsError);
+    expect(toMissionsApiError(new InvalidMissionFieldsError({ type: 'x' })).status).toBe(400);
+  });
+
+  it('horaires ISO UTC convertis en Date pour le store, mission vacante', async () => {
+    const createMissionStore = vi.fn(async () => ({
+      id: 'mission-1',
+      secteurId: '00000000-0000-0000-0000-00000000e5e1',
+      type: 'accueil' as const,
+      titre: 'Accueil village',
+      debutLe: DEBUT,
+      finLe: FIN,
+      consignes: null,
+      createdAt: new Date(),
+    }));
+    const mission = await createMission(SESSION_ORGANISATEUR as SessionRecord, CORPS, {
+      store: storeFactice({ createMission: createMissionStore }),
+    });
+    expect(mission.couverture).toBe('vacante');
+    expect(mission.couvertureLabel).toBe('Vacante');
+    expect(mission.typeLabel).toBe('Accueil');
+    expect(createMissionStore).toHaveBeenCalledWith(
+      expect.objectContaining({ debutLe: DEBUT, finLe: FIN, consignes: null }),
+    );
+  });
+
+  it('secteur d’une autre org → SecteurNotFoundError → 404', () => {
+    expect(toMissionsApiError(new SecteurNotFoundError()).status).toBe(404);
+    expect(toMissionsApiError(new MissionNotFoundError()).status).toBe(404);
+    expect(toMissionsApiError(new VolontaireNotFoundError()).status).toBe(404);
+  });
+
+  it('aucune édition pour l’organisation : AucuneEditionError → 409 admin.missions.aucune_edition', async () => {
+    const store = storeFactice({ findCurrentEdition: async () => null });
+    await expect(
+      createSecteur(SESSION_ORGANISATEUR as SessionRecord, { nom: 'Village', lieu: 'Place' }, {
+        store,
+      }),
+    ).rejects.toBeInstanceOf(AucuneEditionError);
+    const apiError = toMissionsApiError(new AucuneEditionError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('admin.missions.aucune_edition');
+  });
+});
+
+describe('affecterVolontaire — corps, idempotence, avertissement', () => {
+  const deps = (conflits: MissionConflitRecord[], cree = true): MissionsServiceDeps => ({
+    store: storeFactice({
+      affecter: async () => ({ cree, conflits }),
+    }),
+  });
+
+  const CONFLIT: MissionConflitRecord = {
+    missionId: 'mission-b',
+    secteurNom: 'Tronçon',
+    type: 'securite_troncon',
+    titre: 'Barrière PK 10',
+    debutLe: new Date('2027-05-16T10:00:00.000Z'),
+    finLe: new Date('2027-05-16T14:00:00.000Z'),
+  };
+
+  it('corps incomplet → InvalidAffectationError → 400', async () => {
+    await expect(
+      affecterVolontaire(SESSION_ORGANISATEUR as SessionRecord, { missionId: '00000000-0000-0000-0000-0000000000d1' }),
+    ).rejects.toBeInstanceOf(InvalidAffectationError);
+    expect(toMissionsApiError(new InvalidAffectationError()).status).toBe(400);
+  });
+
+  it('sans conflit : cree true, avertissement null', async () => {
+    const resultat = await affecterVolontaire(
+      SESSION_ORGANISATEUR as SessionRecord,
+      { missionId: '00000000-0000-0000-0000-0000000000d1', volontaireId: '00000000-0000-0000-0000-0000000000b1' },
+      deps([]),
+    );
+    expect(resultat).toEqual({ ok: true, cree: true, avertissement: null });
+  });
+
+  it('avec conflit : affectation MAINTENUE + avertissement listant la mission', async () => {
+    const resultat = await affecterVolontaire(
+      SESSION_ORGANISATEUR as SessionRecord,
+      { missionId: '00000000-0000-0000-0000-0000000000d1', volontaireId: '00000000-0000-0000-0000-0000000000b1' },
+      deps([CONFLIT]),
+    );
+    expect(resultat.cree).toBe(true);
+    expect(resultat.avertissement?.missions).toEqual([
+      {
+        missionId: 'mission-b',
+        secteurNom: 'Tronçon',
+        typeLabel: 'Sécurité tronçon',
+        titre: 'Barrière PK 10',
+        debutLe: '2027-05-16T10:00:00.000Z',
+        finLe: '2027-05-16T14:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('doublon ignoré : cree false, jamais une erreur', async () => {
+    const resultat = await affecterVolontaire(
+      SESSION_ORGANISATEUR as SessionRecord,
+      { missionId: '00000000-0000-0000-0000-0000000000d1', volontaireId: '00000000-0000-0000-0000-0000000000b1' },
+      deps([], false),
+    );
+    expect(resultat.cree).toBe(false);
+  });
+});
+
+describe('états admin et volontaire — assemblage couverture dérivée', () => {
+  const etat = {
+    secteurs: [SECTEUR],
+    missions: [
+      {
+        id: 'mission-1',
+        secteurId: '00000000-0000-0000-0000-00000000e5e1',
+        type: 'accueil' as const,
+        titre: 'Accueil village',
+        debutLe: DEBUT,
+        finLe: FIN,
+        consignes: null,
+        createdAt: new Date(),
+      },
+      {
+        id: 'mission-2',
+        secteurId: '00000000-0000-0000-0000-00000000e5e1',
+        type: 'scan_checkpoint' as const,
+        titre: 'Scan PK 12',
+        debutLe: FIN,
+        finLe: new Date('2027-05-16T18:00:00.000Z'),
+        consignes: null,
+        createdAt: new Date(),
+      },
+    ],
+    affectations: [
+      { missionId: 'mission-1', volontaireId: '00000000-0000-0000-0000-0000000000b1', volontaireNom: 'Kahina', createdAt: new Date() },
+    ],
+  };
+
+  it('admin : mission 1 couverte (1 affectation), mission 2 vacante, volontaires listés', async () => {
+    const state = await getMissionsAdminState(SESSION_ORGANISATEUR as SessionRecord, {
+      store: storeFactice({
+        listMissionsEtat: async () => etat,
+        listVolontaires: async () => [
+          {
+            id: 'v-1',
+            nom: 'Kahina',
+            email: 'kahina@exemple.dz',
+            telephone: null,
+            statutInvitation: 'active',
+            expireLe: null,
+            createdAt: new Date(),
+          },
+        ],
+      }),
+    });
+    expect(state.edition).toEqual(EDITION);
+    expect(state.secteurs[0]?.missions.map((m) => [m.titre, m.couverture])).toEqual([
+      ['Accueil village', 'couverte'],
+      ['Scan PK 12', 'vacante'],
+    ]);
+    expect(state.secteurs[0]?.missions[0]?.affectations).toEqual([
+      { volontaireId: '00000000-0000-0000-0000-0000000000b1', volontaireNom: 'Kahina' },
+    ]);
+    expect(state.volontaires).toEqual([{ id: 'v-1', nom: 'Kahina' }]);
+  });
+
+  it('volontaire : ses missions filtrées par son compte, couverture générale', async () => {
+    const state = await getMissionsVolontaireState(SESSION_VOLONTAIRE as SessionRecord, {
+      store: storeFactice({
+        listMissionsEtat: async () => etat,
+        findVolontaireIdByAccount: async () => '00000000-0000-0000-0000-0000000000b1',
+      }),
+    });
+    expect(state.editionNom).toBe(EDITION.nom);
+    expect(state.mesMissions.map((m) => m.titre)).toEqual(['Accueil village']);
+    expect(state.missions.map((m) => m.couverture)).toEqual(['couverte', 'vacante']);
+    expect(state.missions[0]?.secteurNom).toBe('Village');
+    expect(state.missions[1]?.typeLabel).toBe('Scan checkpoint');
+  });
+
+  it('sans édition : états vides sans erreur', async () => {
+    const store = storeFactice({ findCurrentEdition: async () => null });
+    await expect(
+      getMissionsAdminState(SESSION_ORGANISATEUR as SessionRecord, { store }),
+    ).resolves.toEqual({ edition: null, secteurs: [], volontaires: [] });
+    await expect(
+      getMissionsVolontaireState(SESSION_VOLONTAIRE as SessionRecord, { store }),
+    ).resolves.toEqual({ editionNom: null, mesMissions: [], missions: [] });
+  });
+});
+
+describe('enveloppes secteurs/missions — statuts et codes', () => {
+  it('suppression secteur occupé : 409 avec l’action « retire ses missions d’abord »', () => {
+    const apiError = toMissionsApiError(new SecteurOccupeError(2));
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('admin.missions.secteur_occupe');
+    expect(apiError.envelope.error.action).toContain('Retire ses missions d’abord');
+  });
+
+  it('deleteSecteur introuvable → 404, jamais 500', async () => {
+    await expect(
+      deleteSecteur(SESSION_ORGANISATEUR as SessionRecord, 'inconnu', {
+        store: storeFactice({ deleteSecteur: async () => false }),
+      }),
+    ).rejects.toBeInstanceOf(SecteurNotFoundError);
+  });
+});
+
+describe('ids non-UUID — gardes avant postgres (jamais de 22P02 → 500)', () => {
+  const CORPS_MISSION = {
+    secteurId: '00000000-0000-0000-0000-0000000000f1',
+    type: 'accueil',
+    titre: 'Accueil village',
+    debutLe: DEBUT.toISOString(),
+    finLe: FIN.toISOString(),
+  };
+
+  it('chemin secteur « pas-un-uuid » : update et delete → 404 NotFound, store non appelé', async () => {
+    const store = storeFactice();
+    await expect(
+      updateSecteur(SESSION_ORGANISATEUR as SessionRecord, 'pas-un-uuid', { nom: 'V', lieu: 'P' }, {
+        store,
+      }),
+    ).rejects.toBeInstanceOf(SecteurNotFoundError);
+    await expect(
+      deleteSecteur(SESSION_ORGANISATEUR as SessionRecord, 'pas-un-uuid', { store }),
+    ).rejects.toBeInstanceOf(SecteurNotFoundError);
+  });
+
+  it('chemin mission « pas-un-uuid » : update et delete → 404 NotFound', async () => {
+    const store = storeFactice();
+    await expect(
+      updateMission(SESSION_ORGANISATEUR as SessionRecord, 'pas-un-uuid', CORPS_MISSION, {
+        store,
+      }),
+    ).rejects.toBeInstanceOf(MissionNotFoundError);
+    await expect(
+      deleteMission(SESSION_ORGANISATEUR as SessionRecord, 'pas-un-uuid', { store }),
+    ).rejects.toBeInstanceOf(MissionNotFoundError);
+  });
+
+  it('corps affectation « pas-un-uuid » : InvalidAffectationError → 400', async () => {
+    await expect(
+      affecterVolontaire(SESSION_ORGANISATEUR as SessionRecord, {
+        missionId: 'pas-un-uuid',
+        volontaireId: '00000000-0000-0000-0000-0000000000f2',
+      }),
+    ).rejects.toBeInstanceOf(InvalidAffectationError);
+    await expect(
+      affecterVolontaire(SESSION_ORGANISATEUR as SessionRecord, {
+        missionId: '00000000-0000-0000-0000-0000000000f3',
+        volontaireId: 'pas-un-uuid',
+      }),
+    ).rejects.toBeInstanceOf(InvalidAffectationError);
+  });
+
+  it('secteurId « pas-un-uuid » en corps mission (create/update) → SecteurNotFoundError 404', async () => {
+    const store = storeFactice();
+    await expect(
+      createMission(SESSION_ORGANISATEUR as SessionRecord, {
+        ...CORPS_MISSION,
+        secteurId: 'pas-un-uuid',
+      }, { store }),
+    ).rejects.toBeInstanceOf(SecteurNotFoundError);
+    await expect(
+      updateMission(SESSION_ORGANISATEUR as SessionRecord, '00000000-0000-0000-0000-0000000000f4', {
+        ...CORPS_MISSION,
+        secteurId: 'pas-un-uuid',
+      }, { store }),
+    ).rejects.toBeInstanceOf(SecteurNotFoundError);
+  });
+});

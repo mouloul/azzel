@@ -14,7 +14,7 @@ import {
   type InscriptionsStore,
 } from '@/modules/inscriptions/store';
 import { importVolontaires, renvoyerInvitation } from '@/modules/missions/service';
-import { VolontaireNotFoundError } from '@/modules/missions/errors';
+import { MissionNotFoundError, VolontaireNotFoundError } from '@/modules/missions/errors';
 import { createMissionsStore } from '@/modules/missions/store';
 import {
   recreateAzzelTestDb,
@@ -41,6 +41,9 @@ const ORG_TABLES = [
   'email_outbox',
   'account',
   'volontaire',
+  'secteur',
+  'mission',
+  'affectation',
 ] as const;
 
 function validInput(epreuve: string): InscriptionFormInput {
@@ -283,6 +286,39 @@ describe.skipIf(testUrls === null)(
       };
       volontaireAId = await importerUnVolontaire(sessionAdminA, 'Volontaire A');
       volontaireBId = await importerUnVolontaire(sessionAdminB, 'Volontaire B');
+
+      // Story 3.2 — secteurs + missions + affectations dans CHAQUE organisation
+      // via le store réel : peuple secteur/mission/affectation pour les preuves
+      // d'isolation ci-dessous (ORG_TABLES étendu aux 3 tables).
+      for (const [orgId, editionId, volontaireId] of [
+        [orgAId, editionAId, volontaireAId],
+        [orgBId, editionBId, volontaireBId],
+      ] as const) {
+        const secteur = await missionsStore.createSecteur({
+          organisationId: orgId,
+          editionId,
+          nom: `Village ${orgId.slice(0, 4)}`,
+          lieu: 'Place du village',
+          contact: null,
+        });
+        const mission = await missionsStore.createMission({
+          organisationId: orgId,
+          secteurId: secteur.id,
+          type: 'accueil',
+          titre: 'Accueil village',
+          debutLe: new Date('2027-05-16T06:00:00.000Z'),
+          finLe: new Date('2027-05-16T12:00:00.000Z'),
+          consignes: null,
+        });
+        const affectation = await missionsStore.affecter({
+          organisationId: orgId,
+          missionId: mission.id,
+          volontaireId,
+        });
+        if (!affectation.cree) {
+          throw new Error(`affectation initiale non créée pour ${orgId}`);
+        }
+      }
     }, 120_000);
 
     afterAll(async () => {
@@ -448,6 +484,66 @@ describe.skipIf(testUrls === null)(
       await expect(
         renvoyerInvitation(sessionAdminA, volontaireBId, { store: missionsStore }),
       ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+    });
+
+    // --- Story 3.2 — secteurs, missions, affectations ---------------------------
+
+    /** Édition « 2027 » d'une organisation — échoue clairement si elle manque. */
+    async function edition2027Pour(organisationId: string): Promise<string> {
+      const rows = await sql<{ id: string }[]>`
+        SELECT id FROM edition WHERE slug = '2027' AND organisation_id = ${organisationId}
+      `;
+      const id = rows[0]?.id;
+      if (!id) {
+        throw new Error(
+          `édition « 2027 » absente pour l’organisation ${organisationId} : fixtures incomplètes`,
+        );
+      }
+      return id;
+    }
+
+    it('story 3.2 : chaque organisation voit SES secteurs et missions, pas ceux de l’autre', async () => {
+      const editionA = await edition2027Pour(orgAId);
+      const editionB = await edition2027Pour(orgBId);
+      for (const [orgId, editionId] of [
+        [orgAId, editionA],
+        [orgBId, editionB],
+      ] as const) {
+        const etat = await missionsStore.listMissionsEtat(orgId, editionId);
+        expect(etat.secteurs).toHaveLength(1);
+        expect(etat.missions).toHaveLength(1);
+        expect(etat.affectations).toHaveLength(1);
+        // La couverture dérivée ne voit que les affectations de l'organisation.
+        expect(etat.affectations.every((a) => a.missionId === etat.missions[0]?.id)).toBe(true);
+      }
+    });
+
+    it('story 3.2 : affectation croisée refusée — le volontaire de A ne rejoint pas la mission de B', async () => {
+      const editionA = await edition2027Pour(orgAId);
+      const editionB = await edition2027Pour(orgBId);
+      const etatA = await missionsStore.listMissionsEtat(orgAId, editionA);
+      const etatB = await missionsStore.listMissionsEtat(orgBId, editionB);
+      const missionB = etatB.missions[0];
+      if (!missionB) {
+        throw new Error('mission org B absente');
+      }
+      // GUC B + volontaire de A : RLS rend la fiche volontaire invisible → 404.
+      await expect(
+        missionsStore.affecter({
+          organisationId: orgBId,
+          missionId: missionB.id,
+          volontaireId: volontaireAId,
+        }),
+      ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+      // Mission de B + GUC A : invisible → 404.
+      await expect(
+        missionsStore.affecter({
+          organisationId: orgAId,
+          missionId: missionB.id,
+          volontaireId: volontaireAId,
+        }),
+      ).rejects.toBeInstanceOf(MissionNotFoundError);
+      expect(etatA.affectations).toHaveLength(1);
     });
   },
 );

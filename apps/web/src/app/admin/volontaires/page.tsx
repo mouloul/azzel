@@ -51,6 +51,13 @@ export default async function AdminVolontairesPage() {
           créé, ignoré ou rejeté — jamais d’import silencieux.
         </p>
         <VolontairesManager volontaires={state.volontaires} />
+        <p className="hint">
+          Prochaine étape :{' '}
+          <a className="btn-lien" href="/admin/missions">
+            découpe ton édition en secteurs et missions
+          </a>{' '}
+          puis affecte ces volontaires.
+        </p>
       </article>
     </section>
   );

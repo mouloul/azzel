@@ -213,12 +213,26 @@ describe('importVolontaires — service (store factice)', () => {
   } as const satisfies SessionRecord;
 
   function storeFactice(outcomes: ImportLigneOutcome[]): MissionsStore {
+    const indisponible = (): never => {
+      throw new Error('store factice : méthode missions 3.2 non appelée ici');
+    };
     return {
       importVolontaires: async () => outcomes,
       listVolontaires: async () => [],
       renvoyerInvitation: async () => {
         throw new VolontaireNotFoundError();
       },
+      findCurrentEdition: indisponible,
+      createSecteur: indisponible,
+      updateSecteur: indisponible,
+      deleteSecteur: indisponible,
+      createMission: indisponible,
+      updateMission: indisponible,
+      deleteMission: indisponible,
+      listMissionsEtat: indisponible,
+      findVolontaireIdByAccount: indisponible,
+      affecter: indisponible,
+      desaffecter: indisponible,
     };
   }
 

@@ -1,0 +1,7 @@
+/* Espace volontaire (story 3.2) — tes missions + couverture générale.
+   Fichier propre à la page /volontaires : la PWA 3.3/3.4 greffera ses styles
+   terrain (operationsTokens) par-dessus sans toucher à la vitrine. */
+.volontaires-mes-missions{list-style:none;margin:0 0 var(--az-space-3);padding:0;display:grid;gap:var(--az-space-2)}
+.volontaires-mes-missions li{display:grid;gap:2px;padding:var(--az-space-2);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm)}
+.volontaires-titre{font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);font-weight:var(--az-font-weight-meta);letter-spacing:var(--az-letter-spacing-eyebrow);text-transform:uppercase;color:var(--az-texte-2);margin:var(--az-space-3) 0 var(--az-space-1)}
+.volontaires-consignes summary{cursor:pointer;font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}

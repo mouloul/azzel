@@ -1,0 +1,20 @@
+/* Admin secteurs et missions (story 3.2) — formulaires, chips couverture,
+   affectations et bandeau d'avertissement de chevauchement. Fichier propre à
+   la page /admin/missions : hors du chunk CSS partagé (budget accueil). */
+.missions-liste{display:grid;gap:var(--az-space-3)}
+.missions-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
+.secteur-bloc{display:grid;gap:var(--az-space-2);padding:var(--az-space-3) 0;border-bottom:1px solid var(--az-filet)}
+.secteur-entete{display:flex;flex-wrap:wrap;gap:var(--az-space-2);justify-content:space-between;align-items:flex-start}
+.mission-ligne{display:grid;gap:var(--az-space-2);padding:var(--az-space-2) 0 var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding-inline:var(--az-space-3)}
+.mission-entete{display:flex;flex-wrap:wrap;gap:var(--az-space-2);align-items:baseline}
+.mission-horaires{display:block;width:100%}
+.mission-consignes summary{cursor:pointer;font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
+.mission-affectations{list-style:none;margin:0;padding:0;display:grid;gap:var(--az-space-1)}
+.mission-affectations li{display:flex;flex-wrap:wrap;gap:var(--az-space-2);align-items:center;justify-content:space-between}
+.mission-affecter{display:flex;flex-wrap:wrap;gap:var(--az-space-2);align-items:center}
+.mission-affecter label{font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
+.chip-couverte{color:var(--az-texte-1);border-color:currentColor}
+.chip-vacante{color:var(--az-texte-2);border-color:currentColor}
+.missions-avertissement{display:grid;gap:var(--az-space-1);border:2px solid currentColor;border-radius:var(--az-radius-sm);padding:var(--az-space-2);margin-top:var(--az-space-2)}
+.missions-avertissement-titre{font-weight:600}
+.missions-avertissement ul{margin:0;padding-left:1.2em}
