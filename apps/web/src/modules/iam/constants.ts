@@ -16,15 +16,32 @@ export const MAX_CODE_REQUESTS_PER_HOUR = 1000;
 
 export const RESEND_COOLDOWN_SEC = 60;
 
+// Bornes du mot de passe volontaire — ici (client-safe) et non dans password.ts
+// (qui importe node:crypto) : la page /invitation importe ces constantes sans
+// tirer scrypt dans le chunk client.
+export const PASSWORD_MIN_LENGTH = 8;
+
+export const PASSWORD_MAX_LENGTH = 128;
+
 export const SESSION_TTL_SEC = 30 * 24 * 60 * 60;
 
 export const SESSION_COOKIE_NAME = 'azzel_session';
 
-export const ACCOUNT_ROLES = ['coureur', 'organisateur'] as const;
+export const ACCOUNT_ROLES = ['coureur', 'organisateur', 'volontaire'] as const;
 
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 export const ROLE_ORGANISATEUR: AccountRole = 'organisateur';
+
+export const ROLE_VOLONTAIRE: AccountRole = 'volontaire';
+
+// Story 3.1 — invitation volontaire : TTL 14 jours, consommée à l'usage.
+export const INVITATION_TTL_DAYS = 14;
+
+// Espace du rôle volontaire (redirections requireRolePage / activation).
+export const VOLONTAIRES_HOME_PATH = '/volontaires';
+
+export const CONNEXION_VOLONTAIRE_PATH = '/connexion-volontaire';
 
 export const ADMIN_EMAILS_ENV_NAME = 'AZZEL_ADMIN_EMAILS';
 

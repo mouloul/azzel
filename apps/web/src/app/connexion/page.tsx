@@ -235,6 +235,14 @@ export default function ConnexionPage() {
             <p className="error-action">{error.action}</p>
           </div>
         )}
+        {/* Story 3.1 — lien discret : la connexion volontaire (mot de passe)
+            est un parcours séparé, la connexion par code ne change pas. */}
+        <p className="hint">
+          Volontaire ?{' '}
+          <a className="btn-lien" href="/connexion-volontaire">
+            Connecte-toi ici
+          </a>
+        </p>
       </article>
     </section>
   );

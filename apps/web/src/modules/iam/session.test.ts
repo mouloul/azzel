@@ -50,6 +50,14 @@ const SESSION_COUREUR = {
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
 };
 
+const SESSION_VOLONTAIRE = {
+  accountId: 'account-3',
+  organisationId: 'org-1',
+  email: 'volontaire@exemple.dz',
+  role: 'volontaire',
+  createdAt: new Date('2026-10-01T10:00:00.000Z'),
+};
+
 function withCookie(token: string | undefined): void {
   headersMock.cookies.mockResolvedValue({
     get: (name: string) => (name === 'azzel_session' && token ? { value: token } : undefined),
@@ -75,10 +83,10 @@ describe('requireRole — garde IAM par rôle', () => {
     expect(result).toEqual({ status: 'unauthenticated' });
   });
 
-  it('session coureur : forbidden sans fuiter la session', async () => {
+  it('session coureur : forbidden, la session accompagne le refus (redirection ciblée)', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_COUREUR);
     const result = await requireRole('organisateur', 'jeton-coureur');
-    expect(result).toEqual({ status: 'forbidden' });
+    expect(result).toEqual({ status: 'forbidden', session: SESSION_COUREUR });
   });
 
   it('session organisateur : authenticated avec la session', async () => {
@@ -107,6 +115,34 @@ describe('requireRolePage — gardes des pages (redirections)', () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_COUREUR);
     await requireRolePage('organisateur').catch((error: unknown) => error);
     expect(navigationMock.redirect).toHaveBeenCalledWith('/espace-coureur');
+  });
+
+  it('story 3.1 — session volontaire : redirection vers /volontaires (son espace)', async () => {
+    withCookie('jeton-volontaire');
+    iamServiceMock.getSession.mockResolvedValue(SESSION_VOLONTAIRE);
+    await requireRolePage('organisateur').catch((error: unknown) => error);
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/volontaires');
+  });
+
+  it('story 3.1 — page volontaire sans cookie : redirection vers /connexion-volontaire', async () => {
+    withCookie(undefined);
+    await requireRolePage('volontaire').catch((error: unknown) => error);
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/connexion-volontaire');
+  });
+
+  it('story 3.1 — page volontaire en session coureur : redirection vers /espace-coureur', async () => {
+    withCookie('jeton-coureur');
+    iamServiceMock.getSession.mockResolvedValue(SESSION_COUREUR);
+    await requireRolePage('volontaire').catch((error: unknown) => error);
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/espace-coureur');
+  });
+
+  it('story 3.1 — page volontaire en session volontaire : authenticated, pas de redirection', async () => {
+    withCookie('jeton-volontaire');
+    iamServiceMock.getSession.mockResolvedValue(SESSION_VOLONTAIRE);
+    const result = await requireRolePage('volontaire');
+    expect(result).toEqual({ status: 'authenticated', session: SESSION_VOLONTAIRE });
+    expect(navigationMock.redirect).not.toHaveBeenCalled();
   });
 
   it('session organisateur : authenticated avec la session, pas de redirection', async () => {

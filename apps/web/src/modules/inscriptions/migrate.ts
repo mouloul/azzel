@@ -15,6 +15,7 @@ const MODULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 export const MIGRATION_DIRS = [
   path.join(MODULES_DIR, 'iam', 'migrations'),
   path.join(MODULES_DIR, 'inscriptions', 'migrations'),
+  path.join(MODULES_DIR, 'missions', 'migrations'),
   path.join(MODULES_DIR, 'contenus', 'migrations'),
   path.join(MODULES_DIR, 'retour-images', 'migrations'),
 ];

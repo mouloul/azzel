@@ -6,7 +6,9 @@ import { DbUnavailableError } from '@/modules/iam/errors';
 
 import type { NotificationType } from './email-contents';
 
-export type OutboxStatus = 'pending' | 'sending' | 'sent' | 'failed';
+// 'cancelled' (0019) : email d'une invitation révoquée avant envoi — jamais
+// listé par la file, jamais rejoué.
+export type OutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
 
 // Dead-letter implicite : à partir de ce nombre de tentatives, la ligne n'est plus
 // reprise par la file — elle reste visible en base et le CLI la signale.

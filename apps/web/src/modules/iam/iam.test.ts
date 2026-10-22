@@ -15,11 +15,18 @@ import {
   EmailSendError,
   ForbiddenError,
   InvalidCodeError,
+  InvalidCredentialsError,
+  InvitationExpiredError,
+  InvitationInvalidError,
+  PasswordInvalidError,
   RateLimitedError,
   toApiError,
   UnauthenticatedError,
+  VolunteerCodeLoginRefusedError,
 } from './errors';
 import {
+  activerVolontaire,
+  connecterVolontaire,
   generateLoginCode,
   hashClientIp,
   isValidEmail,
@@ -27,6 +34,7 @@ import {
   normalizeLoginCode,
   requestLoginCode,
   sha256Hex,
+  verifyLoginCode,
 } from './service';
 import { createAppRoleGuard, createIamStore, type IamStore } from './store';
 
@@ -211,6 +219,9 @@ function createFakeStore(overrides: Partial<IamStore> = {}): IamStore {
     recordCodeRequestIp: async () => {},
     insertLoginCode: async () => {},
     verifyCodeAndStartSession: async () => ({ ok: false, reason: 'code_invalid' }),
+    findAccountRoleByEmail: async () => null,
+    consumeInvitationAndStartSession: async () => ({ ok: false, reason: 'invalid' }),
+    verifyPasswordAndStartSession: async () => ({ ok: false, reason: 'invalid_credentials' }),
     findSessionByTokenHash: async () => null,
     revokeSessionByTokenHash: async () => {},
     ...overrides,
@@ -289,6 +300,167 @@ describe('quota par IP de la demande de code', () => {
     expect(MAX_CODE_REQUESTS_PER_IP).toBeLessThanOrEqual(50);
     expect(MAX_CODE_REQUESTS_PER_IP).toBeGreaterThan(0);
     expect(CODE_REQUEST_IP_WINDOW_MS).toBe(60 * 60 * 1000);
+  });
+});
+
+// --- Story 3.1 — parcours volontaire (unitaire, store factice) ------------------
+
+describe('connexion par code refusée pour les volontaires (story 3.1)', () => {
+  it('email volontaire existant : refus AVANT toute création de code, aucun envoi', async () => {
+    const insertLoginCode = vi.fn(async () => {});
+    const sendCode = vi.fn(async () => {});
+    const store = createFakeStore({
+      findAccountRoleByEmail: async () => 'volontaire',
+      insertLoginCode,
+    });
+    await expect(
+      requestLoginCode('volontaire@exemple.dz', { store, sendCode }),
+    ).rejects.toBeInstanceOf(VolunteerCodeLoginRefusedError);
+    expect(insertLoginCode).not.toHaveBeenCalled();
+    expect(sendCode).not.toHaveBeenCalled();
+  });
+
+  it('email sans compte ou compte coureur : le flux de code continue', async () => {
+    for (const role of [null, 'coureur', 'organisateur'] as const) {
+      const insertLoginCode = vi.fn(async () => {});
+      const store = createFakeStore({
+        findAccountRoleByEmail: async () => role,
+        insertLoginCode,
+      });
+      await requestLoginCode('coureur@exemple.dz', { store, sendCode: async () => {} });
+      expect(insertLoginCode).toHaveBeenCalled();
+    }
+  });
+
+  it('vérification d’un code dont le compte est volontaire : refus orienté', async () => {
+    const store = createFakeStore({
+      verifyCodeAndStartSession: async () => ({ ok: false as const, reason: 'volontaire' as const }),
+    });
+    await expect(verifyLoginCode('v@exemple.dz', '123456', { store })).rejects.toBeInstanceOf(
+      VolunteerCodeLoginRefusedError,
+    );
+  });
+
+  it('enveloppes : refus code volontaire 400, identifiants 400, invitation 400/410, mot de passe 400', () => {
+    expect(toApiError(new VolunteerCodeLoginRefusedError())).toMatchObject({
+      status: 400,
+      envelope: { error: { code: 'iam.volontaire_code_refused' } },
+    });
+    expect(toApiError(new InvalidCredentialsError())).toMatchObject({
+      status: 400,
+      envelope: { error: { code: 'iam.invalid_credentials' } },
+    });
+    expect(toApiError(new InvitationInvalidError())).toMatchObject({
+      status: 400,
+      envelope: { error: { code: 'iam.invitation_invalid' } },
+    });
+    expect(toApiError(new InvitationExpiredError())).toMatchObject({
+      status: 410,
+      envelope: { error: { code: 'iam.invitation_expired' } },
+    });
+    expect(toApiError(new PasswordInvalidError())).toMatchObject({
+      status: 400,
+      envelope: { error: { code: 'iam.password_invalid' } },
+    });
+  });
+
+  it('activerVolontaire : jeton trop court et mot de passe hors bornes refusés avant la base', async () => {
+    const store = createFakeStore();
+    await expect(activerVolontaire('court', 'motdepasse-2026', { store })).rejects.toBeInstanceOf(
+      InvitationInvalidError,
+    );
+    await expect(activerVolontaire('j'.repeat(64), 'court', { store })).rejects.toBeInstanceOf(
+      PasswordInvalidError,
+    );
+  });
+
+  it('activerVolontaire : consommation réussie → token + email ; expirée → InvitationExpiredError', async () => {
+    const storeOk = createFakeStore({
+      consumeInvitationAndStartSession: async () => ({
+        ok: true as const,
+        accountId: 'a1',
+        organisationId: 'o1',
+        email: 'v@exemple.dz',
+        role: 'volontaire' as const,
+      }),
+    });
+    const resultat = await activerVolontaire('j'.repeat(64), 'motdepasse-2026', { store: storeOk });
+    expect(resultat.email).toBe('v@exemple.dz');
+    expect(resultat.token.length).toBeGreaterThanOrEqual(32);
+
+    const storeExpired = createFakeStore({
+      consumeInvitationAndStartSession: async () => ({ ok: false as const, reason: 'expired' as const }),
+    });
+    await expect(
+      activerVolontaire('j'.repeat(64), 'motdepasse-2026', { store: storeExpired }),
+    ).rejects.toBeInstanceOf(InvitationExpiredError);
+  });
+
+  it('connecterVolontaire : échec générique InvalidCredentialsError, jamais d’énumération', async () => {
+    const store = createFakeStore({
+      verifyPasswordAndStartSession: async () => ({ ok: false as const, reason: 'invalid_credentials' as const }),
+    });
+    await expect(connecterVolontaire('v@exemple.dz', 'mauvais', { store })).rejects.toBeInstanceOf(
+      InvalidCredentialsError,
+    );
+    await expect(connecterVolontaire('pas-un-email', 'motdepasse-2026', { store })).rejects.toBeInstanceOf(
+      InvalidCredentialsError,
+    );
+    const storeOk = createFakeStore({
+      verifyPasswordAndStartSession: async () => ({
+        ok: true as const,
+        accountId: 'a1',
+        organisationId: 'o1',
+        email: 'v@exemple.dz',
+        role: 'volontaire' as const,
+      }),
+    });
+    await expect(
+      connecterVolontaire('V@Exemple.DZ ', 'motdepasse-2026', { store: storeOk }),
+    ).resolves.toMatchObject({ email: 'v@exemple.dz' });
+  });
+
+  it('connecterVolontaire : mot de passe hors bornes refusé AVANT scrypt et avant tout appel base', async () => {
+    const verifyPasswordAndStartSession = vi.fn();
+    const recordCodeRequestIp = vi.fn();
+    const store = createFakeStore({ verifyPasswordAndStartSession, recordCodeRequestIp });
+    await expect(
+      connecterVolontaire('v@exemple.dz', 'x'.repeat(129), { store }, { clientIp: '203.0.113.7' }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    expect(verifyPasswordAndStartSession).not.toHaveBeenCalled();
+    expect(recordCodeRequestIp).not.toHaveBeenCalled();
+  });
+
+  it('connecterVolontaire : quota par IP consommé AVANT la vérification (force brute bornée)', async () => {
+    const ordre: string[] = [];
+    const store = createFakeStore({
+      recordCodeRequestIp: async () => {
+        ordre.push('ip');
+      },
+      verifyPasswordAndStartSession: async () => {
+        ordre.push('verif');
+        return { ok: false as const, reason: 'invalid_credentials' as const };
+      },
+    });
+    await expect(
+      connecterVolontaire('v@exemple.dz', 'motdepasse-2026', { store }, { clientIp: '203.0.113.7' }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    expect(ordre).toEqual(['ip', 'verif']);
+  });
+
+  it('connecterVolontaire : seuil IP atteint → RateLimitedError (429), la base n’est pas interrogée', async () => {
+    const verifyPasswordAndStartSession = vi.fn();
+    const store = createFakeStore({
+      recordCodeRequestIp: async () => {
+        throw new RateLimitedError(900);
+      },
+      verifyPasswordAndStartSession,
+    });
+    await expect(
+      connecterVolontaire('v@exemple.dz', 'motdepasse-2026', { store }, { clientIp: '203.0.113.7' }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+    expect(verifyPasswordAndStartSession).not.toHaveBeenCalled();
+    expect(toApiError(new RateLimitedError(900)).status).toBe(429);
   });
 });
 

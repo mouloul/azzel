@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { Workbook } from 'exceljs';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -12,6 +13,9 @@ import {
   createInscriptionsStore,
   type InscriptionsStore,
 } from '@/modules/inscriptions/store';
+import { importVolontaires, renvoyerInvitation } from '@/modules/missions/service';
+import { VolontaireNotFoundError } from '@/modules/missions/errors';
+import { createMissionsStore } from '@/modules/missions/store';
 import {
   recreateAzzelTestDb,
   resolveTestDatabaseUrls,
@@ -26,6 +30,7 @@ import {
 const testUrls = resolveTestDatabaseUrls('multi-org');
 
 // Tables métier portant organisation_id : l'isolation doit y être totale.
+// (invitation : voir le test dédié — pattern 0011, cherchée par secret pré-org.)
 const ORG_TABLES = [
   'evenement',
   'edition',
@@ -35,6 +40,7 @@ const ORG_TABLES = [
   'preuve',
   'email_outbox',
   'account',
+  'volontaire',
 ] as const;
 
 function validInput(epreuve: string): InscriptionFormInput {
@@ -71,10 +77,45 @@ describe.skipIf(testUrls === null)(
     let emailB = '';
     let coureurAId = '';
     let coureurBId = '';
+    let missionsStore: ReturnType<typeof createMissionsStore>;
+    let volontaireAId = '';
+    let volontaireBId = '';
     let schemaBefore: { table: string; columns: string[] }[] = [];
     let schemaAfter: { table: string; columns: string[] }[] = [];
     let policiesBefore = 0;
     let policiesAfter = 0;
+
+    /** Import réel d'un volontaire (xlsx exceljs) via le service missions. */
+    async function importerUnVolontaire(
+      sessionAdmin: SessionRecord,
+      nom: string,
+    ): Promise<string> {
+      const classeur = new Workbook();
+      const feuille = classeur.addWorksheet('Volontaires');
+      feuille.addRow(['Nom', 'Email', 'Téléphone']);
+      feuille.addRow([nom, `${sessionAdmin.organisationId}@test.azzel`, '+213 555 010 210']);
+      const bytes = new Uint8Array(
+        (await classeur.xlsx.writeBuffer()) as ArrayBuffer,
+      );
+      const rapport = await importVolontaires(sessionAdmin, {
+        bytes,
+        filename: 'volontaires.xlsx',
+      }, { store: missionsStore });
+      const cree = rapport.lignes.find((ligne) => ligne.statut === 'créé');
+      if (!cree) {
+        throw new Error(`import volontaire « ${nom} » sans ligne créée`);
+      }
+      const rows = await sql<{ id: string }[]>`
+        SELECT v.id FROM volontaire v
+        JOIN account a ON a.id = v.account_id
+        WHERE a.email = ${cree.email} AND v.organisation_id = ${sessionAdmin.organisationId}
+      `;
+      const id = rows[0]?.id;
+      if (!id) {
+        throw new Error(`fiche volontaire « ${nom} » absente en base`);
+      }
+      return id;
+    }
 
     async function schemaFingerprint(): Promise<{ table: string; columns: string[] }[]> {
       const rows = await sql<{ table_name: string; columns: string[] }[]>`
@@ -221,6 +262,27 @@ describe.skipIf(testUrls === null)(
       });
       coureurAId = await coureurIdFor(accountAId);
       coureurBId = await coureurIdFor(accountBId);
+
+      // Story 3.1 — volontaires importés dans CHAQUE organisation via le
+      // service réel (xlsx exceljs) : peuple account/volontaire/invitation/
+      // email_outbox pour les preuves d'isolation ci-dessous.
+      missionsStore = createMissionsStore(app);
+      const sessionAdminA: SessionRecord = {
+        accountId: accountAId,
+        organisationId: orgAId,
+        email: emailA,
+        role: 'organisateur',
+        createdAt: new Date(),
+      };
+      const sessionAdminB: SessionRecord = {
+        accountId: accountBId,
+        organisationId: orgBId,
+        email: emailB,
+        role: 'organisateur',
+        createdAt: new Date(),
+      };
+      volontaireAId = await importerUnVolontaire(sessionAdminA, 'Volontaire A');
+      volontaireBId = await importerUnVolontaire(sessionAdminB, 'Volontaire B');
     }, 120_000);
 
     afterAll(async () => {
@@ -248,14 +310,16 @@ describe.skipIf(testUrls === null)(
         ]),
       );
 
-      // La file d'envoi a bien une ligne par organisation (GUC de chaque tx).
+      // La file d'envoi a au moins une ligne par organisation (GUC de chaque tx) :
+      // 1 notification d'inscription (story 1.8) + 1 invitation volontaire
+      // (story 3.1) par organisation.
       const outboxByOrg = await sql<{ organisation_id: string; count: number }[]>`
         SELECT organisation_id, count(*)::int AS count FROM email_outbox GROUP BY organisation_id
       `;
       expect(outboxByOrg).toEqual(
         expect.arrayContaining([
-          { organisation_id: orgAId, count: 1 },
-          { organisation_id: orgBId, count: 1 },
+          { organisation_id: orgAId, count: 2 },
+          { organisation_id: orgBId, count: 2 },
         ]),
       );
     });
@@ -330,6 +394,60 @@ describe.skipIf(testUrls === null)(
       const recordB = await iamStore.findSessionByTokenHash(tokenHashB);
       expect(recordB?.organisationId).toBe(orgBId);
       expect(recordB?.email).toBe(emailB);
+    });
+
+    // --- Story 3.1 — volontaires et invitations --------------------------------
+
+    it('story 3.1 : chaque organisation voit SES volontaires, l’import B n’a rien créé chez A', async () => {
+      const listeA = await missionsStore.listVolontaires(orgAId);
+      const listeB = await missionsStore.listVolontaires(orgBId);
+      expect(listeA.map((v) => v.email)).toEqual([`${orgAId}@test.azzel`]);
+      expect(listeB.map((v) => v.email)).toEqual([`${orgBId}@test.azzel`]);
+    });
+
+    it('story 3.1 : invitation — pattern 0011 (secret d’abord) : sous GUC A, les invitations de B sont invisibles', async () => {
+      // Le compte des invitations doit être IDENTIQUE vu sous GUC A et GUC B :
+      // chaque organisation ne voit que la sienne (le contrôle d'accès hors GUC
+      // reste le secret — le hash du jeton).
+      for (const [orgId, autreOrgId] of [
+        [orgAId, orgBId],
+        [orgBId, orgAId],
+      ] as const) {
+        const compte = await withOrg(app, orgId, async (tx) => {
+          const rows = await tx<{ count: number; autres: number }[]>`
+            SELECT count(*)::int AS count,
+              count(*) FILTER (WHERE organisation_id = ${autreOrgId})::int AS autres
+            FROM invitation
+          `;
+          return rows[0];
+        });
+        expect(compte?.count).toBe(1);
+        expect(compte?.autres).toBe(0);
+      }
+    });
+
+    it('story 3.1 : renvoi d’invitation croisé refusé — B ne peut pas réinviter le volontaire de A', async () => {
+      const sessionAdminB: SessionRecord = {
+        accountId: accountBId,
+        organisationId: orgBId,
+        email: emailB,
+        role: 'organisateur',
+        createdAt: new Date(),
+      };
+      await expect(
+        renvoyerInvitation(sessionAdminB, volontaireAId, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+      // Et l'inverse.
+      const sessionAdminA: SessionRecord = {
+        accountId: accountAId,
+        organisationId: orgAId,
+        email: emailA,
+        role: 'organisateur',
+        createdAt: new Date(),
+      };
+      await expect(
+        renvoyerInvitation(sessionAdminA, volontaireBId, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(VolontaireNotFoundError);
     });
   },
 );

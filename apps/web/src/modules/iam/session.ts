@@ -1,7 +1,13 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { SESSION_COOKIE_NAME, type AccountRole } from './constants';
+import {
+  CONNEXION_VOLONTAIRE_PATH,
+  ROLE_VOLONTAIRE,
+  SESSION_COOKIE_NAME,
+  VOLONTAIRES_HOME_PATH,
+  type AccountRole,
+} from './constants';
 import { DbUnavailableError } from './errors';
 import { getSession } from './service';
 import type { SessionRecord } from './store';
@@ -33,7 +39,7 @@ export type RequireRoleResult =
   | { status: 'authenticated'; session: SessionRecord }
   | { status: 'db-unavailable' }
   | { status: 'unauthenticated' }
-  | { status: 'forbidden' };
+  | { status: 'forbidden'; session: SessionRecord };
 
 export async function requireRole(
   required: AccountRole,
@@ -55,7 +61,9 @@ export async function requireRole(
     return { status: 'unauthenticated' };
   }
   if (session.role !== required) {
-    return { status: 'forbidden' };
+    // La session accompagne le refus : requireRolePage redirige un volontaire
+    // vers SON espace au lieu de l'espace coureur (story 3.1).
+    return { status: 'forbidden', session };
   }
   return { status: 'authenticated', session };
 }
@@ -64,10 +72,10 @@ export async function requireRolePage(required: AccountRole): Promise<RequireSes
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const result = await requireRole(required, token);
   if (result.status === 'unauthenticated') {
-    redirect('/connexion');
+    redirect(required === ROLE_VOLONTAIRE ? CONNEXION_VOLONTAIRE_PATH : '/connexion');
   }
   if (result.status === 'forbidden') {
-    redirect('/espace-coureur');
+    redirect(result.session.role === ROLE_VOLONTAIRE ? VOLONTAIRES_HOME_PATH : '/espace-coureur');
   }
   return result;
 }
