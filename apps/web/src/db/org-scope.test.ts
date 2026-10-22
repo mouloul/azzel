@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type postgres from 'postgres';
 
@@ -6,6 +6,7 @@ import {
   ORGANISATION_GUC,
   findOrganisationIdBySlug,
   listOrganisationIds,
+  resetOrganisationIdMemoForTests,
   withDefaultOrg,
   withOrg,
 } from './org-scope';
@@ -35,6 +36,10 @@ function fakeConnection(results: unknown[] = []) {
 function textOf(query: RecordedQuery): string {
   return query.fragments.join('?');
 }
+
+beforeEach(() => {
+  resetOrganisationIdMemoForTests();
+});
 
 describe('withOrg — GUC transactionnel', () => {
   it('pose set_config(app.organisation_id, org, true) puis exécute fn dans sql.begin', async () => {
@@ -73,8 +78,8 @@ describe('withOrg — GUC transactionnel', () => {
 
 describe('findOrganisationIdBySlug — lecture publique sans GUC', () => {
   it('retourne l’id de la ligne trouvée', async () => {
-    const { sql, queries } = fakeConnection([{ id: 'org-x' }]);
-    await expect(findOrganisationIdBySlug(sql, 'ait-aissi')).resolves.toBe('org-x');
+    const { sql, queries } = fakeConnection([{ id: '11111111-1111-4111-8111-111111111111' }]);
+    await expect(findOrganisationIdBySlug(sql, 'ait-aissi')).resolves.toBe('11111111-1111-4111-8111-111111111111');
     expect(textOf(queries[0] as RecordedQuery)).toContain('FROM organisation');
     expect((queries[0] as RecordedQuery).params).toEqual(['ait-aissi']);
   });

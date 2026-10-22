@@ -1,0 +1,8 @@
+/* Admin sponsors (story 2.3) — liste, actions, badge signature.
+   Fichier propre à la page /admin/sponsors : hors du chunk CSS partagé
+   avec la vitrine (budget premier chargement < 300 Ko). */
+.sponsors-liste{display:grid;gap:var(--az-space-3)}
+.sponsor-ligne{display:grid;gap:var(--az-space-2);padding:var(--az-space-3) 0;border-bottom:1px solid var(--az-filet)}
+.sponsor-ligne form{display:grid;gap:var(--az-space-3)}
+.sponsors-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
+.chip-meta{display:inline-block;margin-left:var(--az-space-2);font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);font-weight:var(--az-font-weight-meta);letter-spacing:var(--az-letter-spacing-eyebrow);text-transform:uppercase;color:var(--az-texte-2);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:2px 8px}

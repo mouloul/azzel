@@ -4,9 +4,9 @@ import type { ReactNode } from 'react';
 import { AdminHeaderLink } from '@/components/admin-header-link';
 import { BandeauEgide } from '@/components/bandeau-egide';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { buildTokensCss } from '@/lib/tokens-css';
 import { buildThemeInitScript } from '@/lib/theme';
 import './globals.css';
+import './tokens-synchronises.css';
 
 export const metadata: Metadata = {
   title: {
@@ -43,10 +43,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           as="font"
           type="font/woff2"
           crossOrigin="anonymous"
-        />
-        <style
-          precedence="tokens"
-          dangerouslySetInnerHTML={{ __html: buildTokensCss() }}
         />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <a className="skip-link" href="#contenu">

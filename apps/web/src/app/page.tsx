@@ -9,7 +9,9 @@ import {
   GlypheTala,
   GlypheYaz,
 } from '@/components/glyphes-piliers';
+import { SectionPartenaires } from '@/components/section-partenaires';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { getPartenairesSection } from '@/modules/sponsors/service';
 
 const PHOTOS = '/charte/photos-2026';
 
@@ -36,8 +38,17 @@ const PILIERS = [
   },
 ];
 
-export default function HomePage() {
-  const telephone = readAssistancePhone();
+// Section partenaires lue en base à chaque requête (bascule A/B « sans dev »,
+// FR-22) : l’accueil passe du prérendu statique au dynamique — la section est
+// rendue serveur à chaque requête (voir Design Notes 2.3), le reste de la page
+// est inchangé (texte).
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage() {
+  const [telephone, partenaires] = await Promise.all([
+    readAssistancePhone(),
+    getPartenairesSection(),
+  ]);
 
   return (
     <>
@@ -174,6 +185,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <SectionPartenaires view={partenaires} />
 
       <section
         className="vitrine-bande vitrine-bande--foret"

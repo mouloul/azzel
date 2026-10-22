@@ -1,8 +1,28 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { siteTokens } from '@azzel/shared';
 
 import { buildTokensCss } from './tokens-css';
+
+describe('tokens-synchronises.css (fichier servi, story 2.3)', () => {
+  it('est synchronisé avec buildTokensCss — sinon pnpm -F @azzel/web tokens:sync', () => {
+    const chemin = fileURLToPath(
+      new URL('../app/tokens-synchronises.css', import.meta.url),
+    );
+    const fichier = readFileSync(chemin, 'utf8');
+    const attendu = `/* FICHIER GÉNÉRÉ — ne pas éditer à la main.
+ * Source : packages/shared (siteTokens/operationsTokens) via src/lib/tokens-css.ts.
+ * Régénérer : pnpm -F @azzel/web tokens:sync (aussi exécuté avant chaque build).
+ */
+
+${buildTokensCss()}
+`;
+    expect(fichier).toBe(attendu);
+  });
+});
 
 describe('buildTokensCss', () => {
   const css = buildTokensCss();

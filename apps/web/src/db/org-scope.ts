@@ -40,15 +40,32 @@ export async function withOrg<T>(
  * Lecture publique de l'organisation par slug, SANS GUC — exception documentée
  * (spec 1.9) : résolution de l'organisation par défaut pour les flows pré-session
  * (l'existence d'une organisation n'est pas sensible ; écritures scopées en base).
+ * Mémoïsée au niveau module : slug → id est immuable par déploiement, l'accueil
+ * dynamique ne refait pas la requête à chaque hit.
  */
+const organisationIdParSlug = new Map<string, string>();
+
+/** Tests uniquement : vide la mémo slug → id (isolation entre suites). */
+export function resetOrganisationIdMemoForTests(): void {
+  organisationIdParSlug.clear();
+}
+
 export async function findOrganisationIdBySlug(
   sql: postgres.Sql,
   slug: string,
 ): Promise<string | null> {
+  const enMemoire = organisationIdParSlug.get(slug);
+  if (enMemoire !== undefined) {
+    return enMemoire;
+  }
   const rows = await sql<{ id: string }[]>`
     SELECT id FROM organisation WHERE slug = ${slug} LIMIT 1
   `;
-  return rows[0]?.id ?? null;
+  const id = rows[0]?.id ?? null;
+  if (id !== null) {
+    organisationIdParSlug.set(slug, id);
+  }
+  return id;
 }
 
 /** Tous les ids d'organisation (lecture publique, sans GUC) — worker outbox, CLI. */
