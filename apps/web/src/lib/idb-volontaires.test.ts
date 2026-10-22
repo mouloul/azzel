@@ -150,8 +150,19 @@ function annuaireExemple(genereA: string): AnnuaireEdition {
     editionId: 'edition-1',
     genereA,
     coureurs: [
-      { dossard: 1, nom: 'Ulahianne', prenom: 'Yani' },
-      { dossard: 12, nom: 'Cherchée', prenom: 'Iness' },
+      // Story 4.1 — contrat v2 : jeton base64url 22 caractères par coureur.
+      {
+        dossard: 1,
+        nom: 'Ulahianne',
+        prenom: 'Yani',
+        jeton: 'jeton-coureur-1-aaaaaa',
+      },
+      {
+        dossard: 12,
+        nom: 'Cherchée',
+        prenom: 'Iness',
+        jeton: 'jeton-coureur-12-aaaaa',
+      },
     ],
   };
 }
@@ -314,8 +325,8 @@ describe('lireAnnuaire / ecrireAnnuaire — store dédié v2 (story 3.4)', () =>
     const invalide = {
       ...annuaireExemple('2026-10-22T08:00:00.000Z'),
       coureurs: [
-        { dossard: 7, nom: 'Doublon', prenom: 'Un' },
-        { dossard: 7, nom: 'Doublon', prenom: 'Deux' },
+        { dossard: 7, nom: 'Doublon', prenom: 'Un', jeton: 'jeton-doublon-1-aaaaaa' },
+        { dossard: 7, nom: 'Doublon', prenom: 'Deux', jeton: 'jeton-doublon-2-aaaaaa' },
       ],
     };
     expect(await ecrireAnnuaire(invalide)).toBe(false);

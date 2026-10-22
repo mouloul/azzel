@@ -106,6 +106,10 @@
   --az-font-meta-lg: var(--font-body);
   --az-font-size-meta-lg: 15px;
   --az-font-weight-meta-lg: 400;
+  --az-font-dossard: var(--font-display);
+  --az-font-size-dossard: 74px;
+  --az-font-weight-dossard: 800;
+  --az-line-height-dossard: 1;
   --az-radius: var(--radius-md);
   --az-radius-sm: var(--radius-sm);
   --az-radius-md: var(--radius-md);

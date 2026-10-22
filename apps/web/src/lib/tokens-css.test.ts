@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { siteTokens } from '@azzel/shared';
+import { siteTokens, operationsTokens } from '@azzel/shared';
 
 import { buildTokensCss } from './tokens-css';
 
@@ -106,6 +106,17 @@ describe('buildTokensCss', () => {
     expect(rootBlock).toContain('--az-space-gutter:');
   });
 
+  it('émet la typo dossard (story 4.1) — numéro 74 px de l’e-dossard', () => {
+    expect(rootBlock).toContain('--az-font-dossard: var(--font-display);');
+    expect(rootBlock).toContain(`--az-font-size-dossard: ${operationsTokens.typography.dossard.fontSize};`);
+    expect(rootBlock).toContain(
+      `--az-font-weight-dossard: ${operationsTokens.typography.dossard.fontWeight};`,
+    );
+    expect(rootBlock).toContain(
+      `--az-line-height-dossard: ${operationsTokens.typography.dossard.lineHeight};`,
+    );
+  });
+
   it('émet les styles eyebrow et bouton depuis siteTokens', () => {
     expect(rootBlock).toContain(
       `--az-font-size-eyebrow: ${siteTokens.styles.eyebrow.fontSize};`,
@@ -123,11 +134,10 @@ describe('buildTokensCss', () => {
     expect(rootBlock).not.toContain('font-size: 17px;');
   });
 
-  it('n’émet pas de variables mortes (--bp-*, typo dossard)', () => {
+  it('n’émet pas de variables mortes (--bp-*, letter-spacing surtitre)', () => {
     expect(rootBlock).not.toContain('--bp-sm:');
     expect(rootBlock).not.toContain('--bp-md:');
     expect(rootBlock).not.toContain('--bp-lg:');
-    expect(rootBlock).not.toContain('--az-font-dossard:');
     expect(rootBlock).not.toContain('--az-letter-spacing-surtitre:');
   });
 });

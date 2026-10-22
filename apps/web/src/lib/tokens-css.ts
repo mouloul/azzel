@@ -51,6 +51,8 @@ const AZ_TYPOGRAPHY_ROLES = new Set([
   'body',
   'meta',
   'meta-lg',
+  // Story 4.1 — numéro 74 px de l'e-dossard (carte sombre coureur).
+  'dossard',
 ]);
 
 const AZ_REMAP: Record<string, string> = {

@@ -674,3 +674,43 @@ export async function attribuerDossards(
     editionId: edition.id,
   });
 }
+
+// Story 4.1 — e-dossard du coureur : tout ce que la page /espace-coureur/
+// e-dossard affiche, SANS donnée d'un autre coureur. Le jeton naît ici
+// (première consultation du validé) et le service n'expose JAMAIS le payload
+// QR : l'encodage `azzel-e1:<jeton>` reste l'affaire de la page via shared.
+
+export interface EdossardState {
+  jeton: string;
+  dossard: number | null;
+  prenom: string;
+  nom: string;
+  epreuveNom: string;
+  editionNom: string;
+}
+
+/**
+ * E-dossard du coureur de la session (édition courante). Null si le dossier
+ * n'est pas validé (ou pas de coureur) : la page affiche alors le message
+ * d'attente renvoyant vers la checklist — AUCUN QR. NoEditionError sinon
+ * (même garde que l'attribution des dossards).
+ */
+export async function obtenirEdossard(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<EdossardState | null> {
+  const store = deps.store ?? getInscriptionsStore();
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    throw new NoEditionError();
+  }
+  const data = await store.obtenirOuCreerJetonEdossard({
+    organisationId: session.organisationId,
+    accountId: session.accountId,
+    editionId: edition.id,
+  });
+  if (!data) {
+    return null;
+  }
+  return { ...data, editionNom: edition.nom };
+}

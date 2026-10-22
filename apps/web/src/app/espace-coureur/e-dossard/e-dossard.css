@@ -1,0 +1,143 @@
+/* Story 4.1 — e-dossard (surface coureur, palette operationsTokens).
+   Fichier propre à /espace-coureur/e-dossard. La carte sombre est TOUJOURS
+   sombre (guichet, plein soleil) : couleurs fixes issues des rôles *-sombre
+   des tokens (bg-sombre #101A14, texte-sombre #E8F0E9, texte-2-sombre
+   #A9C0AE, action-sombre #8FD4A8) — indépendantes du mode clair/sombre du
+   site. Le QR vit sur carte blanche coins 16 px, modules encre : contrastes
+   fixes pour rester scannable dans les deux modes. */
+
+/* --- Carte sombre : identité + numéro 74 px -------------------------------- */
+
+.edossard-carte-sombre {
+  --edossard-fond: #101A14;
+  --edossard-encre: #E8F0E9;
+  --edossard-encre-2: #A9C0AE;
+  --edossard-accent: #8FD4A8;
+
+  display: grid;
+  gap: var(--az-space-2);
+  justify-items: start;
+  background: var(--edossard-fond);
+  color: var(--edossard-encre);
+  border-color: var(--edossard-fond);
+}
+
+.edossard-surtitre {
+  color: var(--edossard-accent);
+}
+
+.edossard-identite {
+  margin: 0;
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  color: var(--edossard-encre);
+}
+
+.edossard-epreuve {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  color: var(--edossard-encre-2);
+}
+
+.edossard-numero {
+  margin: var(--az-space-2) 0 0;
+  font-family: var(--az-font-dossard);
+  font-size: var(--az-font-size-dossard);
+  font-weight: var(--az-font-weight-dossard);
+  line-height: var(--az-line-height-dossard);
+  color: var(--edossard-encre);
+  font-variant-numeric: tabular-nums;
+}
+
+.edossard-numero--attente {
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  line-height: 1.2;
+  color: var(--edossard-encre-2);
+}
+
+.edossard-numero-note {
+  margin: 0;
+  font-size: var(--az-font-size-body);
+  line-height: var(--az-line-height-body);
+  color: var(--edossard-encre-2);
+}
+
+/* Badge « HORS-LIGNE PRÊT » — mono (fontStackMono de packages/shared). */
+.edossard-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-2);
+  min-height: 32px;
+  margin-top: var(--az-space-2);
+  padding: var(--az-space-1) var(--az-space-3);
+  border-radius: var(--az-radius-full);
+  background: var(--edossard-accent);
+  color: #0C2415; /* action-texte-sombre */
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--az-font-size-meta-lg);
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.06em;
+}
+
+.edossard-badge-point {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--az-radius-full);
+  background: currentColor;
+}
+
+/* --- Carte QR : blanche, coins 16 px, SVG haute définition ------------------ */
+
+.edossard-carte-qr {
+  display: grid;
+  gap: var(--az-space-3);
+  justify-items: center;
+  background: #FFFFFF;
+  border-color: var(--az-filet);
+  color: var(--az-texte);
+}
+
+.edossard-qr {
+  width: 100%;
+  max-width: 320px;
+  padding: var(--az-space-3);
+  border-radius: var(--az-radius-md); /* 16 px */
+  background: #FFFFFF;
+}
+
+.edossard-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.edossard-qr-legende {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  text-align: center;
+}
+
+/* --- Conseil raccourci système ---------------------------------------------- */
+
+.edossard-conseil-titre {
+  margin: 0 0 var(--az-space-2);
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+}
+
+.edossard-conseil {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+}
+
+[data-theme="dark"] .edossard-carte-qr {
+  background: #FFFFFF;
+  color: var(--az-texte);
+}

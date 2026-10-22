@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import postgres, { type Sql } from 'postgres';
 
 import { DOSSARD_MAX } from '@azzel/shared';
@@ -73,6 +75,11 @@ export interface CoureurRecord {
   status: string;
   /** Numéro de dossard (nullable : attribué par lot, story 3.4). */
   dossard: number | null;
+  /**
+   * Jeton e-dossard (story 4.1) : nullable, créé paresseusement à la première
+   * consultation du coureur validé — jamais régénéré.
+   */
+  jetonEdossard: string | null;
   refusalReason: string | null;
   decidedBy: string | null;
   decidedAt: Date | null;
@@ -181,6 +188,24 @@ export interface AttribuerDossardsInput {
   editionId: string;
 }
 
+// Story 4.1 — données coureur nécessaires à la page e-dossard. Renvoyées d'un
+// seul tenant par le store (le jeton naît dans la même transaction que la
+// lecture du dossard/identité : pas de course avec l'attribution 3.4).
+
+export interface EdossardCoureurData {
+  jeton: string;
+  dossard: number | null;
+  prenom: string;
+  nom: string;
+  epreuveNom: string;
+}
+
+export interface ObtenirJetonEdossardInput {
+  organisationId: string;
+  accountId: string;
+  editionId: string;
+}
+
 /**
  * Garde de capacité du lot (pure, testée unitairement) : la suite de la
  * numérotation (base + cibles) doit rester sous le plafond — sinon enveloppe
@@ -240,6 +265,9 @@ export interface InscriptionsStore {
   }): Promise<DossierDetail | null>;
   decideDossier(input: DecideDossierInput): Promise<CoureurRecord>;
   attribuerDossards(input: AttribuerDossardsInput): Promise<DossardsAttribution>;
+  obtenirOuCreerJetonEdossard(
+    input: ObtenirJetonEdossardInput,
+  ): Promise<EdossardCoureurData | null>;
   findPreuveByIdForOrganisation(
     preuveId: string,
     organisationId: string,
@@ -317,6 +345,7 @@ interface CoureurRow {
   age_category: string;
   status: string;
   dossard: number | null;
+  jeton_edossard: string | null;
   refusal_reason: string | null;
   decided_by: string | null;
   decided_at: Date | null;
@@ -386,6 +415,7 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     categorieAge: row.age_category,
     status: row.status,
     dossard: row.dossard,
+    jetonEdossard: row.jeton_edossard,
     refusalReason: row.refusal_reason,
     decidedBy: row.decided_by,
     decidedAt: row.decided_at,
@@ -403,7 +433,7 @@ const COUREUR_COLUMNS = `
   c.first_name, c.last_name, c.phone,
   c.emergency_contact_name, c.emergency_contact_phone,
   c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
-  c.dossard, c.refusal_reason, c.decided_by, c.decided_at,
+  c.dossard, c.jeton_edossard, c.refusal_reason, c.decided_by, c.decided_at,
   c.decharge_accepted_at, c.decharge_version,
   c.reglement_accepted_at, c.reglement_version,
   c.created_at, c.updated_at,
@@ -1069,6 +1099,75 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       );
     },
 
+    // Story 4.1 — jeton e-dossard : créé paresseusement (première consultation
+    // du coureur VALIDÉ) et UNE SEULE FOIS, jamais régénéré. Atomicité : le
+    // FOR UPDATE pose le verrou coureur — deux consultations concurrentes se
+    // sérialisent, la seconde relit le jeton posé par la première et le rend
+    // tel quel. L'UPDATE garde `jeton_edossard IS NULL` en prédicat (défense
+    // supplémentaire) ; la UNIQUE partielle SQL (0023) reste le dernier
+    // recours contre un collision inter-coureurs (128 bits d'aléa : proche de
+    // l'impossible, et une violation échoue proprement la transaction).
+    async obtenirOuCreerJetonEdossard(
+      input: ObtenirJetonEdossardInput,
+    ): Promise<EdossardCoureurData | null> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          const lockedRows = await tx<
+            {
+              id: string;
+              status: string;
+              dossard: number | null;
+              first_name: string;
+              last_name: string;
+              jeton_edossard: string | null;
+              epreuve_nom: string;
+            }[]
+          >`
+            SELECT c.id, c.status, c.dossard, c.first_name, c.last_name,
+                   c.jeton_edossard, e.name AS epreuve_nom
+            FROM coureur c
+            JOIN epreuve e ON e.id = c.epreuve_id
+            WHERE c.account_id = ${input.accountId}
+              AND c.edition_id = ${input.editionId}
+              AND c.organisation_id = ${input.organisationId}
+            LIMIT 1
+            FOR UPDATE OF c
+          `;
+          const locked = lockedRows[0];
+          if (!locked) {
+            return null;
+          }
+          // Seul un dossier VALIDÉ obtient un e-dossard — les autres états
+          // (constitution, refusé) ne créent jamais de jeton.
+          if (locked.status !== COUREUR_STATUS_VALIDE) {
+            return null;
+          }
+          let jeton = locked.jeton_edossard;
+          if (jeton === null) {
+            // randomBytes(16) en base64url = 22 caractères (CHECK SQL 0023).
+            const candidat = randomBytes(16).toString('base64url');
+            const updatedRows = await tx<{ jeton_edossard: string }[]>`
+              UPDATE coureur
+              SET jeton_edossard = ${candidat}, updated_at = now()
+              WHERE id = ${locked.id} AND jeton_edossard IS NULL
+              RETURNING jeton_edossard
+            `;
+            jeton = updatedRows[0]?.jeton_edossard ?? null;
+          }
+          if (jeton === null) {
+            throw new Error('jeton e-dossard non posé après création');
+          }
+          return {
+            jeton,
+            dossard: locked.dossard,
+            prenom: locked.first_name,
+            nom: locked.last_name,
+            epreuveNom: locked.epreuve_nom,
+          };
+        }),
+      );
+    },
+
     async findPreuveByIdForOrganisation(
       preuveId: string,
       organisationId: string,
@@ -1113,6 +1212,7 @@ function createUnavailableStore(): InscriptionsStore {
     findDossierDetail: unavailable,
     decideDossier: unavailable,
     attribuerDossards: unavailable,
+    obtenirOuCreerJetonEdossard: unavailable,
     findPreuveByIdForOrganisation: unavailable,
   };
 }

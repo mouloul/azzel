@@ -3,16 +3,25 @@
 // persiste en IndexedDB, l'épopée 4 (scan zone blanche) le consomme — jamais
 // réinventé localement. Défensif par construction : un payload invalide donne
 // null, jamais d'exception.
+//
+// Story 4.1 — version 2 du schéma : chaque coureur porte son `jeton` e-dossard
+// (résolu par chercherParJeton — le QR n'encode JAMAIS le dossard nu). Les
+// coureurs validés qui n'ont jamais consulté leur e-dossard (jeton NULL en
+// base) restent hors réplique jusqu'à consultation : le contrat exige un jeton.
 
-export const ANNUAIRE_SCHEMA_VERSION = 1 as const;
+import { estJetonEdossardValide } from './edossard';
+
+export const ANNUAIRE_SCHEMA_VERSION = 2 as const;
 
 export type AnnuaireSchemaVersion = typeof ANNUAIRE_SCHEMA_VERSION;
 
-/** Identité minimale pour valider un scan (NFR-7) : dossard + nom + prénom. */
+/** Identité minimale pour valider un scan (NFR-7) : dossard, noms, jeton. */
 export interface CoureurAnnuaire {
   dossard: number;
   nom: string;
   prenom: string;
+  /** Jeton e-dossard (4.1) — c'est LUI que le QR encode, jamais le dossard. */
+  jeton: string;
 }
 
 /** Réplique complète d'une édition, servie par GET /api/volontaires/annuaire. */
@@ -29,6 +38,7 @@ export const DOSSARD_INCONNU_LABEL = 'DOSSARD INCONNU';
 
 /** Bornes du dossard — symétrie exacte avec le CHECK SQL (migration 0022). */
 export const DOSSARD_MIN = 1;
+
 export const DOSSARD_MAX = 9999;
 
 export function estDossardValide(valeur: unknown): valeur is number {
@@ -62,14 +72,16 @@ function estCoureurAnnuaire(valeur: unknown): valeur is CoureurAnnuaire {
   return (
     estDossardValide(candidat.dossard) &&
     estTexteNonVide(candidat.nom) &&
-    estTexteNonVide(candidat.prenom)
+    estTexteNonVide(candidat.prenom) &&
+    estJetonEdossardValide(candidat.jeton)
   );
 }
 
 /**
  * Garde de schéma du payload annuaire : formes (version, identifiants, ISO,
- * coureurs) ET unicité des dossards. Rejette tout doublon — un annuaire avec
- * deux fois le même dossard ne peut pas servir à valider un scan.
+ * coureurs), unicité des dossards ET des jetons. Un doublon — dossard ou
+ * jeton — rend la réplique ambiguë : elle ne peut plus servir à valider un
+ * scan (le jeton dupliqué est la défense en profondeur de l'UNIQUE SQL 0023).
  */
 export function estAnnuaireValide(valeur: unknown): valeur is AnnuaireEdition {
   if (typeof valeur !== 'object' || valeur === null) {
@@ -88,15 +100,20 @@ export function estAnnuaireValide(valeur: unknown): valeur is AnnuaireEdition {
   if (!Array.isArray(candidat.coureurs)) {
     return false;
   }
-  const vus = new Set<number>();
+  const dossardsVus = new Set<number>();
+  const jetonsVus = new Set<string>();
   for (const coureur of candidat.coureurs) {
     if (!estCoureurAnnuaire(coureur)) {
       return false;
     }
-    if (vus.has(coureur.dossard)) {
+    if (dossardsVus.has(coureur.dossard)) {
       return false;
     }
-    vus.add(coureur.dossard);
+    if (jetonsVus.has(coureur.jeton)) {
+      return false;
+    }
+    dossardsVus.add(coureur.dossard);
+    jetonsVus.add(coureur.jeton);
   }
   return true;
 }
@@ -114,4 +131,32 @@ export function chercherParDossard(
     return null;
   }
   return annuaire.coureurs.find((coureur) => coureur.dossard === dossard) ?? null;
+}
+
+/**
+ * Story 4.1 — recherche par jeton e-dossard : c'est le chemin du scanneur
+ * (le QR décodé donne un jeton, JAMAIS un dossard). Totale : payload invalide
+ * ou jeton mal formé → null, jamais d'exception — l'épopée 4 affichera
+ * DOSSARD_INCONNU_LABEL sur ce null.
+ */
+export function chercherParJeton(annuaire: unknown, jeton: string): CoureurAnnuaire | null {
+  if (!estAnnuaireValide(annuaire) || !estJetonEdossardValide(jeton)) {
+    return null;
+  }
+  return annuaire.coureurs.find((coureur) => coureur.jeton === jeton) ?? null;
+}
+
+/**
+ * Story 4.1 (revue) — index par jeton pour le chemin chaud du scanneur 4.2 :
+ * `chercherParJeton` revalide toute la réplique (O(n) + regex) à CHAQUE
+ * appel ; ici la réplique est validée UNE fois puis réduite à une Map
+ * (jeton → coureur) sur laquelle le lookup est O(1). Totale : payload
+ * invalide (doublons compris, déjà rejetés par estAnnuaireValide) → null.
+ * Les lookups one-shot (chercherParDossard/chercherParJeton) restent inchangés.
+ */
+export function indexerAnnuaire(annuaire: unknown): ReadonlyMap<string, CoureurAnnuaire> | null {
+  if (!estAnnuaireValide(annuaire)) {
+    return null;
+  }
+  return new Map(annuaire.coureurs.map((coureur) => [coureur.jeton, coureur]));
 }

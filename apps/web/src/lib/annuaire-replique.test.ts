@@ -20,6 +20,8 @@ function annuaire(genereA: string, coureurs = 1): AnnuaireEdition {
             dossard: index + 1,
             nom: `Nom${index}`,
             prenom: `Prenom${index}`,
+            // Contrat v2 (4.1) : jeton base64url 22 caractères.
+            jeton: `jeton-coureur-${index}-aaaaaaaaaaa`.slice(0, 22),
           })),
   };
 }

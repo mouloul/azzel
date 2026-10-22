@@ -74,12 +74,13 @@ const ETAT = {
 };
 
 const ANNUAIRE = {
-  version: 1,
+  version: 2,
   editionId: 'edition-1',
   genereA: '2026-10-22T08:00:00.000Z',
   coureurs: [
-    { dossard: 1, nom: 'Ulahianne', prenom: 'Yani' },
-    { dossard: 12, nom: 'Cherchée', prenom: 'Iness' },
+    // Contrat v2 (story 4.1) : jeton base64url 22 caractères par coureur.
+    { dossard: 1, nom: 'Ulahianne', prenom: 'Yani', jeton: 'jeton-coureur-1-aaaaaa' },
+    { dossard: 12, nom: 'Cherchée', prenom: 'Iness', jeton: 'jeton-coureur-12-aaaaa' },
   ],
 };
 

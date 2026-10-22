@@ -109,15 +109,26 @@ describe('GET /api/volontaires/annuaire', () => {
     expect(body.error.code).toBe('volontaires.db_unavailable');
   });
 
-  it('session volontaire : 200, payload = contrat shared validé (version, tri), no-store', async () => {
+  it('session volontaire : 200, payload = contrat shared validé (version 2, jetons, tri), no-store', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_VOLONTAIRE);
     missionsServiceMock.getAnnuaireEdition.mockResolvedValue({
       version: ANNUAIRE_SCHEMA_VERSION,
       editionId: 'edition-1',
       genereA: '2026-10-22T08:00:00.000Z',
       coureurs: [
-        { dossard: 1, nom: 'Ulahianne', prenom: 'Yani' },
-        { dossard: 12, nom: 'Cherchée', prenom: 'Iness' },
+        // Contrat v2 (story 4.1) : jeton par coureur, tri par dossard.
+        {
+          dossard: 1,
+          nom: 'Ulahianne',
+          prenom: 'Yani',
+          jeton: 'jeton-coureur-1-aaaaaa',
+        },
+        {
+          dossard: 12,
+          nom: 'Cherchée',
+          prenom: 'Iness',
+          jeton: 'jeton-coureur-12-aaaaa',
+        },
       ],
     });
     const response = await getAnnuaire(requete(true));
@@ -131,6 +142,9 @@ describe('GET /api/volontaires/annuaire', () => {
       1,
       12,
     ]);
+    for (const coureur of body.coureurs) {
+      expect(coureur.jeton).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    }
   });
 
   it('aucun coureur numéroté : 200 avec coureurs [] — « rien à précharger » côté PWA', async () => {

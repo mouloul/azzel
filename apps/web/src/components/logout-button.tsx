@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { effacerEtatVolontaires } from '@/lib/idb-volontaires';
+import { purgerCachesCoureur } from '@/lib/pwa-coureur';
 
 export function LogoutButton() {
   const router = useRouter();
@@ -11,14 +12,19 @@ export function LogoutButton() {
 
   async function onLogout(): Promise<void> {
     setPending(true);
+    // Appareil partagé (stories 3.3/4.1) : les poches locales — fiche et
+    // annuaire volontaires en IndexedDB + caches des service workers
+    // volontaires ET coureur (le QR e-dossard) — ne survivent pas au compte.
+    // Purge SYSTÉMATIQUE, parallèle à l'appel d'API et indépendante de son
+    // succès : la redirection a lieu de toute façon, et le QR ne doit jamais
+    // rester sur l'appareil si le serveur est injoignable. Silencieuse par
+    // construction : elle ne bloque jamais la sortie.
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' });
-      if (response.ok) {
-        // Appareil partagé (story 3.3) : la poche volontaires — fiche en
-        // IndexedDB et caches du service worker — ne survit pas à la
-        // déconnexion. Purge silencieuse : elle ne bloque jamais la sortie.
-        await effacerEtatVolontaires();
-      }
+      await Promise.all([
+        effacerEtatVolontaires(),
+        purgerCachesCoureur(),
+        fetch('/api/auth/logout', { method: 'POST' }),
+      ]);
     } catch {} finally {
       setPending(false);
     }

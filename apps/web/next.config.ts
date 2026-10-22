@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'no-cache' },
         ],
       },
+      {
+        // Story 4.1 — même ceinture documentaire pour le SW e-dossard : la
+        // frontière est /espace-coureur, jamais ailleurs.
+        source: '/sw-coureur.js',
+        headers: [
+          { key: 'Service-Worker-Allowed', value: '/espace-coureur' },
+          { key: 'Cache-Control', value: 'no-cache' },
+        ],
+      },
     ];
   },
 };

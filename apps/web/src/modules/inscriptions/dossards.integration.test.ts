@@ -30,6 +30,7 @@ import {
   attribuerDossards,
   decideDossier,
   getDossiersState,
+  obtenirEdossard,
   submitInscription,
 } from './service';
 import { createInscriptionsStore, type InscriptionsStore } from './store';
@@ -133,6 +134,10 @@ describe.skipIf(testUrls === null)(
       await acceptDocuments(session, { decharge: true, reglement: true }, { store });
       const coureurId = await coureurIdFor(accountId);
       await decideDossier(organisateur, coureurId, { decision: 'valider' }, { store });
+      // Story 4.1 — ces coureurs ont consulté leur e-dossard : leur jeton
+      // existe, ils entrent dans la réplique annuaire v2 (contrat : jeton
+      // requis par coureur).
+      await obtenirEdossard(session, { store });
       return { coureurId, prenom };
     }
 
@@ -341,9 +346,10 @@ describe.skipIf(testUrls === null)(
       // constitution et le dossier non validé restent hors annuaire.
       expect(annuaire.coureurs.map((coureur) => coureur.dossard)).toEqual([1, 2, 3, 5]);
       expect(annuaire.coureurs.find((coureur) => coureur.nom === 'HorsAnnuaire')).toBeUndefined();
-      // Identité minimale : dossard + nom + prénom uniquement (NFR-7).
+      // Identité minimale v2 (4.1) : dossard + nom + prénom + jeton (NFR-7).
       for (const coureur of annuaire.coureurs) {
-        expect(Object.keys(coureur).sort()).toEqual(['dossard', 'nom', 'prenom']);
+        expect(Object.keys(coureur).sort()).toEqual(['dossard', 'jeton', 'nom', 'prenom']);
+        expect(coureur.jeton).toMatch(/^[A-Za-z0-9_-]{22}$/);
       }
     });
 

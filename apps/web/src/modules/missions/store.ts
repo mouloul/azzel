@@ -80,13 +80,17 @@ export interface AffectationRecord {
   createdAt: Date;
 }
 
-// Story 3.4 — coureurs numérotés de l'édition, pour la réplique annuaire.
-// Identité minimale (NFR-7) : dossard + nom + prénom, rien d'autre.
+// Stories 3.4/4.1 — coureurs numérotés de l'édition, pour la réplique annuaire
+// v2. Identité minimale (NFR-7) : dossard + noms + jeton e-dossard, rien
+// d'autre. Le contrat shared exige un jeton par coureur : les validés SANS
+// jeton (jamais consulté leur e-dossard) restent hors réplique jusqu'à
+// consultation — le scanneur ne verra jamais un jeton null.
 
 export interface CoureurAnnuaireRecord {
   dossard: number;
   nom: string;
   prenom: string;
+  jeton: string;
 }
 
 export interface MissionsEtatRecords {
@@ -862,29 +866,35 @@ export function createMissionsStore(sql: Sql): MissionsStore {
       );
     },
 
-    // Story 3.4 — lecture locale cross-table (pattern findCurrentEdition, aucun
-    // import du module inscriptions) : la surface volontaires réplique l'annuaire
-    // des coureurs VALIDÉS numérotés de l'édition courante, triés par dossard.
-    // Org-scopée withOrg/RLS comme toute requête métier.
+    // Stories 3.4/4.1 — lecture locale cross-table (pattern findCurrentEdition,
+    // aucun import du module inscriptions) : la surface volontaires réplique
+    // l'annuaire v2 des coureurs VALIDÉS numérotés AVEC jeton e-dossard de
+    // l'édition courante, triés par dossard. Org-scopée withOrg/RLS comme
+    // toute requête métier.
     async listCoureursAnnuaire(
       organisationId: string,
       editionId: string,
     ): Promise<CoureurAnnuaireRecord[]> {
       return withDb(async () =>
         withOrg(sql, organisationId, async (tx) => {
-          const rows = await tx<{ dossard: number; nom: string; prenom: string }[]>`
-            SELECT dossard, last_name AS nom, first_name AS prenom
+          const rows = await tx<
+            { dossard: number; nom: string; prenom: string; jeton: string }[]
+          >`
+            SELECT dossard, last_name AS nom, first_name AS prenom,
+                   jeton_edossard AS jeton
             FROM coureur
             WHERE edition_id = ${editionId}
               AND organisation_id = ${organisationId}
               AND status = ${COUREUR_STATUS_VALIDE}
               AND dossard IS NOT NULL
+              AND jeton_edossard IS NOT NULL
             ORDER BY dossard ASC
           `;
           return rows.map((row) => ({
             dossard: row.dossard,
             nom: row.nom,
             prenom: row.prenom,
+            jeton: row.jeton,
           }));
         }),
       );

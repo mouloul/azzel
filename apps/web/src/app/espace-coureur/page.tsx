@@ -138,6 +138,11 @@ function ChecklistCard({
           <p className="checklist-bandeau-texte">{BANDEAU_DOSSIER_VALIDE}</p>
         </div>
       )}
+      {complet && (
+        <a className="checklist-action" href="/espace-coureur/e-dossard">
+          Ton e-dossard — QR à présenter au guichet
+        </a>
+      )}
       <ol role="list" className="checklist">
         {pieces.map((piece) => {
           const etat = etatPiece(piece);

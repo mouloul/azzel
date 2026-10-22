@@ -398,10 +398,12 @@ async function editionCouranteOuErreur(
   return edition;
 }
 
-// Story 3.4 — assemblage du contrat versionné (AD-8, packages/shared) : la
-// réplique servie à GET /api/volontaires/annuaire ne contient QUE des coureurs
-// validés numérotés, triés par dossard, avec le strict minimum d'identité
-// (NFR-7). Aucune édition → AucuneEditionError (même garde que les secteurs).
+// Stories 3.4/4.1 — assemblage du contrat versionné (AD-8, packages/shared) :
+// la réplique servie à GET /api/volontaires/annuaire contient QUE des coureurs
+// validés numérotés AYANT CONSULTÉ leur e-dossard (jeton requis par le contrat
+// v2 — le scanneur 4.2 résout les QR par chercherParJeton), triés par dossard,
+// avec le strict minimum d'identité (NFR-7). Aucune édition → AucuneEditionError
+// (même garde que les secteurs).
 export async function getAnnuaireEdition(
   session: SessionRecord,
   deps: MissionsServiceDeps = {},

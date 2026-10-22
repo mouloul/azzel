@@ -81,6 +81,7 @@ function buildChecklistStore(scenario: ChecklistScenario = {}): InscriptionsStor
           categorieAge: 'Senior',
           status: 'en constitution',
           dossard: null,
+          jetonEdossard: null,
           refusalReason: null,
           decidedBy: null,
           decidedAt: null,
