@@ -48,4 +48,16 @@ describe('layout racine — rendu statique', () => {
     expect(html).toContain('href="/region"');
     expect(html.indexOf('footer-nav')).toBeGreaterThan(-1);
   });
+
+  it('pied de page : lien texte « Retour en images » vers /retour-en-images (story 2.5)', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    expect(html).toContain('href="/retour-en-images"');
+    expect(html).toContain('Retour en images');
+    // Même registre sobre que /parcours et /region : dans la même navigation.
+    const nav = html.slice(html.indexOf('footer-nav'), html.indexOf('</nav>'));
+    expect(nav).toContain('href="/parcours"');
+    expect(nav).toContain('href="/retour-en-images"');
+  });
 });

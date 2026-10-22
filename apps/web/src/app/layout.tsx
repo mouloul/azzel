@@ -67,6 +67,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <nav className="footer-nav" aria-label="Se préparer">
             <Link href="/parcours">Parcours</Link>
             <Link href="/region">La région</Link>
+            {/* Story 2.5 — un simple lien texte : le trailer et la page retour en
+                images restent hors du budget de premier chargement de l'accueil. */}
+            <Link href="/retour-en-images">Retour en images</Link>
           </nav>
           <p className="meta">Plateforme Azzel</p>
         </footer>

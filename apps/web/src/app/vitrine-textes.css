@@ -1,6 +1,6 @@
-/* Pages /parcours et /region (story 2.4) — importé par ces pages seules :
-   hors du chunk CSS partagé avec l’accueil (budget premier chargement
-   < 300 Ko, voir scripts/check-budget.sh).
+/* Pages /parcours, /region (story 2.4) et /retour-en-images (story 2.5) —
+   importé par ces pages seules : hors du chunk CSS partagé avec l’accueil
+   (budget premier chargement < 300 Ko, voir scripts/check-budget.sh).
    Texte simple échappé, GPX en <details> natif (chargement différé
    structurel). Contrastes : paires testées ink/ink-muted/heading sur
    surface-raised (voir contrastes.test.ts). */
@@ -25,3 +25,28 @@
 .aa-citation__bloc p{margin:0;font-family:var(--font-display);font-weight:600;font-size:22px;line-height:1.2;color:var(--heading)}
 .aa-citation__bloc footer{margin-top:var(--space-2);font-size:13px;color:var(--ink-muted)}
 @media (max-width:640px){.aa-parcours{grid-template-columns:1fr}.aa-citation__bloc p{font-size:19px}}
+
+/* Retour en images (story 2.5) — trailer, témoignages, galerie.
+   Poster du trailer : dégradé forêt en pur CSS (zéro octet d'image) ; les hex
+   ci-dessous sont ceux de POSTER_DEGRADE_COULEURS / PASTILLE_LECTURE du domaine
+   (modules/retour-images/domain.ts) — le contraste pastille/gradient et
+   glyphe/pastille est testé (≥ 3:1, WCAG 1.4.11) dans contrastes.test.ts. */
+.aa-retour-section{margin-top:var(--space-8)}
+.aa-trailer{margin:0}
+.aa-trailer__poster{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-4);width:100%;min-height:72px;padding:var(--space-12) var(--space-6);aspect-ratio:16/9;border:2px solid transparent;border-radius:var(--radius-md);cursor:pointer;background:linear-gradient(160deg,#24503C 0%,#183A2B 55%,#122C20 100%);color:var(--on-forest);font:inherit}
+.aa-trailer__poster:hover .aa-trailer__play{transform:scale(1.06)}
+/* WCAG 1.4.11 : var(--focus) ≈ 2,2:1 sur fond forêt — outline on-forest (pattern hero). */
+.aa-trailer__poster:focus-visible{outline:2px solid var(--on-forest);outline-offset:2px;box-shadow:0 0 0 4px #183A2B}
+.aa-trailer__play{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:9999px;background:#8FD4A8;color:#183A2B;transition:transform .2s ease}
+.aa-trailer__play svg{display:block;margin-left:4px}
+.aa-trailer__libelle{margin:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--on-forest)}
+.aa-trailer__lecteur{display:block;width:100%;aspect-ratio:16/9;border:none;border-radius:var(--radius-md);background:#122C20}
+.aa-temoignages{display:grid;gap:var(--space-6);grid-template-columns:1fr;margin:var(--space-6) 0 0}
+.aa-temoignage__entete{display:flex;align-items:center;gap:var(--space-3)}
+.aa-temoignage__avatar{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:9999px;background:var(--forest-surface);color:var(--on-forest);font-family:var(--font-display);font-weight:700;font-size:18px}
+.aa-temoignage__prenom{margin:0;font-family:var(--font-display);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--heading)}
+.aa-temoignage__edition{margin:0;font-size:13px;color:var(--ink-muted)}
+.aa-temoignage__citation{margin:var(--space-3) 0 0}
+.aa-temoignage__citation p{margin:0;font-size:15px;line-height:1.6;color:var(--ink)}
+@media (min-width:640px){.aa-temoignages{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:960px){.aa-temoignages{grid-template-columns:repeat(3,1fr)}}

@@ -1,0 +1,11 @@
+/* Admin retour en images (story 2.5) — liste témoignages, avatar initiales.
+   Fichier propre à la page /admin/retour-images : hors du chunk CSS partagé
+   avec la vitrine (budget premier chargement < 300 Ko). */
+.retour-images-liste{display:grid;gap:var(--az-space-3)}
+.temoignage-ligne{display:grid;gap:var(--az-space-2);padding:var(--az-space-3) 0;border-bottom:1px solid var(--az-filet)}
+.temoignage-ligne form{display:grid;gap:var(--az-space-3)}
+.temoignage-entete{display:flex;align-items:center;gap:var(--az-space-3)}
+.temoignage-citation{font-style:italic}
+.retour-images-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
+.avatar-initiales{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:40px;height:40px;border-radius:var(--az-radius-full);background:var(--forest-surface);color:var(--on-forest);font-family:var(--font-display);font-weight:700;font-size:16px}
+.temoignage-ordre{width:6rem}

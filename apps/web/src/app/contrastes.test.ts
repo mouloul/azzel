@@ -1,10 +1,34 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { siteTokens } from '@azzel/shared';
 
+import {
+  GLYPHE_LECTURE,
+  PASTILLE_LECTURE,
+  POSTER_DEGRADE_COULEURS,
+} from '@/modules/retour-images/domain';
+
 const SEUIL_COURANT = 4.5;
 const SEUIL_GRAND_TEXTE = 3;
 const SEUIL_NON_TEXTUEL = 3;
+
+/** Extrait le bloc de déclarations d'une règle CSS par son sélecteur (règle
+ *  ancrée en début de ligne : les variantes :hover/`:focus-visible` d'une
+ *  même page ne masquent pas la règle de base). */
+function extraireRegle(css: string, selecteur: string): string {
+  const modele = new RegExp(
+    `^${selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`,
+    'm',
+  );
+  const bloc = css.match(modele)?.[1];
+  if (bloc === undefined) {
+    throw new Error(`règle ${selecteur} absente du CSS lu`);
+  }
+  return bloc;
+}
 
 /*
  * Exemption WCAG 1.4.11 (contraste des éléments non textuels) : la frise kabyle
@@ -245,5 +269,61 @@ describe('contrastes WCAG — paire interdite (jamais rendue)', () => {
       couleur('light', 'forest-surface'),
     );
     expect(ratio).toBeLessThan(SEUIL_COURANT);
+  });
+});
+
+/* Story 2.5 — poster du trailer : le dégradé forêt et la pastille de lecture
+ * « vert altitude » sont des hex fixes (pas des rôles de thème) : le poster
+ * remplace une image, identique dans les deux thèmes. Sources uniques des
+ * couleurs : modules/retour-images/domain.ts — le garde ci-dessous lit le CSS
+ * réellement servi et vérifie que chaque hex s'y trouve dans la règle
+ * correspondante (précédent tokens-css.test : le CSS peut trahir les constantes). */
+describe('contrastes WCAG — poster trailer (story 2.5)', () => {
+  for (const stop of POSTER_DEGRADE_COULEURS) {
+    it(`pastille lecture (vert altitude) / dégradé ${stop} — ≥ 3:1 (non textuel, 1.4.11)`, () => {
+      const ratio = ratioContraste(PASTILLE_LECTURE, stop);
+      expect(ratio, `pastille ${PASTILLE_LECTURE} sur ${stop} : ${ratio.toFixed(3)}:1`).toBeGreaterThanOrEqual(
+        SEUIL_NON_TEXTUEL,
+      );
+    });
+
+    it(`libellé on-forest / dégradé ${stop} — ≥ 4,5:1 (texte 15 px)`, () => {
+      for (const theme of ['light', 'dark'] as const) {
+        const ratio = ratioContraste(couleur(theme, 'on-forest'), stop);
+        expect(
+          ratio,
+          `on-forest (${theme}) sur ${stop} : ${ratio.toFixed(3)}:1`,
+        ).toBeGreaterThanOrEqual(SEUIL_COURANT);
+      }
+    });
+  }
+
+  it('glyphe triangle / pastille vert altitude — ≥ 3:1 (non textuel, invariant)', () => {
+    const ratio = ratioContraste(GLYPHE_LECTURE, PASTILLE_LECTURE);
+    expect(
+      ratio,
+      `glyphe ${GLYPHE_LECTURE} sur pastille ${PASTILLE_LECTURE} : ${ratio.toFixed(3)}:1`,
+    ).toBeGreaterThanOrEqual(SEUIL_NON_TEXTUEL);
+  });
+
+  it('vitrine-textes.css servit exactement les hex du domaine dans les règles du poster', () => {
+    const css = readFileSync(
+      fileURLToPath(new URL('./vitrine-textes.css', import.meta.url)),
+      'utf8',
+    ).toLowerCase();
+    const poster = extraireRegle(css, '.aa-trailer__poster');
+    for (const stop of POSTER_DEGRADE_COULEURS) {
+      expect(
+        poster,
+        `${stop} doit figurer dans le dégradé de .aa-trailer__poster`,
+      ).toContain(stop.toLowerCase());
+    }
+    const play = extraireRegle(css, '.aa-trailer__play');
+    expect(play, `${PASTILLE_LECTURE} est le fond de la pastille`).toContain(
+      PASTILLE_LECTURE.toLowerCase(),
+    );
+    expect(play, `${GLYPHE_LECTURE} est la couleur du glyphe`).toContain(
+      GLYPHE_LECTURE.toLowerCase(),
+    );
   });
 });
