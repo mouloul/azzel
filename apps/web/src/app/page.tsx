@@ -2,15 +2,46 @@ import Link from 'next/link';
 
 import { AaPhoto } from '@/components/aa-photo';
 import { assistancePhoneHref } from '@/components/assistance-button';
+import { Crete, Frise } from '@/components/frise';
+import {
+  GlypheIngel,
+  GlypheTabzimt,
+  GlypheTala,
+  GlypheYaz,
+} from '@/components/glyphes-piliers';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 
 const PHOTOS = '/charte/photos-2026';
+
+const PILIERS = [
+  {
+    Glyphe: GlypheYaz,
+    titre: 'Sport',
+    texte: 'Deux trails — 35 km et 12 km — au départ du stade Agni Lhoudh.',
+  },
+  {
+    Glyphe: GlypheTala,
+    titre: 'Santé',
+    texte: '116 enfants ont couru la Course Kids lors de l’édition 2026.',
+  },
+  {
+    Glyphe: GlypheTabzimt,
+    titre: 'Citoyenneté',
+    texte: 'Coureurs, familles et bénévoles se retrouvent au village d’Aït Aïssi.',
+  },
+  {
+    Glyphe: GlypheIngel,
+    titre: 'Écologie',
+    texte: 'Les sentiers traversent la forêt de Yakouren.',
+  },
+];
 
 export default function HomePage() {
   const telephone = readAssistancePhone();
 
   return (
     <>
+      <Frise />
       <section className="aa-hero">
         <AaPhoto
           variant="couverture"
@@ -27,6 +58,7 @@ export default function HomePage() {
           <h1 className="aa-hero__title">
             Week-end Sportif <em>Aït Aïssi</em>
           </h1>
+          <Crete />
           <p className="aa-hero__meta">
             Trail en forêt au départ du stade Agni Lhoudh — Aït Aïssi, commune de Yakouren.
           </p>
@@ -119,6 +151,31 @@ export default function HomePage() {
       </section>
 
       <section
+        className="vitrine-bande"
+        aria-labelledby="titre-piliers"
+      >
+        <div className="aa-section">
+          <p className="aa-eyebrow">Le village</p>
+          <h2 className="aa-h2" id="titre-piliers">
+            Une course portée par son village
+          </h2>
+          <p className="aa-lead">
+            Sport, santé, citoyenneté, écologie : quatre piliers ancrent la
+            course dans la vie du village d’Aït Aïssi.
+          </p>
+          <div className="aa-piliers">
+            {PILIERS.map(({ Glyphe, titre, texte }) => (
+              <article className="aa-card aa-pilier" key={titre}>
+                <Glyphe />
+                <h3 className="aa-pilier__titre">{titre}</h3>
+                <p className="aa-pilier__texte">{texte}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
         className="vitrine-bande vitrine-bande--foret"
         aria-labelledby="titre-contact"
       >
@@ -139,6 +196,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      <Frise />
     </>
   );
 }

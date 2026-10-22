@@ -809,8 +809,11 @@ main {
   color: var(--on-forest);
 }
 
+/* ochre-300 sur forest-surface ne tient pas AA en sombre (≈3,35:1 à 14 px) :
+   l'eyebrow de la bande forêt suit le h2/lead (on-forest). L'ochre du hero
+   reste charte verbatim (proxy uni forest ≥ 4,5:1, voir contrastes.test.ts). */
 .vitrine-bande--foret .aa-eyebrow {
-  color: var(--ochre-300);
+  color: var(--on-forest);
 }
 
 .vitrine-bande--foret .aa-lead {
@@ -822,7 +825,7 @@ main {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--az-space-4);
-  margin-top: var(--az-space-8);
+  margin-top: var(--space-8);
 }
 
 .aa-contact-numero {
@@ -839,7 +842,7 @@ main {
   display: grid;
   gap: var(--az-space-6);
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  margin: var(--az-space-8) 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 .aa-stat__value,
@@ -865,14 +868,14 @@ main {
   display: grid;
   gap: var(--az-space-6);
   grid-template-columns: 1fr;
-  margin: var(--az-space-8) 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 .aa-galerie {
   display: grid;
   gap: var(--az-space-6);
   grid-template-columns: 1fr;
-  margin: var(--az-space-8) 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 .aa-card > .aa-chip {
@@ -887,6 +890,81 @@ main {
   .aa-galerie {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Identité village — piliers, glyphes, frise, crête (story 2.2).
+   Taille des glyphes : constante TAILLE_GLYPHE du composant (attributs SVG width/height). */
+.aa-piliers {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: 1fr;
+  margin: var(--space-8) 0 0;
+}
+
+.aa-glyphe {
+  display: block;
+  color: var(--heading);
+  margin-bottom: var(--space-4);
+}
+
+.aa-pilier__titre {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--az-font-size-display-sm);
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--heading);
+  margin: 0;
+}
+
+.aa-pilier__texte {
+  font-size: var(--az-font-size-body);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: var(--space-2) 0 0;
+}
+
+.aa-frise {
+  display: block;
+  width: 100%;
+  color: var(--heading);
+  opacity: 0.4;
+}
+
+.aa-crete {
+  display: block;
+  color: var(--ochre-300);
+  margin-top: var(--az-space-3);
+}
+
+@media (min-width: 640px) {
+  .aa-piliers {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 960px) {
+  .aa-piliers {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .aa-pilier {
+    padding: var(--space-4);
+  }
+
+  .aa-pilier__titre {
+    font-size: var(--az-font-size-btn);
+  }
+}
+
+/* WCAG 1.4.11 : var(--focus) ne tient pas 3:1 sur les fonds forêt (≈2,2:1 en clair) —
+   outline on-forest + halo forest-surface sur hero et bande forêt. */
+.aa-hero :is(a, button, input, select, textarea):focus-visible,
+.vitrine-bande--foret :is(a, button, input, select, textarea):focus-visible {
+  outline-color: var(--on-forest);
+  box-shadow: 0 0 0 4px var(--forest-surface);
 }
 
 /* Photos — squelette (aspect-ratio + fond neutre) puis fondu à l'arrivée.

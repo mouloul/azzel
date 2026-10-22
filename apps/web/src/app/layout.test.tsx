@@ -23,4 +23,20 @@ describe('layout racine — rendu statique', () => {
       html.indexOf('class="site-header"'),
     );
   });
+
+  it('aucune frise ni crête décorative au niveau du layout (réservées aux seuils de la vitrine)', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    expect(html).not.toContain('data-frise');
+    expect(html).not.toContain('data-crete');
+    expect(html).not.toContain('data-glyphe');
+  });
+
+  it('aucune mention « Tafsut » dans le layout', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    expect(html.toLowerCase()).not.toContain('tafsut');
+  });
 });

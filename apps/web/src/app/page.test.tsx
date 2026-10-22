@@ -108,3 +108,77 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).not.toContain('>600<');
   });
 });
+
+describe('accueil vitrine — identité village (story 2.2)', () => {
+  it('piliers : quatre glyphes SVG inline et libellés exacts', () => {
+    const html = renduAccueil();
+    const glyphes = html.match(/<svg[^>]*data-glyphe="([^"]+)"[^>]*>/g) ?? [];
+    expect(glyphes.length).toBe(4);
+    // Correspondance piliers ↔ glyphes (noms kabyles sources) :
+    // Sport → yaz ⵣ, Santé → tala (la fontaine), Citoyenneté → tabzimt (la fibule), Écologie → ingel (le cèdre).
+    const noms = glyphes
+      .map((g) => g.match(/data-glyphe="([^"]+)"/)?.[1] ?? '')
+      .sort();
+    expect(noms).toEqual(['ingel', 'tabzimt', 'tala', 'yaz']);
+    const titres = (html.match(/class="aa-pilier__titre">([^<]+)</g) ?? []).map((t) =>
+      t.replace(/^.*?>/, '').replace(/<$/, ''),
+    );
+    expect(new Set(titres)).toEqual(new Set(['Sport', 'Santé', 'Citoyenneté', 'Écologie']));
+  });
+
+  it('piliers : cartes sobres avec glyphe + titre + ligne concrète, jamais de glyphe seul', () => {
+    const html = renduAccueil();
+    expect((html.match(/<article class="aa-card aa-pilier"/g) ?? []).length).toBe(4);
+    expect(html).toContain('stade Agni Lhoudh');
+    expect(html).toContain('116 enfants');
+    expect(html).toContain('village d’Aït Aïssi');
+    expect(html).toContain('forêt de Yakouren');
+  });
+
+  it('glyphes : monochromes currentColor, trait sans remplissage, 20–24 px', () => {
+    const html = renduAccueil();
+    const blocs = html.match(/<svg[^>]*data-glyphe[^>]*>.*?<\/svg>/g) ?? [];
+    expect(blocs.length).toBe(4);
+    for (const bloc of blocs) {
+      expect(bloc).toContain('stroke="currentColor"');
+      expect(bloc).toContain('fill="none"');
+      expect(bloc).not.toMatch(/fill="(?!none)/);
+      expect(bloc).toMatch(/width="2[0-4]"/);
+      expect(bloc).toMatch(/height="2[0-4]"/);
+    }
+  });
+
+  it('frise : présente en tête et pied de la vitrine, aria-hidden, jamais dans le contenu', () => {
+    const html = renduAccueil();
+    const frises = html.match(/<svg[^>]*data-frise[^>]*>/g) ?? [];
+    expect(frises.length).toBe(2);
+    for (const frise of frises) {
+      expect(frise).toContain('aria-hidden="true"');
+    }
+    const premiere = html.indexOf('data-frise');
+    const derniere = html.lastIndexOf('data-frise');
+    expect(premiere).toBeGreaterThan(-1);
+    expect(premiere).toBeLessThan(html.indexOf('aa-hero'));
+    expect(derniere).toBeGreaterThan(html.indexOf('id="titre-contact"'));
+  });
+
+  it('crête : ligne ocre 1,5 px sous le titre du hero, aria-hidden', () => {
+    const html = renduAccueil();
+    const crete = html.match(/<svg[^>]*data-crete[^>]*>/)?.[0] ?? '';
+    expect(crete).not.toBe('');
+    expect(crete).toContain('aria-hidden="true"');
+    expect(crete).toContain('stroke-width="1.5"');
+    expect((html.match(/data-crete/g) ?? []).length).toBe(1);
+    expect(html.indexOf('data-crete')).toBeGreaterThan(html.indexOf('aa-hero__title'));
+    expect(html.indexOf('data-crete')).toBeLessThan(html.indexOf('aa-hero__meta'));
+  });
+
+  it('interdits : aucun « Tafsut », médaillon, mascotte ni drapeau', () => {
+    const html = renduAccueil().toLowerCase();
+    expect(html).not.toContain('tafsut');
+    expect(html).not.toContain('médaillon');
+    expect(html).not.toContain('medaillon');
+    expect(html).not.toContain('mascotte');
+    expect(html).not.toContain('drapeau');
+  });
+});
