@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -32,6 +33,20 @@ import {
 } from './service';
 import { createInscriptionsStore, type InscriptionsStore } from './store';
 import type { InscriptionFormInput } from './domain';
+
+/** Noms des fichiers .sql des deux dossiers de migrations (iam + inscriptions), triés. */
+async function listMigrationFiles(): Promise<string[]> {
+  const dirs = [
+    new URL('../iam/migrations/', import.meta.url),
+    new URL('./migrations/', import.meta.url),
+  ];
+  const names: string[] = [];
+  for (const dir of dirs) {
+    const entries = await readdir(dir);
+    names.push(...entries.filter((name) => name.endsWith('.sql')));
+  }
+  return names.sort();
+}
 
 const testUrls = resolveTestDatabaseUrls('inscriptions');
 
@@ -98,20 +113,12 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     };
   }
 
-  it('migrations : 0001 à 0009 appliquées avec les seeds attendus', async () => {
+  it('migrations : toutes appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;
-    expect(rows.map((row) => row.name)).toEqual([
-      '0001_iam.sql',
-      '0002_inscriptions.sql',
-      '0003_documents.sql',
-      '0004_coureur_checks.sql',
-      '0005_preuve.sql',
-      '0006_roles_statuts.sql',
-      '0007_email_outbox.sql',
-      '0008_rls_roles.sql',
-      '0009_activate_rls.sql',
-    ]);
+    // Liste dérivée des fichiers plutôt qu'écrite en dur : chaque story ajoute une
+    // migration, et une liste figée ici fait échouer la suite pour une raison sans rapport.
+    expect(rows.map((row) => row.name)).toEqual(await listMigrationFiles());
 
     const editions = await sql`
       SELECT name, race_date::text AS race_date, registration_closes_at
@@ -159,7 +166,7 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(9);
+    expect(rows[0]?.count).toBe((await listMigrationFiles()).length);
   });
 
   it('inscription complète : coureur créé, rattaché édition/épreuve/organisation', async () => {

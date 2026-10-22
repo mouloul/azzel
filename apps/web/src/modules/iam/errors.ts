@@ -49,6 +49,20 @@ export class DbUnavailableError extends Error {
   }
 }
 
+/**
+ * Production : la connexion applicative n'est pas le rôle azzel_app. Le
+ * propriétaire a BYPASSRLS — tout le cloisonnement multi-organisation tomberait
+ * en silence. On refuse de servir plutôt que d'avertir (story 1.9).
+ */
+export class AppRoleMisconfiguredError extends Error {
+  constructor(readonly currentUser: string) {
+    super(
+      `connexion applicative en rôle « ${currentUser} » : le RLS serait contourné`,
+    );
+    this.name = 'AppRoleMisconfiguredError';
+  }
+}
+
 export class EmailSendError extends Error {
   constructor(cause?: unknown) {
     super("envoi de l'email impossible", { cause });
@@ -131,6 +145,16 @@ export function toApiError(error: unknown): ApiError {
         code: 'iam.db_unavailable',
         message: 'Connexion indisponible.',
         action: 'Réessayez dans un instant.',
+      }),
+    };
+  }
+  if (error instanceof AppRoleMisconfiguredError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'iam.db_misconfigured',
+        message: 'Service indisponible : configuration de la base incorrecte.',
+        action: 'Prévenez l’organisation : la connexion applicative est mal configurée.',
       }),
     };
   }

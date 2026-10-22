@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { resetOrganisationIdMemoForTests, withOrg } from '@/db/org-scope';
 import { applyAllMigrations } from '@/modules/inscriptions/migrate';
 import {
   closeAzzelTestDb,
@@ -11,6 +13,11 @@ import {
   type AzzelTestConnections,
 } from '@/test/integration-db';
 
+import {
+  CODE_REQUEST_IP_WINDOW_MS,
+  CODE_REQUEST_WINDOW_MS,
+  MAX_CODE_REQUESTS_PER_IP,
+} from './constants';
 import {
   CodeExhaustedError,
   DbUnavailableError,
@@ -31,6 +38,20 @@ const testUrls = resolveTestDatabaseUrls('iam');
 
 function uniqueEmail(): string {
   return `coureur-${randomUUID()}@test.azzel`;
+}
+
+/** Nombre de fichiers .sql des deux dossiers de migrations (iam + inscriptions). */
+async function countMigrationFiles(): Promise<number> {
+  const dirs = [
+    new URL('./migrations/', import.meta.url),
+    new URL('../inscriptions/migrations/', import.meta.url),
+  ];
+  let total = 0;
+  for (const dir of dirs) {
+    const names = await readdir(dir);
+    total += names.filter((name) => name.endsWith('.sql')).length;
+  }
+  return total;
 }
 
 describe.skipIf(testUrls === null)('iam — intégration Postgres (base azzel_test)', () => {
@@ -243,6 +264,7 @@ describe.skipIf(testUrls === null)('iam — intégration Postgres (base azzel_te
   });
 
   it('base injoignable : DbUnavailableError', async () => {
+    resetOrganisationIdMemoForTests();
     const badSql = postgres('postgres://azzel:azzel@127.0.0.1:54330/azzel', {
       max: 1,
       connect_timeout: 1,
@@ -263,7 +285,9 @@ describe.skipIf(testUrls === null)('iam — intégration Postgres (base azzel_te
     const applied = await applyAllMigrations(sql);
     expect(applied).toEqual([]);
     const rows = await sql`SELECT count(*)::int AS count FROM schema_migrations`;
-    expect(rows[0]?.count).toBe(9);
+    // Comptage dynamique : le nombre de migrations change à chaque story, et une
+    // constante en dur ici fait échouer la suite pour une raison sans rapport.
+    expect(rows[0]?.count).toBe(await countMigrationFiles());
   });
 
   it('rôle : coureur par défaut, la session porte le rôle', async () => {
@@ -393,5 +417,135 @@ describe.skipIf(testUrls === null)('iam — intégration Postgres (base azzel_te
         process.env.AZZEL_ADMIN_EMAILS = previous;
       }
     }
+  });
+  // --- Correctifs sécurité stories 1.2 / 1.9 ---------------------------------
+
+  async function createOrganisation(): Promise<string> {
+    const rows = await sql<{ id: string }[]>`
+      INSERT INTO organisation (slug, name)
+      VALUES (${`org-${randomUUID()}`}, 'Organisation de test')
+      RETURNING id
+    `;
+    return rows[0]?.id as string;
+  }
+
+  it('isolation : un code demandé dans l’organisation B n’invalide pas celui de A', async () => {
+    const email = uniqueEmail();
+    const orgA = await store.getDefaultOrganisationId();
+    const orgB = await createOrganisation();
+    const now = Date.now();
+    const commun = {
+      email,
+      expiresAt: new Date(now + 600_000),
+      perEmailCutoff: new Date(now - CODE_REQUEST_WINDOW_MS),
+      hourlyCutoff: new Date(now - 3_600_000),
+    };
+
+    await store.insertLoginCode({ ...commun, organisationId: orgA, codeHash: sha256Hex('111111') });
+    await store.insertLoginCode({ ...commun, organisationId: orgB, codeHash: sha256Hex('222222') });
+
+    const codeA = await sql`
+      SELECT invalidated_at FROM login_code
+      WHERE email = ${email} AND organisation_id = ${orgA}
+    `;
+    expect(codeA.length).toBe(1);
+    expect(codeA[0]?.invalidated_at).toBeNull();
+  });
+
+  it('isolation : la limitation par email est comptée par organisation', async () => {
+    const email = uniqueEmail();
+    const orgB = await createOrganisation();
+    for (let demande = 0; demande < 3; demande += 1) {
+      await requestLoginCode(email, { store, sendCode: noopSendCode });
+    }
+    await expect(
+      requestLoginCode(email, { store, sendCode: noopSendCode }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+
+    // Même adresse, autre organisation : quota intact (le compteur est scopé).
+    const now = Date.now();
+    await expect(
+      store.insertLoginCode({
+        organisationId: orgB,
+        email,
+        codeHash: sha256Hex('333333'),
+        expiresAt: new Date(now + 600_000),
+        perEmailCutoff: new Date(now - CODE_REQUEST_WINDOW_MS),
+        hourlyCutoff: new Date(now - 3_600_000),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('RLS : sous le GUC d’une organisation, les login_code et session des autres sont invisibles', async () => {
+    const email = uniqueEmail();
+    const orgA = await store.getDefaultOrganisationId();
+    const orgB = await createOrganisation();
+    const capture = await captureSendCode();
+    await requestLoginCode(email, { store, sendCode: capture.sendCode });
+    await verifyLoginCode(email, capture.getCode(), { store });
+
+    const vuDepuisB = await withOrg(app, orgB, async (tx) => {
+      const codes = await tx`SELECT id FROM login_code WHERE email = ${email}`;
+      const sessions = await tx`
+        SELECT s.id FROM session s WHERE s.organisation_id = ${orgA}
+      `;
+      return { codes: codes.length, sessions: sessions.length };
+    });
+    expect(vuDepuisB).toEqual({ codes: 0, sessions: 0 });
+
+    const vuDepuisA = await withOrg(app, orgA, async (tx) => {
+      const codes = await tx`SELECT id FROM login_code WHERE email = ${email}`;
+      return codes.length;
+    });
+    expect(vuDepuisA).toBe(1);
+  });
+
+  it('RLS : écrire une ligne d’une autre organisation est refusé (FORCE RLS)', async () => {
+    const orgA = await store.getDefaultOrganisationId();
+    const orgB = await createOrganisation();
+    await expect(
+      withOrg(app, orgB, async (tx) => {
+        await tx`
+          INSERT INTO login_code (organisation_id, email, code_hash, expires_at)
+          VALUES (${orgA}, ${uniqueEmail()}, ${sha256Hex('444444')}, now() + interval '10 minutes')
+        `;
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('quota par IP : au-delà du seuil, la demande est refusée même avec des emails différents', async () => {
+    const ipHash = sha256Hex(`ip-test-${randomUUID()}`);
+    const cutoff = (): Date => new Date(Date.now() - CODE_REQUEST_IP_WINDOW_MS);
+    for (let demande = 0; demande < MAX_CODE_REQUESTS_PER_IP; demande += 1) {
+      await store.recordCodeRequestIp({ ipHash, cutoff: cutoff() });
+    }
+    try {
+      await store.recordCodeRequestIp({ ipHash, cutoff: cutoff() });
+      expect.unreachable('la demande au-delà du seuil devait être refusée');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RateLimitedError);
+      expect((error as RateLimitedError).retryAfterSec).toBeGreaterThan(0);
+    }
+
+    // Une autre IP n’est pas affectée : le quota borne l’auteur, pas le service.
+    await expect(
+      store.recordCodeRequestIp({ ipHash: sha256Hex(randomUUID()), cutoff: cutoff() }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('quota par IP : demandes parallèles bornées par le verrou consultatif', async () => {
+    const ipHash = sha256Hex(`ip-parallele-${randomUUID()}`);
+    const cutoff = new Date(Date.now() - CODE_REQUEST_IP_WINDOW_MS);
+    const results = await Promise.allSettled(
+      Array.from({ length: MAX_CODE_REQUESTS_PER_IP + 3 }, () =>
+        store.recordCodeRequestIp({ ipHash, cutoff }),
+      ),
+    );
+    const acceptees = results.filter((result) => result.status === 'fulfilled');
+    expect(acceptees.length).toBe(MAX_CODE_REQUESTS_PER_IP);
+    const rows = await sql`
+      SELECT count(*)::int AS count FROM login_code_ip_request WHERE ip_hash = ${ipHash}
+    `;
+    expect(rows[0]?.count).toBe(MAX_CODE_REQUESTS_PER_IP);
   });
 });

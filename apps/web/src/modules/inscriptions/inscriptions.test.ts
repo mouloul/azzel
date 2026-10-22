@@ -25,6 +25,7 @@ import {
 import {
   BothAcceptancesRequiredError,
   DecisionInvalidError,
+  DossierIncompletError,
   DossierNotFoundError,
   DossierValidatedError,
   DocumentsMissingError,
@@ -785,6 +786,20 @@ describe('toAdminApiError — enveloppes admin', () => {
     const apiError = toAdminApiError(new DecisionInvalidError());
     expect(apiError.status).toBe(400);
     expect(apiError.envelope.error.code).toBe('admin.decision_invalid');
+  });
+
+  it('DossierIncompletError : 409 admin.dossier_incomplet nommant les pièces manquantes', () => {
+    const apiError = toAdminApiError(new DossierIncompletError(['preuve', 'decharge']));
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('admin.dossier_incomplet');
+    expect(apiError.envelope.error.message).toContain('la preuve de paiement');
+    expect(apiError.envelope.error.message).toContain('la décharge acceptée');
+  });
+
+  it('DossierIncompletError : une seule pièce manquante, message sans « et »', () => {
+    const apiError = toAdminApiError(new DossierIncompletError(['reglement']));
+    expect(apiError.envelope.error.message).toContain('le règlement intérieur accepté');
+    expect(apiError.envelope.error.message).not.toContain(' et ');
   });
 
   it('DossierNotFoundError : 404 admin.dossier_not_found', () => {

@@ -148,3 +148,32 @@ Compte différé à la vérification : `login_code` porte l'email (pas de FK) �
 
 **Manual checks (if no CLI):**
 - `pnpm dev:web` → /connexion : parcourir email → code (lu dans les logs serveur sans SMTP), vérifier collage, renvoi 60 s, mode sombre, déconnexion.
+
+## Revue de code
+
+**2026-10-22 — revue d'épopée (3 lentilles : adverse, chemins limites, trous de vérification) sur le diff complet des stories 1.1 à 1.9.**
+
+### Constats retenus
+
+1. **Déni de service trivial de l'authentification.** Le compteur horaire de `insertLoginCode` (`MAX_CODE_REQUESTS_PER_HOUR = 1000`) était **global** : aucun filtre `organisation_id`, et aucune limite par IP sur `POST /api/auth/code`. Mille requêtes avec des adresses différentes bloquaient la connexion de tous les utilisateurs pendant une heure — scénario d'autant plus probable le jour de l'ouverture des inscriptions.
+2. **Codes de connexion non isolés entre organisations.** L'UPDATE d'invalidation (`WHERE email = … AND consumed_at IS NULL`) opérait toutes organisations confondues. Volet base traité en story 1.9.
+
+### Modifications apportées
+
+- `apps/web/src/modules/iam/store.ts` — le compteur horaire **et** le compteur par email sont filtrés sur `organisation_id` ; filtres `organisation_id` explicites ajoutés sur l'UPDATE d'invalidation, la relecture `FOR UPDATE` du code et les deux UPDATE de révocation de session (défense en profondeur, en plus du RLS).
+- `apps/web/src/modules/iam/store.ts` + `constants.ts` — nouveau quota **par IP** en fenêtre glissante : `recordCodeRequestIp` (table `login_code_ip_request`, verrou consultatif, purge au fil de l'eau), `MAX_CODE_REQUESTS_PER_IP = 20` sur `CODE_REQUEST_IP_WINDOW_MS = 1 h`. Appelé par `requestLoginCode` **avant** toute écriture liée à l'email.
+- `apps/web/src/app/api/auth/code/route.ts` — extraction de l'IP (`x-forwarded-for` première adresse, repli `x-real-ip`). L'IP n'est jamais stockée en clair : empreinte salée (`hashClientIp`, sel `AZZEL_IP_HASH_SALT`).
+
+### Décisions et limites assumées
+
+- **Sans en-tête d'IP** (appel direct, développement), le quota IP ne s'applique pas : seule la limite par email joue. Documenté dans le code. En production, l'application doit être derrière un proxy qui pose `x-forwarded-for`.
+- `AZZEL_IP_HASH_SALT` doit être posée en production : avec le sel de repli, les IPv4 restent énumérables par force brute.
+- La **pré-sélection** du code dans `verifyCodeAndStartSession` reste hors GUC — voir les limites détaillées en story 1.9.
+
+### Vérification
+
+Tests ajoutés dans `iam.test.ts` (hachage d'IP : stabilité et sensibilité au sel ; ordre quota-IP avant écriture ; refus sans code créé ni envoyé ; absence d'IP ; seuils), `auth.test.ts` (transmission de l'IP par la route, 3 cas) et `iam.integration.test.ts` (limitation par email comptée par organisation ; quota IP au-delà du seuil, y compris en parallèle). Suite complète avec base : 558 passés, 0 échec.
+
+### Constats non traités dans cette passe
+
+L'attribut `Secure` du cookie de session n'est toujours asserté par aucun test (le passer à `false` resterait indolore pour la suite) ; `/api/auth/code` et `/api/auth/verify` n'ont pas le garde `content-length` présent sur les autres routes ; retirer une adresse de `AZZEL_ADMIN_EMAILS` ne redescend jamais le rôle `organisateur` déjà accordé ; un échec SMTP après insertion du code consomme le quota sans que l'utilisateur reçoive rien.

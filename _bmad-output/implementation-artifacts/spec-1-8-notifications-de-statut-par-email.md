@@ -119,3 +119,28 @@ Décisions : outbox inséré DANS la transaction métier (l'événement et son e
 
 **Manual checks (if no CLI):**
 - Parcours : inscription → http://localhost:8026 (email reçu) ; refus avec motif → email avec motif+numéro ; couper Mailpit (`dev-mail.sh down`) → refuser → `dev-mail.sh up` + `pnpm -F @azzel/web emails:send` → email parti.
+
+## Revue de code
+
+**2026-10-22 — revue d'épopée (3 lentilles : adverse, chemins limites, trous de vérification) sur le diff complet des stories 1.1 à 1.9.**
+
+### Constat retenu
+
+`claimOutboxRow` passait la ligne à `statut = 'sending'` avant l'envoi SMTP, mais `listOutstanding` ne reprenait que `pending` et `failed`, et `countDeadLetters` ne comptait que `failed`. Si le process mourait entre la revendication et `markOutboxSent`/`markOutboxFailed` — crash, redéploiement, fin d'exécution serverless — la ligne restait bloquée en `sending` **à vie** : email jamais envoyé, jamais rejoué, et invisible du CLI. Les trois lentilles ont relevé ce défaut indépendamment. Il contredit directement le « and replay » du message de commit : un coureur pouvait ne jamais apprendre la décision sur son dossier, sans que personne ne le voie.
+
+### Modifications apportées
+
+- `migrations/0013_outbox_claimed_at.sql` (nouveau) — colonne `claimed_at timestamptz` sur `email_outbox` et index partiel `email_outbox_sending_claimed_idx` sur les lignes `sending`. Écrite en `IF NOT EXISTS` : applicable sur une base déjà migrée.
+- `apps/web/src/modules/notifications/outbox-store.ts` — constante exportée `OUTBOX_CLAIM_LEASE_MINUTES = 15` et condition partagée « bail expiré » (`statut = 'sending' AND (claimed_at IS NULL OR claimed_at <= now() - 15 min)`) ; `claimed_at IS NULL` couvre les lignes `sending` antérieures à la migration, traitées comme un bail déjà expiré. `claimOutboxRow` horodate la revendication et accepte une ligne au bail expiré. `listOutstanding` reprend ces lignes. `markOutboxSent` / `markOutboxFailed` libèrent le bail. `countDeadLetters` compte les lignes abandonnées dont les tentatives sont épuisées. Le type `OutboxRow` n'a pas été élargi : `claimed_at` reste interne au store, aucun appelant n'est impacté.
+
+### Incident de numérotation, à connaître
+
+La migration a d'abord été écrite en `0010`, numéro **déjà pris** par `0010_sponsors.sql` (épopée 2, en cours en parallèle). Les deux auraient cohabité sans erreur, le runner triant par nom de fichier — c'est exactement le défaut relevé par ailleurs : `schema_migrations` est clé sur le seul nom de fichier, donc deux migrations homonymes de modules différents se masqueraient silencieusement. Renumérotée en `0013` et rendue idempotente avant d'être rejouée. Le défaut de fond (clé = basename) reste ouvert, documenté en story 1.1.
+
+### Vérification
+
+Test d'intégration ajouté : claim sans marquage → `processOutbox` ne propose rien (l'envoi lève s'il est appelé) → `claimed_at` reculé de 16 minutes → la ligne est reprise, `sent = 1`, `attempts = 2`. Par ailleurs, deux tests de ce fichier validaient un dossier sans preuve ni acceptations : complétés suite à la nouvelle règle de la story 1.6. Suite complète avec base : 558 passés, 0 échec.
+
+### Constats non traités dans cette passe
+
+`notifyOutbox` est lancé en promesse flottante (`void (async () => …)()`) sans `after()` ni `waitUntil` : Next peut geler l'exécution après la réponse, ce qui **produit** la situation corrigée ici plutôt que de l'éviter — le bail la rattrape désormais, mais la cause demeure. `buildNotificationEmail` retombe silencieusement sur « inscription reçue » pour un `type` inconnu. `APP_URL` absente produit sans bruit des liens `http://localhost:3000` dans les emails envoyés, alors que `SMTP_URL` absente échoue explicitement. Enfin, supprimer les deux appels à `notifyOutbox` ne fait échouer aucun test.

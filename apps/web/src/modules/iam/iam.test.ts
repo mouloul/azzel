@@ -1,10 +1,17 @@
+import type { Sql } from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  CODE_REQUEST_IP_WINDOW_MS,
+  MAX_CODE_REQUESTS_PER_IP,
+} from './constants';
 import { buildLoginCodeEmailText, sendLoginCodeEmail } from './email';
 import { readAdminEmails, readSmtpUrl } from './env';
 import {
+  AppRoleMisconfiguredError,
   CodeExhaustedError,
   DbUnavailableError,
+  EmailInvalidError,
   EmailSendError,
   ForbiddenError,
   InvalidCodeError,
@@ -14,11 +21,14 @@ import {
 } from './errors';
 import {
   generateLoginCode,
+  hashClientIp,
   isValidEmail,
   normalizeEmail,
   normalizeLoginCode,
+  requestLoginCode,
   sha256Hex,
 } from './service';
+import { createAppRoleGuard, createIamStore, type IamStore } from './store';
 
 describe('normalizeEmail', () => {
   it('trim et minuscules', () => {
@@ -190,5 +200,184 @@ describe('readAdminEmails — AZZEL_ADMIN_EMAILS', () => {
       process.env.AZZEL_ADMIN_EMAILS = previous;
     }
     expect(true).toBe(true);
+  });
+});
+
+// --- Correctifs sécurité stories 1.2 / 1.9 -----------------------------------
+
+function createFakeStore(overrides: Partial<IamStore> = {}): IamStore {
+  return {
+    getDefaultOrganisationId: async () => '00000000-0000-0000-0000-000000000001',
+    recordCodeRequestIp: async () => {},
+    insertLoginCode: async () => {},
+    verifyCodeAndStartSession: async () => ({ ok: false, reason: 'code_invalid' }),
+    findSessionByTokenHash: async () => null,
+    revokeSessionByTokenHash: async () => {},
+    ...overrides,
+  };
+}
+
+describe('quota par IP de la demande de code', () => {
+  it('hashClientIp : empreinte stable, jamais l’IP en clair, sensible au sel', () => {
+    vi.stubEnv('AZZEL_IP_HASH_SALT', 'sel-a');
+    const premier = hashClientIp('203.0.113.7');
+    expect(premier).toMatch(/^[0-9a-f]{64}$/);
+    expect(premier).toBe(hashClientIp('203.0.113.7'));
+    expect(premier).not.toContain('203.0.113.7');
+    expect(hashClientIp('203.0.113.8')).not.toBe(premier);
+    vi.stubEnv('AZZEL_IP_HASH_SALT', 'sel-b');
+    expect(hashClientIp('203.0.113.7')).not.toBe(premier);
+    vi.unstubAllEnvs();
+  });
+
+  it('IP fournie : le quota est consommé AVANT toute écriture liée à l’email', async () => {
+    const ordre: string[] = [];
+    const store = createFakeStore({
+      recordCodeRequestIp: async () => {
+        ordre.push('ip');
+      },
+      insertLoginCode: async () => {
+        ordre.push('code');
+      },
+    });
+    await requestLoginCode(
+      'coureur@exemple.dz',
+      { store, sendCode: async () => {} },
+      { clientIp: '203.0.113.7' },
+    );
+    expect(ordre).toEqual(['ip', 'code']);
+  });
+
+  it('quota IP atteint : RateLimitedError, aucun code créé ni envoyé', async () => {
+    const insertLoginCode = vi.fn(async () => {});
+    const sendCode = vi.fn(async () => {});
+    const store = createFakeStore({
+      recordCodeRequestIp: async () => {
+        throw new RateLimitedError(900);
+      },
+      insertLoginCode,
+    });
+    await expect(
+      requestLoginCode('coureur@exemple.dz', { store, sendCode }, { clientIp: '203.0.113.7' }),
+    ).rejects.toBeInstanceOf(RateLimitedError);
+    expect(insertLoginCode).not.toHaveBeenCalled();
+    expect(sendCode).not.toHaveBeenCalled();
+  });
+
+  it('IP absente ou vide : pas d’appel au quota, le flux reste nominal', async () => {
+    const recordCodeRequestIp = vi.fn(async () => {});
+    const store = createFakeStore({ recordCodeRequestIp });
+    await requestLoginCode('coureur@exemple.dz', { store, sendCode: async () => {} });
+    await requestLoginCode(
+      'coureur@exemple.dz',
+      { store, sendCode: async () => {} },
+      { clientIp: '   ' },
+    );
+    expect(recordCodeRequestIp).not.toHaveBeenCalled();
+  });
+
+  it('email invalide : refusé avant même le quota IP', async () => {
+    const recordCodeRequestIp = vi.fn(async () => {});
+    const store = createFakeStore({ recordCodeRequestIp });
+    await expect(
+      requestLoginCode('pas-un-email', { store, sendCode: async () => {} }, { clientIp: '1.2.3.4' }),
+    ).rejects.toBeInstanceOf(EmailInvalidError);
+    expect(recordCodeRequestIp).not.toHaveBeenCalled();
+  });
+
+  it('seuil par IP bas et explicite, fenêtre d’une heure', () => {
+    expect(MAX_CODE_REQUESTS_PER_IP).toBeLessThanOrEqual(50);
+    expect(MAX_CODE_REQUESTS_PER_IP).toBeGreaterThan(0);
+    expect(CODE_REQUEST_IP_WINDOW_MS).toBe(60 * 60 * 1000);
+  });
+});
+
+describe('createAppRoleGuard — rôle applicatif (story 1.9)', () => {
+  function fakeSql(currentUser: string): Sql {
+    const calls = { count: 0 };
+    const sql = (async () => {
+      calls.count += 1;
+      return [{ current_user: currentUser }];
+    }) as unknown as Sql & { calls: typeof calls };
+    sql.calls = calls;
+    return sql;
+  }
+
+  it('rôle applicatif : passe sans bruit, une seule interrogation de la base', async () => {
+    const sql = fakeSql('azzel_app') as Sql & { calls: { count: number } };
+    const guard = createAppRoleGuard(sql, { production: true });
+    await expect(guard()).resolves.toBeUndefined();
+    await expect(guard()).resolves.toBeUndefined();
+    expect(sql.calls.count).toBe(1);
+  });
+
+  it('production + mauvais rôle : refuse de servir (erreur, pas un avertissement)', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const guard = createAppRoleGuard(fakeSql('azzel'), { production: true });
+      await expect(guard()).rejects.toBeInstanceOf(AppRoleMisconfiguredError);
+      // Le refus est définitif : chaque accès suivant échoue aussi.
+      await expect(guard()).rejects.toBeInstanceOf(AppRoleMisconfiguredError);
+      expect(error).toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('développement + mauvais rôle : avertissement, le service continue', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const guard = createAppRoleGuard(fakeSql('azzel'), { production: false });
+      await expect(guard()).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('base injoignable : verdict non mémorisé, nouvelle tentative au prochain accès', async () => {
+    let appels = 0;
+    const sql = (async () => {
+      appels += 1;
+      if (appels === 1) {
+        throw new Error('ECONNREFUSED');
+      }
+      return [{ current_user: 'azzel_app' }];
+    }) as unknown as Sql;
+    const guard = createAppRoleGuard(sql, { production: true });
+    await expect(guard()).rejects.toThrow('ECONNREFUSED');
+    await expect(guard()).resolves.toBeUndefined();
+    expect(appels).toBe(2);
+  });
+
+  it('garde câblée au store : en production, aucune requête n’est exécutée', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      let requetes = 0;
+      const sql = (async () => {
+        requetes += 1;
+        return [{ current_user: 'azzel' }];
+      }) as unknown as Sql;
+      const store = createIamStore(sql, {
+        ensureAppRole: createAppRoleGuard(sql, { production: true }),
+      });
+      await expect(store.getDefaultOrganisationId()).rejects.toBeInstanceOf(
+        AppRoleMisconfiguredError,
+      );
+      // Seul le SELECT current_user de la garde a été émis.
+      expect(requetes).toBe(1);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('AppRoleMisconfiguredError : 503 enveloppe iam.db_misconfigured, sans détail interne', () => {
+    const apiError = toApiError(new AppRoleMisconfiguredError('azzel'));
+    expect(apiError.status).toBe(503);
+    expect(apiError.envelope.error.code).toBe('iam.db_misconfigured');
+    expect(apiError.envelope.error.message).not.toContain('azzel_app');
   });
 });

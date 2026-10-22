@@ -1,0 +1,82 @@
+# CI Azzel — story 1.1 (fondation du monorepo).
+#
+# Objectif : qu'aucune preuve ne puisse disparaître en silence. Les règles qui ne
+# vivent qu'en SQL (RLS multi-organisation, limitation de débit des codes de
+# connexion, immuabilité du dossier validé, machine à états de l'outbox, unicité de
+# la preuve active) ne sont prouvées que par les suites d'intégration ; sans base
+# celles-ci se skippent. On fournit donc une vraie base Postgres et on pose
+# AZZEL_REQUIRE_DB=1 : le skip devient un échec dur (apps/web/src/test/integration-db.ts).
+#
+# Deux rôles, comme en local (scripts/dev-db.sh) :
+#   - propriétaire « azzel »      → DATABASE_OWNER_URL (migrations, création d'azzel_test) ;
+#   - applicatif  « azzel_app »   → DATABASE_URL (RLS appliqué ; créé par la migration 0008).
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: Typecheck, build et tests (base incluse)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Même version majeure que le Postgres de développement (scripts/dev-db.sh).
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: azzel
+          POSTGRES_PASSWORD: azzel
+          POSTGRES_DB: azzel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U azzel -d azzel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Rôle applicatif : créé par la migration 0008 avec AZZEL_APP_PASSWORD.
+      DATABASE_URL: postgres://azzel_app:azzel@localhost:5432/azzel
+      DATABASE_OWNER_URL: postgres://azzel:azzel@localhost:5432/azzel
+      AZZEL_APP_PASSWORD: azzel
+      # Garde-fou : interdit tout saut des suites d'intégration.
+      AZZEL_REQUIRE_DB: '1'
+
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installation de pnpm
+        # Version lue dans le champ « packageManager » de package.json (pnpm@11.1.1).
+        uses: pnpm/action-setup@v4
+
+      - name: Installation de Node
+        uses: actions/setup-node@v4
+        with:
+          # Cohérent avec engines : ^22.13.0 || ^24.3.0 || >=26.0.0.
+          node-version: '24'
+          cache: pnpm
+
+      - name: Installation des dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Vérification des types
+        run: pnpm typecheck
+
+      - name: Application des migrations (rôle propriétaire)
+        # Crée le rôle applicatif azzel_app (0008) puis active le RLS (0009).
+        run: pnpm -F @azzel/web db:migrate
+
+      - name: Build
+        run: pnpm build
+
+      - name: Tests (unitaires + intégration, aucun saut autorisé)
+        run: pnpm test

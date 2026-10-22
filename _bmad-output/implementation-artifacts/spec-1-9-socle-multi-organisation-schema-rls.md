@@ -121,3 +121,38 @@ Ajustements à la note Winston, découverts en spécifiant : (1) `organisation` 
 
 **Manual checks (if no CLI):**
 - En psql en rôle azzel_app : `SELECT count(*) FROM coureur;` → 0 sans `SET app.organisation_id` ; avec le GUC posé → les lignes de l'org seulement.
+
+## Revue de code
+
+**2026-10-22 — revue d'épopée (3 lentilles : adverse, chemins limites, trous de vérification) sur le diff complet des stories 1.1 à 1.9.**
+
+### Constats retenus
+
+1. **`login_code` et `session` hors isolation.** La migration 0009 posait des politiques `USING (true)` sur ces deux tables, **sans** `FORCE ROW LEVEL SECURITY`, contrairement aux tables métier. L'exception était documentée en Design Notes, mais sa portée réelle dépassait l'intention : l'UPDATE d'invalidation et la relecture du code opéraient toutes organisations confondues. Dès la deuxième organisation, une demande de code dans l'org B invalidait le code de l'org A pour la même adresse.
+2. **RLS contournable en silence.** Le rôle propriétaire reçoit `BYPASSRLS`. Si `DATABASE_URL` pointait sur lui, toute l'isolation disparaissait — et la seule réaction était un `console.warn` asynchrone avec `.catch(() => {})`. Une variable d'environnement de production copiée depuis la ligne `DATABASE_OWNER_URL` de `.env.example` suffisait à désactiver FR-27 intégralement.
+3. **Mot de passe du rôle applicatif.** `AZZEL_APP_PASSWORD` absente retombait silencieusement sur `'azzel'`. Le commentaire de 0008 annonçait par ailleurs une rotation par `ALTER ROLE` qui **n'a jamais lieu** : le runner saute toute migration déjà inscrite dans `schema_migrations`.
+4. **`evenement.slug` unique globalement.** `0002_inscriptions.sql` déclarait `slug text NOT NULL UNIQUE`, alors que toutes les autres tables sont scopées par organisation. Deux organisations n'auraient pas pu déclarer un événement de même slug : le deuxième client aurait été bloqué, en contradiction directe avec la promesse de cette story.
+
+### Modifications apportées
+
+- `migrations/0011_login_isolation.sql` (nouveau) — `FORCE ROW LEVEL SECURITY` sur `login_code` et `session` ; les politiques permissives de 0009 sont remplacées par le motif « GUC posé → organisation seule, GUC absent → tout » (style `nullif(current_setting(...), '')` de 0009). Crée aussi `login_code_ip_request` (table d'infra anti-abus de la story 1.2, politique permissive assumée : elle ne porte aucune donnée d'organisation) et ses grants.
+- `apps/web/src/modules/iam/store.ts` — `warnIfNotAppRole` remplacé par `createAppRoleGuard` : verdict vérifié avant chaque accès base, mémorisé (une seule requête ; une panne de connexion n'est pas mémorisée). En production, un rôle différent de `azzel_app` lève `AppRoleMisconfiguredError` et **aucune requête n'est exécutée** ; en développement, l'avertissement est conservé. Erreur mappée en 503 `iam.db_misconfigured`, sans détail interne.
+- `apps/web/src/modules/inscriptions/migrate.ts` — en `NODE_ENV=production`, `AZZEL_APP_PASSWORD` est **exigée** (erreur explicite, plus de repli sur `'azzel'`) ; repli conservé en développement.
+- `migrations/0008_rls_roles.sql` — commentaire corrigé : cette migration ne rejoue pas, ce n'est donc pas un mécanisme de rotation ; la rotation se fait hors migrations (`ALTER ROLE` + mise à jour de `DATABASE_URL`).
+- `migrations/0012_evenement_slug_par_organisation.sql` (nouveau) — bloc `DO` qui retrouve la contrainte d'unicité mono-colonne sur `evenement.slug` sans se fier à son nom, la supprime et pose `UNIQUE (organisation_id, slug)`. `0002` n'est pas modifiée (déjà appliquée). Recherche d'usages de l'unicité globale : **aucun** dans le code applicatif.
+
+### Limite assumée, non forcée
+
+La **pré-sélection** du code dans `verifyCodeAndStartSession` reste hors GUC : le flux documenté en Design Notes cherche la ligne par secret avant que l'organisation soit connue. Conséquence résiduelle, commentée dans le code : une même adresse ayant un code en cours dans deux organisations voit le plus récent l'emporter — les deux ne coexistent pas pour la vérification. **Ce n'est pas une fuite** : le hash doit correspondre à la ligne retenue, donc un code ne peut plus ouvrir de session dans une autre organisation que la sienne. Lever cette limite exigerait de qualifier la requête par organisation (slug ou domaine), ce que la V1 ne fait pas. À arbitrer avec Winston au moment où une deuxième organisation arrive.
+
+### Vérification
+
+`iam.integration.test.ts` : le code de l'org B n'invalide pas celui de A ; invisibilité croisée de `login_code`/`session` sous GUC ; écriture inter-organisation refusée (FORCE RLS). `evenement-slug.integration.test.ts` (nouveau) : deux organisations créent un événement de même slug, doublon dans la même organisation rejeté, et assertion sur `pg_constraint`. `migrate.test.ts` (nouveau) : injection, échappement, repli dev, échec explicite en production. Les assertions qui codaient en dur la liste et le nombre de migrations (`inscriptions.integration.test.ts`, `iam.integration.test.ts`) ont été rendues dynamiques : elles cassaient à chaque story pour une raison sans rapport. Suite complète avec base : 558 passés, 0 échec.
+
+### Conséquences pour le déploiement
+
+En production, il faut désormais poser `AZZEL_APP_PASSWORD` (sinon `db:migrate` échoue), `AZZEL_IP_HASH_SALT` (story 1.2), et `DATABASE_URL` doit bien pointer sur `azzel_app` — sinon l'application refuse de servir, ce qui est voulu.
+
+### Constats non traités dans cette passe
+
+Le commentaire de `org-scope.ts` affirmant que « toutes les requêtes métier des stores passent par ici » reste inexact : `findOrganisationIdBySlug`, `listOrganisationIds`, `findSessionByTokenHash` et `revokeSessionByTokenHash` s'exécutent hors `withOrg`. Un lecteur peut en déduire un scoping universel et ajouter une requête sensible sans filtre.

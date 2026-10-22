@@ -135,3 +135,29 @@ Décisions Winston (note en context:) : colonne role unique (pas de N-N), promot
 
 **Manual checks (if no CLI):**
 - `AZZEL_ADMIN_EMAILS=vous@example.dz pnpm dev:web` → se connecter avec cet email → lien Administration → liste, détail, télécharger une preuve, refuser sans motif (blocage), avec motif, puis côté coureur : motif affiché, redépôt → retour en constitution.
+
+## Revue de code
+
+**2026-10-22 — revue d'épopée (3 lentilles : adverse, chemins limites, trous de vérification) sur le diff complet des stories 1.1 à 1.9.**
+
+### Constat retenu
+
+`decideDossier`, branche `valider`, ne vérifiait **ni la présence d'une preuve de paiement active, ni les acceptations** (décharge, règlement intérieur). Un organisateur pouvait donc valider un dossier vide et délivrer un dossard sans décharge signée — exposition juridique réelle, et contradiction avec la matrice de cette story (« coureur en constitution **+ preuve active** → statut validé ») comme avec la story 1.4 (« sans les deux acceptations, le dossier ne peut pas être considéré complet »).
+
+### Modifications apportées
+
+- `apps/web/src/modules/inscriptions/errors.ts` — type `PieceDossier` (`'preuve' | 'decharge' | 'reglement'`), erreur `DossierIncompletError(pieces)`, helper `formatPiecesManquantes`, et mapping dans `toAdminApiError` → **409 `admin.dossier_incomplet`**, message et action en français nommant les pièces manquantes. Pas de 500.
+- `apps/web/src/modules/inscriptions/store.ts`, `decideDossier`, branche `valider` — après le no-op idempotent, lecture **dans la même transaction que le `FOR UPDATE`** de la preuve `status = 'active'` et des colonnes `decharge_accepted_at` / `reglement_accepted_at` ; si une pièce manque, `DossierIncompletError`.
+- Aucune modification de route : `POST /api/admin/dossiers/[id]/decision` passait déjà par `toAdminApiError`.
+
+### Décision explicite
+
+**Le refus reste possible sur un dossier incomplet** : seule la branche `valider` est gardée — refuser pour pièce manquante est précisément l'usage attendu. Un test l'épingle. La règle est exactement celle des specs (preuve + décharge + règlement), sans durcissement supplémentaire.
+
+### Vérification
+
+`dossiers-admin.integration.test.ts` : helper `completerDossier()` ajouté et appliqué aux quatre tests qui validaient un dossier vide ; quatre nouveaux tests (validation sans rien → 409 et statut inchangé ; preuve seule ; acceptations seules ; refus d'un dossier incomplet toujours permis). `inscriptions.test.ts` : deux tests d'enveloppe. Deux tests de `outbox.integration.test.ts` validaient également un dossier vide — complétés avec preuve et acceptations. Suite complète avec base : 558 passés, 0 échec.
+
+### Constats non traités dans cette passe
+
+Le refus n'est pas idempotent (refuser un dossier déjà refusé réécrit le statut et insère une nouvelle ligne d'outbox à chaque clic, alors que la validation est idempotente) ; un `id` non-UUID déclenche une erreur Postgres `22P02` convertie en 500 au lieu d'un 404 ; `listCoureurs` expose `hasMore` sans qu'aucun curseur ni paramètre de page n'existe dans la route, rendant les dossiers au-delà de 200 inaccessibles ; `escapeLike` n'est exercé par aucun test.

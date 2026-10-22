@@ -80,6 +80,54 @@ describe('POST /api/auth/code', () => {
   });
 });
 
+describe('POST /api/auth/code — IP transmise pour le quota anti-abus', () => {
+  function codeRequest(headers: Record<string, string>): NextRequest {
+    return new NextRequest(BASE + '/api/auth/code', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ email: 'coureur@exemple.dz' }),
+      duplex: 'half',
+    });
+  }
+
+  it('x-forwarded-for : seule la première adresse (client d’origine) est retenue', async () => {
+    serviceMock.requestLoginCode.mockResolvedValue(undefined);
+
+    await postCode(codeRequest({ 'x-forwarded-for': '203.0.113.7, 198.51.100.4' }));
+
+    expect(serviceMock.requestLoginCode).toHaveBeenCalledWith(
+      'coureur@exemple.dz',
+      {},
+      { clientIp: '203.0.113.7' },
+    );
+  });
+
+  it('x-real-ip en secours quand x-forwarded-for est absent', async () => {
+    serviceMock.requestLoginCode.mockResolvedValue(undefined);
+
+    await postCode(codeRequest({ 'x-real-ip': '203.0.113.9' }));
+
+    expect(serviceMock.requestLoginCode).toHaveBeenCalledWith(
+      'coureur@exemple.dz',
+      {},
+      { clientIp: '203.0.113.9' },
+    );
+  });
+
+  it('aucun en-tête d’IP : clientIp null, la demande reste traitée', async () => {
+    serviceMock.requestLoginCode.mockResolvedValue(undefined);
+
+    const response = await postCode(codeRequest({}));
+
+    expect(response.status).toBe(200);
+    expect(serviceMock.requestLoginCode).toHaveBeenCalledWith(
+      'coureur@exemple.dz',
+      {},
+      { clientIp: null },
+    );
+  });
+});
+
 describe('GET /api/auth/session', () => {
   it('sans cookie : 401 avec enveloppe iam.unauthenticated', async () => {
     const response = await getSessionRoute(new NextRequest(BASE + '/api/auth/session'));

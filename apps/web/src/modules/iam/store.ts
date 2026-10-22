@@ -6,16 +6,23 @@ import {
 } from '@/db/org-scope';
 
 import {
+  APP_DB_ROLE,
   CODE_REQUEST_GLOBAL_WINDOW_MS,
+  CODE_REQUEST_IP_WINDOW_MS,
   CODE_REQUEST_WINDOW_MS,
   DEFAULT_ORGANISATION_SLUG,
   MAX_CODE_ATTEMPTS,
   MAX_CODE_REQUESTS_PER_HOUR,
+  MAX_CODE_REQUESTS_PER_IP,
   MAX_CODE_REQUESTS_PER_WINDOW,
   type AccountRole,
 } from './constants';
-import { readDatabaseUrl } from './env';
-import { DbUnavailableError, RateLimitedError } from './errors';
+import { readDatabaseUrl, readEnv } from './env';
+import {
+  AppRoleMisconfiguredError,
+  DbUnavailableError,
+  RateLimitedError,
+} from './errors';
 
 export type VerifyOutcome =
   | { ok: true; accountId: string; organisationId: string; email: string; role: AccountRole }
@@ -31,6 +38,11 @@ export interface SessionRecord {
 
 export interface IamStore {
   getDefaultOrganisationId(): Promise<string>;
+  /**
+   * Quota par adresse IP de la demande de code (fenêtre glissante). Enregistre la
+   * demande si le seuil n'est pas atteint, lève RateLimitedError sinon.
+   */
+  recordCodeRequestIp(input: { ipHash: string; cutoff: Date }): Promise<void>;
   insertLoginCode(input: {
     organisationId: string;
     email: string;
@@ -84,7 +96,7 @@ function isConnectionError(error: unknown): boolean {
   return error instanceof Error && CONNECTION_ERROR_PATTERN.test(error.message);
 }
 
-async function withDb<T>(run: () => Promise<T>): Promise<T> {
+async function wrapDbErrors<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {
@@ -100,7 +112,25 @@ function retryAfterSec(oldestAt: Date | null, windowMs: number): number {
   return Math.max(1, Math.ceil((oldestMs + windowMs - Date.now()) / 1000));
 }
 
-export function createIamStore(sql: Sql): IamStore {
+export interface CreateIamStoreOptions {
+  /**
+   * Garde story 1.9 : vérifie une fois que la connexion est bien le rôle
+   * applicatif. Appelée avant CHAQUE accès base — en production elle rejette
+   * (AppRoleMisconfiguredError) et l'application ne sert pas.
+   */
+  ensureAppRole?: () => Promise<void>;
+}
+
+export function createIamStore(sql: Sql, options: CreateIamStoreOptions = {}): IamStore {
+  const { ensureAppRole } = options;
+  const withDb = <T>(run: () => Promise<T>): Promise<T> =>
+    wrapDbErrors(async () => {
+      if (ensureAppRole) {
+        await ensureAppRole();
+      }
+      return run();
+    });
+
   return {
     async getDefaultOrganisationId(): Promise<string> {
       return withDb(async () => {
@@ -114,6 +144,30 @@ export function createIamStore(sql: Sql): IamStore {
         }
         return id;
       });
+    },
+
+    async recordCodeRequestIp(input: { ipHash: string; cutoff: Date }): Promise<void> {
+      // Hors withOrg : le quota par IP s'applique AVANT que l'organisation soit
+      // résolue, et vaut pour toutes (table sans organisation_id, cf. 0011).
+      await withDb(() =>
+        sql.begin(async (tx) => {
+          await tx`SELECT pg_advisory_xact_lock(hashtext(${`ip:${input.ipHash}`}))`;
+          const rows = await tx<{ count: number; oldest: Date | null }[]>`
+            SELECT count(*)::int AS count, min(created_at) AS oldest
+            FROM login_code_ip_request
+            WHERE ip_hash = ${input.ipHash} AND created_at > ${input.cutoff}
+          `;
+          const row = rows[0];
+          if ((row?.count ?? 0) >= MAX_CODE_REQUESTS_PER_IP) {
+            throw new RateLimitedError(
+              retryAfterSec(row?.oldest ?? null, CODE_REQUEST_IP_WINDOW_MS),
+            );
+          }
+          // Purge au fil de l'eau : pas de tâche planifiée en V1.
+          await tx`DELETE FROM login_code_ip_request WHERE created_at <= ${input.cutoff}`;
+          await tx`INSERT INTO login_code_ip_request (ip_hash) VALUES (${input.ipHash})`;
+        }),
+      );
     },
 
     async insertLoginCode(input: {
@@ -131,7 +185,9 @@ export function createIamStore(sql: Sql): IamStore {
           const perEmailRows = await tx<{ count: number; oldest: Date | null }[]>`
             SELECT count(*)::int AS count, min(created_at) AS oldest
             FROM login_code
-            WHERE email = ${input.email} AND created_at > ${input.perEmailCutoff}
+            WHERE organisation_id = ${input.organisationId}
+              AND email = ${input.email}
+              AND created_at > ${input.perEmailCutoff}
           `;
           const perEmail = perEmailRows[0];
           if ((perEmail?.count ?? 0) >= MAX_CODE_REQUESTS_PER_WINDOW) {
@@ -139,10 +195,15 @@ export function createIamStore(sql: Sql): IamStore {
               retryAfterSec(perEmail?.oldest ?? null, CODE_REQUEST_WINDOW_MS),
             );
           }
+          // Garde-fou de volumétrie SCOPÉ À L'ORGANISATION : un compteur global
+          // laissait 1000 demandes avec des adresses différentes bloquer la
+          // connexion de tout le monde. La protection contre l'auteur d'un tel
+          // flot est le quota par IP (recordCodeRequestIp), pas ce compteur.
           const hourlyRows = await tx<{ count: number; oldest: Date | null }[]>`
             SELECT count(*)::int AS count, min(created_at) AS oldest
             FROM login_code
-            WHERE created_at > ${input.hourlyCutoff}
+            WHERE organisation_id = ${input.organisationId}
+              AND created_at > ${input.hourlyCutoff}
           `;
           const hourly = hourlyRows[0];
           if ((hourly?.count ?? 0) >= MAX_CODE_REQUESTS_PER_HOUR) {
@@ -150,10 +211,14 @@ export function createIamStore(sql: Sql): IamStore {
               retryAfterSec(hourly?.oldest ?? null, CODE_REQUEST_GLOBAL_WINDOW_MS),
             );
           }
+          // organisation_id explicite (défense en profondeur, en plus du RLS de
+          // 0011) : sans lui, demander un code dans l'organisation B invalidait
+          // le code en cours de la même adresse dans l'organisation A.
           await tx`
             UPDATE login_code
             SET invalidated_at = now()
-            WHERE email = ${input.email}
+            WHERE organisation_id = ${input.organisationId}
+              AND email = ${input.email}
               AND consumed_at IS NULL
               AND invalidated_at IS NULL
           `;
@@ -173,10 +238,19 @@ export function createIamStore(sql: Sql): IamStore {
       adminEmails: string[];
     }): Promise<VerifyOutcome> {
       return withDb(async () => {
-        // Multi-org : le code est cherché par email (politique permissive, secret
-        // d'abord) SANS GUC par défaut — c'est l'organisation de la ligne
-        // login_code qui gouverne compte et session. La re-lecture sous verrou
-        // (FOR UPDATE) dans la transaction withOrg garde la consommation atomique.
+        // Multi-org : la PRÉ-SÉLECTION se fait hors GUC (exception documentée
+        // spec 1.9) — l'organisation n'est pas connue avant d'avoir trouvé la
+        // ligne. Elle ne sert qu'à déterminer l'organisation ; tout le reste
+        // (vérification du hash, compteur de tentatives, consommation, session)
+        // se passe sous withOrg AVEC un filtre organisation_id explicite.
+        //
+        // Limite assumée : une même adresse ayant un code en cours dans DEUX
+        // organisations voit la plus récente l'emporter — les deux codes ne
+        // coexistent pas pour la vérification. Lever cette limite demanderait de
+        // qualifier la requête par organisation (slug ou domaine), ce que la V1
+        // ne fait pas. Ce n'est pas une fuite : le hash doit correspondre à la
+        // ligne choisie, donc un code ne peut pas ouvrir de session ailleurs que
+        // dans son organisation d'origine.
         const codeRows = await sql<{ organisation_id: string }[]>`
           SELECT organisation_id FROM login_code
           WHERE email = ${input.email}
@@ -193,7 +267,8 @@ export function createIamStore(sql: Sql): IamStore {
           const rows = await tx<LoginCodeRow[]>`
             SELECT id, organisation_id, code_hash, attempts, expires_at
             FROM login_code
-            WHERE email = ${input.email}
+            WHERE organisation_id = ${codeOrganisationId}
+              AND email = ${input.email}
               AND consumed_at IS NULL
               AND invalidated_at IS NULL
             ORDER BY created_at DESC
@@ -247,7 +322,9 @@ export function createIamStore(sql: Sql): IamStore {
           await tx`
             UPDATE session
             SET revoked_at = now()
-            WHERE account_id = ${account.id} AND revoked_at IS NULL
+            WHERE organisation_id = ${code.organisation_id}
+              AND account_id = ${account.id}
+              AND revoked_at IS NULL
           `;
           await tx`
             INSERT INTO session (organisation_id, account_id, token_hash, expires_at)
@@ -321,7 +398,8 @@ export function createIamStore(sql: Sql): IamStore {
           // session révoquée ou expirée entre les deux étapes n'est plus acceptée.
           await tx`
             UPDATE session SET revoked_at = now()
-            WHERE token_hash = ${tokenHash}
+            WHERE organisation_id = ${core.organisation_id}
+              AND token_hash = ${tokenHash}
               AND revoked_at IS NULL
               AND expires_at > now()
           `;
@@ -337,6 +415,7 @@ function createUnavailableStore(): IamStore {
   };
   return {
     getDefaultOrganisationId: unavailable,
+    recordCodeRequestIp: unavailable,
     insertLoginCode: unavailable,
     verifyCodeAndStartSession: unavailable,
     findSessionByTokenHash: unavailable,
@@ -344,24 +423,50 @@ function createUnavailableStore(): IamStore {
   };
 }
 
-// Story 1.9 : au premier accès applicatif, signaler une connexion qui ne serait
-// pas en rôle azzel_app — sinon le RLS serait contourné en silence (owner/superuser).
-function warnIfNotAppRole(sql: Sql): void {
-  const globals = globalThis as typeof globalThis & { __azzelAppRoleWarned?: boolean };
-  if (globals.__azzelAppRoleWarned) {
-    return;
-  }
-  globals.__azzelAppRoleWarned = true;
-  void sql<{ current_user: string }[]>`SELECT current_user`
-    .then((rows) => {
-      const currentUser = rows[0]?.current_user;
-      if (currentUser && currentUser !== 'azzel_app') {
-        console.warn(
-          `[db] connexion applicative en rôle « ${currentUser} » (attendu « azzel_app ») : le RLS est contourné — DATABASE_URL doit pointer sur le rôle applicatif (story 1.9).`,
-        );
+export function isProductionRuntime(): boolean {
+  return readEnv('NODE_ENV') === 'production';
+}
+
+/**
+ * Story 1.9 : la connexion applicative DOIT être le rôle azzel_app — le
+ * propriétaire a BYPASSRLS, donc tout l'isolement multi-organisation tomberait
+ * en silence. En production on refuse de servir (erreur à chaque accès, pas un
+ * simple avertissement) ; en développement on conserve l'avertissement.
+ *
+ * Le verdict est mémorisé : un seul `SELECT current_user` par connexion. Une
+ * panne de connexion n'est PAS mémorisée (nouvelle tentative au prochain accès).
+ */
+export function createAppRoleGuard(
+  sql: Sql,
+  options: { production: boolean },
+): () => Promise<void> {
+  let verdict: Promise<void> | null = null;
+  const check = async (): Promise<void> => {
+    const rows = await sql<{ current_user: string }[]>`SELECT current_user`;
+    const currentUser = rows[0]?.current_user ?? 'inconnu';
+    if (currentUser === APP_DB_ROLE) {
+      return;
+    }
+    const message =
+      `[db] connexion applicative en rôle « ${currentUser} » (attendu « ${APP_DB_ROLE} ») : ` +
+      'le RLS est contourné — DATABASE_URL doit pointer sur le rôle applicatif (story 1.9).';
+    if (options.production) {
+      console.error(message);
+      throw new AppRoleMisconfiguredError(currentUser);
+    }
+    console.warn(message);
+  };
+  return async () => {
+    verdict ??= check();
+    try {
+      await verdict;
+    } catch (error) {
+      if (!(error instanceof AppRoleMisconfiguredError)) {
+        verdict = null;
       }
-    })
-    .catch(() => {});
+      throw error;
+    }
+  };
 }
 
 export function getIamStore(): IamStore {
@@ -373,8 +478,9 @@ export function getIamStore(): IamStore {
   let store: IamStore;
   if (databaseUrl) {
     const sql = postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 });
-    warnIfNotAppRole(sql);
-    store = createIamStore(sql);
+    store = createIamStore(sql, {
+      ensureAppRole: createAppRoleGuard(sql, { production: isProductionRuntime() }),
+    });
   } else {
     store = createUnavailableStore();
   }

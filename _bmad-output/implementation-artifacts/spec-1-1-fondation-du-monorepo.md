@@ -118,3 +118,29 @@ Flot des tokens : `shared/src/tokens.ts` (objet typé unique) → web : boucle g
 
 **Manual checks (if no CLI):**
 - Ouvrir la page racine : bascule d'en-tête fonctionne, choix survit au rechargement, suit le système par défaut ; inspecter les CSS vars = hex du frontmatter.
+
+## Revue de code
+
+**2026-10-22 — revue d'épopée (3 lentilles : adverse, chemins limites, trous de vérification) sur le diff complet des stories 1.1 à 1.9.**
+
+### Constat retenu
+
+Les six suites d'intégration se sautaient en silence. `resolveTestDatabaseUrls` (`apps/web/src/test/integration-db.ts`) émettait un `console.warn` et retournait `null` en l'absence de `DATABASE_URL`/`DATABASE_OWNER_URL`, consommé par `describe.skipIf`. Le dépôt n'avait par ailleurs aucun pipeline CI. Sur un clone propre (`.env` est gitignoré), `pnpm test` était donc vert **sans vérifier** le RLS multi-organisation, la limitation de débit des codes, l'immuabilité du dossier validé, la machine à états de l'outbox ni l'unicité de la preuve active — toutes ces règles ne vivent qu'en SQL et ne sont prouvées que par ces suites. L'épopée 1 a été close sur cette base.
+
+### Modifications apportées
+
+- `apps/web/src/test/integration-db.ts` — nouvelle fonction exportée `integrationDbRequired()` et helper interne `skipOrFail()`. Quand `AZZEL_REQUIRE_DB` est posée, l'absence de base lève une erreur au lieu de sauter : le message nomme la suite, les variables manquantes et la commande de correction. Sans la variable, le comportement est strictement inchangé (saut + avertissement), pour ne pas gêner le travail local. Les trois branches de `resolveTestDatabaseUrls` passent par ce helper ; les deux `throw` existants (hôte non local, serveurs différents) sont inchangés.
+- `.github/workflows/ci.yml` (nouveau) — sur `push` et `pull_request` : service `postgres:17-alpine` (même majeure que `dev-db.sh`), pnpm via `packageManager`, Node 24, puis `typecheck` → `db:migrate` → `build` → `test` avec `AZZEL_REQUIRE_DB=1`. Les deux URLs sont fournies (propriétaire et rôle applicatif) ; le rôle `azzel_app` est créé par la migration 0008, d'où l'ordre migrations avant tests.
+
+### Vérification
+
+Garde-fou prouvé dans les deux sens : sans base et avec `AZZEL_REQUIRE_DB=1`, la suite d'intégration échoue avec le message attendu ; sans la variable, elle est sautée comme avant. Suite complète avec base : 558 passés, 0 échec, 5 skips.
+
+### Limites assumées
+
+- Le workflow n'a pas pu être exécuté ici : il est validé syntaxiquement, pas prouvé vert sur un runner GitHub. Premier push à surveiller.
+- La suite Mailpit (`outbox.integration.test.ts`) reste sautée en CI : aucun service SMTP n'a été ajouté. À traiter si la couverture d'envoi réel doit être garantie en CI.
+
+### Constats non traités dans cette passe
+
+Clés de `schema_migrations` réduites au nom de fichier (deux migrations homonymes de modules différents se masqueraient — une collision 0010 s'est d'ailleurs produite pendant cette revue, voir story 1.8) ; `migrate.ts` n'a pas adopté la résolution de symlink de `send-cli.ts` ; absence d'en-têtes de sécurité et d'ESLint ; erreurs inattendues converties en 500 sans journalisation ; `themeFor` et le contrat `buildTokensCss` → `globals.css` non gardés par des tests.

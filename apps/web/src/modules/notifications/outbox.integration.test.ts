@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -14,13 +17,27 @@ import { readSmtpUrl } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import type { InscriptionFormInput } from '@/modules/inscriptions/domain';
-import { decideDossier, submitInscription } from '@/modules/inscriptions/service';
+import { acceptDocuments, decideDossier, submitInscription } from '@/modules/inscriptions/service';
+import { uploadPreuve } from '@/modules/inscriptions/proof-service';
+import { LocalDiskProofStore } from '@/modules/inscriptions/proof-store';
 import { createInscriptionsStore, type InscriptionsStore } from '@/modules/inscriptions/store';
 
-import { createOutboxStore, type OutboxStore } from './outbox-store';
+import {
+  createOutboxStore,
+  OUTBOX_CLAIM_LEASE_MINUTES,
+  type OutboxStore,
+} from './outbox-store';
 import { processOutbox } from './worker';
 
 const testUrls = resolveTestDatabaseUrls('notifications');
+
+/** JPEG minimal (en-tête valide + remplissage) pour les preuves de paiement des dossiers. */
+function jpegBytes(size: number): Uint8Array {
+  const bytes = new Uint8Array(size);
+  bytes.set([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
+  bytes.fill(0xab, 11);
+  return bytes;
+}
 
 // File d’envoi Mailpit locale : assertions via son API http://localhost:8026.
 // Le test n’envoie jamais vers un SMTP distant (hôte SMTP local exigé).
@@ -96,14 +113,24 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
   let store: InscriptionsStore;
   let outbox: OutboxStore;
   let organisationId: string;
+  let storageDir = '';
+  let proofStore: LocalDiskProofStore;
 
   const noTrigger = async (): Promise<void> => {};
 
+  /** Un dossier n'est validable qu'avec preuve active + décharge + règlement (story 1.6). */
+  async function completerDossier(session: SessionRecord): Promise<void> {
+    await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
+    await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+  }
+
   beforeAll(async () => {
+    storageDir = mkdtempSync(path.join(tmpdir(), 'azzel-outbox-it-'));
     connections = await recreateAzzelTestDb(ownerUrl, appUrl);
     ({ owner: sql, app } = connections);
     store = createInscriptionsStore(app);
     outbox = createOutboxStore(app);
+    proofStore = new LocalDiskProofStore(storageDir);
 
     const organisations = await sql`SELECT id FROM organisation WHERE slug = 'ait-aissi'`;
     organisationId = organisations[0]?.id as string;
@@ -112,6 +139,9 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
   afterAll(async () => {
     if (connections) {
       await closeAzzelTestDb(connections);
+    }
+    if (storageDir) {
+      rmSync(storageDir, { recursive: true, force: true });
     }
   });
 
@@ -207,6 +237,7 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
   it('décisions : valider → dossier_valide, refuser → dossier_refuse avec motif dans le payload', async () => {
     const valideSession = await createSession();
     await submitInscription(valideSession, validInput(), { store, triggerOutbox: noTrigger });
+    await completerDossier(valideSession);
     const valideCoureur = await coureurIdFor(valideSession.accountId);
     await decideDossier(await organisateurSession(), valideCoureur, { decision: 'valider' }, {
       store,
@@ -248,6 +279,7 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
   it('re-validation idempotente : aucune nouvelle ligne outbox pour le no-op', async () => {
     const session = await createSession();
     await submitInscription(session, validInput(), { store, triggerOutbox: noTrigger });
+    await completerDossier(session);
     const coureurId = await coureurIdFor(session.accountId);
     const organisateur = await organisateurSession();
 
@@ -339,6 +371,41 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
     const after = (await outboxRows()).filter((row) => row.id === id);
     expect(after[0]?.statut).toBe('sending');
     expect(after[0]?.attempts).toBe(1);
+  });
+
+  it('bail de revendication : « sending » orpheline non reprise avant expiration, reprise après', async () => {
+    const session = await createSession();
+    await submitInscription(session, validInput(), { store, triggerOutbox: noTrigger });
+    const id = (await outboxRows()).filter((row) => row.destinataire === session.email)[0]
+      ?.id as string;
+
+    // Process mort juste après le claim : la ligne reste « sending », jamais marquée.
+    expect(await outbox.claimOutboxRow(organisationId, id)).toBe(true);
+    const claimed = (await outboxRows()).filter((row) => row.id === id)[0];
+    expect(claimed?.statut).toBe('sending');
+
+    // Bail encore valide : la file ne propose rien, l'envoi n'est même pas tenté.
+    const immediate = await processOutbox(10, {
+      store: outbox,
+      send: async () => {
+        throw new Error('ne doit pas être appelé');
+      },
+    });
+    expect(immediate).toEqual({ processed: 0, sent: 0, failed: 0, storeError: null });
+
+    await sql`
+      UPDATE email_outbox
+      SET claimed_at = now() - make_interval(mins => ${OUTBOX_CLAIM_LEASE_MINUTES + 1})
+      WHERE id = ${id}
+    `;
+
+    const replay = await processOutbox(10, { store: outbox, send: async () => {} });
+    expect(replay.sent).toBe(1);
+
+    const after = (await outboxRows()).filter((row) => row.id === id)[0];
+    expect(after?.statut).toBe('sent');
+    // Une seule reprise : la tentative abandonnée plus celle du rejeu.
+    expect(after?.attempts).toBe(2);
   });
 
   it('backoff : failed non repris avant next_attempt_at, repris après expiration', async () => {

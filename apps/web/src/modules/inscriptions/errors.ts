@@ -105,6 +105,34 @@ export class RefusalReasonTooLongError extends Error {
   }
 }
 
+/**
+ * Pièces exigées avant la validation d'un dossier (story 1.6 : « coureur en
+ * constitution + preuve active » ; story 1.4 : les deux acceptations sont la
+ * valeur juridique du dossier). Jamais de dossard sans décharge signée.
+ */
+export type PieceDossier = 'preuve' | 'decharge' | 'reglement';
+
+const LIBELLES_PIECES: Record<PieceDossier, string> = {
+  preuve: 'la preuve de paiement',
+  decharge: 'la décharge acceptée',
+  reglement: 'le règlement intérieur accepté',
+};
+
+export function formatPiecesManquantes(pieces: readonly PieceDossier[]): string {
+  const libelles = pieces.map((piece) => LIBELLES_PIECES[piece]);
+  if (libelles.length <= 1) {
+    return libelles[0] ?? '';
+  }
+  return `${libelles.slice(0, -1).join(', ')} et ${libelles[libelles.length - 1]}`;
+}
+
+export class DossierIncompletError extends Error {
+  constructor(readonly pieces: readonly PieceDossier[]) {
+    super(`dossier incomplet : ${pieces.join(', ')}`);
+    this.name = 'DossierIncompletError';
+  }
+}
+
 export class DossierNotFoundError extends Error {
   constructor() {
     super('dossier introuvable pour cette organisation');
@@ -367,6 +395,18 @@ export function toAdminApiError(error: unknown): ApiError {
         code: 'admin.refusal_reason_too_long',
         message: `Le motif de refus dépasse ${error.max} caractères.`,
         action: 'Raccourcis le motif puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof DossierIncompletError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.dossier_incomplet',
+        message: `Ce dossier ne peut pas être validé : il manque ${formatPiecesManquantes(
+          error.pieces,
+        )}.`,
+        action: 'Demande au coureur de compléter les pièces manquantes, puis valide à nouveau.',
       }),
     };
   }

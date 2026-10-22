@@ -2,12 +2,14 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 import {
   CODE_REQUEST_GLOBAL_WINDOW_MS,
+  CODE_REQUEST_IP_WINDOW_MS,
   CODE_REQUEST_WINDOW_MS,
   CODE_TTL_MS,
+  IP_HASH_SALT_ENV_NAME,
   SESSION_TTL_SEC,
 } from './constants';
 import { sendLoginCodeEmail } from './email';
-import { readAdminEmails } from './env';
+import { readAdminEmails, readEnv } from './env';
 import { CodeExhaustedError, EmailInvalidError, InvalidCodeError } from './errors';
 import { getIamStore, type IamStore, type SessionRecord } from './store';
 
@@ -39,15 +41,42 @@ export interface IamServiceDeps {
   sendCode?: SendCodeFn;
 }
 
+/**
+ * Empreinte salée de l'adresse IP : on ne stocke jamais l'IP en clair pour un
+ * simple compteur anti-abus. Le sel vient de AZZEL_IP_HASH_SALT ; à défaut un sel
+ * fixe est utilisé (dev) — en production, poser la variable, sans quoi l'espace
+ * des IPv4 reste énumérable par force brute.
+ */
+export function hashClientIp(clientIp: string): string {
+  const salt = readEnv(IP_HASH_SALT_ENV_NAME) ?? 'azzel-ip';
+  return sha256Hex(`${salt}:${clientIp}`);
+}
+
+export interface RequestContext {
+  /** IP de l'appelant, extraite par la route. Absente → pas de quota par IP. */
+  clientIp?: string | null;
+}
+
 export async function requestLoginCode(
   rawEmail: string,
   deps: IamServiceDeps = {},
+  context: RequestContext = {},
 ): Promise<void> {
   const store = deps.store ?? getIamStore();
   const sendCode = deps.sendCode ?? sendLoginCodeEmail;
   const email = normalizeEmail(rawEmail);
   if (!isValidEmail(email)) {
     throw new EmailInvalidError();
+  }
+  // Quota par IP AVANT toute écriture liée à l'email : c'est ce qui empêche un
+  // seul auteur de saturer le quota horaire de l'organisation avec des adresses
+  // email différentes (déni de service de la connexion).
+  const clientIp = context.clientIp?.trim();
+  if (clientIp) {
+    await store.recordCodeRequestIp({
+      ipHash: hashClientIp(clientIp),
+      cutoff: new Date(Date.now() - CODE_REQUEST_IP_WINDOW_MS),
+    });
   }
   const organisationId = await store.getDefaultOrganisationId();
   const code = generateLoginCode();

@@ -12,6 +12,20 @@ export type OutboxStatus = 'pending' | 'sending' | 'sent' | 'failed';
 // reprise par la file — elle reste visible en base et le CLI la signale.
 export const MAX_OUTBOX_ATTEMPTS = 5;
 
+// Bail de revendication : une ligne « sending » dont claimed_at remonte à plus de
+// OUTBOX_CLAIM_LEASE_MINUTES est considérée abandonnée (process mort entre le claim
+// et markOutboxSent/markOutboxFailed). Sans ce bail elle resterait « sending » à vie :
+// jamais envoyée, jamais rejouée, invisible du CLI. 15 minutes couvrent largement un
+// envoi SMTP, même lent, sans retarder la reprise au-delà du raisonnable.
+export const OUTBOX_CLAIM_LEASE_MINUTES = 15;
+
+// Fragment partagé : « ligne revendiquée mais abandonnée ». claimed_at NULL vise les
+// lignes « sending » antérieures à la migration 0010 — bail réputé déjà expiré.
+const ABANDONED_CLAIM_CONDITION = `(
+  statut = 'sending'
+  AND (claimed_at IS NULL OR claimed_at <= now() - make_interval(mins => ${OUTBOX_CLAIM_LEASE_MINUTES}))
+)`;
+
 export interface OutboxRow {
   id: string;
   organisationId: string;
@@ -109,16 +123,20 @@ export function createOutboxStore(sql: Sql): OutboxStore {
     },
 
     // Candidats à l'envoi : pending immédiat, failed seulement après expiration du
-    // backoff (next_attempt_at) ; poison exclu (attempts >= MAX_OUTBOX_ATTEMPTS).
+    // backoff (next_attempt_at), sending seulement après expiration du bail de
+    // revendication ; poison exclu (attempts >= MAX_OUTBOX_ATTEMPTS).
     // Les lignes « sent » ne sont jamais re-listées (idempotence).
     async listOutstanding(organisationId: string, limit: number): Promise<OutboxRow[]> {
       return withOrg(sql, organisationId, async (tx) => {
         const rows = await tx<OutboxDbRow[]>`
           SELECT ${tx.unsafe(OUTSTANDING_COLUMNS)}
           FROM email_outbox
-          WHERE statut IN ('pending', 'failed')
-            AND attempts < ${MAX_OUTBOX_ATTEMPTS}
-            AND (statut = 'pending' OR next_attempt_at IS NULL OR next_attempt_at <= now())
+          WHERE attempts < ${MAX_OUTBOX_ATTEMPTS}
+            AND (
+              statut = 'pending'
+              OR (statut = 'failed' AND (next_attempt_at IS NULL OR next_attempt_at <= now()))
+              OR ${tx.unsafe(ABANDONED_CLAIM_CONDITION)}
+            )
           ORDER BY created_at ASC
           LIMIT ${limit}
         `;
@@ -128,12 +146,15 @@ export function createOutboxStore(sql: Sql): OutboxStore {
 
     // Revendication atomique avant envoi : 0 ligne = déjà prise par un worker
     // concurrent (ou poison) — on saute. attempts est incrémenté ICI, une seule fois.
+    // claimed_at horodate le bail : une ligne « sending » n'est reprise que lorsque
+    // son bail a expiré (le worker qui la détenait est réputé mort).
     async claimOutboxRow(organisationId: string, id: string): Promise<boolean> {
       return withOrg(sql, organisationId, async (tx) => {
         const rows = await tx<{ id: string }[]>`
           UPDATE email_outbox
-          SET statut = 'sending', attempts = attempts + 1
-          WHERE id = ${id} AND statut IN ('pending', 'failed')
+          SET statut = 'sending', attempts = attempts + 1, claimed_at = now()
+          WHERE id = ${id}
+            AND (statut IN ('pending', 'failed') OR ${tx.unsafe(ABANDONED_CLAIM_CONDITION)})
           RETURNING id
         `;
         return rows.length > 0;
@@ -144,7 +165,8 @@ export function createOutboxStore(sql: Sql): OutboxStore {
       await withOrg(sql, organisationId, async (tx) => {
         await tx`
           UPDATE email_outbox
-          SET statut = 'sent', last_error = NULL, next_attempt_at = NULL, sent_at = now()
+          SET statut = 'sent', last_error = NULL, next_attempt_at = NULL,
+              claimed_at = NULL, sent_at = now()
           WHERE id = ${id} AND statut = 'sending'
         `;
       });
@@ -160,14 +182,17 @@ export function createOutboxStore(sql: Sql): OutboxStore {
       await withOrg(sql, organisationId, async (tx) => {
         await tx`
           UPDATE email_outbox
-          SET statut = 'failed', last_error = ${message},
+          SET statut = 'failed', last_error = ${message}, claimed_at = NULL,
               next_attempt_at = now() + least(attempts * interval '5 minutes', interval '1 hour')
           WHERE id = ${id} AND statut = 'sending'
         `;
       });
     },
 
-    // Inspection globale (CLI) : somme des impasses de chaque organisation.
+    // Inspection globale (CLI) : somme des impasses de chaque organisation — lignes
+    // « failed » à tentatives épuisées, et lignes « sending » abandonnées (bail expiré)
+    // dont les tentatives sont elles aussi épuisées : sans ce second cas, un process
+    // mort au dernier essai cacherait l'impasse au CLI.
     async countDeadLetters(): Promise<number> {
       const organisationIds = await listOrganisationIds(sql);
       let total = 0;
@@ -176,7 +201,8 @@ export function createOutboxStore(sql: Sql): OutboxStore {
           const rows = await tx<{ count: number }[]>`
             SELECT count(*)::int AS count
             FROM email_outbox
-            WHERE statut = 'failed' AND attempts >= ${MAX_OUTBOX_ATTEMPTS}
+            WHERE attempts >= ${MAX_OUTBOX_ATTEMPTS}
+              AND (statut = 'failed' OR ${tx.unsafe(ABANDONED_CLAIM_CONDITION)})
           `;
           return rows[0]?.count ?? 0;
         });

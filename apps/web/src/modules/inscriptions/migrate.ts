@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
+import { APP_PASSWORD_ENV_NAME, DEV_APP_PASSWORD_FALLBACK } from '../iam/constants';
 import { readDatabaseOwnerUrl, readEnv } from '../iam/env';
 
 const MODULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,9 +22,30 @@ function sqlLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function injectAppPassword(content: string): string {
-  const password = readEnv('AZZEL_APP_PASSWORD') ?? 'azzel';
-  return content.split(APP_PASSWORD_PLACEHOLDER).join(sqlLiteral(password));
+/**
+ * Remplace le placeholder du mot de passe applicatif (migration 0008).
+ * En production, AZZEL_APP_PASSWORD est EXIGÉE : un repli silencieux sur « azzel »
+ * donnerait un rôle azzel_app au mot de passe public, et le RLS ne protégerait
+ * plus rien. En développement, le repli documenté est conservé.
+ */
+export function injectAppPassword(content: string): string {
+  if (!content.includes(APP_PASSWORD_PLACEHOLDER)) {
+    return content;
+  }
+  const password = readEnv(APP_PASSWORD_ENV_NAME);
+  if (password) {
+    return content.split(APP_PASSWORD_PLACEHOLDER).join(sqlLiteral(password));
+  }
+  if (readEnv('NODE_ENV') === 'production') {
+    throw new Error(
+      `${APP_PASSWORD_ENV_NAME} absente : en production, le mot de passe du rôle applicatif ` +
+        'azzel_app doit être fourni explicitement (aucune valeur par défaut). ' +
+        'Définis-la puis relance pnpm -F @azzel/web db:migrate.',
+    );
+  }
+  return content
+    .split(APP_PASSWORD_PLACEHOLDER)
+    .join(sqlLiteral(DEV_APP_PASSWORD_FALLBACK));
 }
 
 export async function applyAllMigrations(sql: postgres.Sql): Promise<string[]> {

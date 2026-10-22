@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 
-import { readDatabaseOwnerUrl, readDatabaseUrl } from '@/modules/iam/env';
+import { readDatabaseOwnerUrl, readDatabaseUrl, readEnv } from '@/modules/iam/env';
 import { applyAllMigrations } from '@/modules/inscriptions/migrate';
 
 // Story 1.9 — plomberie partagée des suites d'intégration :
@@ -17,6 +17,43 @@ import { applyAllMigrations } from '@/modules/inscriptions/migrate';
 export const TEST_DATABASE = 'azzel_test';
 
 const ALLOWED_TEST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+// Garde-fou story 1.1 : sans base, les suites d'intégration se SKIPPENT en silence
+// (un simple console.warn) — sur un clone propre (.env gitignoré) `pnpm test` est
+// alors vert sans avoir prouvé une seule règle qui ne vit qu'en SQL (RLS
+// multi-organisation, limitation de débit des codes, immuabilité du dossier validé,
+// machine à états de l'outbox, unicité de la preuve active).
+// AZZEL_REQUIRE_DB=1 transforme ce skip en ÉCHEC DUR : c'est ce que pose la CI
+// (.github/workflows/ci.yml) pour qu'aucune de ces preuves ne puisse disparaître.
+const REQUIRE_DB_ENV_NAME = 'AZZEL_REQUIRE_DB';
+
+const FALSY_REQUIRE_DB_VALUES = new Set(['0', 'false', 'non', 'no', 'off']);
+
+/** Vrai si AZZEL_REQUIRE_DB est posée à une valeur non « fausse » (1, true, oui…). */
+export function integrationDbRequired(): boolean {
+  const value = readEnv(REQUIRE_DB_ENV_NAME);
+  return value !== null && !FALSY_REQUIRE_DB_VALUES.has(value.toLowerCase());
+}
+
+/**
+ * Base absente : lève si AZZEL_REQUIRE_DB est posée (CI), sinon skippe avec un
+ * avertissement. `manquantes` liste les variables d'environnement en cause.
+ */
+function skipOrFail(label: string, raison: string, manquantes: string[]): null {
+  if (integrationDbRequired()) {
+    throw new Error(
+      [
+        `intégration ${label} IMPOSSIBLE — ${raison}`,
+        `${REQUIRE_DB_ENV_NAME} est posée : les suites d'intégration ne doivent PAS être sautées.`,
+        `Variable(s) manquante(s) ou invalide(s) : ${manquantes.join(', ')}.`,
+        'Corriger : « bash scripts/dev-db.sh up » puis « pnpm -F @azzel/web db:migrate »',
+        `(voir .env.example). Pour autoriser le saut en local, retirer ${REQUIRE_DB_ENV_NAME}.`,
+      ].join('\n'),
+    );
+  }
+  console.warn(`intégration ${label} SKIPPÉE — ${raison}`);
+  return null;
+}
 
 export interface TestDatabaseUrls {
   appUrl: URL;
@@ -36,28 +73,31 @@ function parseUrl(value: string | null): URL | null {
 
 /**
  * Résout les deux URLs de test (app + propriétaire). Retourne null → suite SKIPPÉE
- * (message console) ; lève une Error explicite si une URL pointe hors localhost ou
- * si app et propriétaire ne sont pas sur le même serveur.
+ * (message console) — sauf si AZZEL_REQUIRE_DB est posée : la résolution lève alors
+ * une Error détaillant les variables manquantes (voir skipOrFail). Lève aussi si une
+ * URL pointe hors localhost ou si app et propriétaire ne sont pas sur le même serveur.
  */
 export function resolveTestDatabaseUrls(label: string): TestDatabaseUrls | null {
   const appUrl = parseUrl(readDatabaseUrl());
   const ownerUrl = parseUrl(readDatabaseOwnerUrl());
 
   if (appUrl === null && ownerUrl === null) {
-    console.warn(`intégration ${label} SKIPPÉE — bash scripts/dev-db.sh up pour l’activer`);
-    return null;
+    return skipOrFail(label, 'aucune base configurée (bash scripts/dev-db.sh up pour l’activer)', [
+      'DATABASE_URL',
+      'DATABASE_OWNER_URL',
+    ]);
   }
   if (appUrl === null) {
-    console.warn(
-      `intégration ${label} SKIPPÉE — DATABASE_URL absente ou mal formée (voir .env.example)`,
-    );
-    return null;
+    return skipOrFail(label, 'DATABASE_URL absente ou mal formée (voir .env.example)', [
+      'DATABASE_URL',
+    ]);
   }
   if (ownerUrl === null) {
-    console.warn(
-      `intégration ${label} SKIPPÉE — DATABASE_OWNER_URL absente ou mal formée (voir .env.example, story 1.9)`,
+    return skipOrFail(
+      label,
+      'DATABASE_OWNER_URL absente ou mal formée (voir .env.example, story 1.9)',
+      ['DATABASE_OWNER_URL'],
     );
-    return null;
   }
 
   for (const url of [appUrl, ownerUrl]) {

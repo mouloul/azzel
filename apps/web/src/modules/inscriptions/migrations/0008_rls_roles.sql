@@ -3,15 +3,24 @@
 -- tables métier uniquement, jamais de DDL. Les migrations tournent en propriétaire
 -- (DATABASE_OWNER_URL). Ce bloc DO idempotent couvre les environnements existants ;
 -- `scripts/dev-db.sh` crée aussi le rôle sur les bases neuves (avant toute migration).
--- Le mot de passe vient de l'env AZZEL_APP_PASSWORD (défaut « azzel »), injecté par
--- le runner de migrations via le placeholder entre quotes ci-dessous.
+-- Le mot de passe vient de l'env AZZEL_APP_PASSWORD, injecté par le runner de
+-- migrations via le placeholder entre quotes ci-dessous. En développement, le
+-- runner retombe sur « azzel » ; en production il EXIGE AZZEL_APP_PASSWORD et
+-- refuse de migrer sans elle (aucune valeur par défaut, cf. migrate.ts).
+--
+-- ATTENTION — cette migration ne rejoue PAS : le runner saute toute migration
+-- déjà inscrite dans schema_migrations. Le bloc ci-dessous ne s'exécute donc
+-- qu'une seule fois par base. Changer AZZEL_APP_PASSWORD ensuite n'a aucun effet
+-- ici : une rotation de mot de passe se fait hors migrations, en propriétaire
+-- (`ALTER ROLE azzel_app PASSWORD '…'`), puis en mettant à jour DATABASE_URL.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'azzel_app') THEN
     CREATE ROLE azzel_app LOGIN PASSWORD '__AZZEL_APP_PASSWORD__';
   ELSE
-    -- Rotation de mot de passe : le rôle existe déjà (dev-db.sh ou run précédent),
-    -- on réaligne LOGIN/mot de passe sur AZZEL_APP_PASSWORD.
+    -- Le rôle existe déjà (créé par dev-db.sh sur une base neuve) : on aligne
+    -- LOGIN/mot de passe une fois, à la première application de cette migration.
+    -- Ce n'est PAS un mécanisme de rotation (voir l'avertissement en tête).
     ALTER ROLE azzel_app LOGIN PASSWORD '__AZZEL_APP_PASSWORD__';
   END IF;
 END

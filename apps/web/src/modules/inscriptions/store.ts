@@ -7,6 +7,7 @@ import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 import { COUREUR_STATUS_EN_CONSTITUTION, canDepositPreuve, isRegistrationOpen } from './domain';
 import {
   DbUnavailableError,
+  DossierIncompletError,
   DossierNotFoundError,
   DossierValidatedError,
   DocumentsMissingError,
@@ -14,6 +15,7 @@ import {
   PreuveIdenticalRefusedError,
   RegistrationClosedError,
   RefusalReasonRequiredError,
+  type PieceDossier,
 } from './errors';
 
 export interface EditionRecord {
@@ -887,6 +889,27 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             if (locked.status === 'validé') {
               // Re-validation idempotente : no-op, rien ne change.
               return toCoureurRecord(locked);
+            }
+            // Garde juridique (stories 1.4 + 1.6) : pas de dossard sans preuve de
+            // paiement active NI sans les deux acceptations horodatées. Lecture dans
+            // la même transaction que le FOR UPDATE : l'état ne peut pas glisser.
+            const preuveActiveRows = await tx<{ id: string }[]>`
+              SELECT id FROM preuve
+              WHERE coureur_id = ${input.coureurId} AND status = 'active'
+              LIMIT 1
+            `;
+            const piecesManquantes: PieceDossier[] = [];
+            if (!preuveActiveRows[0]) {
+              piecesManquantes.push('preuve');
+            }
+            if (locked.decharge_accepted_at === null) {
+              piecesManquantes.push('decharge');
+            }
+            if (locked.reglement_accepted_at === null) {
+              piecesManquantes.push('reglement');
+            }
+            if (piecesManquantes.length > 0) {
+              throw new DossierIncompletError(piecesManquantes);
             }
             status = 'validé';
           } else if (input.decision === 'refuser') {
