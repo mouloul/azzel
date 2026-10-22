@@ -13,6 +13,7 @@ import { toAdminApiError } from '@/modules/inscriptions/errors';
 import { getDossiersState } from '@/modules/inscriptions/service';
 
 import { AdminIndisponible } from '../indisponible';
+import { AttributionDossards } from './attribution-dossards';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +79,8 @@ export default async function AdminDossiersPage({
           </button>
         </form>
 
+        <AttributionDossards />
+
         {state.dossiers.length === 0 ? (
           <p className="hint">
             {search.length > 0
@@ -91,6 +94,7 @@ export default async function AdminDossiersPage({
                 <tr>
                   <th scope="col">Coureur</th>
                   <th scope="col">Épreuve</th>
+                  <th scope="col">Dossard</th>
                   <th scope="col">Statut</th>
                   <th scope="col">Preuve</th>
                   <th scope="col">Acceptations</th>
@@ -110,6 +114,13 @@ export default async function AdminDossiersPage({
                       <span className="meta dossier-email">{dossier.email}</span>
                     </td>
                     <td>{dossier.epreuveNom}</td>
+                    <td>
+                      {dossier.dossard !== null ? (
+                        <span className="dossard-numero">{dossier.dossard}</span>
+                      ) : (
+                        <span className="meta">—</span>
+                      )}
+                    </td>
                     <td>
                       <span className={coureurStatusChipClass(dossier.status)}>
                         {COUREUR_STATUS_LABELS[dossier.status as CoureurStatus] ?? dossier.status}

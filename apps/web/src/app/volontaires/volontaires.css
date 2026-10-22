@@ -242,6 +242,25 @@
   color: var(--az-texte-2);
 }
 
+/* --- Annuaire des coureurs (story 3.4) — état de préchargement seul -------- */
+
+.volontaires-annuaire {
+  display: grid;
+  gap: var(--az-space-2);
+  justify-items: start;
+  padding: var(--az-space-3);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-md);
+  background: var(--az-surface);
+}
+
+.volontaires-annuaire-texte {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  color: var(--az-texte);
+}
+
 /* --- États d'attente / actions ---------------------------------------------- */
 
 .volontaires-attente {

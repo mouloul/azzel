@@ -7,6 +7,7 @@ import { INVITATION_TTL_DAYS } from '@/modules/iam/constants';
 import { DbUnavailableError } from '@/modules/iam/errors';
 import { sha256Hex } from '@/modules/iam/service';
 import { insertInvitation, revokePendingInvitations } from '@/modules/iam/store';
+import { COUREUR_STATUS_VALIDE } from '@/modules/inscriptions/domain';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 import { readDatabaseUrl } from '@/modules/iam/env';
 
@@ -77,6 +78,15 @@ export interface AffectationRecord {
   volontaireId: string;
   volontaireNom: string;
   createdAt: Date;
+}
+
+// Story 3.4 — coureurs numérotés de l'édition, pour la réplique annuaire.
+// Identité minimale (NFR-7) : dossard + nom + prénom, rien d'autre.
+
+export interface CoureurAnnuaireRecord {
+  dossard: number;
+  nom: string;
+  prenom: string;
 }
 
 export interface MissionsEtatRecords {
@@ -151,6 +161,10 @@ export interface MissionsStore {
     missionId: string;
     volontaireId: string;
   }): Promise<boolean>;
+  listCoureursAnnuaire(
+    organisationId: string,
+    editionId: string,
+  ): Promise<CoureurAnnuaireRecord[]>;
 }
 
 export function genererJetonInvitation(): string {
@@ -847,6 +861,34 @@ export function createMissionsStore(sql: Sql): MissionsStore {
         }),
       );
     },
+
+    // Story 3.4 — lecture locale cross-table (pattern findCurrentEdition, aucun
+    // import du module inscriptions) : la surface volontaires réplique l'annuaire
+    // des coureurs VALIDÉS numérotés de l'édition courante, triés par dossard.
+    // Org-scopée withOrg/RLS comme toute requête métier.
+    async listCoureursAnnuaire(
+      organisationId: string,
+      editionId: string,
+    ): Promise<CoureurAnnuaireRecord[]> {
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<{ dossard: number; nom: string; prenom: string }[]>`
+            SELECT dossard, last_name AS nom, first_name AS prenom
+            FROM coureur
+            WHERE edition_id = ${editionId}
+              AND organisation_id = ${organisationId}
+              AND status = ${COUREUR_STATUS_VALIDE}
+              AND dossard IS NOT NULL
+            ORDER BY dossard ASC
+          `;
+          return rows.map((row) => ({
+            dossard: row.dossard,
+            nom: row.nom,
+            prenom: row.prenom,
+          }));
+        }),
+      );
+    },
   };
 }
 
@@ -869,6 +911,7 @@ function createUnavailableStore(): MissionsStore {
     findVolontaireIdByAccount: unavailable,
     affecter: unavailable,
     desaffecter: unavailable,
+    listCoureursAnnuaire: unavailable,
   };
 }
 

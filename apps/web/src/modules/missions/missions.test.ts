@@ -233,6 +233,7 @@ describe('importVolontaires — service (store factice)', () => {
       findVolontaireIdByAccount: indisponible,
       affecter: indisponible,
       desaffecter: indisponible,
+      listCoureursAnnuaire: indisponible,
     };
   }
 

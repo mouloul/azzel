@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_LOCALE } from '@azzel/shared';
 
-import { libelleHorsLigne, libelleSynchronise } from './fraicheur';
+import { libelleHorsLigne, libelleHorsLigneAnnuaire, libelleSynchronise } from './fraicheur';
 
 // Story 3.3 — libellés de fraîcheur : le badge dit toujours si les données
 // sont synchronisées ou lues depuis la poche. Les attendus sont composés avec
@@ -37,5 +37,17 @@ describe('libelleHorsLigne', () => {
 
   it('horodatage invalide : libellé dégradé, jamais d’exception', () => {
     expect(libelleHorsLigne('')).toBe('hors-ligne — données enregistrées');
+  });
+});
+
+describe('libelleHorsLigneAnnuaire (story 3.4)', () => {
+  it('« hors-ligne — annuaire du JJ/MM HH:MM » en heure locale', () => {
+    expect(libelleHorsLigneAnnuaire(SYNCHRO)).toBe(
+      `hors-ligne — annuaire du ${DATE_HEURE.format(new Date(SYNCHRO))}`,
+    );
+  });
+
+  it('horodatage invalide : libellé dégradé, jamais d’exception', () => {
+    expect(libelleHorsLigneAnnuaire('nada')).toBe('hors-ligne — annuaire enregistré');
   });
 });

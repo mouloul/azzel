@@ -1,5 +1,7 @@
 import type { SessionRecord } from '@/modules/iam/store';
 
+import { ANNUAIRE_SCHEMA_VERSION, nowIsoUtc, type AnnuaireEdition } from '@azzel/shared';
+
 import {
   LIBELLES_COUVERTURE,
   LIBELLES_MISSION_TYPE,
@@ -394,6 +396,25 @@ async function editionCouranteOuErreur(
     throw new AucuneEditionError();
   }
   return edition;
+}
+
+// Story 3.4 — assemblage du contrat versionné (AD-8, packages/shared) : la
+// réplique servie à GET /api/volontaires/annuaire ne contient QUE des coureurs
+// validés numérotés, triés par dossard, avec le strict minimum d'identité
+// (NFR-7). Aucune édition → AucuneEditionError (même garde que les secteurs).
+export async function getAnnuaireEdition(
+  session: SessionRecord,
+  deps: MissionsServiceDeps = {},
+): Promise<AnnuaireEdition> {
+  const store = deps.store ?? getMissionsStore();
+  const edition = await editionCouranteOuErreur(store, session.organisationId);
+  const coureurs = await store.listCoureursAnnuaire(session.organisationId, edition.id);
+  return {
+    version: ANNUAIRE_SCHEMA_VERSION,
+    editionId: edition.id,
+    genereA: nowIsoUtc(),
+    coureurs,
+  };
 }
 
 function assertSecteurValide(input: ReturnType<typeof normalizeSecteurInput>): void {

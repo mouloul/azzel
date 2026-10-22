@@ -78,6 +78,11 @@ export default async function AdminDossierDetailPage({
             {COUREUR_STATUS_LABELS[coureur.status as CoureurStatus] ?? coureur.status}
           </span>
         </p>
+        {coureur.dossard !== null ? (
+          <p className="meta">
+            Dossard attribué : <span className="dossard-numero">{coureur.dossard}</span>
+          </p>
+        ) : null}
 
         <div className="recap">
           <p className="recap-titre">Pièces du dossier</p>

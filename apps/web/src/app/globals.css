@@ -706,6 +706,21 @@ main {
   display: block;
 }
 
+/* Story 3.4 — numéro de dossard (table /admin/dossiers) et bouton de lot. */
+.dossard-numero {
+  font-family: var(--az-font-meta);
+  font-weight: var(--az-font-weight-surtitre);
+  white-space: nowrap;
+}
+
+.attribution-dossards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+  margin: var(--az-space-3) 0;
+}
+
 .field textarea {
   min-height: 96px;
   width: 100%;

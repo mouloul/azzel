@@ -20,6 +20,7 @@ import {
   BothAcceptancesRequiredError,
   DecisionInvalidError,
   InvalidFieldsError,
+  NoEditionError,
   RefusalReasonRequiredError,
   RefusalReasonTooLongError,
   RegistrationClosedError,
@@ -29,6 +30,7 @@ import {
   type CoureurRecord,
   type DossierDecision,
   type DossierListItem,
+  type DossardsAttribution as DossardsAttributionStore,
   type EditionRecord,
   type EpreuveRecord,
   type InscriptionsStore,
@@ -49,6 +51,7 @@ export interface CoureurSummary {
   age: number;
   categorie: AgeCategory;
   status: string;
+  dossard: number | null;
   refusalReason: string | null;
   dechargeAccepte: { acceptedAt: string; version: string } | null;
   reglementAccepte: { acceptedAt: string; version: string } | null;
@@ -122,6 +125,7 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
     age: record.age,
     categorie: record.categorieAge as AgeCategory,
     status: record.status,
+    dossard: record.dossard,
     refusalReason: record.refusalReason,
     dechargeAccepte: acceptanceSummary(record.dechargeAcceptedAt, record.dechargeVersion),
     reglementAccepte: acceptanceSummary(record.reglementAcceptedAt, record.reglementVersion),
@@ -503,6 +507,7 @@ export interface DossierListEntry {
   email: string;
   epreuveNom: string;
   status: string;
+  dossard: number | null;
   refusalReason: string | null;
   hasActivePreuve: boolean;
   preuveDepositedAt: string | null;
@@ -539,6 +544,7 @@ function toDossierListEntry(item: DossierListItem): DossierListEntry {
     email: item.email,
     epreuveNom: item.epreuveNom,
     status: item.status,
+    dossard: item.dossard,
     refusalReason: item.refusalReason,
     hasActivePreuve: item.hasActivePreuve,
     preuveDepositedAt: item.preuveDepositedAt ? item.preuveDepositedAt.toISOString() : null,
@@ -650,4 +656,21 @@ export async function decideDossier(
   });
   notifyOutbox(deps);
   return toCoureurSummary(record);
+}
+
+export type DossardsAttribution = DossardsAttributionStore;
+
+export async function attribuerDossards(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<DossardsAttribution> {
+  const store = deps.store ?? getInscriptionsStore();
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    throw new NoEditionError();
+  }
+  return store.attribuerDossards({
+    organisationId: session.organisationId,
+    editionId: edition.id,
+  });
 }

@@ -31,3 +31,9 @@ export function libelleHorsLigne(generéA: string): string {
   const date = parseIso(generéA);
   return date === null ? 'hors-ligne — données enregistrées' : `hors-ligne — données du ${DATE_HEURE.format(date)}`;
 }
+
+/** Story 3.4 — variante annuaire : « hors-ligne — annuaire du 16/05 06:00 ». */
+export function libelleHorsLigneAnnuaire(genereA: string): string {
+  const date = parseIso(genereA);
+  return date === null ? 'hors-ligne — annuaire enregistré' : `hors-ligne — annuaire du ${DATE_HEURE.format(date)}`;
+}

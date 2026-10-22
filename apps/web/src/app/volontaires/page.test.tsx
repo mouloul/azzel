@@ -18,6 +18,7 @@ vi.mock(
 
 const missionsServiceMock = vi.hoisted(() => ({
   getMissionsVolontaireState: vi.fn(),
+  getAnnuaireEdition: vi.fn(),
 }));
 
 vi.mock(
@@ -72,6 +73,16 @@ const ETAT = {
   missions: [MISSION],
 };
 
+const ANNUAIRE = {
+  version: 1,
+  editionId: 'edition-1',
+  genereA: '2026-10-22T08:00:00.000Z',
+  coureurs: [
+    { dossard: 1, nom: 'Ulahianne', prenom: 'Yani' },
+    { dossard: 12, nom: 'Cherchée', prenom: 'Iness' },
+  ],
+};
+
 async function rendu(): Promise<string> {
   const flux = await renderToReadableStream(<VolontairesPage />);
   return await new Response(flux).text();
@@ -80,6 +91,9 @@ async function rendu(): Promise<string> {
 beforeEach(() => {
   sessionMock.requireRolePage.mockReset();
   missionsServiceMock.getMissionsVolontaireState.mockReset();
+  missionsServiceMock.getAnnuaireEdition.mockReset();
+  // Annuaire par défaut pour les tests 3.3 : les tests 3.4 surchargent.
+  missionsServiceMock.getAnnuaireEdition.mockResolvedValue(ANNUAIRE);
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_VOLONTAIRE,
@@ -137,5 +151,47 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
     const html = await rendu();
     expect(html).toContain('Connexion indisponible.');
     expect(html).not.toContain('Ton espace mission');
+  });
+});
+
+describe('page /volontaires — section « Annuaire des coureurs » (story 3.4)', () => {
+  it('annuaire initial : badge role=status aria-live=polite « Annuaire prêt — N coureurs »', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    missionsServiceMock.getAnnuaireEdition.mockResolvedValue(ANNUAIRE);
+    const html = await rendu();
+    expect(html).toContain('Annuaire des coureurs');
+    expect(html).toContain('Annuaire prêt — 2 coureurs');
+    // Badge annuaire ÉPINGLÉ (pas juste un aria-live quelque part) : la balise
+    // ouvrante qui porte « Annuaire prêt » est bien le status poli.
+    const position = html.indexOf('Annuaire prêt');
+    const ouverture = html.lastIndexOf('<p', position);
+    const badge = html.slice(ouverture, position);
+    expect(badge).toContain('role="status"');
+    expect(badge).toContain('aria-live="polite"');
+  });
+
+  it('aucun coureur à dossard : badge « aucun coureur à dossard — rien à précharger »', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    missionsServiceMock.getAnnuaireEdition.mockResolvedValue({ ...ANNUAIRE, coureurs: [] });
+    const html = await rendu();
+    expect(html).toContain('aucun coureur à dossard — rien à précharger');
+  });
+
+  it('annuaire en échec côté serveur : la fiche mission reste rendue, préchargement client tranche', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    missionsServiceMock.getAnnuaireEdition.mockRejectedValue(new Error('sans édition'));
+    const html = await rendu();
+    expect(html).toContain('Ton espace mission');
+    expect(html).toContain('Annuaire des coureurs');
+    expect(html).toContain('Annuaire en cours de préchargement');
+  });
+
+  it('pas de liste de coureurs affichée : noms jamais rendus, seul l’état est visible', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    missionsServiceMock.getAnnuaireEdition.mockResolvedValue(ANNUAIRE);
+    const html = await rendu();
+    expect(html).toContain('Annuaire prêt — 2 coureurs');
+    expect(html).not.toContain('Ulahianne');
+    expect(html).not.toContain('Cherchée');
   });
 });

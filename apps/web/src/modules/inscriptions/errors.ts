@@ -140,6 +140,14 @@ export class DossierNotFoundError extends Error {
   }
 }
 
+/** Édition ayant épuisé ses numéros (base + lot > 9999) — jamais un CHECK SQL brut. */
+export class DossardsEpuisesError extends Error {
+  constructor() {
+    super('numéros de dossard épuisés pour l’édition');
+    this.name = 'DossardsEpuisesError';
+  }
+}
+
 export class PreuveNotFoundError extends Error {
   constructor() {
     super('preuve introuvable pour cette organisation');
@@ -410,6 +418,16 @@ export function toAdminApiError(error: unknown): ApiError {
       }),
     };
   }
+  if (error instanceof DossardsEpuisesError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.dossards_epuises',
+        message: 'L’édition a épuisé ses numéros de dossard (maximum 9999).',
+        action: 'Vérifie les doublons de la liste ou contacte le support avant le jour J.',
+      }),
+    };
+  }
   if (error instanceof DossierNotFoundError) {
     return {
       status: 404,
@@ -467,6 +485,16 @@ export function toAdminApiError(error: unknown): ApiError {
         code: 'admin.body_too_large',
         message: 'La requête est trop volumineuse.',
         action: 'Raccourcis le motif puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof NoEditionError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'admin.no_edition',
+        message: 'Aucune édition n’est configurée : l’attribution des dossards est impossible.',
+        action: 'Réessaie dans un instant ou vérifie la configuration de l’édition.',
       }),
     };
   }

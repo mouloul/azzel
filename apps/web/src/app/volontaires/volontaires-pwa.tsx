@@ -1,25 +1,30 @@
 'use client';
 
-import { formatLocalDateTime } from '@azzel/shared';
+import { estAnnuaireValide, formatLocalDateTime, type AnnuaireEdition } from '@azzel/shared';
 import { useEffect, useState } from 'react';
 
 import { AssistanceButton, assistancePhoneHref } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
-import { libelleHorsLigne, libelleSynchronise } from '@/lib/fraicheur';
+import { resoudreAnnuaireHorsLigne, type StatutAnnuaire } from '@/lib/annuaire-replique';
+import { libelleHorsLigne, libelleHorsLigneAnnuaire, libelleSynchronise } from '@/lib/fraicheur';
 import {
+  ecrireAnnuaire,
   ecrireEtatVolontaires,
+  lireAnnuaire,
   lireEtatVolontaires,
   type EtatVolontaires,
 } from '@/lib/idb-volontaires';
 import { readStoredTheme, writeStoredTheme } from '@/lib/theme';
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
-// Story 3.3 — PWA volontaires : revalidation à CHAQUE ouverture en ligne
+// Stories 3.3/3.4 — PWA volontaires : revalidation à CHAQUE ouverture en ligne
 // (réponse persistée en IndexedDB → fiche dans la poche dès l'affectation),
 // badge d'état role="status" (« synchronisé à HH:MM » / « HORS-LIGNE PRÊT »),
 // invitation au mode sombre à la première ouverture, fiches une colonne avec
-// contact PC en gros bouton tel:. Le scan reste une mission parmi d'autres :
-// l'épopée 4 greffera caméra et outbox sur ce shell — ne rien verrouiller.
+// contact PC en gros bouton tel:. Story 3.4 : section « Annuaire des coureurs »
+// — réplique préchargée à chaque ouverture en ligne (badge DÉDIÉ, annonce
+// séparée au lecteur d'écran), consommée par le scan de l'épopée 4. Pas de
+// liste affichée : seul l'état de préchargement est requis.
 
 type StatutSync = 'synchrone' | 'hors-ligne';
 
@@ -86,11 +91,37 @@ function FicheMission({ mission }: { mission: MissionVolontaireView }) {
   );
 }
 
+function libelleAnnuaire(statut: StatutAnnuaire, annuaire: AnnuaireEdition | null): string {
+  switch (statut) {
+    case 'pret':
+      return `Annuaire prêt — ${annuaire?.coureurs.length ?? 0} coureurs`;
+    case 'hors-ligne':
+      return annuaire !== null ? libelleHorsLigneAnnuaire(annuaire.genereA) : 'hors-ligne';
+    case 'aucun':
+      return 'aucun coureur à dossard — rien à précharger';
+    case 'non-enregistre':
+      return 'Annuaire chargé mais non enregistré sur cet appareil — réessaie';
+    case 'indisponible':
+      return 'Annuaire indisponible — réessaie en ligne';
+    default:
+      return 'Annuaire en cours de préchargement…';
+  }
+}
+
+function statutInitialAnnuaire(annuaire: AnnuaireEdition | null): StatutAnnuaire {
+  if (annuaire == null) {
+    return 'chargement';
+  }
+  return annuaire.coureurs.length > 0 ? 'pret' : 'aucun';
+}
+
 export function VolontairesPwa({
   etatInitial,
+  annuaireInitial,
   email,
 }: {
   etatInitial: EtatVolontaires;
+  annuaireInitial: AnnuaireEdition | null;
   email: string;
 }) {
   const [etat, setEtat] = useState<EtatVolontaires>(etatInitial);
@@ -100,6 +131,13 @@ export function VolontairesPwa({
   const [statut, setStatut] = useState<StatutSync>('synchrone');
   const [sessionExpiree, setSessionExpiree] = useState(false);
   const [invitationSombre, setInvitationSombre] = useState(false);
+  // Story 3.4 — annuaire : le rendu serveur amorce l'état (badge dédié), la
+  // revalidation tranche ensuite. Deux annonces séparées au lecteur d'écran :
+  // chaque badge porte son nom (« Annuaire… »).
+  const [annuaire, setAnnuaire] = useState<AnnuaireEdition | null>(annuaireInitial);
+  const [statutAnnuaire, setStatutAnnuaire] = useState<StatutAnnuaire>(
+    statutInitialAnnuaire(annuaireInitial),
+  );
 
   // Revalidation : à chaque ouverture, on rappelle l'API en ligne. Succès →
   // IndexedDB (la poche). Échec → IndexedDB d'abord (le plus frais gagne,
@@ -134,7 +172,11 @@ export function VolontairesPwa({
           return;
         }
         if (enCache !== null) {
-          if (enCache.generéA > etatInitial.generéA) {
+          // Fraîcheur par valeur (Date.getTime()), jamais par les chaînes —
+          // même racine que le repli annuaire 3.4.
+          if (
+            new Date(enCache.generéA).getTime() > new Date(etatInitial.generéA).getTime()
+          ) {
             setEtat(enCache);
           }
         } else {
@@ -154,6 +196,69 @@ export function VolontairesPwa({
   // choix mémorisé). La bascule de l'en-tête du site reste disponible ensuite.
   useEffect(() => {
     setInvitationSombre(readStoredTheme() === null);
+  }, []);
+
+  // Story 3.4 — revalidation de l'annuaire, même paradigme que l'état : à
+  // chaque ouverture en ligne, fetch → IndexedDB (la poche du scanneur), avec
+  // délai maximal (une requête suspendue ne bloque pas le badge à vie). Échec
+  // → résolution pure extraite (lib/annuaire-replique) : la poche d'abord (le
+  // plus frais gagne par Date.getTime()), l'état serveur amorce sinon — et
+  // quand l'initial gagne, la poche est réécrite pour ne pas diverger de l'UI.
+  // Un fetch réussi mais NON enregistré en poche (quota, mode privé iOS) ne
+  // ment jamais : état dédié « non enregistré ».
+  useEffect(() => {
+    let annule = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/volontaires/annuaire', {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (response.status === 401 || response.status === 403) {
+          if (!annule) {
+            setSessionExpiree(true);
+          }
+          return;
+        }
+        if (!response.ok) {
+          throw new Error('annuaire injoignable');
+        }
+        const payload = await response.json();
+        if (!estAnnuaireValide(payload)) {
+          throw new Error('annuaire hors contrat');
+        }
+        if (annule) {
+          return;
+        }
+        setAnnuaire(payload);
+        const enregistre = await ecrireAnnuaire(payload);
+        if (annule) {
+          return;
+        }
+        if (!enregistre) {
+          setStatutAnnuaire('non-enregistre');
+          return;
+        }
+        setStatutAnnuaire(payload.coureurs.length > 0 ? 'pret' : 'aucun');
+      } catch {
+        const enCache = await lireAnnuaire();
+        if (annule) {
+          return;
+        }
+        const enLigne = typeof navigator === 'undefined' || navigator.onLine !== false;
+        const choix = resoudreAnnuaireHorsLigne(enCache, annuaireInitial, enLigne);
+        setAnnuaire(choix.annuaire);
+        setStatutAnnuaire(choix.statut);
+        if (choix.annuaire !== null && choix.annuaire !== enCache) {
+          // Amorce de poche ou initial plus frais que la poche : l'UI affiche
+          // cette réplique, la poche doit porter exactement la même.
+          await ecrireAnnuaire(choix.annuaire);
+        }
+      }
+    })();
+    return () => {
+      annule = true;
+    };
   }, []);
 
   const choisirTheme = (theme: 'dark' | 'light') => {
@@ -276,6 +381,30 @@ export function VolontairesPwa({
           ))}
         </ul>
       )}
+
+      <section className="volontaires-annuaire" aria-labelledby="volontaires-annuaire-titre">
+        <h2 className="volontaires-titre" id="volontaires-annuaire-titre">
+          Annuaire des coureurs
+        </h2>
+        <p className="volontaires-surtitre">Avant le départ</p>
+        <p
+          role="status"
+          aria-live="polite"
+          className={
+            statutAnnuaire === 'hors-ligne'
+              ? 'volontaires-badge volontaires-badge--hors-ligne'
+              : 'volontaires-badge volontaires-badge--synchro'
+          }
+          suppressHydrationWarning
+        >
+          <span aria-hidden="true" className="volontaires-badge-point" />
+          {libelleAnnuaire(statutAnnuaire, annuaire)}
+        </p>
+        <p className="volontaires-annuaire-texte">
+          L’annuaire de l’édition se précharge tout seul à chaque ouverture en ligne : les scans
+          reconnaîtront les dossards même sans réseau. Aucune liste à lire ici.
+        </p>
+      </section>
 
       <div className="volontaires-actions-bas">
         <LogoutButton />

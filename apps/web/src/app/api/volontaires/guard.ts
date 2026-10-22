@@ -11,7 +11,7 @@ import {
 import { requireRole } from '@/modules/iam/session';
 import type { SessionRecord } from '@/modules/iam/store';
 
-import { toMissionsApiError, type ApiError } from '@/modules/missions/errors';
+import { toMissionsApiError, AucuneEditionError, type ApiError } from '@/modules/missions/errors';
 
 // Story 3.3 — garde d'API de la surface volontaires : déclinaison du pattern
 // guardAdmin pour le rôle volontaire (route publique d'état, enveloppes
@@ -33,6 +33,18 @@ export function toVolontairesApiError(error: unknown): ApiError {
         message: 'Connexion indisponible.',
         action:
           'Réessaie dans un instant — ta fiche reste lisible hors-ligne si tu l’avais déjà ouverte en ligne.',
+      }),
+    };
+  }
+  // Story 3.4 — l'annuaire exige une édition : un volontaire sans édition
+  // reçoit une enveloppe terrain, pas un code admin.missions.*.
+  if (error instanceof AucuneEditionError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'volontaires.annuaire_sans_edition',
+        message: 'L’annuaire des coureurs n’est pas encore publié pour ton organisation.',
+        action: 'Réessaie plus tard — ou appelle l’équipe si tu y es déjà à J-1.',
       }),
     };
   }

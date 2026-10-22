@@ -1,12 +1,20 @@
 import postgres, { type Sql } from 'postgres';
 
+import { DOSSARD_MAX } from '@azzel/shared';
+
 import { withOrg } from '@/db/org-scope';
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
-import { COUREUR_STATUS_EN_CONSTITUTION, canDepositPreuve, isRegistrationOpen } from './domain';
+import {
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_VALIDE,
+  canDepositPreuve,
+  isRegistrationOpen,
+} from './domain';
 import {
   DbUnavailableError,
+  DossardsEpuisesError,
   DossierIncompletError,
   DossierNotFoundError,
   DossierValidatedError,
@@ -63,6 +71,8 @@ export interface CoureurRecord {
   age: number;
   categorieAge: string;
   status: string;
+  /** Numéro de dossard (nullable : attribué par lot, story 3.4). */
+  dossard: number | null;
   refusalReason: string | null;
   decidedBy: string | null;
   decidedAt: Date | null;
@@ -148,6 +158,7 @@ export interface DossierListItem {
   epreuveSlug: string;
   epreuveNom: string;
   status: string;
+  dossard: number | null;
   refusalReason: string | null;
   hasActivePreuve: boolean;
   preuveDepositedAt: Date | null;
@@ -157,6 +168,29 @@ export interface DossierListItem {
 }
 
 export type DossierDecision = 'valider' | 'refuser';
+
+/** Résultat du lot d'attribution (story 3.4) — idempotent, jamais de renumérotation. */
+export interface DossardsAttribution {
+  attribues: number;
+  premier: number | null;
+  dernier: number | null;
+}
+
+export interface AttribuerDossardsInput {
+  organisationId: string;
+  editionId: string;
+}
+
+/**
+ * Garde de capacité du lot (pure, testée unitairement) : la suite de la
+ * numérotation (base + cibles) doit rester sous le plafond — sinon enveloppe
+ * claire (DossardsEpuisesError, 409), jamais un CHECK SQL brut en 500.
+ */
+export function assertCapaciteDossards(base: number, cibles: number): void {
+  if (base + cibles > DOSSARD_MAX) {
+    throw new DossardsEpuisesError();
+  }
+}
 
 export interface DossierDetail {
   coureur: CoureurRecord;
@@ -205,6 +239,7 @@ export interface InscriptionsStore {
     coureurId: string;
   }): Promise<DossierDetail | null>;
   decideDossier(input: DecideDossierInput): Promise<CoureurRecord>;
+  attribuerDossards(input: AttribuerDossardsInput): Promise<DossardsAttribution>;
   findPreuveByIdForOrganisation(
     preuveId: string,
     organisationId: string,
@@ -281,6 +316,7 @@ interface CoureurRow {
   age: number;
   age_category: string;
   status: string;
+  dossard: number | null;
   refusal_reason: string | null;
   decided_by: string | null;
   decided_at: Date | null;
@@ -349,6 +385,7 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     age: row.age,
     categorieAge: row.age_category,
     status: row.status,
+    dossard: row.dossard,
     refusalReason: row.refusal_reason,
     decidedBy: row.decided_by,
     decidedAt: row.decided_at,
@@ -366,7 +403,7 @@ const COUREUR_COLUMNS = `
   c.first_name, c.last_name, c.phone,
   c.emergency_contact_name, c.emergency_contact_phone,
   c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
-  c.refusal_reason, c.decided_by, c.decided_at,
+  c.dossard, c.refusal_reason, c.decided_by, c.decided_at,
   c.decharge_accepted_at, c.decharge_version,
   c.reglement_accepted_at, c.reglement_version,
   c.created_at, c.updated_at,
@@ -760,6 +797,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               epreuve_slug: string;
               epreuve_nom: string;
               status: string;
+              dossard: number | null;
               refusal_reason: string | null;
               preuve_id: string | null;
               preuve_created_at: Date | null;
@@ -772,7 +810,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           >`
             SELECT c.id AS coureur_id, c.first_name, c.last_name, a.email,
                    e.slug AS epreuve_slug, e.name AS epreuve_nom,
-                   c.status, c.refusal_reason,
+                   c.status, c.dossard, c.refusal_reason,
                    p.id AS preuve_id, p.created_at AS preuve_created_at,
                    c.decharge_accepted_at, c.reglement_accepted_at,
                    c.created_at, c.updated_at,
@@ -804,6 +842,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               epreuveSlug: row.epreuve_slug,
               epreuveNom: row.epreuve_nom,
               status: row.status,
+              dossard: row.dossard,
               refusalReason: row.refusal_reason,
               hasActivePreuve: row.preuve_id !== null,
               preuveDepositedAt: row.preuve_created_at,
@@ -981,6 +1020,55 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       );
     },
 
+    async attribuerDossards(input: AttribuerDossardsInput): Promise<DossardsAttribution> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          // Story 3.4 — lot idempotent : seuls les VALIDÉS SANS dossard sont
+          // ciblés. Verrou posé sur les lignes ciblées AVANT la lecture du max :
+          // deux lots concurrents se sérialisent (READ COMMITTED re-évalue la
+          // condition après le commit du premier — les dossards fraîchement
+          // posés quittent le lot). Les déjà numérotés ne sont JAMAIS touchés :
+          // pas de renumérotation, pas de réutilisation.
+          const cibles = await tx<{ id: string }[]>`
+            SELECT c.id
+            FROM coureur c
+            WHERE c.edition_id = ${input.editionId}
+              AND c.organisation_id = ${input.organisationId}
+              AND c.status = ${COUREUR_STATUS_VALIDE}
+              AND c.dossard IS NULL
+            ORDER BY c.created_at ASC, c.id ASC
+            FOR UPDATE OF c
+          `;
+          if (cibles.length === 0) {
+            return { attribues: 0, premier: null, dernier: null };
+          }
+          // Suite du max de l'édition (vu APRÈS le verrou : inclut un éventuel
+          // lot concurrent commis entre-temps).
+          const maxRows = await tx<{ max: number }[]>`
+            SELECT COALESCE(MAX(dossard), 0)::int AS max
+            FROM coureur
+            WHERE edition_id = ${input.editionId}
+              AND organisation_id = ${input.organisationId}
+              AND dossard IS NOT NULL
+          `;
+          const base = maxRows[0]?.max ?? 0;
+          // Plafond défendu AVANT toute écriture : un lot qui dépasserait 9999
+          // échoue proprement (le lot entier, rien de partiellement posé).
+          assertCapaciteDossards(base, cibles.length);
+          // Numérotation séquentielle, ordre created_at — la UNIQUE partielle
+          // SQL (0022) défend l'unicité en dernier recours.
+          for (const [index, cible] of cibles.entries()) {
+            const dossard = base + index + 1;
+            await tx`
+              UPDATE coureur SET dossard = ${dossard}, updated_at = now()
+              WHERE id = ${cible.id} AND dossard IS NULL
+            `;
+          }
+          return { attribues: cibles.length, premier: base + 1, dernier: base + cibles.length };
+        }),
+      );
+    },
+
     async findPreuveByIdForOrganisation(
       preuveId: string,
       organisationId: string,
@@ -1024,6 +1112,7 @@ function createUnavailableStore(): InscriptionsStore {
     listCoureurs: unavailable,
     findDossierDetail: unavailable,
     decideDossier: unavailable,
+    attribuerDossards: unavailable,
     findPreuveByIdForOrganisation: unavailable,
   };
 }

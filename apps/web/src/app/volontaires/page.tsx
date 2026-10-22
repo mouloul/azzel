@@ -1,20 +1,22 @@
-import { nowIsoUtc } from '@azzel/shared';
+import { nowIsoUtc, type AnnuaireEdition } from '@azzel/shared';
 
 import { AssistanceButton } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireRolePage } from '@/modules/iam/session';
 import { toMissionsApiError } from '@/modules/missions/errors';
-import { getMissionsVolontaireState } from '@/modules/missions/service';
+import { getAnnuaireEdition, getMissionsVolontaireState } from '@/modules/missions/service';
 
 import { VolontairesPwa } from './volontaires-pwa';
 
 import './volontaires.css';
 
-// Story 3.3 — page serveur de la PWA volontaires : requireRolePage volontaire,
-// état initial assemblé côté serveur (rendu SSR = plan A), puis le composant
-// client revalide à chaque ouverture en ligne et persiste en IndexedDB
-// (la poche). L'annuaire (3.4) viendra se greffer ici : ne rien verrouiller.
+// Stories 3.3/3.4 — page serveur de la PWA volontaires : requireRolePage
+// volontaire, état initial assemblé côté serveur (rendu SSR = plan A), puis le
+// composant client revalide à chaque ouverture en ligne et persiste en
+// IndexedDB (la poche). L'annuaire (3.4) suit le même paradigme : son échec
+// n'entrave JAMAIS la fiche mission (annuaireInitial null → préchargement
+// seul, tranché par l'effet client).
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +70,15 @@ export default async function VolontairesPage() {
     );
   }
 
+  // Annuaire (3.4) : dégradation isolée — une erreur ici ne casse pas la page,
+  // la revalidation client tranche (null = état « en cours de préchargement »).
+  let annuaireInitial: AnnuaireEdition | null = null;
+  try {
+    annuaireInitial = (await getAnnuaireEdition(session)) ?? null;
+  } catch {
+    annuaireInitial = null;
+  }
+
   return (
     <VolontairesPwa
       email={session.email}
@@ -78,6 +89,7 @@ export default async function VolontairesPage() {
         missions: state.missions,
         generéA: nowIsoUtc(),
       }}
+      annuaireInitial={annuaireInitial}
     />
   );
 }
