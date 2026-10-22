@@ -142,6 +142,14 @@ export default async function HomePage() {
               </p>
             </article>
           </div>
+          <p className="aa-liens-vitrine">
+            <Link className="aa-lien-texte" href="/parcours">
+              Parcours, horaires et consignes
+            </Link>
+            <Link className="aa-lien-texte" href="/region">
+              Hébergement et infos pratiques dans la région
+            </Link>
+          </p>
           <div className="aa-galerie">
             <AaPhoto
               src={`${PHOTOS}/aitaissi-2026-ligne-depart-640.webp`}

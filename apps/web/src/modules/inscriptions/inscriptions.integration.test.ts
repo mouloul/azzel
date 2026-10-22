@@ -17,7 +17,7 @@ import {
   type AzzelTestConnections,
 } from '@/test/integration-db';
 
-import { applyAllMigrations } from './migrate';
+import { applyAllMigrations, MIGRATION_DIRS } from './migrate';
 import {
   BothAcceptancesRequiredError,
   DossierValidatedError,
@@ -34,14 +34,10 @@ import {
 import { createInscriptionsStore, type InscriptionsStore } from './store';
 import type { InscriptionFormInput } from './domain';
 
-/** Noms des fichiers .sql des deux dossiers de migrations (iam + inscriptions), triés. */
+/** Noms des fichiers .sql de tous les dossiers de migrations du runner, triés. */
 async function listMigrationFiles(): Promise<string[]> {
-  const dirs = [
-    new URL('../iam/migrations/', import.meta.url),
-    new URL('./migrations/', import.meta.url),
-  ];
   const names: string[] = [];
-  for (const dir of dirs) {
+  for (const dir of MIGRATION_DIRS) {
     const entries = await readdir(dir);
     names.push(...entries.filter((name) => name.endsWith('.sql')));
   }

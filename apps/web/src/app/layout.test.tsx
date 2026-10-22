@@ -39,4 +39,13 @@ describe('layout racine — rendu statique', () => {
     );
     expect(html.toLowerCase()).not.toContain('tafsut');
   });
+
+  it('pied de page : liens texte sobres vers /parcours et /region (story 2.4)', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    expect(html).toContain('href="/parcours"');
+    expect(html).toContain('href="/region"');
+    expect(html.indexOf('footer-nav')).toBeGreaterThan(-1);
+  });
 });

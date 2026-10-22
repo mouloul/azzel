@@ -64,6 +64,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </header>
         <main id="contenu">{children}</main>
         <footer className="site-footer">
+          <nav className="footer-nav" aria-label="Se préparer">
+            <Link href="/parcours">Parcours</Link>
+            <Link href="/region">La région</Link>
+          </nav>
           <p className="meta">Plateforme Azzel</p>
         </footer>
       </body>

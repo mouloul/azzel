@@ -1038,6 +1038,19 @@ a.aa-partenaire__nom{color:inherit}
   margin: 0;
 }
 
+/* Parcours & région (story 2.4) — liens de navigation (accueil + pages vitrine).
+   Les styles propres aux pages /parcours et /region vivent dans
+   vitrine-textes.css, importé par ces pages seules : hors du chemin critique
+   de l’accueil (budget premier chargement < 300 Ko). */
+.aa-liens-vitrine{display:flex;flex-wrap:wrap;gap:var(--az-space-4) var(--az-space-6);margin:var(--space-8) 0 0}
+.aa-lien-texte{color:var(--heading);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.aa-lien-texte:hover{color:var(--accent)}
+
+/* Pied de page — liens texte sobres vers les pages vitrine (story 2.4) */
+.footer-nav{display:flex;flex-wrap:wrap;gap:var(--az-space-2) var(--az-space-4);margin:0 0 var(--az-space-3)}
+.footer-nav a{color:var(--az-texte);text-decoration:underline;text-underline-offset:3px}
+.footer-nav a:hover{color:var(--az-texte-2)}
+
 /* Thème sombre — voile hero assombri */
 [data-theme='dark'] .aa-hero__veil {
   background: linear-gradient(

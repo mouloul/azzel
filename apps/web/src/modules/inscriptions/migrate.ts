@@ -9,9 +9,13 @@ import { readDatabaseOwnerUrl, readEnv } from '../iam/env';
 
 const MODULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const MIGRATION_DIRS = [
+// Dossiers de migrations, dans l'ordre du runner — exportés pour que les suites
+// d'intégration comptent les fichiers à la source (toute nouvelle migration est
+// couverte sans toucher aux tests).
+export const MIGRATION_DIRS = [
   path.join(MODULES_DIR, 'iam', 'migrations'),
   path.join(MODULES_DIR, 'inscriptions', 'migrations'),
+  path.join(MODULES_DIR, 'contenus', 'migrations'),
 ];
 
 // Placeholder du mot de passe du rôle applicatif dans 0008_rls_roles.sql :

@@ -1,0 +1,11 @@
+/* Admin contenus (story 2.4) — un formulaire par bloc éditable.
+   Fichier propre à la page /admin/contenus : hors du chunk CSS partagé
+   avec la vitrine (budget premier chargement < 300 Ko). */
+.contenus-liste{display:grid;gap:var(--az-space-4)}
+.contenu-bloc{border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-4);display:grid;gap:var(--az-space-3)}
+.contenu-bloc form{display:grid;gap:var(--az-space-3)}
+.contenu-bloc textarea{min-height:180px;font-size:15px}
+.contenu-entete{display:flex;flex-wrap:wrap;gap:var(--az-space-2);align-items:center}
+.contenu-entete h2{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--heading)}
+.contenu-meta{font-family:var(--az-font-meta);font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
+.contenu-bloc .hint{margin:0}

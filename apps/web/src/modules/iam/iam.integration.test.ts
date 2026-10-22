@@ -5,7 +5,7 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { resetOrganisationIdMemoForTests, withOrg } from '@/db/org-scope';
-import { applyAllMigrations } from '@/modules/inscriptions/migrate';
+import { applyAllMigrations, MIGRATION_DIRS } from '@/modules/inscriptions/migrate';
 import {
   closeAzzelTestDb,
   recreateAzzelTestDb,
@@ -40,14 +40,10 @@ function uniqueEmail(): string {
   return `coureur-${randomUUID()}@test.azzel`;
 }
 
-/** Nombre de fichiers .sql des deux dossiers de migrations (iam + inscriptions). */
+/** Nombre de fichiers .sql de tous les dossiers de migrations du runner. */
 async function countMigrationFiles(): Promise<number> {
-  const dirs = [
-    new URL('./migrations/', import.meta.url),
-    new URL('../inscriptions/migrations/', import.meta.url),
-  ];
   let total = 0;
-  for (const dir of dirs) {
+  for (const dir of MIGRATION_DIRS) {
     const names = await readdir(dir);
     total += names.filter((name) => name.endsWith('.sql')).length;
   }

@@ -96,6 +96,14 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('Épreuve phare');
   });
 
+  it('navigation sobre : liens texte /parcours et /region dans la section épreuves (story 2.4)', () => {
+    const html = HTML_ACCUEIL;
+    expect(html).toContain('href="/parcours"');
+    expect(html).toContain('href="/region"');
+    expect(html.indexOf('href="/parcours"')).toBeGreaterThan(html.indexOf('titre-epreuves-2027'));
+    expect(html.indexOf('href="/region"')).toBeGreaterThan(html.indexOf('titre-epreuves-2027'));
+  });
+
   it('contact : bouton Appeler l’équipe (tel:) présent dans le hero et la section contact', () => {
     const html = HTML_ACCUEIL;
     expect(html).toContain('Appeler l’équipe');

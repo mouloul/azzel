@@ -78,5 +78,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Budget premier chargement de l'accueil (< 300 Ko)
+        # Story 2.1/2.4 : le seuil est gardé en CI — mesuré sur le build frais
+        # via next start (scripts/check-budget.sh), échec dur au-delà de 300 Ko.
+        run: bash scripts/check-budget.sh
+
       - name: Tests (unitaires + intégration, aucun saut autorisé)
         run: pnpm test

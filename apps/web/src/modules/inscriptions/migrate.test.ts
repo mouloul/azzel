@@ -1,6 +1,8 @@
+import { readdir } from 'node:fs/promises';
+
 import { describe, expect, it, vi } from 'vitest';
 
-import { injectAppPassword } from './migrate';
+import { injectAppPassword, MIGRATION_DIRS } from './migrate';
 
 const CONTENT = "CREATE ROLE azzel_app LOGIN PASSWORD '__AZZEL_APP_PASSWORD__';";
 
@@ -47,5 +49,18 @@ describe('injectAppPassword — mot de passe du rôle applicatif (story 1.9)', (
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe('MIGRATION_DIRS — unicité des noms de fichiers (story 2.4)', () => {
+  it('aucun nom de migration en double à travers les dossiers : le tri global et la clé schema_migrations (nom seul) confondraient deux fichiers homonymes', async () => {
+    const noms: string[] = [];
+    for (const dir of MIGRATION_DIRS) {
+      const entrees = await readdir(dir);
+      noms.push(...entrees.filter((nom) => nom.endsWith('.sql')));
+    }
+    expect(noms.length).toBeGreaterThan(0);
+    const doublons = noms.filter((nom, index) => noms.indexOf(nom) !== index);
+    expect(doublons).toEqual([]);
   });
 });
