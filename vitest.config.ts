@@ -20,6 +20,7 @@ export default defineConfig({
     include: [
       'packages/shared/src/**/*.test.ts',
       'apps/web/src/**/*.test.ts',
+      'apps/web/src/**/*.test.tsx',
       'apps/runners/src/**/*.test.ts',
     ],
   },

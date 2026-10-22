@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AdminHeaderLink } from '@/components/admin-header-link';
+import { BandeauEgide } from '@/components/bandeau-egide';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildTokensCss } from '@/lib/tokens-css';
 import { buildThemeInitScript } from '@/lib/theme';
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a className="skip-link" href="#contenu">
           Aller au contenu
         </a>
+        <BandeauEgide />
         <header className="site-header">
           <Link
             className="brand-logo"

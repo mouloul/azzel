@@ -29,11 +29,37 @@ pnpm build          # shared (tsc) + runners (tsc) + web (next build)
 pnpm typecheck      # zéro erreur TypeScript attendue sur les trois packages
 pnpm test           # tests unitaires (vitest) : shared + lib web
 pnpm test:db        # dev-db.sh up + pnpm test (intégration Postgres garantie)
+pnpm budget         # build + mesure du budget de la page d'accueil (< 300 Ko)
 bash scripts/dev-db.sh up    # Postgres 17 dédié (port 54329) + .env
 bash scripts/dev-mail.sh up  # faux SMTP Mailpit (SMTP 2525, UI http://localhost:8026) + SMTP_URL
 pnpm dev:web        # serveur de développement Next.js
 pnpm dev:runners    # Metro pour la dev build coureurs (expo start --dev-client)
 ```
+
+## Budget page d'accueil (story 2.1)
+
+Le premier chargement de la page d'accueil (HTML + CSS + JS + polices préchargées
++ photo hero en 640) doit rester **< 300 Ko**. La mesure est déterministe :
+
+```bash
+pnpm budget                          # build + mesure
+bash scripts/check-budget.sh        # mesure seule, sur un build existant
+```
+
+Le port du serveur de mesure est configurable par une seule variable, `BUDGET_PORT`
+(défaut 3123), utilisée à la fois par le script et par le test d'intégration opt-in
+`apps/web/src/app/home.integration.test.ts` (skip si aucun serveur n'écoute, échec
+sur une réponse non-OK).
+
+Le script démarre `next start` sur le build frais, mesure le poids « fil » de chaque
+ressource locale référencée par le HTML servi (gzip quand le serveur compresse) et
+affiche le détail par ressource. Le budget mesure le **chemin mobile** : la photo
+hero est servie en 640 via `<picture>` (la variante 1280 n'est choisie qu'au-delà de
+700 px ; léger upscale accepté sous le voile sur écrans DPR ≥ 2), et les photos
+différées `loading="lazy"` sous la ligne de flottaison ne comptent pas. Le script
+vérifie aussi que le HTML servi contient l'égide, le CTA `/connexion` et les
+chiffres officiels 2026 ; il échoue (exit 1) si le seuil ou le contenu est en
+défaut, ou si une ressource est inaccessible.
 
 ## Notifications par email (file d'envoi)
 
