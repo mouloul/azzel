@@ -5,7 +5,7 @@ created: '2026-10-21'
 status: 'in-progress'
 review_loop_iteration: 0
 baseline_revision: '1f05525'
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - {project-root}/_bmad-output/implementation-artifacts/epic-2-context.md
 warnings: []
@@ -73,6 +73,18 @@ deferred: []
 - Given un sponsor signature et le mode A, when la vitrine s'affiche, then l'emplacement signature est rendu (nom display, bande forêt) et le basculement en mode B depuis l'admin est visible au simple rechargement.
 - Given aucun sponsor, when la vitrine s'affiche, then aucune section vide n'apparaît.
 - Given un coureur, when il accède aux routes sponsors admin, then 403 sans fuite.
+
+
+## Review Triage Log
+
+### 2026-10-22 — Review pass
+- verdicts: 26 findings — high 0, medium 4, low 18, false 0 (9 entrées patch, 2 defer, 2 rejets)
+- patches : PATCH destructif (types invalides → 400), flag signature détruit en mode B, double signature concurrente (index unique partiel), section jamais testée au niveau page (vue non-nulle), formulaire (reset/conf/écrasement concurrent), WHERE org explicite, plafonds 20 org/12 rendu, 201 + helper garde corps, predev tokens:sync, mémo slug (+ reset tests), alt décoratif, hint https. Defers : onError logo sans test DOM, end-to-end admin→vitrine (convention). Rejets : GET config (surface API légitime), mixed-content (hint suffit V1).
+- Note run : fusion avec la revue d'épopée 1 parallèle (migrations 0011-0013, garde de rôle app, CI) — commit séparé 56ba5d8 ; 3 collisions corrigées (fixtures UUID, pollution mémo).
+
+## Auto Run Result
+
+**Statut : done.** Sponsors A/B de bout en bout : migration 0010 (RLS), module sponsors (CRUD org-scopé, résolution A/B/signature, plafonds), API admin 201 + enveloppes, /admin/sponsors (bascule + CRUD + confirmations), section vitrine dynamique (bande signature / grille équivalente / absente si vide), tokens CSS extraits en fichier généré (sync au build + predev) pour tenir le budget. Vérification : 567 passés + 5 skips (45 fichiers), pnpm budget 299/300 Ko, migrations 0001-0013 idempotentes. Recommandation re-revue : true (marge budget 180 o en pire cas peuplé — levier identifié ; UI admin sans test de composant).
 
 ## Spec Change Log
 
