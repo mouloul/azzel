@@ -6,16 +6,21 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { assistancePhoneHref } from '@/components/assistance-button';
-import { lireAnnuaire, obtenirAppareilId, retraitsParJeton } from '@/lib/idb-volontaires';
+import {
+  lireAnnuaire,
+  obtenirAppareilId,
+  passagesParJetonCheckpoint,
+  retraitsParJeton,
+} from '@/lib/idb-volontaires';
 import { creerAudioScan, type AudioScan } from '@/lib/scan/audio-scan';
 import {
   formatHeureVoyant,
+  libelleVoyantPassage,
   libelleVoyantRetrait,
-  libelleVoyantScan,
-  resoudreEtEnregistrer,
+  traiterScanPassage,
   traiterScanRetrait,
+  type ResultatPassage,
   type ResultatRetrait,
-  type ResultatScan,
 } from '@/lib/scan/etats-scan';
 import {
   classifierErreurCamera,
@@ -29,16 +34,19 @@ export { NOTE_NON_ENREGISTRE } from '@/lib/scan/etats-scan';
 
 // Story 4.2 — moteur de scan caméra et états de retour (UX-DR-6/7/18). Page
 // 100 % locale : la validation se fait contre la réplique IndexedDB (jamais
-// de réseau), le dédoublonnage est de SESSION (en mémoire — 4.3/4.4 le
-// remplaceront). Le bip + le voyant SONT la confirmation (< 1 s), aucun
-// bouton « valider ». L'audio et la vibration ne partent qu'après le geste
+// de réseau). Le bip + le voyant SONT la confirmation (< 1 s), aucun bouton
+// « valider ». L'audio et la vibration ne partent qu'après le geste
 // « Démarrer le scan ». Tutoiement (surface volontaire).
 //
 // Story 4.3 — le mode est un PARAMÈTRE (mêmes moteur, écrans, bips) :
 // `retrait` (guichet) résout contre l'outbox IndexedDB — dédoublonnage
 // PERSISTANT cross-session, append-only au succès, note « NON enregistré sur
-// cet appareil » si IDB refuse (jamais de mensonge). 4.4 greffera le mode
-// passage pareillement.
+// cet appareil » si IDB refuse (jamais de mensonge).
+//
+// Story 4.4 — le mode `checkpoint` (défaut) enregistre les PASSAGES sur le
+// même gabarit : le checkpoint est la mission scan en cours (checkpointId
+// transmis par la page), dédoublonnage persistant par PAIRE coureur ×
+// checkpoint, libellé succès avec l'heure appareil intégrée.
 
 /** Clignotement du voyant borné dans le temps : statique passé ce délai. */
 export const DUREE_CLIGNOTEMENT_MS = 6000;
@@ -64,9 +72,9 @@ export const TEXTES_SCAN: Record<ModeScan, TextesScan> = {
     annoncePreparation: 'Lecture de l’annuaire enregistré sur cet appareil…',
     titrePret: 'Scanner les e-dossards',
     leadPret: (nombreCoureurs) =>
-      `Annuaire prêt — ${nombreCoureurs} coureurs enregistrés sur cet appareil. Le scan fonctionne même sans réseau.`,
+      `Annuaire prêt — ${nombreCoureurs} coureurs enregistrés sur cet appareil. Chaque passage s’enregistre sur l’appareil, même sans réseau.`,
     hintPret:
-      'Vise le QR du coureur : le bip et le voyant confirment chaque lecture en moins d’une seconde. Aucun bouton à valider.',
+      'Vise le QR du coureur : le bip et le voyant confirment chaque passage en moins d’une seconde. Un coureur déjà passé à ce point de contrôle SUR CET APPAREIL (même après reconnexion) affiche DÉJÀ PASSÉ.',
     ariaEcran: 'Scanner les e-dossards',
   },
   retrait: {
@@ -92,10 +100,10 @@ type Phase =
   | 'module';
 
 interface Voyant {
-  resultat: ResultatScan | ResultatRetrait;
+  resultat: ResultatRetrait | ResultatPassage;
   /** Heure de l'appareil du scan affiché (donnée locale, AD-3). */
   heure: Date;
-  /** Succès retrait uniquement : IDB a refusé l'append (jamais de mensonge). */
+  /** Succès enregistrable uniquement : IDB a refusé l'append (jamais de mensonge). */
   note?: string;
 }
 
@@ -200,10 +208,17 @@ export function ScanClient({
   assistancePhone,
   missionLabel,
   mode = 'checkpoint',
+  checkpointId = null,
 }: {
   assistancePhone: string;
   missionLabel: string;
   mode?: ModeScan;
+  /**
+   * Story 4.4 — id de la mission scan_checkpoint en cours (LE checkpoint) :
+   * référence chaque passage (clé naturelle édition+coureur+checkpoint).
+   * Null en mode retrait / hors mission.
+   */
+  checkpointId?: string | null;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('chargement');
@@ -217,13 +232,13 @@ export function ScanClient({
   const decodeurRef = useRef<Decodeur | null>(null);
   const audioRef = useRef<AudioScan | null>(null);
   const indexRef = useRef<ReadonlyMap<string, CoureurAnnuaire> | null>(null);
-  // Dédoublonnage de SESSION (en mémoire) : jeton → première lecture. 4.3/4.4
-  // le remplaceront par leurs clés naturelles persistées.
-  const dejaVusRef = useRef<Map<string, Date>>(new Map());
   // Story 4.3 — mode retrait : index outbox (chargé au démarrage, mis à jour
   // par l'orchestrateur) + contexte d'append (appareil + édition) + numéro de
   // séquence (seul le DERNIER scan rend).
   const retraitsRef = useRef<Map<string, Date>>(new Map());
+  // Story 4.4 — mode checkpoint : index outbox passages, clé composite
+  // `${jeton}:${checkpointId}` (chargé au démarrage, mis à jour pareillement).
+  const passagesRef = useRef<Map<string, Date>>(new Map());
   const appareilIdRef = useRef<string | null>(null);
   const editionIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
@@ -235,9 +250,10 @@ export function ScanClient({
   const actif = phase === 'active';
 
   // Annuaire local : IndexedDB uniquement (jamais de réseau ici). Vide ou
-  // absent → état bloquant, le scan refuse de démarrer à l'aveugle. En mode
-  // retrait : l'outbox (dédoublonnage persistant cross-session) et
-  // l'appareilId (clé d'idempotence) sont chargés en même temps.
+  // absent → état bloquant, le scan refuse de démarrer à l'aveugle. Dans les
+  // DEUX modes persistants, l'outbox (dédoublonnage cross-session) et
+  // l'appareilId (clé d'idempotence) sont chargés en même temps : retraits
+  // par jeton (4.3), passages par jeton×checkpoint (4.4).
   useEffect(() => {
     let annule = false;
     (async () => {
@@ -253,17 +269,19 @@ export function ScanClient({
       }
       indexRef.current = index;
       setNombreCoureurs(index.size);
+      const [appareilId, indexOutbox] = await Promise.all([
+        obtenirAppareilId(),
+        mode === 'retrait' ? retraitsParJeton() : passagesParJetonCheckpoint(),
+      ]);
+      if (annule) {
+        return;
+      }
+      appareilIdRef.current = appareilId;
+      editionIdRef.current = annuaire !== null ? annuaire.editionId : null;
       if (mode === 'retrait') {
-        const [appareilId, retraits] = await Promise.all([
-          obtenirAppareilId(),
-          retraitsParJeton(),
-        ]);
-        if (annule) {
-          return;
-        }
-        appareilIdRef.current = appareilId;
-        editionIdRef.current = annuaire !== null ? annuaire.editionId : null;
-        retraitsRef.current = retraits;
+        retraitsRef.current = indexOutbox;
+      } else {
+        passagesRef.current = indexOutbox;
       }
       setPhase('prete');
     })();
@@ -273,11 +291,11 @@ export function ScanClient({
   }, [mode]);
 
   // Un payload décodé → resolution + enregistrement → voyant + bip +
-  // vibration (< 1 s). Checkpoint : session en mémoire. Retrait :
-  // l'orchestrateur pur émet immédiatement (voyant+bip JAMAIS derrière
-  // l'outbox), l'append part en arrière-plan — une note « NON enregistré »
-  // ne complète le voyant QUE si aucun scan plus récent n'a eu lieu entre
-  // temps (numéro de séquence : seul le dernier scan rend).
+  // vibration (< 1 s). Les DEUX modes passent par leur orchestrateur pur :
+  // émission immédiate (voyant+bip JAMAIS derrière l'outbox), append en
+  // arrière-plan — une note « NON enregistré » ne complète le voyant QUE si
+  // aucun scan plus récent n'a eu lieu entre temps (numéro de séquence :
+  // seul le dernier scan rend).
   const surPayload = useCallback(
     (payload: string) => {
       const index = indexRef.current;
@@ -285,10 +303,10 @@ export function ScanClient({
         return;
       }
       const maintenant = new Date();
+      const numero = sequenceRef.current + 1;
+      sequenceRef.current = numero;
 
       if (mode === 'retrait') {
-        const numero = sequenceRef.current + 1;
-        sequenceRef.current = numero;
         const { retour, termine } = traiterScanRetrait(
           payload,
           index,
@@ -311,14 +329,50 @@ export function ScanClient({
         return;
       }
 
-      const resultat = resoudreEtEnregistrer(payload, index, dejaVusRef.current, maintenant);
-      setVoyant({ resultat, heure: maintenant });
-      emettreRetourAudio(resultat.etat);
+      // Story 4.4 — mode checkpoint : passage persistant au checkpoint en
+      // cours (mission scan), dédoublonnage par PAIRE coureur × checkpoint.
+      const { retour, termine } = traiterScanPassage(
+        payload,
+        index,
+        passagesRef.current,
+        checkpointId,
+        appareilIdRef.current,
+        editionIdRef.current,
+        maintenant,
+      );
+      setVoyant({ resultat: retour.resultat, note: retour.note, heure: maintenant });
+      emettreRetourAudio(retour.resultat.etat);
+      void termine.then((final) => {
+        if (final.note === undefined) {
+          return;
+        }
+        // La note de refus atteint le voyant si ce scan est TOUJOURS le
+        // dernier (garde habituelle), OU si le voyant courant est le doublon
+        // OPTIMISTE de ce scan — un rescan affiché « DÉJÀ PASSÉ » pendant que
+        // l'append échouait : la clé composite rattache la note au bon
+        // coureur×checkpoint (sinon le doublon mentirait : rien n'est
+        // enregistré).
+        setVoyant((precedent) => {
+          if (precedent === null) {
+            return precedent;
+          }
+          const cleCourante =
+            'cleComposite' in precedent.resultat ? precedent.resultat.cleComposite : undefined;
+          const doublonDuRefus =
+            precedent.resultat.etat === 'doublon' &&
+            final.resultat.cleComposite !== undefined &&
+            cleCourante === final.resultat.cleComposite;
+          if (numero !== sequenceRef.current && !doublonDuRefus) {
+            return precedent;
+          }
+          return { ...precedent, note: final.note };
+        });
+      });
     },
-    [mode],
+    [mode, checkpointId],
   );
 
-  const emettreRetourAudio = useCallback((etat: ResultatScan['etat']) => {
+  const emettreRetourAudio = useCallback((etat: ResultatPassage['etat']) => {
     const audio = audioRef.current;
     if (audio === null) {
       return;
@@ -424,8 +478,15 @@ export function ScanClient({
     router.push('/volontaires');
   }, [router]);
 
-  const libelleVoyant = (resultat: ResultatScan | ResultatRetrait): string =>
-    mode === 'retrait' ? libelleVoyantRetrait(resultat) : libelleVoyantScan(resultat);
+  // Story 4.4 — le libellé succès du mode checkpoint intègre l'heure appareil
+  // du scan : la fonction reçoit l'heure du voyant (donnée locale, AD-3).
+  const libelleVoyant = (
+    resultat: ResultatRetrait | ResultatPassage,
+    heure: Date,
+  ): string =>
+    mode === 'retrait'
+      ? libelleVoyantRetrait(resultat)
+      : libelleVoyantPassage(resultat, heure);
 
   if (phase === 'chargement') {
     return (
@@ -532,7 +593,7 @@ export function ScanClient({
             aria-live="assertive"
             className={`scan-voyant scan-voyant--${voyant.resultat.etat === 'succès' ? 'succes' : 'doublon'}${voyantClignote ? ' scan-voyant--vif' : ''}`}
           >
-            <p className="scan-voyant-texte">{libelleVoyant(voyant.resultat)}</p>
+            <p className="scan-voyant-texte">{libelleVoyant(voyant.resultat, voyant.heure)}</p>
             {voyant.note !== undefined && <p className="scan-voyant-note">{voyant.note}</p>}
             <p className="scan-voyant-heure" suppressHydrationWarning>
               {formatHeureVoyant(voyant.heure)}
@@ -549,7 +610,7 @@ export function ScanClient({
               aria-live="assertive"
               className={`scan-voyant scan-voyant--inconnu${voyantClignote ? ' scan-voyant--vif' : ''}`}
             >
-              <p className="scan-voyant-texte">{libelleVoyant(voyant.resultat)}</p>
+              <p className="scan-voyant-texte">{libelleVoyant(voyant.resultat, voyant.heure)}</p>
               <a className="scan-voyant-action" href={assistancePhoneHref(assistancePhone)}>
                 Appeler le PC
               </a>

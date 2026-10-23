@@ -9,7 +9,7 @@ import { getAnnuaireEdition, getMissionsVolontaireState } from '@/modules/missio
 
 import { VolontairesPwa } from './volontaires-pwa';
 
-import { NOTICE_SCAN_RETRAIT } from './scan/page';
+import { NOTICE_SCAN_PASSAGE, NOTICE_SCAN_RETRAIT } from './scan/page';
 
 import './volontaires.css';
 
@@ -29,6 +29,16 @@ export const metadata = {
 /** Story 4.3 — message affiché quand le mode retrait est demandé sans mission guichet. */
 export const MESSAGE_SCAN_RETRAIT =
   'Le scan de retrait est réservé aux volontaires avec une mission « Distribution des dossards ». Ta fiche mission ci-dessous liste tes missions.';
+
+/** Story 4.4 — message affiché quand le mode passages est demandé sans mission scan. */
+export const MESSAGE_SCAN_PASSAGE =
+  'Le scan des passages est réservé aux volontaires avec une mission « Scan checkpoint » — le checkpoint identifie chaque passage. Ta fiche mission ci-dessous liste tes missions.';
+
+/** Story 4.3/4.4 — clés d'URL du scanner → messages affichés sur la fiche. */
+const MESSAGES_SCAN: Record<string, string> = {
+  [NOTICE_SCAN_RETRAIT]: MESSAGE_SCAN_RETRAIT,
+  [NOTICE_SCAN_PASSAGE]: MESSAGE_SCAN_PASSAGE,
+};
 
 export default async function VolontairesPage({
   searchParams,
@@ -89,14 +99,14 @@ export default async function VolontairesPage({
     annuaireInitial = null;
   }
 
-  // Story 4.3 — redirection douce du scanner retrait sans mission guichet :
-  // le message est affiché une fois sur la fiche (?scan=retrait-sans-mission,
-  // clé unique du côté scanner). Le paramètre peut être répété : seul le
-  // PREMIER élément compte.
+  // Story 4.3/4.4 — redirection douce du scanner sans mission du mode : le
+  // message est affiché une fois sur la fiche (?scan=<clé>, clé unique du
+  // côté scanner). Le paramètre peut être répété : seul le PREMIER élément
+  // compte.
   const parametres = (await searchParams) ?? {};
   const scanBrut = parametres.scan;
   const scan = Array.isArray(scanBrut) ? scanBrut[0] : scanBrut;
-  const noticeScan = scan === NOTICE_SCAN_RETRAIT ? MESSAGE_SCAN_RETRAIT : null;
+  const noticeScan = scan === undefined ? null : (MESSAGES_SCAN[scan] ?? null);
 
   return (
     <VolontairesPwa

@@ -42,7 +42,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { DbUnavailableError } from '@/modules/iam/errors';
-import VolontairesPage, { MESSAGE_SCAN_RETRAIT } from './page';
+import VolontairesPage, { MESSAGE_SCAN_PASSAGE, MESSAGE_SCAN_RETRAIT } from './page';
 
 const SESSION_VOLONTAIRE = {
   accountId: 'account-volontaire',
@@ -316,9 +316,44 @@ describe('page /volontaires — message du mode retrait refusé (story 4.3)', ()
     expect(html.split(MESSAGE_SCAN_RETRAIT).length - 1).toBe(1);
   });
 
+  it('miroir : le message passages n’est PAS affiché pour la clé retrait', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu(Promise.resolve({ scan: 'retrait-sans-mission' }));
+    expect(html).not.toContain(MESSAGE_SCAN_PASSAGE);
+  });
+
   it('sans paramètre : aucun message (fiche ordinaire)', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
     const html = await rendu();
     expect(html).not.toContain(MESSAGE_SCAN_RETRAIT);
+  });
+});
+
+describe('page /volontaires — message du mode passages refusé (story 4.4)', () => {
+  it('?scan=passage-sans-mission : message affiché UNE SEULE fois, annoncé au lecteur d’écran', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu(Promise.resolve({ scan: 'passage-sans-mission' }));
+    expect(html.split(MESSAGE_SCAN_PASSAGE).length - 1).toBe(1);
+    const position = html.indexOf(MESSAGE_SCAN_PASSAGE);
+    const ouverture = html.lastIndexOf('<p', position);
+    expect(html.slice(ouverture, position)).toContain('role="status"');
+  });
+
+  it('les DEUX messages restent distincts (jamais d’affichage croisé)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu(Promise.resolve({ scan: 'passage-sans-mission' }));
+    expect(html).not.toContain(MESSAGE_SCAN_RETRAIT);
+  });
+
+  it('paramètre répété (scan[]=…) : seul le PREMIER élément compte', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu(Promise.resolve({ scan: ['passage-sans-mission', 'autre'] }));
+    expect(html.split(MESSAGE_SCAN_PASSAGE).length - 1).toBe(1);
+  });
+
+  it('sans paramètre : aucun message (fiche ordinaire)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).not.toContain(MESSAGE_SCAN_PASSAGE);
   });
 });

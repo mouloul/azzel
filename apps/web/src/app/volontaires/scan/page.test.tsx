@@ -9,6 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // assistance, annuaire absent bloquant) et garde-fous CSS du voyant
 // (clignotement ≤ 1/s, reduced-motion statique, stop ≥ 64 px). Isolée par
 // mocks (pattern page.test.tsx volontaires).
+// Story 4.4 — le mode checkpoints (défaut) devient gated par la mission scan
+// (le checkpoint identifie le passage) : sans mission → redirection douce
+// avec message dédié ; échec d'état → silencieuse (pattern 4.3).
 
 const sessionMock = vi.hoisted(() => ({
   requireRolePage: vi.fn(),
@@ -47,7 +50,7 @@ vi.mock('next/navigation', () => ({
   redirect: navigationMock.redirect,
 }));
 
-import ScanPage, { NOTICE_SCAN_RETRAIT } from './page';
+import ScanPage, { NOTICE_SCAN_PASSAGE, NOTICE_SCAN_RETRAIT } from './page';
 import {
   DUREE_CLIGNOTEMENT_MS,
   NOTE_NON_ENREGISTRE,
@@ -132,7 +135,7 @@ describe('page /volontaires/scan — garde serveur et mission', () => {
     expect(html).not.toContain('Lecture de l’annuaire');
   });
 
-  it('session volontaire : scanner rendu, aucun appel réseau dans la page', async () => {
+  it('session volontaire avec mission scan : scanner rendu, aucun appel réseau dans la page', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
       editionNom: 'Édition 2027',
       mesMissions: [MISSION_SCAN],
@@ -144,11 +147,71 @@ describe('page /volontaires/scan — garde serveur et mission', () => {
     expect(html).toContain('Lecture de l’annuaire enregistré');
   });
 
-  it('état missions en échec : le scanner reste rendu (validation 100 % locale)', async () => {
+  it('état missions en échec : redirection SILENCIEUSE (l’indisponibilité n’est pas l’absence, pattern 4.3)', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockRejectedValue(new Error('db down'));
+    const erreur = await renduRedirige();
+    expect((erreur as Error | null)?.message).toMatch(/NEXT_REDIRECT/);
+    // Fiche sans message « réservé » : la cause réelle (indisponibilité) ne
+    // doit pas être maquillée en absence de mission.
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/volontaires');
+    expect(navigationMock.redirect.mock.calls.join(' ')).not.toContain('scan=');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 4.4 — mode checkpoints (défaut) : gating par la mission scan.
+// ---------------------------------------------------------------------------
+
+describe('page /volontaires/scan — gating du mode checkpoints (story 4.4)', () => {
+  it('mission scan_checkpoint affectée : scanner rendu, PAS de redirection', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_SCAN],
+      missions: [MISSION_SCAN],
+    });
     const html = await rendu();
     expect(html).toContain('Scan des e-dossards');
     expect(html).toContain('Lecture de l’annuaire enregistré');
+    expect(navigationMock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('URL directe sans mission scan (guichet uniquement) : redirection douce AVEC message dédié', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_GUICHET],
+      missions: [MISSION_GUICHET],
+    });
+    const erreur = await renduRedirige();
+    expect((erreur as Error | null)?.message).toMatch(/NEXT_REDIRECT/);
+    expect(navigationMock.redirect).toHaveBeenCalledWith(
+      `/volontaires?scan=${NOTICE_SCAN_PASSAGE}`,
+    );
+  });
+
+  it('sans AUCUNE mission : redirection douce avec le même message dédié', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [],
+      missions: [],
+    });
+    const erreur = await renduRedirige();
+    expect((erreur as Error | null)?.message).toMatch(/NEXT_REDIRECT/);
+    expect(navigationMock.redirect).toHaveBeenCalledWith(
+      `/volontaires?scan=${NOTICE_SCAN_PASSAGE}`,
+    );
+  });
+
+  it('?mode=checkpoint explicite : même gating que le mode par défaut', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_GUICHET],
+      missions: [MISSION_GUICHET],
+    });
+    const erreur = await renduRedirige(Promise.resolve({ mode: 'checkpoint' }));
+    expect((erreur as Error | null)?.message).toMatch(/NEXT_REDIRECT/);
+    expect(navigationMock.redirect).toHaveBeenCalledWith(
+      `/volontaires?scan=${NOTICE_SCAN_PASSAGE}`,
+    );
   });
 });
 
@@ -302,7 +365,7 @@ describe('page /volontaires/scan?mode=retrait — gating par mission guichet', (
     expect(navigationMock.redirect).not.toHaveBeenCalled();
   });
 
-  it('sans paramètre de mode : scanner checkpoints inchangé (4.2)', async () => {
+  it('sans paramètre de mode : scanner checkpoints (gating 4.4 satisfait par la mission scan mockée)', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
       editionNom: 'Édition 2027',
       mesMissions: [MISSION_SCAN],
@@ -321,6 +384,14 @@ describe('libellés dédiés du mode retrait (mêmes écrans, textes distincts)'
     expect(TEXTES_SCAN.retrait.titrePret).toBe('Retirer les dossards');
     expect(TEXTES_SCAN.retrait.hintPret).toContain('DÉJÀ PASSÉ');
     expect(TEXTES_SCAN.checkpoint.surtitre).toBe('Scan des e-dossards');
+  });
+
+  it('TEXTES_SCAN.checkpoint (4.4) : parlent passages enregistrés + hint doublon', () => {
+    expect(TEXTES_SCAN.checkpoint.leadPret(2)).toContain('passage');
+    expect(TEXTES_SCAN.checkpoint.hintPret).toContain('passage');
+    // Hint doublon : même après reconnexion (outbox persistant).
+    expect(TEXTES_SCAN.checkpoint.hintPret).toContain('DÉJÀ PASSÉ');
+    expect(TEXTES_SCAN.checkpoint.hintPret).toContain('reconnexion');
   });
 
   it('note d’honnêteté exacte quand l’outbox refuse l’écriture', () => {

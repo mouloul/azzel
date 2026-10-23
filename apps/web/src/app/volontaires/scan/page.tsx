@@ -1,7 +1,6 @@
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-scan';
 import { requireRolePage } from '@/modules/iam/session';
-import { LIBELLES_MISSION_TYPE } from '@/modules/missions/domain';
 import { getMissionsVolontaireState } from '@/modules/missions/service';
 import { redirect } from 'next/navigation';
 
@@ -20,6 +19,14 @@ import './scan.css';
 // cours ») sinon checkpoints (4.2). URL directe du mode retrait sans mission
 // guichet → redirection douce vers la fiche, avec message (le mode est débloqué
 // par la mission).
+//
+// Story 4.4 — le mode checkpoints (défaut) devient lui aussi gated par la
+// mission : le checkpoint EST la mission scan_checkpoint en cours (son id
+// référence le passage, son titre badge le cadre caméra) — fenêtre courante
+// d'abord, repli première mission du type assumé (préparation avant la
+// course). Sans mission scan → redirection douce avec message DÉDIÉ (pattern
+// retrait) ; échec d'état → redirection silencieuse (l'indisponibilité n'est
+// pas l'absence).
 
 export const dynamic = 'force-dynamic';
 
@@ -30,8 +37,11 @@ export const metadata = {
 /** Paramètre compris par la page : seul `retrait` change le mode. */
 export const MODE_RETRAIT = 'retrait' as const;
 
-/** Clé d'URL du message renvoyé à la fiche volontaires. */
+/** Clé d'URL du message renvoyé à la fiche volontaires (mode retrait). */
 export const NOTICE_SCAN_RETRAIT = 'retrait-sans-mission' as const;
+
+/** Clé d'URL du message renvoyé à la fiche volontaires (mode passages). */
+export const NOTICE_SCAN_PASSAGE = 'passage-sans-mission' as const;
 
 export default async function ScanPage({
   searchParams,
@@ -62,18 +72,19 @@ export default async function ScanPage({
   const modeValeur = Array.isArray(modeBrut) ? modeBrut[0] : modeBrut;
   const modeScan: ModeScan = modeValeur === MODE_RETRAIT ? 'retrait' : 'checkpoint';
 
-  // État missions : badge du cadre caméra (mission en cours du mode) et — pour
-  // le retrait — condition d'accès. Hors-ligne / base indisponible : le
-  // scanner checkpoints reste utilisable (validation 100 % locale).
+  // État missions : badge du cadre caméra (mission en cours du mode) et —
+  // pour les DEUX modes — condition d'accès (le mode est débloqué par la
+  // mission). Hors-ligne / base indisponible : redirection silencieuse
+  // (l'indisponibilité n'est pas l'absence de mission).
   let mesMissions: Awaited<ReturnType<typeof getMissionsVolontaireState>>['mesMissions'] = [];
   let etatMissionsPret = true;
   try {
     const state = await getMissionsVolontaireState(guard.session);
     mesMissions = state.mesMissions;
   } catch {
-    // Dégradation isolée (4.2). En mode retrait, l'indisponibilité n'est PAS
-    // l'absence de mission : la redirection sera SILENCIEUSE (pas de message
-    // « réservé », qui mentirait sur la cause).
+    // Dégradation isolée (4.2) devenue gating (4.3/4.4) : sans état missions,
+    // la redirection est SILENCIEUSE (pas de message « réservé », qui
+    // mentirait sur la cause).
     etatMissionsPret = false;
   }
 
@@ -95,12 +106,21 @@ export default async function ScanPage({
     );
   }
 
-  // Mode checkpoints (4.2) : mission scan en cours (badge du cadre caméra) —
-  // la mission dont la fenêtre horaire contient l'instant, repli première
-  // mission scan, sinon le libellé du type (source unique :
-  // LIBELLES_MISSION_TYPE).
-  const missionLabel =
-    missionScanEnCours(mesMissions, new Date())?.titre ?? LIBELLES_MISSION_TYPE['scan_checkpoint'];
-
-  return <ScanClient assistancePhone={assistancePhone} missionLabel={missionLabel} />;
+  // Mode checkpoints (4.4) : le checkpoint EST la mission scan_checkpoint en
+  // cours (fenêtre courante d'abord, repli première mission du type assumé —
+  // préparation avant la course) — son id référence chaque passage (clé
+  // naturelle édition+coureur+checkpoint), son titre badge le cadre caméra.
+  // Gating identique au retrait : URL directe sans mission scan → redirection
+  // douce AVEC message dédié ; échec d'état → silencieuse.
+  const missionPassage = etatMissionsPret ? missionScanEnCours(mesMissions, new Date()) : null;
+  if (missionPassage === null) {
+    redirect(etatMissionsPret ? `/volontaires?scan=${NOTICE_SCAN_PASSAGE}` : '/volontaires');
+  }
+  return (
+    <ScanClient
+      assistancePhone={assistancePhone}
+      missionLabel={missionPassage.titre}
+      checkpointId={missionPassage.id}
+    />
+  );
 }

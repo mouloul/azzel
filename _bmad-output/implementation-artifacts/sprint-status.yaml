@@ -67,7 +67,7 @@ development_status:
   4-1-e-dossard-qr-hors-ligne: review
   4-2-moteur-de-scan-caméra-et-états-de-retour: review
   4-3-scan-de-retrait-du-dossard: review
-  4-4-scan-de-passage-aux-checkpoints: backlog
+  4-4-scan-de-passage-aux-checkpoints: review
   4-5-synchronisation-par-lots-idempotente: backlog
   epic-4-retrospective: optional
 

@@ -1,17 +1,21 @@
 import {
+  cleIdempotencePassage,
   cleIdempotenceRetrait,
   estAnnuaireValide,
+  estPassageValide,
   estRetraitValide,
   type AnnuaireEdition,
+  type PassageTerrain,
   type RetraitTerrain,
 } from '@azzel/shared';
 
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
-// Stories 3.3/3.4/4.3 — persistance IndexedDB de la poche volontaires. Une base
-// nommée + versionnée : v1 = store « etat » (fiche missions), v2 = store
-// « annuaire » (réplique des coureurs), v3 = stores « outbox » (événements
-// terrain append-only) + « appareil » (identifiant d'appareil stable) — chaque
+// Stories 3.3/3.4/4.3/4.4 — persistance IndexedDB de la poche volontaires.
+// Une base nommée + versionnée : v1 = store « etat » (fiche missions),
+// v2 = store « annuaire » (réplique des coureurs), v3 = stores « outbox »
+// (événements terrain append-only : retraits 4.3 ET passages 4.4, préfixes de
+// clé distincts) + « appareil » (identifiant d'appareil stable) — chaque
 // upgrade crée SANS toucher les stores précédents.
 //
 // L'outbox appartient à l'APPAREIL (AD-5) : il survit à la déconnexion (la
@@ -377,6 +381,106 @@ export async function retraitsParJeton(): Promise<Map<string, Date>> {
     const precedent = index.get(retrait.jeton);
     if (precedent === undefined || horodatage.getTime() < precedent.getTime()) {
       index.set(retrait.jeton, horodatage);
+    }
+  }
+  return index;
+}
+
+// ---------------------------------------------------------------------------
+// Story 4.4 — passages aux checkpoints : MÊME store outbox (aucune migration),
+// préfixe de clé distinct (`passage:v1:`). Retraits et passages cohabitent sans
+// interférer : chaque liste filtre par son garde de contrat (type exact).
+// ---------------------------------------------------------------------------
+
+interface EnregistrementOutboxPassage extends PassageTerrain {
+  cle: string;
+}
+
+/**
+ * Clé de l'index de dédoublonnage passage : `${jeton}:${checkpointId}` — le
+ * doublon est la PAIRE coureur × checkpoint (FR-13) ; même coureur à un AUTRE
+ * checkpoint est un passage distinct (succès). Pas d'editionId dans la clé :
+ * le jeton e-dossard est globalement UNIQUE par coureur ET par édition
+ * (l'annuaire l'exige, unicité vérifiée par estAnnuaireValide) — deux éditions
+ * = deux jetons, aucune collision inter-éditions possible.
+ */
+export function cleIndexPassage(jeton: string, checkpointId: string): string {
+  return `${jeton}:${checkpointId}`;
+}
+
+/**
+ * Append-only strict (gabarit ajouterRetrait) : insère le passage avec sa clé
+ * d'idempotence en clé primaire (`add`, jamais `put`). Même clé déjà présente
+ * (double scan, course entre onglets) → no-op physique : true sans second
+ * enregistrement. False (jamais d'exception) si stockage absent/refusé ou
+ * événement hors contrat.
+ */
+export async function ajouterPassage(passage: PassageTerrain): Promise<boolean> {
+  if (!indexedDbDisponible() || !estPassageValide(passage)) {
+    return false;
+  }
+  const cle = cleIdempotencePassage(
+    passage.appareilId,
+    passage.editionId,
+    passage.jeton,
+    passage.checkpointId,
+  );
+  try {
+    await avecStore(IDB_STORE_OUTBOX, 'readwrite', (store) =>
+      store.add({ ...passage, cle } satisfies EnregistrementOutboxPassage),
+    );
+    return true;
+  } catch (erreur) {
+    // Clé déjà présente : l'événement EST dans l'outbox (le premier reste la
+    // référence, AD-3) — succès d'idempotence, pas un échec.
+    if (
+      typeof erreur === 'object' &&
+      erreur !== null &&
+      'name' in erreur &&
+      (erreur as { name?: unknown }).name === 'ConstraintError'
+    ) {
+      return true;
+    }
+    return false;
+  }
+}
+
+/** Tous les passages de l'outbox (lecture seule, retraits exclus par contrat). */
+export async function listerPassages(): Promise<PassageTerrain[]> {
+  if (!indexedDbDisponible()) {
+    return [];
+  }
+  try {
+    const enregistrements = await avecStore<EnregistrementOutboxPassage[]>(
+      IDB_STORE_OUTBOX,
+      'readonly',
+      (store) => store.getAll() as IDBRequest<EnregistrementOutboxPassage[]>,
+    );
+    // Défensif : retraits et enregistrements d'une autre époque cohabitant
+    // dans le store sont ignorés — seul le contrat passage alimente l'index.
+    return enregistrements
+      .filter(estPassageValide)
+      .map(({ cle: _cle, ...passage }) => passage);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Index de dédoublonnage PERSISTANT du passage (cross-session, FR-13) :
+ * `${jeton}:${checkpointId}` → horodatage du PREMIER passage — si la même
+ * paire existe en plusieurs exemplaires (éditions successives), le plus
+ * ancien gagne. Même coureur, checkpoint différent → entrées DISTINCTES.
+ */
+export async function passagesParJetonCheckpoint(): Promise<Map<string, Date>> {
+  const passages = await listerPassages();
+  const index = new Map<string, Date>();
+  for (const passage of passages) {
+    const horodatage = new Date(passage.horodatage);
+    const cle = cleIndexPassage(passage.jeton, passage.checkpointId);
+    const precedent = index.get(cle);
+    if (precedent === undefined || horodatage.getTime() < precedent.getTime()) {
+      index.set(cle, horodatage);
     }
   }
   return index;

@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ANNUAIRE_SCHEMA_VERSION,
+  cleIdempotencePassage,
   cleIdempotenceRetrait,
+  PASSAGE_SCHEMA_VERSION,
   RETRAIT_SCHEMA_VERSION,
   type AnnuaireEdition,
+  type PassageTerrain,
   type RetraitTerrain,
 } from '@azzel/shared';
 
@@ -19,25 +22,30 @@ import {
   IDB_STORE_OUTBOX,
   IDB_VERSION,
   effacerEtatVolontaires,
+  ajouterPassage,
   ajouterRetrait,
+  cleIndexPassage,
   ecrireAnnuaire,
   ecrireEtatVolontaires,
   lireAnnuaire,
   lireEtatVolontaires,
+  listerPassages,
   listerRetraits,
   obtenirAppareilId,
+  passagesParJetonCheckpoint,
   retraitsParJeton,
   type EtatVolontaires,
 } from './idb-volontaires';
 
-// Stories 3.3/3.4/4.3 — tests du wrapper IndexedDB : aller-retour
+// Stories 3.3/3.4/4.3/4.4 — tests du wrapper IndexedDB : aller-retour
 // écriture/lecture (etat ET annuaire), SSR-safe sans indexedDB (node), clé
 // unique « courant » (le dernier sync gagne), upgrades successives SANS
 // toucher aux stores précédents (v1→v2 annuaire, v2→v3 outbox+appareil),
 // outbox append-only idempotent (clé d'idempotence en keyPath), appareilId
-// stable, purge logout conservatrice (AD-5). Le stub maison imite le strict
-// contrat utilisé : open + upgrade, transaction → objectStore →
-// get/put/add/getAll/clear, requêtes promessifiées.
+// stable, purge logout conservatrice (AD-5), passages au même store avec
+// préfixe de clé distinct (4.4). Le stub maison imite le strict contrat
+// utilisé : open + upgrade, transaction → objectStore → get/put/add/getAll/
+// clear, requêtes promessifiées.
 
 interface RequeteFactice<T> {
   result: T | undefined;
@@ -271,6 +279,22 @@ function retraitExemple(surcharge: Partial<RetraitTerrain> = {}): RetraitTerrain
     editionId: 'edition-1',
     jeton: 'jeton-coureur-1-aaaaaa',
     horodatage: '2027-05-16T06:12:30.000Z',
+    appareilId: APPAREIL,
+    ...surcharge,
+  };
+}
+
+const CHECKPOINT_KM12 = 'mission-scan-km12';
+const CHECKPOINT_KM30 = 'mission-scan-km30';
+
+function passageExemple(surcharge: Partial<PassageTerrain> = {}): PassageTerrain {
+  return {
+    version: PASSAGE_SCHEMA_VERSION,
+    type: 'passage',
+    editionId: 'edition-1',
+    jeton: 'jeton-coureur-1-aaaaaa',
+    checkpointId: CHECKPOINT_KM12,
+    horodatage: '2027-05-16T07:05:09.000Z',
     appareilId: APPAREIL,
     ...surcharge,
   };
@@ -588,6 +612,131 @@ describe('outbox + appareil — stores v3 (story 4.3)', () => {
     expect(index.size).toBe(2);
     expect(index.get('jeton-coureur-1-aaaaaa')?.toISOString()).toBe('2027-05-16T06:12:30.000Z');
     expect(index.get('jeton-coureur-12-aaaaa')?.toISOString()).toBe('2027-05-16T06:30:00.000Z');
+  });
+});
+
+describe('outbox passages — même store, préfixe distinct (story 4.4)', () => {
+  it('SSR-safe : sans indexedDB — append false, listes vides, index vide', async () => {
+    expect(typeof indexedDB).toBe('undefined');
+    await expect(ajouterPassage(passageExemple())).resolves.toBe(false);
+    await expect(listerPassages()).resolves.toEqual([]);
+    await expect(passagesParJetonCheckpoint()).resolves.toEqual(new Map());
+  });
+
+  it('ajouterPassage : append avec la clé d’idempotence passage en clé primaire', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    expect(await ajouterPassage(passageExemple())).toBe(true);
+    const cle = cleIdempotencePassage(APPAREIL, 'edition-1', 'jeton-coureur-1-aaaaaa', CHECKPOINT_KM12);
+    expect(stores.get(IDB_STORE_OUTBOX)?.has(cle)).toBe(true);
+
+    const passages = await listerPassages();
+    expect(passages).toEqual([passageExemple()]);
+    // La clé interne n'est jamais exposée à l'appelant.
+    expect(JSON.stringify(passages)).not.toContain('"cle"');
+  });
+
+  it('append idempotent : même clé → true mais UN SEUL événement (no-op physique)', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    expect(await ajouterPassage(passageExemple())).toBe(true);
+    // Re-scan du même coureur au même checkpoint avec un horodatage
+    // différent : ConstraintError absorbé — l'événement EST dans l'outbox,
+    // le PREMIER reste la référence (AD-3).
+    expect(await ajouterPassage(passageExemple({ horodatage: '2027-05-16T08:00:00.000Z' }))).toBe(
+      true,
+    );
+    expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(1);
+    expect(await listerPassages()).toHaveLength(1);
+    expect((await listerPassages())[0]?.horodatage).toBe('2027-05-16T07:05:09.000Z');
+  });
+
+  it('même coureur à un AUTRE checkpoint : DEUX événements, clés distinctes', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    await ajouterPassage(passageExemple());
+    await ajouterPassage(passageExemple({ checkpointId: CHECKPOINT_KM30 }));
+    expect(await listerPassages()).toHaveLength(2);
+  });
+
+  it('coexistence outbox : retraits et passages cohabitent SANS interférer', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    await ajouterRetrait(retraitExemple());
+    await ajouterPassage(passageExemple());
+    // Le même coureur, retrait ET passage : deux enregistrements distincts.
+    expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(2);
+    // Chaque liste ne voit QUE son contrat (garde type exact).
+    expect(await listerRetraits()).toEqual([retraitExemple()]);
+    expect(await listerPassages()).toEqual([passageExemple()]);
+    // Les index restent indépendants l'un de l'autre.
+    expect((await retraitsParJeton()).size).toBe(1);
+    expect((await passagesParJetonCheckpoint()).size).toBe(1);
+  });
+
+  it('passage hors contrat : append refusé (false), rien en outbox', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    expect(await ajouterPassage(passageExemple({ version: 9 as PassageTerrain['version'] }))).toBe(
+      false,
+    );
+    expect(await ajouterPassage(passageExemple({ checkpointId: '' }))).toBe(false);
+    expect(await ajouterPassage(passageExemple({ jeton: 'court' }))).toBe(false);
+    expect(stores.get(IDB_STORE_OUTBOX)?.size ?? 0).toBe(0);
+  });
+
+  it('enregistrement corrompu ou retrait en outbox : ignorés par listerPassages', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterPassage(passageExemple());
+    await ajouterRetrait(retraitExemple());
+    stores.get(IDB_STORE_OUTBOX)?.set('cle-fantomme', { cle: 'cle-fantomme', nimporte: 'quoi' });
+    const passages = await listerPassages();
+    expect(passages).toHaveLength(1);
+    expect(passages[0]?.type).toBe('passage');
+  });
+
+  it('passagesParJetonCheckpoint : Map `${jeton}:${checkpointId}` → horodatage du PREMIER', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    await ajouterPassage(
+      passageExemple({ horodatage: '2027-05-16T07:05:09.000Z' }),
+    );
+    // Même coureur, autre checkpoint : entrée DISTINCTE (passage distinct).
+    await ajouterPassage(
+      passageExemple({ checkpointId: CHECKPOINT_KM30, horodatage: '2027-05-16T07:30:00.000Z' }),
+    );
+    // Même paire, édition suivante, horodatage plus tardif : le premier reste.
+    await ajouterPassage(
+      passageExemple({ editionId: 'edition-2', horodatage: '2027-05-16T08:00:00.000Z' }),
+    );
+
+    const index = await passagesParJetonCheckpoint();
+    expect(index.size).toBe(2);
+    expect(index.get(cleIndexPassage('jeton-coureur-1-aaaaaa', CHECKPOINT_KM12))?.toISOString()).toBe(
+      '2027-05-16T07:05:09.000Z',
+    );
+    expect(index.get(cleIndexPassage('jeton-coureur-1-aaaaaa', CHECKPOINT_KM30))?.toISOString()).toBe(
+      '2027-05-16T07:30:00.000Z',
+    );
+  });
+
+  it('l’outbox passages survit à la déconnexion (cross-session, AD-5)', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterPassage(passageExemple());
+
+    await effacerEtatVolontaires();
+
+    // Le volontaire se reconnecte : les passages restent, doublons toujours
+    // détectables.
+    await expect(listerPassages()).resolves.toHaveLength(1);
+    expect((await passagesParJetonCheckpoint()).size).toBe(1);
   });
 });
 
