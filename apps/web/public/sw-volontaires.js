@@ -130,27 +130,37 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * Navigation : réseau d'abord. En ligne, une réponse dégradée (5xx) ou une
- * erreur réseau sert le shell en cache plutôt que l'écran d'erreur ; sans
- * shell, la page d'explication. Ne rejette JAMAIS.
+ * Navigation : réseau d'abord. Story 4.2 — chaque page volontaires (fiche,
+ * scanner /volontaires/scan) est cachée sous SON PROPRE chemin ; le repli
+ * hors-ligne sert la page demandée en cache, puis :
+ *   - /volontaires → page d'explication fiche (jamais le scanner sous une
+ *     fausse URL) ;
+ *   - toute autre page (le scanner) JAMAIS visitée en ligne → page dédiée
+ *     « Scanner non enregistré sur cet appareil » — pas le shell fiche, qui
+ *     mènerait à une boucle (CTA scan → même shell).
+ * Ne rejette JAMAIS.
  */
 async function navigationVolontaires(request) {
+  const chemin = new URL(request.url).pathname;
   try {
     const reponse = await fetch(request);
     if (reponse && reponse.ok) {
-      if (!reponse.redirected && new URL(reponse.url).pathname === URL_SHELL) {
-        await mettreEnCache(CACHE_SHELL, URL_SHELL, reponse);
+      if (!reponse.redirected && new URL(reponse.url).pathname === chemin) {
+        await mettreEnCache(CACHE_SHELL, chemin, reponse);
       }
       // Redirection suivie (connexion) : rendue telle quelle, jamais cachée.
       return reponse;
     }
     throw new Error('réponse serveur dégradée');
   } catch (erreur) {
-    const enCache = await caches.match(URL_SHELL, { cacheName: CACHE_SHELL });
+    const enCache = await caches.match(chemin, { cacheName: CACHE_SHELL });
     if (enCache) {
       return enCache;
     }
-    return pageHorsLigne();
+    if (chemin === URL_SHELL) {
+      return pageHorsLigne();
+    }
+    return pageScannerNonEnregistre();
   }
 }
 
@@ -221,6 +231,44 @@ border-radius:8px;text-decoration:none;font-weight:700}</style></head>
 <body><main><h1>Ta fiche n’est pas encore dans la poche</h1>
 <p>Cette application doit être ouverte au moins une fois avec du réseau pour que
 ta fiche mission soit enregistrée sur cet appareil.</p>${lien}</main></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+// Story 4.2 — repli dédié : le scanner ouvert hors-ligne SANS avoir été
+// visité en ligne au préalable (aucune entrée de cache, annuaire forcément
+// absent). Une explication honnête plutôt que le shell fiche sous une fausse
+// URL (boucle CTA). Numéro d'assistance relu dans l'état en cache, s'il existe.
+async function pageScannerNonEnregistre() {
+  let assistance = null;
+  try {
+    const etat = await caches.match(URL_ETAT, { cacheName: CACHE_ETAT });
+    if (etat) {
+      const payload = await etat.json();
+      if (typeof payload.assistancePhone === 'string') {
+        assistance = payload.assistancePhone;
+      }
+    }
+  } catch (erreur) {
+    assistance = null;
+  }
+  const lien =
+    assistance !== null
+      ? `<a href="tel:${assistance.replace(/[\s().-]/g, '')}">Appeler l’équipe</a>`
+      : '<p>Réouvre le scanner dès que le réseau revient.</p>';
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azzel Volontaires — scanner non enregistré</title>
+<style>body{font-family:system-ui,sans-serif;background:#FAFCF8;color:#16281C;
+margin:0;display:grid;place-items:center;min-height:100vh;padding:24px}
+main{max-width:34rem}h1{font-size:1.4rem}a{display:inline-block;margin-top:16px;
+min-height:48px;padding:14px 20px;background:#345E4A;color:#EFF8F2;
+border-radius:8px;text-decoration:none;font-weight:700}</style></head>
+<body><main><h1>Scanner non enregistré sur cet appareil</h1>
+<p>Ouvre-le une fois en ligne : il restera ensuite dans la poche, même sans
+réseau, avec l’annuaire des coureurs.</p>${lien}</main></body></html>`;
   return new Response(html, {
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },

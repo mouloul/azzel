@@ -311,6 +311,82 @@ describe('sw-volontaires — navigations /volontaires', () => {
   });
 });
 
+describe('sw-volontaires — navigation /volontaires/scan (story 4.2)', () => {
+  const SCAN_HTML = '<!doctype html><html><body>scanner e-dossards</body></html>';
+
+  it('en ligne : la page scan ok non redirigée est cachée SOUS SON PROPRE chemin', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(SCAN_HTML, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      }),
+    );
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    expect(await reponse?.text()).toBe(SCAN_HTML);
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.has('/volontaires/scan')).toBe(true);
+  });
+
+  it('hors-ligne : page scan en cache servie à sa place (pas le shell fiche)', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires/scan', reponseFactice(SCAN_HTML));
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    expect(await reponse?.text()).toBe(SCAN_HTML);
+  });
+
+  it('hors-ligne, scan jamais visité : page dédiée « Scanner non enregistré », PAS le shell fiche', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    expect(reponse?.status).toBe(200);
+    const corps = await reponse?.text();
+    expect(corps).toContain('Scanner non enregistré sur cet appareil');
+    expect(corps).toContain('Ouvre-le une fois en ligne');
+    // Le shell fiche ne doit PAS être servi sous l’URL du scanner (boucle CTA).
+    expect(corps).not.toContain('shell volontaires');
+  });
+
+  it('page dédiée scan : assistance relue dans l’état en cache quand elle existe', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cacheEtat = new CacheFactice(HORS_LIGNE);
+    cacheEtat.stock.set('/api/volontaires/etat', reponseFactice(ETAT_JSON));
+    ctx.cachesParNom.set(CACHE_ETAT, cacheEtat);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    const corps = await reponse?.text();
+    expect(corps).toContain('href="tel:+213555010200"');
+  });
+
+  it('page scan redirigée en ligne (session expirée) : rendue, JAMAIS cachée', async () => {
+    const ctx = chargerServiceWorker(async () =>
+      reponseFactice('page de connexion', {
+        redirected: true,
+        url: ORIGINE + '/connexion-volontaire',
+      }),
+    );
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    expect(await reponse?.text()).toBe('page de connexion');
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.size ?? 0).toBe(0);
+  });
+});
+
 describe('sw-volontaires — statiques cache-first', () => {
   it('hors-ligne sans entrée : 503 propre, jamais de promesse rejetée', async () => {
     const ctx = chargerServiceWorker(HORS_LIGNE);

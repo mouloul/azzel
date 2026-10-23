@@ -14,6 +14,7 @@ import {
   lireEtatVolontaires,
   type EtatVolontaires,
 } from '@/lib/idb-volontaires';
+import { missionScanEnCours } from '@/lib/scan/mission-scan';
 import { readStoredTheme, writeStoredTheme } from '@/lib/theme';
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
@@ -267,6 +268,12 @@ export function VolontairesPwa({
     setInvitationSombre(false);
   };
 
+  // Story 4.2 — le scanner n'est qu'une mission parmi d'autres : l'entrée
+  // « Démarrer le scan » n'apparaît que si une mission scan_checkpoint est
+  // affectée au volontaire. Le libellé suit la mission scan en cours (helper
+  // pur partagé avec la page scanner).
+  const missionScan = missionScanEnCours(etat.mesMissions, new Date());
+
   if (sessionExpiree) {
     return (
       <section className="auth">
@@ -356,6 +363,22 @@ export function VolontairesPwa({
             <FicheMission key={mission.id} mission={mission} />
           ))}
         </div>
+      )}
+
+      {missionScan !== null && (
+        <section className="volontaires-scan" aria-labelledby="volontaires-scan-titre">
+          <h2 className="volontaires-titre" id="volontaires-scan-titre">
+            Scan des e-dossards
+          </h2>
+          <a className="volontaires-scan-lien" href="/volontaires/scan">
+            <span className="volontaires-scan-libelle">Démarrer le scan</span>
+            <span className="volontaires-scan-mission">{missionScan.titre}</span>
+          </a>
+          <p className="volontaires-annuaire-texte">
+            Le scanner lit les e-dossards des coureurs et fonctionne même sans réseau — l’annuaire
+            ci-dessous suffit.
+          </p>
+        </section>
       )}
 
       <h2 className="volontaires-titre">Toutes les missions de l’édition</h2>

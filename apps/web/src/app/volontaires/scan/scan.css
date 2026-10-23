@@ -1,0 +1,262 @@
+/* Story 4.2 — scanner e-dossard (surface volontaire). Deux ambiances :
+   - écrans d'état (prêt, permission, annuaire absent) : cartes claires de la
+     surface volontaires ;
+   - écran actif : caméra PLEIN ÉCRAN par-dessus la mise en page du site
+     (position fixed), voile quasi opaque ≥ 96 %, palette sombre FIXE issue
+     des rôles *-sombre des tokens — indépendante du mode clair/sombre (guichet
+     et zone blanche se lisent dans les deux modes).
+
+   Règles terrain (UX-DR-6/7) : voyant pill ≥ 96 px de haut, texte ≥ 24 px
+   graisse 800, heure mono ≥ 16 px, clignotement ≤ 1 flash/s et STATIQUE sous
+   prefers-reduced-motion, stop ≥ 64 dp, jamais la couleur seule. */
+
+/* --- Écrans d'état (hors caméra) -------------------------------------------- */
+
+.scan-page-etat {
+  display: grid;
+  justify-items: center;
+  padding: var(--az-space-5) var(--az-space-3) var(--az-space-7);
+}
+
+.scan-cadre {
+  display: grid;
+  gap: var(--az-space-3);
+  width: 100%;
+  max-width: 34rem;
+}
+
+.scan-cadre h1 {
+  margin: 0;
+}
+
+.scan-reglages {
+  margin: 0;
+  padding-left: var(--az-space-4);
+  display: grid;
+  gap: var(--az-space-2);
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+}
+
+.scan-etat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+}
+
+.scan-etat-actions .btn-action,
+.scan-etat-actions .btn-contour {
+  min-height: 48px;
+}
+
+/* Gros bouton de démarrage : geste fondateur (débloque audio + caméra),
+   cible généreuse ≥ 64 px. */
+.scan-demarrer {
+  min-height: 64px;
+  padding: var(--az-space-3) var(--az-space-5);
+  border: none;
+  border-radius: var(--az-radius);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  font-family: var(--az-font-surtitre);
+  font-size: 20px;
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.scan-demarrer:focus-visible {
+  outline: 3px solid var(--az-focus);
+  outline-offset: 2px;
+}
+
+/* --- Écran actif : caméra plein écran ---------------------------------------- */
+
+.scan-ecran {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #0C1610; /* bg-sombre, sous la video le temps de l'accroche */
+}
+
+.scan-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Voile quasi opaque ≥ 96 % derrière TOUT texte du cadre (UX-DR-6). */
+.scan-voile {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--az-space-2);
+  padding: calc(var(--az-space-3) + env(safe-area-inset-top, 0px))
+    var(--az-space-3) calc(var(--az-space-3) + env(safe-area-inset-bottom, 0px));
+  background: rgba(12, 22, 16, 0.96);
+  color: #E8F0E9; /* texte-sombre */
+}
+
+.scan-entete {
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+/* Badges « · LIVE » + heure locale mono + mission en cours. */
+.scan-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+  margin: 0;
+}
+
+.scan-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: var(--az-space-1) var(--az-space-2);
+  border-radius: var(--az-radius-full);
+  background: rgba(232, 240, 233, 0.12);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--az-font-size-meta-lg);
+  font-weight: var(--az-font-weight-meta);
+  letter-spacing: 0.04em;
+}
+
+.scan-badge--live {
+  color: #8FD4A8; /* action-sombre */
+  font-weight: var(--az-font-weight-surtitre);
+}
+
+.scan-badge--heure {
+  font-weight: var(--az-font-weight-surtitre);
+}
+
+.scan-badge--mission {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-annonce {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  color: #A9C0AE; /* texte-2-sombre */
+}
+
+/* --- Voyant (UX-DR-7) : pill plein cadre ≥ 96 px, texte ≥ 24 px / 800 -------- */
+
+.scan-voyant {
+  display: grid;
+  gap: var(--az-space-1);
+  justify-items: center;
+  align-content: center;
+  min-height: 96px;
+  width: 100%;
+  padding: var(--az-space-2) var(--az-space-3);
+  border-radius: var(--az-radius-lg);
+  text-align: center;
+}
+
+.scan-voyant-texte {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-voyant-heure {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 16px;
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.06em;
+}
+
+/* Trois états, sémantique des couleurs opérationnelles (paires sombres
+   fixes — jamais la couleur seule : icônes ✓/↻/⚠ + textes intégraux). */
+.scan-voyant--succes {
+  background: #62D288; /* succes-sombre */
+  color: #07290F; /* succes-encre-sombre */
+}
+
+.scan-voyant--doublon {
+  background: #F0B445; /* attention-sombre */
+  color: #302205; /* attention-encre-sombre */
+}
+
+.scan-voyant--inconnu {
+  background: #FF7268; /* danger-sombre */
+  color: #340905; /* danger-encre-sombre */
+}
+
+/* Clignotement borné : exactement 1 flash/s, jamais plus — et seulement
+   pendant les 6 premières secondes du voyant (classe --vif posée par le
+   client, retirée ensuite : le texte reste affiché statique). */
+.scan-voyant--vif {
+  animation: scan-clignote 1s steps(2, jump-none) infinite;
+}
+
+@keyframes scan-clignote {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* prefers-reduced-motion : voyants statiques (aucun clignotement). */
+@media (prefers-reduced-motion: reduce) {
+  .scan-voyant--vif {
+    animation: none;
+  }
+}
+
+/* Bouton d'action du voyant inconnu — appel PC direct (téléphone terre-à-terre). */
+.scan-voyant-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: var(--az-space-1) var(--az-space-3);
+  border-radius: var(--az-radius);
+  background: #340905;
+  color: #FFD9D6;
+  text-decoration: none;
+  font-weight: var(--az-font-weight-surtitre);
+}
+
+/* Zone basse : voyant inconnu (position différente du doublon) + stop. */
+.scan-bas {
+  display: grid;
+  gap: var(--az-space-2);
+  justify-items: stretch;
+  margin-top: auto;
+}
+
+/* Pause/stop ≥ 64 dp (cible terrain, gants compris). */
+.scan-stop {
+  min-height: 64px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 2px solid rgba(232, 240, 233, 0.55);
+  border-radius: var(--az-radius);
+  background: rgba(12, 22, 16, 0.9);
+  color: #E8F0E9;
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-body-lg);
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.scan-stop:focus-visible {
+  outline: 3px solid #8FD4A8;
+  outline-offset: 2px;
+}

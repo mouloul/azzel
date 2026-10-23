@@ -206,6 +206,40 @@
   color: var(--az-texte);
 }
 
+/* --- Entrée scanner (story 4.2) — visible si mission scan_checkpoint ------- */
+
+.volontaires-scan {
+  display: grid;
+  gap: var(--az-space-2);
+  justify-items: start;
+}
+
+/* Gros CTA terrain vers /volontaires/scan — cible ≥ 64 px (geste fondateur). */
+.volontaires-scan-lien {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 64px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border-radius: var(--az-radius);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  text-decoration: none;
+}
+
+.volontaires-scan-libelle {
+  font-size: 20px;
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.volontaires-scan-mission {
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-body);
+  opacity: 0.9;
+}
+
 /* --- Toutes les missions (couverture générale) ----------------------------- */
 
 .volontaires-toutes-missions {

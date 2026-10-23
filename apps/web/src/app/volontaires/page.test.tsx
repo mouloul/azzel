@@ -196,3 +196,36 @@ describe('page /volontaires — section « Annuaire des coureurs » (story 3.4)'
     expect(html).not.toContain('Cherchée');
   });
 });
+
+describe('page /volontaires — entrée « Démarrer le scan » (story 4.2)', () => {
+  it('mission scan_checkpoint affectée : gros CTA vers /volontaires/scan avec le titre de la mission', async () => {
+    const missionScan = { ...MISSION, type: 'scan_checkpoint', typeLabel: 'Scan checkpoint', titre: 'Scan km 12' };
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [missionScan],
+      missions: [missionScan],
+    });
+    const html = await rendu();
+    expect(html).toContain('Démarrer le scan');
+    expect(html).toContain('href="/volontaires/scan"');
+    expect(html).toContain('Scan km 12');
+  });
+
+  it('aucune mission scan dans mesMissions : PAS d’entrée scan (le scan reste une mission parmi d’autres)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).not.toContain('Démarrer le scan');
+    expect(html).not.toContain('href="/volontaires/scan"');
+  });
+
+  it('mission scan publiée mais affectée à un autre : PAS d’entrée scan (mesMissions seul juge)', async () => {
+    const missionScan = { ...MISSION, id: 'mission-scan', type: 'scan_checkpoint', titre: 'Scan km 12' };
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [MISSION],
+      missions: [MISSION, missionScan],
+    });
+    const html = await rendu();
+    expect(html).not.toContain('href="/volontaires/scan"');
+  });
+});
