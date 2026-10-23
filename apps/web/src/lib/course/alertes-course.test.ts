@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   HEURE_ALERTE_ATTENTE,
-  LIBELLE_ABANDON_A_VENIR,
+  LIBELLE_ACTION_ABANDON,
   LIBELLE_CONTACT_NON_RENSEIGNE,
   NOTE_SANS_ALERTE,
   lienAppelerSecteur,
@@ -93,13 +93,12 @@ describe('libelleAlerte — texte intégral (jamais la couleur seule)', () => {
     ).toBe('⚠ Dossard 7 — pas vu à Scan col 1200 depuis --:--');
   });
 
-  it('libellés produit : abandon bientôt disponible, note sans alerte sans numéro de story', () => {
-    expect(LIBELLE_ABANDON_A_VENIR).toContain('Saisir l’abandon');
-    expect(LIBELLE_ABANDON_A_VENIR).toContain('bientôt disponible');
+  it('libellés produit : action abandon ACTIVE (story 5.3), note sans alerte sans numéro de story', () => {
+    expect(LIBELLE_ACTION_ABANDON).toBe('Saisir l’abandon');
     expect(NOTE_SANS_ALERTE).toContain('Aucune alerte hors-délais');
     expect(NOTE_SANS_ALERTE).toContain('suivi GPS');
     // Jamais de numéro de story/épopée visible côté produit.
     expect(NOTE_SANS_ALERTE).not.toMatch(/épopée|story|\d+\.\d+/);
-    expect(LIBELLE_ABANDON_A_VENIR).not.toMatch(/\d+\.\d+/);
+    expect(LIBELLE_ACTION_ABANDON).not.toMatch(/\d+\.\d+/);
   });
 });

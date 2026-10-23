@@ -45,10 +45,10 @@ export default async function AdminCoursePage() {
         <p className="surtitre">Administration</p>
         <h1>PC course{etat.edition ? ` — ${etat.edition.nom}` : ''}</h1>
         <p className="lead">
-          Pilotage live de la course : retraits, partants, coureurs en course et
-          arrivées, passages arbitrés par checkpoint (premier reçu fait foi).
-          Les chiffres se rafraîchissent toutes les 5 secondes — leur fraîcheur
-          reste affichée en toutes circonstances.
+          Pilotage live de la course : retraits, partants, coureurs en course,
+          arrivées et abandons saisis au PC, passages arbitrés par checkpoint
+          (premier reçu fait foi). Les chiffres se rafraîchissent toutes les
+          5 secondes — leur fraîcheur reste affichée en toutes circonstances.
         </p>
         <CourseLive etatInitial={etat} />
       </article>

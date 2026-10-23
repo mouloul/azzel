@@ -13,18 +13,24 @@ import {
   APPAREIL_CLIENT_MAX_LENGTH,
   compterStatuts,
   resultatEvenement,
+  type AbandonRecord,
   type AppareilAuth,
   type AppareilRecord,
   type AlerteHorsDelais,
   type CheckpointCourse,
   type EtatCourseRecord,
+  type MotifAbandon,
   type TerrainEvenementRecord,
+  hasAbandonFieldErrors,
+  normaliserSaisieAbandon,
+  validerSaisieAbandon,
 } from './domain';
 import {
   AppareilClientInvalideError,
   AppareilNotFoundError,
   AppareilRevokedError,
   CorpsSyncInvalideError,
+  InvalidAbandonFieldsError,
   JetonAppareilInvalideError,
   LotTropGrandError,
 } from './errors';
@@ -215,11 +221,11 @@ export async function revoquerAppareil(
 
 // ---------------------------------------------------------------------------
 // Story 5.1 — tableau de bord live du PC course. Contrat sérialisé (API/page) :
-// horodatages ISO 8601 UTC, abandones = 0 (compteur RÉSERVÉ à 5.3 pour que la
-// carte existe dès maintenant), genereA = instant serveur (horloge de calcul
-// de la fraîcheur côté client). Le type est DÉRIVÉ d'EtatCourseRecord (Omit +
+// horodatages ISO 8601 UTC, genereA = instant serveur (horloge de calcul de la
+// fraîcheur côté client). Le type est DÉRIVÉ d'EtatCourseRecord (Omit +
 // extensions) : toute colonne ajoutée au record remonte automatiquement ici,
-// la sérialisation ne duplique rien de non lié.
+// la sérialisation ne duplique rien de non lié. Story 5.3 : abandones vit dans
+// le record (abandons de l'édition), la carte PC l'affiche telle quelle.
 // ---------------------------------------------------------------------------
 
 /** Passage board sérialisé : même forme que le record, horodatage en ISO. */
@@ -242,8 +248,6 @@ export interface AlerteCourseSerde
 
 export interface EtatCourse
   extends Omit<EtatCourseRecord, 'checkpoints' | 'alertes' | 'fraicheur'> {
-  /** Réservé story 5.3 (saisie des abandons) — structure stable dès 5.1. */
-  abandones: number;
   checkpoints: CheckpointCourseSerde[];
   /** Recalculées à chaque état : le polling 5 s les émet et les retire. */
   alertes: AlerteCourseSerde[];
@@ -256,7 +260,6 @@ export interface EtatCourse
 function versEtatCourse(record: EtatCourseRecord, genereA: Date): EtatCourse {
   return {
     ...record,
-    abandones: 0,
     checkpoints: record.checkpoints.map((checkpoint) => ({
       ...checkpoint,
       passages: checkpoint.passages.map((passage) => ({
@@ -286,4 +289,51 @@ export async function getEtatCourse(
   const store = deps.store ?? getChronoStore();
   const record = await store.etatCourse(session.organisationId);
   return versEtatCourse(record, new Date());
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.3 — saisie d'un abandon (FR-17). Le service valide la FORME (champs,
+// heure ISO passée — l'heure locale→ISO est convertie côté client), trace
+// l'auteur (email de la session organisateur) et délègue la décision de course
+// au store : dossard résolu, coureur parti, pas arrivé, pas déjà abandonné —
+// tout dans la transaction d'insertion (AD-3 : premier reçu gagne).
+// ---------------------------------------------------------------------------
+
+/** Abandon enregistré, sérialisé pour la route (heure saisie en ISO). */
+export interface AbandonEnregistre {
+  dossard: number;
+  lieu: string;
+  motif: MotifAbandon;
+  heure: string;
+}
+
+export async function saisirAbandon(
+  session: SessionRecord,
+  rawInput: unknown,
+  deps: ChronoServiceDeps = {},
+): Promise<AbandonEnregistre> {
+  const store = deps.store ?? getChronoStore();
+  const input = normaliserSaisieAbandon(rawInput);
+  // UN SEUL instant serveur fonde la validation ET l'horodatage de réception :
+  // une heure exactement égale à « maintenant » reste valide (bornes incluses).
+  const maintenant = new Date();
+  const errors = validerSaisieAbandon(input, maintenant);
+  if (hasAbandonFieldErrors(errors)) {
+    throw new InvalidAbandonFieldsError(errors);
+  }
+  const record: AbandonRecord = await store.saisirAbandon({
+    organisationId: session.organisationId,
+    dossard: input.dossard as number,
+    lieu: input.lieu,
+    motif: input.motif as MotifAbandon,
+    horodatage: new Date(input.heure as string),
+    auteurEmail: session.email,
+    maintenant,
+  });
+  return {
+    dossard: input.dossard as number,
+    lieu: record.lieu,
+    motif: record.motif,
+    heure: record.horodatage.toISOString(),
+  };
 }

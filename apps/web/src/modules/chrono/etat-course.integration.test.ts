@@ -18,8 +18,23 @@ import { createSecteur, createMission, updateMission } from '@/modules/missions/
 import { createMissionsStore, type MissionsStore } from '@/modules/missions/store';
 import { InvalidMissionFieldsError, MissionArriveeUniqueError } from '@/modules/missions/errors';
 
-import { enregistrerAppareil, getEtatCourse, synchroniserLot, verifierJetonAppareil } from './service';
+import {
+  enregistrerAppareil,
+  getEtatCourse,
+  saisirAbandon,
+  synchroniserLot,
+  verifierJetonAppareil,
+} from './service';
 import { createChronoStore } from './store';
+import { MOTIFS_ABANDON } from './domain';
+import {
+  AbandonAvantDepartError,
+  AbandonDejaAbandonneError,
+  AbandonDejaArriveError,
+  AbandonDossardInconnuError,
+  AbandonPasPartiError,
+  InvalidAbandonFieldsError,
+} from './errors';
 
 import {
   closeAzzelTestDb,
@@ -34,6 +49,15 @@ import {
 // = retirés ∧ passage au checkpoint est_arrivee, en course, fraîcheur =
 // max(horodatage_reception), sans checkpoint d'arrivée (0 + drapeau), unicité
 // est_arrivee côté missions, isolation multi-org (RLS).
+//
+// Story 5.2 — alertes hors-délais (barrières relatives à l'horloge réelle,
+// aucune bombe temporelle), exclusion des arrivés, garde domaine barrière.
+//
+// Story 5.3 — saisie des abandons end-to-end : refus (dossard inconnu, pas
+// parti, déjà arrivé, déjà abandonné AD-3, heure future), compteurs (carte
+// Abandonnés, en course recalculé), exclusion des alertes ET des arrivés
+// (scan d'arrivée tardif), doublon CONCURRENT (premier reçu gagne), auteur
+// tracé, append-only (grants), RLS multi-org.
 
 const testUrls = resolveTestDatabaseUrls('etat-course');
 
@@ -46,6 +70,11 @@ const JETON_A2 = jetonBase64url('course-a2');
 const JETON_A3 = jetonBase64url('course-a3');
 const JETON_A4 = jetonBase64url('course-a4');
 const JETON_A5 = jetonBase64url('course-a5');
+/** Story 5.3 — coureurs des scénarios abandon (105 alerté, 106 arrivée tardive, 107 concurrent, 120 borne chronologique). */
+const JETON_A6 = jetonBase64url('course-a6');
+const JETON_A7 = jetonBase64url('course-a7');
+const JETON_A8 = jetonBase64url('course-a8');
+const JETON_A9 = jetonBase64url('course-a9');
 
 /**
  * Story 5.2 — barrière du col PASSÉE, RELATIVE à l'horloge réelle (il y a
@@ -562,6 +591,247 @@ describe.skipIf(testUrls === null)(
           { store: missionsStore },
         ),
       ).rejects.toBeInstanceOf(InvalidMissionFieldsError);
+    });
+
+    // -----------------------------------------------------------------
+    // Story 5.3 — saisie des abandons. État laissé par 5.1/5.2 : A1 (101)
+    // ARRIVÉ, A2 (102) EN COURSE (passé au col, alerte réglée), A3 (103)
+    // validé jamais retiré, A4 (104) en constitution, checkpoint d'arrivée
+    // coché, barrière du col passée (il y a 2 h). Heures de saisie
+    // RELATIVES à l'horloge réelle (passées) : aucune bombe temporelle.
+    // -----------------------------------------------------------------
+
+    /**
+     * Heure de saisie par défaut = MAINTENANT : chronologiquement APRÈS les
+     * retraits reçus pendant la suite (la borne basse 5.3 la refuse sinon) et
+     * dans la tolérance d'horloge. Donnée déclarative du terrain, relative à
+     * l'horloge réelle — aucune bombe temporelle.
+     */
+    const heureDeSaisie = (): string => new Date().toISOString();
+
+    async function saisie(dossard: number, surcharge: Record<string, unknown> = {}) {
+      return saisirAbandon(
+        organisateurA,
+        {
+          dossard,
+          lieu: 'Col 1200',
+          motif: 'epuisement',
+          heure: heureDeSaisie(),
+          ...surcharge,
+        },
+        { store: chronoStore },
+      );
+    }
+
+    it('story 5.3 — refus : dossard inconnu (999, non validé 104), pas parti (103), déjà arrivé (101), heure future', async () => {
+      await expect(saisie(999)).rejects.toBeInstanceOf(AbandonDossardInconnuError);
+      // En constitution : pas un coureur de course, jamais résolu.
+      await expect(saisie(104)).rejects.toBeInstanceOf(AbandonDossardInconnuError);
+      await expect(saisie(103)).rejects.toBeInstanceOf(AbandonPasPartiError);
+      await expect(saisie(101)).rejects.toBeInstanceOf(AbandonDejaArriveError);
+      // Heure future (dans 1 h) : erreur CHAMP, le store n'est même pas joint.
+      await expect(
+        saisie(102, { heure: new Date(Date.now() + 3_600_000).toISOString() }),
+      ).rejects.toMatchObject({ fields: { heure: expect.stringContaining('futur') } });
+      await expect(
+        saisie(102, { heure: '2027-05-16T10:05:00.000' }),
+      ).rejects.toBeInstanceOf(InvalidAbandonFieldsError);
+      // Aucun refus n'a écrit : l'état reste retraits 2 / arrivés 1 / en course 1.
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etat.abandones).toBe(0);
+      expect(etat.retraits).toBe(2);
+      expect(etat.arrives).toBe(1);
+      expect(etat.enCourse).toBe(1);
+    });
+
+    it('story 5.3 — saisie nominale : carte Abandonnés +1, en course −1, réponse ISO ; doublon refusé « déjà abandonné »', async () => {
+      const heure = heureDeSaisie();
+      const abandon = await saisie(102, { lieu: 'Col 1200', motif: 'hors_delais', heure });
+      expect(abandon).toEqual({
+        dossard: 102,
+        lieu: 'Col 1200',
+        motif: 'hors_delais',
+        heure,
+      });
+
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etat.abandones).toBe(1);
+      expect(etat.retraits).toBe(2);
+      expect(etat.arrives).toBe(1);
+      expect(etat.enCourse).toBe(0);
+
+      // AD-3 : le SECOND abandon (autre poste/onglet) est refusé clairement —
+      // le PREMIER reçu reste, jamais deux lignes pour un coureur.
+      await expect(saisie(102, { lieu: 'Ravitaillement km 18', motif: 'blessure' })).rejects.toBeInstanceOf(
+        AbandonDejaAbandonneError,
+      );
+      const compteApres = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM abandon
+        WHERE edition_id = ${editionAId} AND jeton_coureur = ${JETON_A2}
+      `;
+      expect(compteApres[0]?.count).toBe(1);
+      const etatApres = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etatApres.abandones).toBe(1);
+    });
+
+    it('story 5.3 — depuis une alerte : le coureur abandonné SORT des alertes au polling suivant', async () => {
+      // Nouveau coureur 105 : retiré, attendu au col à barrière passée → alerte.
+      await creerCoureur(JETON_A6, 105, 'longue', 'validé');
+      await attendre(10);
+      await sync('course-appareil-105', [
+        retrait('course-appareil-105', JETON_A6, '2027-05-16T06:20:00.000Z'),
+      ]);
+      const avant = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(avant.alertes.map((a) => a.dossard)).toEqual([105]);
+      expect(avant.enCourse).toBe(1);
+
+      // L'action « Saisir l'abandon » de la ligne d'alerte : formulaire
+      // prérempli dossard 105 → enregistrement → l'alerte disparaît.
+      await saisie(105, { lieu: 'Col 1200', motif: 'hors_delais' });
+      const apres = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(apres.alertes).toEqual([]);
+      expect(apres.abandones).toBe(2);
+      expect(apres.enCourse).toBe(0);
+    });
+
+    it('story 5.3 — scan d’arrivée TARDIF : l’abandonné reste abandonné, jamais compté arrivé', async () => {
+      await creerCoureur(JETON_A7, 106, 'longue', 'validé');
+      await attendre(10);
+      await sync('course-appareil-106', [
+        retrait('course-appareil-106', JETON_A7, '2027-05-16T06:25:00.000Z'),
+      ]);
+      await saisie(106, { lieu: 'Gué PK 30', motif: 'epuisement' });
+
+      // Le scan d'arrivée arrive APRÈS l'abandon (réseau différé) : le passage
+      // est archivé, mais l'abandonné ne bascule JAMAIS dans les arrivés.
+      await attendre(10);
+      await sync('course-appareil-106-arrivee', [
+        passage('course-appareil-106-arrivee', JETON_A7, checkpointArriveeId, '2027-05-16T09:00:00.000Z'),
+      ]);
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etat.arrives).toBe(1); // A1 seul — 106 reste ABANDONNÉ (données conservées)
+      expect(etat.abandones).toBe(3);
+      expect(etat.enCourse).toBe(0); // 4 retraits − 3 abandonnés − 1 arrivé, jamais négatif
+    });
+
+    it('story 5.3 — AD-3 : deux saisies CONCURRENTES (PC et secteur) → le premier reçu gagne, JAMAIS deux abandons', async () => {
+      await creerCoureur(JETON_A8, 107, 'longue', 'validé');
+      await attendre(10);
+      await sync('course-appareil-107', [
+        retrait('course-appareil-107', JETON_A8, '2027-05-16T06:30:00.000Z'),
+      ]);
+
+      // Deux sessions PC concurrentes sur le même dossard : transactions
+      // parallèles sur le pool — quel que soit l'entrelacement, UN seul
+      // abandon existe à la fin (UNIQUE SQL + ON CONFLICT DO NOTHING).
+      const resultats = await Promise.allSettled([
+        saisie(107, { lieu: 'PC course', motif: 'blessure' }),
+        saisie(107, { lieu: 'Secteur col', motif: 'epuisement' }),
+      ]);
+      const reussies = resultats.filter((r) => r.status === 'fulfilled');
+      const refusees = resultats.filter((r) => r.status === 'rejected');
+      expect(reussies).toHaveLength(1);
+      expect(refusees).toHaveLength(1);
+      expect((refusees[0] as PromiseRejectedResult).reason).toBeInstanceOf(AbandonDejaAbandonneError);
+
+      const comptes = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM abandon
+        WHERE edition_id = ${editionAId} AND jeton_coureur = ${JETON_A8}
+      `;
+      expect(comptes[0]?.count).toBe(1);
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etat.abandones).toBe(4);
+      expect(etat.retraits).toBe(5);
+      expect(etat.enCourse).toBe(0);
+    });
+
+    it('story 5.3 — liste fermée MOTIFS_ABANDON : un coureur retiré PAR MOTIF, tous insérés (TS et CHECK SQL synchrones)', async () => {
+      // La liste TS et le CHECK SQL 0028 doivent rester synchrones : chaque
+      // motif de MOTIFS_ABANDON (abandon_volontaire compris) passe l'insertion.
+      const jetonsMotifs = MOTIFS_ABANDON.map((motif) => jetonBase64url(`course-motif-${motif}`));
+      for (const [index, jeton] of jetonsMotifs.entries()) {
+        await creerCoureur(jeton, 111 + index, 'longue', 'validé');
+      }
+      await attendre(10);
+      await sync(
+        'course-appareil-motifs',
+        jetonsMotifs.map((jeton, index) =>
+          retrait('course-appareil-motifs', jeton, `2027-05-16T06:4${index}:00.000Z`),
+        ),
+      );
+
+      let abandonesAttendus = 4;
+      for (const [index, motif] of MOTIFS_ABANDON.entries()) {
+        const abandon = await saisie(111 + index, { lieu: 'Col 1200', motif });
+        expect(abandon.motif).toBe(motif);
+        abandonesAttendus += 1;
+      }
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etat.abandones).toBe(abandonesAttendus);
+    });
+
+    it('story 5.3 — borne basse de chronologie : heure ANTÉRIEURE au retrait refusée (erreur champ heure), au retrait acceptée', async () => {
+      await creerCoureur(JETON_A9, 120, 'longue', 'validé');
+      await attendre(10);
+      await sync('course-appareil-120', [
+        retrait('course-appareil-120', JETON_A9, '2027-05-16T06:50:00.000Z'),
+      ]);
+      // Réception SERVEUR du premier retrait (l'instant de départ fait foi).
+      const retraitRecuIso = receptions[receptions.length - 1];
+      expect(retraitRecuIso).toBeDefined();
+      const retraitRecu = new Date(retraitRecuIso as string);
+
+      // 60 s AVANT le départ : erreur champ dédiée « avant le départ » (400).
+      await expect(
+        saisie(120, { heure: new Date(retraitRecu.getTime() - 60_000).toISOString() }),
+      ).rejects.toBeInstanceOf(AbandonAvantDepartError);
+
+      // AU retrait exactement (bornes incluses) : accepté.
+      const abandon = await saisie(120, { heure: retraitRecu.toISOString() });
+      expect(abandon.dossard).toBe(120);
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      expect(etat.abandones).toBe(10);
+    });
+
+    it('story 5.3 — auteur tracé + append-only : email de session en base, UPDATE/DELETE refusés au rôle applicatif', async () => {
+      // Auteur = email du compte organisateur qui a saisi (auditabilité).
+      const lignes = await sql<{ auteur_email: string; lieu: string; motif: string; horodatage: Date }[]>`
+        SELECT auteur_email, lieu, motif, horodatage FROM abandon
+        WHERE edition_id = ${editionAId} AND jeton_coureur = ${JETON_A2}
+      `;
+      expect(lignes[0]?.auteur_email).toBe(organisateurA.email);
+      expect(lignes[0]?.lieu).toBe('Col 1200');
+      expect(lignes[0]?.motif).toBe('hors_delais');
+      // Heure saisie : donnée déclarative passée (jamais dans le futur).
+      expect(new Date(lignes[0]?.horodatage ?? 0).getTime()).toBeLessThan(Date.now());
+
+      // Grants 0028 : le rôle azzel_app n'a que SELECT/INSERT — une tentative
+      // de réécriture est refusée PAR LA BASE (append-only structurel).
+      await expect(
+        withOrg(app, orgAId, (tx) => tx`UPDATE abandon SET lieu = 'réécrit'`),
+      ).rejects.toThrow();
+      await expect(
+        withOrg(app, orgAId, (tx) => tx`DELETE FROM abandon`),
+      ).rejects.toThrow();
+    });
+
+    it('story 5.3 — RLS : l’org B ne voit NI les abandons de A, ni son dossard (introuvable chez B)', async () => {
+      // Le dossard 102 (org A, déjà abandonné) est introuvable côté B : la
+      // saisie B ne peut jamais toucher les coureurs de A.
+      await expect(
+        saisirAbandon(
+          organisateurB,
+          { dossard: 102, lieu: 'Nulle part', motif: 'autre', heure: heureDeSaisie() },
+          { store: chronoStore },
+        ),
+      ).rejects.toBeInstanceOf(AbandonDossardInconnuError);
+
+      // Preuve structurelle : sous GUC B, SANS WHERE applicatif, aucun
+      // abandon de l'org A n'est lisible.
+      const vus = (await withOrg(app, orgBId, (tx) =>
+        tx.unsafe('SELECT organisation_id FROM abandon'),
+      )) as unknown as { organisation_id: string }[];
+      expect(vus).toEqual([]);
     });
   },
 );

@@ -7,12 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Story 5.1 — rendu serveur de la page PC course : cartes de synthèse,
 // boards UX-DR-12 (dossard mono + heure locale, séparateurs pointillés via
 // CSS), fraîcheur TOUJOURS présente (NFR-5), note « aucun checkpoint
-// d’arrivée défini », branches d'erreur. Isolée par mocks (pattern
+// d'arrivée défini », branches d'erreur. Isolée par mocks (pattern
 // page.test.tsx) : session iam + service chrono.
 //
 // Story 5.2 — bloc alertes hors-délais : lignes intégrales clignotantes,
-// actions par ligne (tel: / libellé inactif / abandon désactivé), absence du
+// actions par ligne (tel: / libellé inactif / abandon), absence du
 // bloc quand vide, garde CSS du clignotement borné + reduced-motion.
+//
+// Story 5.3 — saisie des abandons : bouton d'en-tête, action abandon ACTIVE
+// par ligne d'alerte, carte Abandonnés sans note « à venir », formulaire
+// inline ABSENT du SSR (ouverture client uniquement).
 
 const sessionMock = vi.hoisted(() => ({
   requireRolePage: vi.fn(),
@@ -94,6 +98,18 @@ const ETAT = {
 async function rendu(): Promise<string> {
   const flux = await renderToReadableStream(<AdminCoursePage />);
   return await new Response(flux).text();
+}
+
+/**
+ * Contenu de la CARTE « Abandonnés » uniquement (du titre à la fermeture du
+ * div) : les assertions de la carte ne fuient pas sur le reste de la page
+ * (la note sans alerte contient légitimement d'autres formules d'attente).
+ */
+function carteAbandons(html: string): string {
+  const debut = html.indexOf('Abandonnés');
+  expect(debut).toBeGreaterThanOrEqual(0);
+  const fin = html.indexOf('</div>', debut);
+  return html.slice(debut, fin);
 }
 
 beforeEach(() => {
@@ -205,7 +221,7 @@ describe('page /admin/course — bloc alertes hors-délais (story 5.2)', () => {
     expect(html.indexOf('Dossard 101 — pas vu')).toBeLessThan(html.indexOf('Dossard 102 — pas vu'));
   });
 
-  it('actions par ligne : tel: du secteur, libellé inactif sans contact, abandon désactivé « bientôt disponible »', async () => {
+  it('actions par ligne : tel: du secteur, libellé inactif sans contact, abandon ACTIF (story 5.3)', async () => {
     chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
     const html = await rendu();
     // Contact renseigné (ligne 101) : lien tel: normalisé (espaces retirés).
@@ -213,11 +229,12 @@ describe('page /admin/course — bloc alertes hors-délais (story 5.2)', () => {
     expect(html).toContain('Appeler le secteur');
     // Contact absent (ligne 102) : libellé inactif, jamais de lien mort.
     expect(html).toContain('contact du secteur non renseigné');
-    // Abandon : bouton présent mais désactivé, libellé produit (sans numéro
-    // de story) — le disabled est ciblé sur LE bouton abandon.
-    expect(html).toMatch(
-      /<button[^>]*disabled[^>]*>Saisir l’abandon — bientôt disponible<\/button>/,
-    );
+    // Abandon : bouton ACTIF (plus jamais disabled « bientôt disponible »),
+    // un par ligne d'alerte — l'ouverture préremplie vit côté client.
+    expect(html).not.toContain('bientôt disponible');
+    const occurrences = html.match(/<button[^>]*>Saisir l’abandon<\/button>/g) ?? [];
+    expect(occurrences.length).toBe(ETAT.alertes.length);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>Saisir l’abandon/);
   });
 
   it('aucune alerte : le bloc est ABSENT, une note discrète le remplace (batterie = suivi GPS à venir)', async () => {
@@ -238,5 +255,43 @@ describe('page /admin/course — bloc alertes hors-délais (story 5.2)', () => {
     // reduced-motion : animation coupée pour le bloc alertes.
     const blocReduit = css.slice(css.indexOf('@media (prefers-reduced-motion'));
     expect(blocReduit).toMatch(/\.course-alertes\s*\{\s*animation:\s*none/);
+  });
+});
+
+describe('page /admin/course — saisie des abandons (story 5.3)', () => {
+  it('bouton « Saisir un abandon » dans l’en-tête, à côté de la fraîcheur', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('Saisir un abandon');
+    expect(html).toContain('course-entete');
+    expect(html).toContain('course-bouton-abandon');
+  });
+
+  it('carte Abandonnés : compteur réel, note « à venir » retirée (même à 0)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('Abandonnés');
+    expect(carteAbandons(html)).not.toContain('à venir');
+    // Compteur réel dès qu'un abandon existe.
+    chronoServiceMock.getEtatCourse.mockResolvedValue({ ...ETAT, abandones: 2, enCourse: 33 });
+    const htmlAbandons = await rendu();
+    expect(htmlAbandons).toContain('Abandonnés');
+    expect(carteAbandons(htmlAbandons)).not.toContain('à venir');
+  });
+
+  it('formulaire inline : ABSENT du rendu serveur (ouverture client uniquement)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).not.toContain('course-abandon"');
+    expect(html).not.toContain('Enregistrer l’abandon');
+  });
+
+  it('CSS : blocs formulaire/succes sans animation propre (seul le bloc alertes clignote)', () => {
+    const css = readFileSync(fileURLToPath(new URL('./course.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\.course-entete/);
+    expect(css).toMatch(/\.course-abandon\{/);
+    expect(css).toMatch(/\.course-abandon-succes/);
+    const blocAbandon = css.slice(css.indexOf('.course-abandon{'), css.indexOf('@media'));
+    expect(blocAbandon).not.toMatch(/animation/);
   });
 });

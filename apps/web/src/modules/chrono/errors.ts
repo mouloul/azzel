@@ -2,6 +2,8 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 import { DbUnavailableError } from '@/modules/iam/errors';
 
+import type { AbandonFieldErrors } from './domain';
+
 export { DbUnavailableError };
 
 // Story 4.5 — erreurs du module chrono (ingestion terrain + canal sync).
@@ -72,9 +74,81 @@ export class PlafondAppareilsError extends Error {
   }
 }
 
+// Story 5.3 — erreurs de la saisie d'abandon (surface PC course, vouvoiement,
+// enveloppes admin.course.* via toCourseApiError).
+
+/** Champs abandon manquants ou invalides (dossard, lieu, motif, heure) : 400 + fields. */
+export class InvalidAbandonFieldsError extends Error {
+  constructor(readonly fields: AbandonFieldErrors) {
+    super('champs abandon manquants ou invalides');
+    this.name = 'InvalidAbandonFieldsError';
+  }
+}
+
+/** Dossard non résolu dans l'org/édition courante : erreur champ dossard (400). */
+export class AbandonDossardInconnuError extends Error {
+  constructor() {
+    super('dossard inconnu pour cette organisation');
+    this.name = 'AbandonDossardInconnuError';
+  }
+}
+
+/** Coureur jamais retiré : un abandon sans retrait n'a pas de sens course (409). */
+export class AbandonPasPartiError extends Error {
+  constructor() {
+    super('coureur non retiré');
+    this.name = 'AbandonPasPartiError';
+  }
+}
+
+/** Coureur déjà arrivé (passage arbitré au checkpoint arrivée) : 409. */
+export class AbandonDejaArriveError extends Error {
+  constructor() {
+    super('coureur déjà arrivé');
+    this.name = 'AbandonDejaArriveError';
+  }
+}
+
+/** AD-3 : un abandon existe déjà pour ce coureur — le PREMIER reçu gagne (409). */
+export class AbandonDejaAbandonneError extends Error {
+  constructor() {
+    super('coureur déjà abandonné');
+    this.name = 'AbandonDejaAbandonneError';
+  }
+}
+
+/**
+ * Borne basse de chronologie : heure d'abandon antérieure à la réception du
+ * retrait du coureur (lue dans la même transaction) : 400 champ heure.
+ */
+export class AbandonAvantDepartError extends Error {
+  constructor() {
+    super('heure d’abandon antérieure au départ du coureur');
+    this.name = 'AbandonAvantDepartError';
+  }
+}
+
+/** Corps JSON de POST /api/admin/course/abandon illisible : 400. */
+export class CorpsAbandonInvalideError extends Error {
+  constructor() {
+    super('corps de requête abandon illisible');
+    this.name = 'CorpsAbandonInvalideError';
+  }
+}
+
+/** Corps abandon au-delà de la garde taille (défense DoS avant request.json()) : 413. */
+export class CorpsAbandonTropGrandError extends Error {
+  constructor(readonly maxOctets: number) {
+    super(`corps de requête abandon trop volumineux (${maxOctets} octets maximum)`);
+    this.name = 'CorpsAbandonTropGrandError';
+  }
+}
+
 export interface ApiError {
   status: number;
   envelope: ErrorEnvelope;
+  /** Erreurs champ abandon (400) — la route les ajoute au corps de réponse. */
+  fields?: AbandonFieldErrors;
 }
 
 /**
@@ -234,6 +308,9 @@ export function toChronoAdminApiError(error: unknown): ApiError {
  * vouvoiement, namespace admin.course.*. La page n'affiche l'écran d'erreur
  * qu'à l'OUVERTURE : en cours de polling, c'est le CLIENT qui garde le dernier
  * état (jamais blanc, NFR-5).
+ *
+ * Story 5.3 — porte aussi la saisie d'abandon (POST /api/admin/course/abandon) :
+ * erreurs champ (400 + fields), refus de course (409), gardes de corps (400/413).
  */
 export function toCourseApiError(error: unknown): ApiError {
   if (error instanceof DbUnavailableError) {
@@ -243,6 +320,89 @@ export function toCourseApiError(error: unknown): ApiError {
         code: 'admin.db_unavailable',
         message: 'Connexion indisponible.',
         action: 'Réessayez dans un instant — le tableau de bord reprendra de lui-même.',
+      }),
+    };
+  }
+  if (error instanceof InvalidAbandonFieldsError) {
+    return {
+      status: 400,
+      fields: error.fields,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_champs_invalides',
+        message: 'Certains champs de l’abandon sont manquants ou invalides.',
+        action: 'Corrigez les champs signalés puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof AbandonDossardInconnuError) {
+    return {
+      status: 400,
+      fields: { dossard: 'Dossard inconnu sur l’édition en cours.' },
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_dossard_inconnu',
+        message: 'Aucun coureur validé ne porte ce dossard sur l’édition en cours.',
+        action: 'Vérifiez le numéro de dossard puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof AbandonAvantDepartError) {
+    return {
+      status: 400,
+      fields: { heure: 'L’heure d’abandon ne peut pas être avant le départ du coureur.' },
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_avant_depart',
+        message: 'L’heure d’abandon saisie est antérieure au départ de ce coureur.',
+        action: 'Vérifiez l’heure saisie — un abandon ne peut pas précéder le retrait du dossard.',
+      }),
+    };
+  }
+  if (error instanceof AbandonPasPartiError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_pas_parti',
+        message: 'Ce coureur n’est pas parti : un abandon sans retrait de dossard n’a pas de sens de course.',
+        action: 'Vérifiez le dossard — si le retrait vient d’être scanné, il arrivera avec la prochaine synchronisation.',
+      }),
+    };
+  }
+  if (error instanceof AbandonDejaArriveError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_deja_arrive',
+        message: 'Ce coureur est déjà arrivé : son parcours est terminé.',
+        action: 'Aucune action nécessaire — vérifiez le dossard saisi.',
+      }),
+    };
+  }
+  if (error instanceof AbandonDejaAbandonneError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_deja_abandonne',
+        message: 'Ce coureur a déjà été déclaré abandonné : le premier enregistrement reçu fait foi.',
+        action: 'Aucune action nécessaire — l’abandon déjà enregistré reste le bon.',
+      }),
+    };
+  }
+  if (error instanceof CorpsAbandonInvalideError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_corps_invalide',
+        message: 'La requête est illisible.',
+        action: 'Rechargez la page puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof CorpsAbandonTropGrandError) {
+    return {
+      status: 413,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.abandon_corps_trop_grand',
+        message: `Envoi trop volumineux (${error.maxOctets} octets maximum).`,
+        action: 'Raccourcissez le lieu puis réessayez.',
       }),
     };
   }

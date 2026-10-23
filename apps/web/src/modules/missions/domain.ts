@@ -233,37 +233,17 @@ export interface MissionInput {
   barriereLe: string | null;
 }
 
-// RFC3339 STRICT se terminant par Z : un ISO sans Z serait interprété en heure
-// LOCALE du serveur (décalage silencieux) — refusé net.
-const HORODATAGE_RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/;
+// Contrat horodatage transverse : estHorodatageValide + convertisseurs
+// datetime-local vivent dans @azzel/shared (consommés par missions ET chrono).
+// Importés pour l'usage local, réexportés pour compat avec les imports
+// existants du module.
+import { datetimeLocalVersIso, estHorodatageValide, isoVersDatetimeLocal } from '@azzel/shared';
 
-export function estHorodatageValide(valeur: string): boolean {
-  if (!HORODATAGE_RFC3339.test(valeur)) {
-    return false;
-  }
-  const date = new Date(valeur);
-  return !Number.isNaN(date.getTime());
-}
+export { datetimeLocalVersIso, estHorodatageValide, isoVersDatetimeLocal };
 
 /** Identifiants d'entité (chemin de route ou corps) : UUID canonique ou refus. */
 export function estUuidValide(valeur: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(valeur);
-}
-
-/** ISO 8601 UTC (…Z) → valeur d'input datetime-local (heure locale du navigateur). */
-export function isoVersDatetimeLocal(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  const pad = (valeur: number): string => String(valeur).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** Valeur datetime-local (heure locale) → ISO 8601 UTC pour l'API (…Z). */
-export function datetimeLocalVersIso(valeur: string): string {
-  const date = new Date(valeur);
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 }
 
 export function normalizeMissionInput(raw: unknown): MissionInput {

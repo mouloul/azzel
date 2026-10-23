@@ -12,12 +12,20 @@ import {
 import type { SessionRecord } from '@/modules/iam/store';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs } from './domain';
+import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON } from './domain';
 import {
+  AbandonAvantDepartError,
+  AbandonDejaAbandonneError,
+  AbandonDejaArriveError,
+  AbandonDossardInconnuError,
+  AbandonPasPartiError,
   AppareilClientInvalideError,
   AppareilNotFoundError,
   AppareilRevokedError,
+  CorpsAbandonInvalideError,
+  CorpsAbandonTropGrandError,
   CorpsSyncInvalideError,
+  InvalidAbandonFieldsError,
   JetonAppareilInvalideError,
   LotTropGrandError,
   toCourseApiError,
@@ -29,6 +37,7 @@ import {
   listerAppareils,
   premierRecu,
   revoquerAppareil,
+  saisirAbandon,
   synchroniserLot,
   verifierJetonAppareil,
 } from './service';
@@ -83,6 +92,18 @@ function surFil(evenement: RetraitTerrain | PassageTerrain): EvenementSyncTerrai
   return { ...evenement, cle: cleIdempotenceEvenement(evenement) };
 }
 
+/** Record abandon factice (retour du store en mémoire). */
+const ABANDON_RECORD = {
+  id: 'abandon-1',
+  editionId: 'edition-1',
+  jetonCoureur: JETON_COUREUR,
+  lieu: 'Col 1200',
+  motif: 'epuisement' as const,
+  horodatage: new Date('2027-05-16T10:05:00.000Z'),
+  auteurEmail: 'pc@exemple.dz',
+  horodatageReception: new Date('2027-05-16T10:06:00.000Z'),
+};
+
 function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
   return {
     trouverAppareilParHash: vi.fn(async () => ({
@@ -106,12 +127,14 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
       partants: [],
       retraits: 0,
       arrives: 0,
+      abandones: 0,
       enCourse: 0,
       arriveeDefinie: false,
       checkpoints: [],
       alertes: [],
       fraicheur: null,
     })),
+    saisirAbandon: vi.fn(async () => ABANDON_RECORD),
     ...overrides,
   };
 }
@@ -367,7 +390,8 @@ describe('story 5.1 — getEtatCourse (service PC course)', () => {
     partants: [{ epreuveId: 'ep-1', epreuveNom: 'La Longue', total: 12 }],
     retraits: 3,
     arrives: 1,
-    enCourse: 2,
+    abandones: 1,
+    enCourse: 1,
     arriveeDefinie: true,
     checkpoints: [
       {
@@ -389,11 +413,10 @@ describe('story 5.1 — getEtatCourse (service PC course)', () => {
     fraicheur: new Date('2027-05-16T07:05:09.000Z'),
   };
 
-  it('sérialise le record (ISO) + abandones réservé 0 + genereA serveur', async () => {
+  it('sérialise le record (ISO), abandones du record inclus (5.3), genereA serveur', async () => {
     const etat = await getEtatCourse(SESSION, { store: creerStoreFactice({ etatCourse: vi.fn(async () => RECORD_ETAT) }) });
     expect(etat).toEqual({
       ...RECORD_ETAT,
-      abandones: 0,
       checkpoints: [
         {
           id: 'cp-1',
@@ -436,5 +459,201 @@ describe('story 5.1 — toCourseApiError (mapper PC course)', () => {
     const apiError = toCourseApiError(new Error('boom'));
     expect(apiError.status).toBe(500);
     expect(apiError.envelope.error.code).toBe('admin.course.erreur_inconnue');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 5.3 — saisie des abandons : domaine (liste fermée, normalisation,
+// validation), service (délégation, auteur tracé), mapper (400 champ + 409).
+// ---------------------------------------------------------------------------
+
+describe('story 5.3 — domaine abandon : motifs fermés, normalisation, validation', () => {
+  it('MOTIFS_ABANDON : liste fermée métier, estMotifAbandon refuse tout le reste', () => {
+    expect(MOTIFS_ABANDON).toEqual([
+      'blessure',
+      'epuisement',
+      'hors_delais',
+      'abandon_volontaire',
+      'autre',
+    ]);
+    expect(MOTIFS_ABANDON.map((motif) => estMotifAbandon(motif)).every(Boolean)).toBe(true);
+  });
+
+  it('normaliserSaisieAbandon : dossard nombre OU chaîne de chiffres, lieu trimé, motif fermé, heure brute', () => {
+    expect(normaliserSaisieAbandon({ dossard: 102, lieu: '  Col 1200 ', motif: 'blessure', heure: '2027-05-16T10:05:00.000Z' })).toEqual({
+      dossard: 102,
+      lieu: 'Col 1200',
+      motif: 'blessure',
+      heure: '2027-05-16T10:05:00.000Z',
+    });
+    expect(normaliserSaisieAbandon({ dossard: ' 102 ', lieu: '', motif: 'autre', heure: '2027-05-16T10:05:00.000Z' }).dossard).toBe(102);
+  });
+
+  it('normaliserSaisieAbandon : garbage isolé — dossard non numérique, motif hors liste, heure absente', () => {
+    expect(normaliserSaisieAbandon(null)).toEqual({ dossard: null, lieu: '', motif: null, heure: null });
+    expect(normaliserSaisieAbandon({ dossard: 'abc', motif: 'envie', heure: 42 })).toEqual({
+      dossard: null,
+      lieu: '',
+      motif: null,
+      heure: null,
+    });
+  });
+
+  it('validerSaisieAbandon : chaque champ a son erreur (dossard, lieu, motif, heure)', () => {
+    const maintenant = new Date('2027-05-16T10:30:00.000Z');
+    const errors = validerSaisieAbandon(
+      { dossard: null, lieu: '', motif: null, heure: null },
+      maintenant,
+    );
+    expect(Object.keys(errors).sort()).toEqual(['dossard', 'heure', 'lieu', 'motif']);
+    expect(errors.lieu).toContain('obligatoire');
+    expect(errors.motif).toContain('liste');
+  });
+
+  it('validerSaisieAbandon : heure future au-delà de la tolérance refusée, ISO sans Z refusé', () => {
+    const maintenant = new Date('2027-05-16T10:30:00.000Z');
+    // +3 min : au-delà de la tolérance d'horloge (+2 min) → refus.
+    const future = validerSaisieAbandon(
+      { dossard: 102, lieu: 'Col 1200', motif: 'blessure', heure: '2027-05-16T10:33:00.000Z' },
+      maintenant,
+    );
+    expect(future.heure).toBe(
+      'L’heure d’abandon ne peut pas être dans le futur (vérifie l’horloge du poste).',
+    );
+    const sansZ = validerSaisieAbandon(
+      { dossard: 102, lieu: 'Col 1200', motif: 'blessure', heure: '2027-05-16T10:00:00.000' },
+      maintenant,
+    );
+    expect(sansZ.heure).toBe('Indiquez la date et l’heure de l’abandon.');
+  });
+
+  it('validerSaisieAbandon : heure ≤ maintenant + TOLERANCE_HORLOGE_MS valide (dérive horloge PC)', () => {
+    const maintenant = new Date('2027-05-16T10:30:00.000Z');
+    // +1 min puis exactement +2 min (borne incluse) : valides.
+    for (const heure of ['2027-05-16T10:31:00.000Z', '2027-05-16T10:32:00.000Z']) {
+      const errors = validerSaisieAbandon(
+        { dossard: 102, lieu: 'Col 1200', motif: 'blessure', heure },
+        maintenant,
+      );
+      expect(errors.heure).toBeUndefined();
+    }
+    expect(TOLERANCE_HORLOGE_MS).toBe(120_000);
+  });
+
+  it('validerSaisieAbandon : saisie nominale (heure = maintenant, bornes incluses)', () => {
+    const maintenant = new Date('2027-05-16T10:30:00.000Z');
+    const errors = validerSaisieAbandon(
+      { dossard: 102, lieu: 'Col 1200', motif: 'hors_delais', heure: '2027-05-16T10:30:00.000Z' },
+      maintenant,
+    );
+    expect(Object.values(errors).every((message) => message === undefined)).toBe(true);
+  });
+});
+
+describe('story 5.3 — saisirAbandon (service)', () => {
+  // Heure de saisie RELATIVE (il y a 10 min) : la validation serveur compare
+  // à l'horloge RÉELLE — une date fixe future deviendrait une bombe temporelle.
+  const heurePassee = new Date(Date.now() - 600_000);
+  const SAISIE_VALIDE = {
+    dossard: 102,
+    lieu: 'Col 1200',
+    motif: 'epuisement',
+    heure: heurePassee.toISOString(),
+  };
+
+  it('champs invalides : InvalidAbandonFieldsError, store non appelé', async () => {
+    const store = creerStoreFactice();
+    await expect(
+      saisirAbandon(SESSION, { ...SAISIE_VALIDE, heure: new Date(Date.now() + 3_600_000).toISOString() }, { store }),
+    ).rejects.toBeInstanceOf(InvalidAbandonFieldsError);
+    await expect(saisirAbandon(SESSION, { lieu: 'Col' }, { store })).rejects.toBeInstanceOf(
+      InvalidAbandonFieldsError,
+    );
+    expect(store.saisirAbandon).not.toHaveBeenCalled();
+  });
+
+  it('nominal : délégation org + auteur = email de la session, réponse sérialisée', async () => {
+    const store = creerStoreFactice();
+    const abandon = await saisirAbandon(SESSION, SAISIE_VALIDE, { store });
+    // La réponse porte le RECORD du store (source de vérité), le dossard SAISI.
+    expect(abandon).toEqual({
+      dossard: 102,
+      lieu: ABANDON_RECORD.lieu,
+      motif: ABANDON_RECORD.motif,
+      heure: ABANDON_RECORD.horodatage.toISOString(),
+    });
+    expect(store.saisirAbandon).toHaveBeenCalledWith({
+      organisationId: 'org-1',
+      dossard: 102,
+      lieu: 'Col 1200',
+      motif: 'epuisement',
+      horodatage: heurePassee,
+      auteurEmail: 'karim@exemple.dz',
+      maintenant: expect.any(Date),
+    });
+  });
+
+  it('refus de course : les erreurs du store se PROPAGENT (route → 409/400)', async () => {
+    for (const erreur of [
+      new AbandonDossardInconnuError(),
+      new AbandonPasPartiError(),
+      new AbandonDejaArriveError(),
+      new AbandonDejaAbandonneError(),
+    ]) {
+      const store = creerStoreFactice({
+        saisirAbandon: vi.fn(async () => {
+          throw erreur;
+        }),
+      });
+      await expect(saisirAbandon(SESSION, SAISIE_VALIDE, { store })).rejects.toBe(erreur);
+    }
+  });
+});
+
+describe('story 5.3 — toCourseApiError (mapper saisie abandon)', () => {
+  it('champs invalides : 400 + fields, enveloppe admin.course.abandon_champs_invalides', () => {
+    const apiError = toCourseApiError(
+      new InvalidAbandonFieldsError({ dossard: 'Indique un numéro de dossard.' }),
+    );
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields?.dossard).toContain('dossard');
+    expect(apiError.envelope.error.code).toBe('admin.course.abandon_champs_invalides');
+  });
+
+  it('dossard inconnu : 400 + erreur champ dossard, enveloppe dédiée', () => {
+    const apiError = toCourseApiError(new AbandonDossardInconnuError());
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields?.dossard).toContain('Dossard inconnu');
+    expect(apiError.envelope.error.code).toBe('admin.course.abandon_dossard_inconnu');
+  });
+
+  it('heure avant le départ du coureur : 400 + erreur champ heure, enveloppe dédiée', () => {
+    const apiError = toCourseApiError(new AbandonAvantDepartError());
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields?.heure).toContain('avant le départ du coureur');
+    expect(apiError.envelope.error.code).toBe('admin.course.abandon_avant_depart');
+  });
+
+  it('refus de course (AD-3) : 409 sans fields, enveloppes dédiées et vouvoyées', () => {
+    for (const [erreur, code] of [
+      [new AbandonPasPartiError(), 'admin.course.abandon_pas_parti'],
+      [new AbandonDejaArriveError(), 'admin.course.abandon_deja_arrive'],
+      [new AbandonDejaAbandonneError(), 'admin.course.abandon_deja_abandonne'],
+    ] as const) {
+      const apiError = toCourseApiError(erreur);
+      expect(apiError.status).toBe(409);
+      expect(apiError.fields).toBeUndefined();
+      expect(apiError.envelope.error.code).toBe(code);
+      // Vouvoiement (surface PC) : jamais de tutoiement terrain.
+      expect(apiError.envelope.error.action).not.toMatch(/\b[Rr]éessaie\b/);
+    }
+  });
+
+  it('gardes de corps : 400 illisible, 413 trop grand', () => {
+    expect(toCourseApiError(new CorpsAbandonInvalideError()).status).toBe(400);
+    expect(
+      toCourseApiError(new CorpsAbandonTropGrandError(1024)).envelope.error.code,
+    ).toBe('admin.course.abandon_corps_trop_grand');
+    expect(toCourseApiError(new CorpsAbandonTropGrandError(1024)).status).toBe(413);
   });
 });

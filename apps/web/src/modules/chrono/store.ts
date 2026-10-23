@@ -14,13 +14,23 @@ import { sha256Hex } from '@/modules/iam/service';
 import { readDatabaseUrl } from '@/modules/iam/env';
 
 import type {
+  AbandonRecord,
   AlerteHorsDelais,
   AppareilRecord,
   EtatCourseRecord,
+  MotifAbandon,
   TerrainEvenementRecord,
 } from './domain';
 import { PLAFOND_APPAREILS_PAR_ORG, calculerOffsetEstimeMs, estUuidValide } from './domain';
-import { AppareilRevokedError, PlafondAppareilsError } from './errors';
+import {
+  AbandonAvantDepartError,
+  AbandonDejaAbandonneError,
+  AbandonDejaArriveError,
+  AbandonDossardInconnuError,
+  AbandonPasPartiError,
+  AppareilRevokedError,
+  PlafondAppareilsError,
+} from './errors';
 
 // Story 4.5 — store chrono : l'ingestion d'un lot entier vit dans UNE SEULE
 // transaction withOrg (résolution des jetons + insertions idempotentes) — un
@@ -68,6 +78,21 @@ export interface ChronoStore {
   }): Promise<AppareilRecord | null>;
   /** Story 5.1 — agrégats PC course (lecture seule, arbitrage AD-3, org-scopés). */
   etatCourse(organisationId: string): Promise<EtatCourseRecord>;
+  /**
+   * Story 5.3 — saisie d'un abandon : résolution dossard, contraintes de
+   * course et insertion dans UNE transaction (AD-3 : le PREMIER reçu gagne).
+   */
+  saisirAbandon(input: {
+    organisationId: string;
+    dossard: number;
+    lieu: string;
+    motif: MotifAbandon;
+    /** Heure LOCALE saisie (donnée déclarative) — déjà convertie ISO par le client. */
+    horodatage: Date;
+    auteurEmail: string;
+    /** Heure serveur : base de l'arbitrage (horodatage_reception). */
+    maintenant: Date;
+  }): Promise<AbandonRecord>;
 }
 
 /** Jeton BRUT du canal sync : 256 bits, base64url — hashé avant toute base. */
@@ -161,6 +186,48 @@ function toAppareilRecord(row: AppareilRow): AppareilRecord {
     lastSyncAt: row.last_sync_at,
     createdAt: row.created_at,
   };
+}
+
+interface AbandonRow {
+  id: string;
+  edition_id: string;
+  jeton_coureur: string;
+  lieu: string;
+  motif: MotifAbandon;
+  horodatage: Date;
+  auteur_email: string;
+  horodatage_reception: Date;
+}
+
+function toAbandonRecord(row: AbandonRow): AbandonRecord {
+  return {
+    id: row.id,
+    editionId: row.edition_id,
+    jetonCoureur: row.jeton_coureur,
+    lieu: row.lieu,
+    motif: row.motif,
+    horodatage: row.horodatage,
+    auteurEmail: row.auteur_email,
+    horodatageReception: row.horodatage_reception,
+  };
+}
+
+/**
+ * Édition courante de l'org : la plus proche date_course = la plus récente,
+ * id ASC en tie-break canonique (dates égales). Partagée par etatCourse et
+ * saisirAbandon — un seul lieu de vérité pour « l'édition pilotée ».
+ */
+async function editionCourante(
+  tx: postgres.TransactionSql,
+  organisationId: string,
+): Promise<{ id: string; name: string } | undefined> {
+  const editions = await tx<{ id: string; name: string }[]>`
+    SELECT id, name FROM edition
+    WHERE organisation_id = ${organisationId}
+    ORDER BY race_date DESC, id ASC
+    LIMIT 1
+  `;
+  return editions[0];
 }
 
 export function createChronoStore(sql: Sql): ChronoStore {
@@ -441,22 +508,14 @@ export function createChronoStore(sql: Sql): ChronoStore {
     async etatCourse(organisationId: string): Promise<EtatCourseRecord> {
       return withDb(() =>
         withOrg(sql, organisationId, async (tx) => {
-          // Édition courante (pattern findCurrentEdition répliqué localement —
-          // aucun import cross-module) : la plus proche date_course = la plus
-          // récente ; id ASC en tie-break canonique (dates égales).
-          const editions = await tx<{ id: string; name: string }[]>`
-            SELECT id, name FROM edition
-            WHERE organisation_id = ${organisationId}
-            ORDER BY race_date DESC, id ASC
-            LIMIT 1
-          `;
-          const edition = editions[0];
+          const edition = await editionCourante(tx, organisationId);
           if (!edition) {
             return {
               edition: null,
               partants: [],
               retraits: 0,
               arrives: 0,
+              abandones: 0,
               enCourse: 0,
               arriveeDefinie: false,
               checkpoints: [],
@@ -465,7 +524,7 @@ export function createChronoStore(sql: Sql): ChronoStore {
             };
           }
 
-          const [partantsRows, checkpointRows, retraitRows, passageRows, dossardRows, fraicheurRows] =
+          const [partantsRows, checkpointRows, retraitRows, passageRows, abandonRows, dossardRows, fraicheurRows] =
             await Promise.all([
               tx<{ id: string; name: string; total: number }[]>`
                 SELECT e.id, e.name,
@@ -511,6 +570,14 @@ export function createChronoStore(sql: Sql): ChronoStore {
                   AND type = 'passage'
                 ORDER BY checkpoint_id, jeton_coureur, horodatage_reception ASC, id ASC
               `,
+              // Story 5.3 — abandons de l'édition (UNIQUE par coureur en
+              // base : une ligne = un coureur abandonné, jamais de doublon).
+              tx<{ jeton_coureur: string }[]>`
+                SELECT jeton_coureur
+                FROM abandon
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+              `,
               tx<{ jeton: string; dossard: number }[]>`
                 SELECT jeton_edossard AS jeton, dossard
                 FROM coureur
@@ -539,6 +606,16 @@ export function createChronoStore(sql: Sql): ChronoStore {
           // ne gonfle NI retraits NI en course.
           const jetonsRetires = new Set(
             retraitRows
+              .map((row) => row.jeton_coureur)
+              .filter((jeton) => dossardParJeton.has(jeton)),
+          );
+
+          // Story 5.3 — abandonnés de l'édition : résolus par construction
+          // (la saisie valide le dossard), la garde de résolution reste par
+          // défense en profondeur — un abandon fantôme ne toucherait aucun
+          // compteur.
+          const jetonsAbandonnes = new Set(
+            abandonRows
               .map((row) => row.jeton_coureur)
               .filter((jeton) => dossardParJeton.has(jeton)),
           );
@@ -573,18 +650,21 @@ export function createChronoStore(sql: Sql): ChronoStore {
             ),
           }));
 
-          // Arrivés = retirés RÉSOLUS ∧ passage AU checkpoint est_arrivee (∧ :
-          // intersection — la formule 5.1 reste exacte : arrivés ⊆ retirés,
-          // en course = retraits − abandonnés − arrivés ne descend jamais
-          // sous 0). L'ensemble vit AU-DESSUS des alertes : un arrivé est aussi
-          // exclu du calcul d'alerte (5.2) — sa course est finie.
+          // Arrivés = retirés RÉSOLUS ∧ passage AU checkpoint est_arrivee
+          // ∧ NON abandonnés (∧ : intersection). La saisie refuse un coureur
+          // déjà arrivé (5.3), mais un scan d'arrivée peut arriver APRÈS
+          // l'abandon (réseau différé) : l'abandonné reste abandonné, il ne
+          // bascule JAMAIS dans les arrivés. L'ensemble vit AU-DESSUS des
+          // alertes : un arrivé comme un abandonné ont leur course finie.
           const arriveeCheckpoint = checkpointRows.find((row) => row.est_arrivee);
           const jetonsAArrivee =
             arriveeCheckpoint !== undefined
               ? (jetonsParCheckpoint.get(arriveeCheckpoint.id) ?? new Set<string>())
               : new Set<string>();
           const jetonsArrives = new Set(
-            [...jetonsRetires].filter((jeton) => jetonsAArrivee.has(jeton)),
+            [...jetonsRetires].filter(
+              (jeton) => jetonsAArrivee.has(jeton) && !jetonsAbandonnes.has(jeton),
+            ),
           );
           const arrives = jetonsArrives.size;
 
@@ -606,8 +686,9 @@ export function createChronoStore(sql: Sql): ChronoStore {
             }
             const passes = jetonsParCheckpoint.get(checkpoint.id) ?? new Set<string>();
             for (const jeton of jetonsRetires) {
-              // Arrivé : plus aucune alerte de sécurité, sur AUCUN checkpoint.
-              if (jetonsArrives.has(jeton)) {
+              // Arrivé ou ABANDONNÉ : plus aucune alerte de sécurité, sur
+              // AUCUN checkpoint — la course est finie dans les deux cas.
+              if (jetonsArrives.has(jeton) || jetonsAbandonnes.has(jeton)) {
                 continue;
               }
               const dossard = dossardParJeton.get(jeton);
@@ -636,12 +717,136 @@ export function createChronoStore(sql: Sql): ChronoStore {
             })),
             retraits: jetonsRetires.size,
             arrives,
-            enCourse: jetonsRetires.size - arrives,
+            abandones: jetonsAbandonnes.size,
+            enCourse: Math.max(0, jetonsRetires.size - jetonsAbandonnes.size - arrives),
             arriveeDefinie: arriveeCheckpoint !== undefined,
             checkpoints,
             alertes,
             fraicheur: fraicheurRows[0]?.fraicheur ?? null,
           };
+        }),
+      );
+    },
+
+    // -----------------------------------------------------------------
+    // Story 5.3 — saisie d'un abandon. TOUT vit dans UNE SEULE transaction
+    // withOrg : l'état de course au moment de la saisie est la vérité (jamais
+    // une validation à froid sur un état potentiellement périmé). L'insertion
+    // append-only porte l'arbitrage AD-3 : UNIQUE (edition, jeton) + ON
+    // CONFLICT DO NOTHING — deux saisies concurrentes (PC et secteur) ne
+    // peuvent JAMAIS produire deux abandons, le premier reçu fait foi.
+    // -----------------------------------------------------------------
+    async saisirAbandon(input: {
+      organisationId: string;
+      dossard: number;
+      lieu: string;
+      motif: MotifAbandon;
+      horodatage: Date;
+      auteurEmail: string;
+      maintenant: Date;
+    }): Promise<AbandonRecord> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          // Édition courante (helper partagé avec etatCourse) : la saisie vit
+          // sur l'édition que le PC est en train de piloter.
+          const edition = await editionCourante(tx, input.organisationId);
+
+          // Résolution dossard → coureur VALIDÉ et numéroté de l'édition
+          // courante (mêmes règles que le board : un dossard d'une autre
+          // édition, non validé ou sans jeton, est introuvable — RLS comprise).
+          let jeton: string | null = null;
+          if (edition !== undefined) {
+            const coureurs = await tx<{ jeton: string }[]>`
+              SELECT jeton_edossard AS jeton
+              FROM coureur
+              WHERE organisation_id = ${input.organisationId}
+                AND edition_id = ${edition.id}
+                AND dossard = ${input.dossard}
+                AND status = 'validé'
+                AND jeton_edossard IS NOT NULL
+              LIMIT 1
+            `;
+            jeton = coureurs[0]?.jeton ?? null;
+          }
+          if (edition === undefined || jeton === null) {
+            throw new AbandonDossardInconnuError();
+          }
+
+          // Coureur parti : sans retrait arbitré, un abandon n'a pas de sens
+          // de course (il n'est nulle part « en course »). La réception du
+          // PREMIER retrait (arbitrage AD-3) servira aussi de borne basse de
+          // chronologie une fois les refus d'état de course passés.
+          const retraits = await tx<{ horodatage_reception: Date }[]>`
+            SELECT horodatage_reception FROM terrain_evenement
+            WHERE organisation_id = ${input.organisationId}
+              AND edition_id = ${edition.id}
+              AND jeton_coureur = ${jeton}
+              AND type = 'retrait'
+            ORDER BY horodatage_reception ASC, id ASC
+            LIMIT 1
+          `;
+          const retraitRecu = retraits[0];
+          if (retraitRecu === undefined) {
+            throw new AbandonPasPartiError();
+          }
+
+          // Coureur pas déjà arrivé : un passage arbitré au checkpoint
+          // est_arrivee clôt la course — l'abandon ne la réouvre pas.
+          const arrivees = await tx<{ id: string }[]>`
+            SELECT m.id
+            FROM mission m
+            JOIN secteur s ON s.id = m.secteur_id
+            WHERE m.organisation_id = ${input.organisationId}
+              AND s.edition_id = ${edition.id}
+              AND m.type = 'scan_checkpoint'
+              AND m.est_arrivee
+            LIMIT 1
+          `;
+          const arriveeCheckpoint = arrivees[0];
+          if (arriveeCheckpoint !== undefined) {
+            const passages = await tx<{ id: string }[]>`
+              SELECT id FROM terrain_evenement
+              WHERE organisation_id = ${input.organisationId}
+                AND edition_id = ${edition.id}
+                AND jeton_coureur = ${jeton}
+                AND type = 'passage'
+                AND checkpoint_id = ${arriveeCheckpoint.id}
+              LIMIT 1
+            `;
+            if (passages.length > 0) {
+              throw new AbandonDejaArriveError();
+            }
+          }
+
+          // Borne basse de chronologie : l'heure déclarée du terrain vit
+          // APRÈS le départ (réception SERVEUR du premier retrait, lue dans
+          // la même transaction). Les refus d'état de course sont passés :
+          // ce qui reste à corriger est la FORME de la saisie.
+          if (input.horodatage.getTime() < retraitRecu.horodatage_reception.getTime()) {
+            throw new AbandonAvantDepartError();
+          }
+
+          // Insertion append-only ARBITRÉE : le PREMIER reçu commit, le
+          // concurrent retombe sur DO NOTHING (0 ligne) → « déjà abandonné ».
+          const inserees = await tx<AbandonRow[]>`
+            INSERT INTO abandon (
+              organisation_id, edition_id, jeton_coureur, lieu, motif,
+              horodatage, auteur_email, horodatage_reception
+            )
+            VALUES (
+              ${input.organisationId}, ${edition.id}, ${jeton}, ${input.lieu},
+              ${input.motif}, ${input.horodatage}, ${input.auteurEmail},
+              ${input.maintenant}
+            )
+            ON CONFLICT (edition_id, jeton_coureur) DO NOTHING
+            RETURNING id, edition_id, jeton_coureur, lieu, motif, horodatage,
+                      auteur_email, horodatage_reception
+          `;
+          const row = inserees[0];
+          if (row === undefined) {
+            throw new AbandonDejaAbandonneError();
+          }
+          return toAbandonRecord(row);
         }),
       );
     },
@@ -661,6 +866,7 @@ function createUnavailableStore(): ChronoStore {
     listerAppareils: unavailable,
     revoquerAppareil: unavailable,
     etatCourse: unavailable,
+    saisirAbandon: unavailable,
   };
 }
 

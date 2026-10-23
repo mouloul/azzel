@@ -4,10 +4,11 @@
 // à l'ingestion. Toute la validation de forme vit dans le contrat shared
 // (estRetraitValide/estPassageValide) — ici, jamais réinventée.
 
-import type {
-  EvenementSyncTerrain,
-  ResultatEvenementSync,
-  StatutSyncTerrain,
+import {
+  estHorodatageValide,
+  type EvenementSyncTerrain,
+  type ResultatEvenementSync,
+  type StatutSyncTerrain,
 } from '@azzel/shared';
 
 /** Appareil authentifié par Bearer — résolu par hash, avant tout GUC. */
@@ -92,9 +93,11 @@ export interface EtatCourseRecord {
   partants: PartantsEpreuve[];
   /** Premiers retraits reçus, par coureur distinct. */
   retraits: number;
-  /** Retirés ∧ passage arbitré au checkpoint est_arrivee (∧ = intersection). */
+  /** Retirés ∧ passage arbitré au checkpoint est_arrivee ∧ NON abandonnés. */
   arrives: number;
-  /** retraits − abandonnés − arrivés (abandonnés = 0 en 5.1, réservé 5.3). */
+  /** Abandons de l'édition (UNIQUE par coureur — AD-3, append-only). */
+  abandones: number;
+  /** retraits − abandonnés − arrivés, JAMAIS négatif (défense d'affichage). */
   enCourse: number;
   /** Au plus un checkpoint d'arrivée par édition (garde service missions). */
   arriveeDefinie: boolean;
@@ -103,6 +106,133 @@ export interface EtatCourseRecord {
   alertes: AlerteHorsDelais[];
   /** max(horodatage_reception) — null = aucune donnée reçue. */
   fraicheur: Date | null;
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.3 — saisie des abandons (FR-17). Liste fermée de motifs métier
+// (calque MISSION_TYPES : CHECK SQL 0028 + domaine, aucun motif libre), record
+// append-only, validation de forme de la saisie (la résolution dossard→coureur
+// et les contraintes de course vivent dans la transaction du store — l'état au
+// moment de la saisie est la vérité, jamais un état potentiellement périmé).
+// ---------------------------------------------------------------------------
+
+export const MOTIFS_ABANDON = [
+  'blessure',
+  'epuisement',
+  'hors_delais',
+  'abandon_volontaire',
+  'autre',
+] as const;
+
+export type MotifAbandon = (typeof MOTIFS_ABANDON)[number];
+
+export const LIBELLES_MOTIF_ABANDON: Record<MotifAbandon, string> = {
+  blessure: 'Blessure',
+  epuisement: 'Épuisement',
+  hors_delais: 'Hors-délais',
+  abandon_volontaire: 'Abandon volontaire',
+  autre: 'Autre',
+};
+
+export function estMotifAbandon(valeur: unknown): valeur is MotifAbandon {
+  return typeof valeur === 'string' && (MOTIFS_ABANDON as readonly string[]).includes(valeur);
+}
+
+/** Lieu libre court (CHECK SQL 0028 symétrique). */
+export const MAX_LIEU_ABANDON_LENGTH = 200;
+
+export const ABANDON_FIELD_ORDER = ['dossard', 'lieu', 'motif', 'heure'] as const;
+
+export type AbandonField = (typeof ABANDON_FIELD_ORDER)[number];
+
+export type AbandonFieldErrors = Partial<Record<AbandonField, string>>;
+
+/** Saisie normalisée : dossard entier, lieu trimé, motif fermé, heure ISO. */
+export interface SaisieAbandonInput {
+  dossard: number | null;
+  lieu: string;
+  motif: MotifAbandon | null;
+  /** ISO 8601 UTC strict (…Z) — converti depuis l'heure locale par le client. */
+  heure: string | null;
+}
+
+/** Ligne abandon telle que lue en base (append-only, AD-3). */
+export interface AbandonRecord {
+  id: string;
+  editionId: string;
+  jetonCoureur: string;
+  lieu: string;
+  motif: MotifAbandon;
+  /** Heure LOCALE saisie, stockée ISO UTC — donnée déclarative, pas classement. */
+  horodatage: Date;
+  auteurEmail: string;
+  horodatageReception: Date;
+}
+
+/**
+ * Normalise un corps de saisie brut (API) : dossard entier (nombre ou chaîne
+ * de chiffres — toute autre forme reste null et valide en erreur champ),
+ * motif hors liste fermée → null (jamais avali en « autre » silencieux),
+ * heure conservée brute (la validation juge la forme).
+ */
+export function normaliserSaisieAbandon(raw: unknown): SaisieAbandonInput {
+  const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const dossardBrut = record.dossard;
+  let dossard: number | null = null;
+  if (typeof dossardBrut === 'number' && Number.isInteger(dossardBrut)) {
+    dossard = dossardBrut;
+  } else if (typeof dossardBrut === 'string' && /^\d+$/.test(dossardBrut.trim())) {
+    dossard = Number(dossardBrut.trim());
+  }
+  const lieu = typeof record.lieu === 'string' ? record.lieu.trim() : '';
+  const heure = typeof record.heure === 'string' ? record.heure.trim() : '';
+  return {
+    dossard,
+    lieu,
+    motif: estMotifAbandon(record.motif) ? record.motif : null,
+    heure: heure.length > 0 ? heure : null,
+  };
+}
+
+/**
+ * Tolérance d'horloge PC/serveur : une heure saisie ≤ maintenant + 2 minutes
+ * reste valide (dérive d'horloge du poste PC, soumission rapide du défaut
+ * « maintenant »). Même constante pour la validation locale ET serveur.
+ */
+export const TOLERANCE_HORLOGE_MS = 120_000;
+
+/**
+ * Validation de forme de la saisie (mêmes règles côté client pour le retour
+ * immédiat et côté serveur pour la vérité, vouvoiement PC) : dossard entier
+ * ≥ 1, lieu 1–200, motif de la liste fermée, heure ISO UTC passée ou dans la
+ * tolérance d'horloge.
+ */
+export function validerSaisieAbandon(
+  input: SaisieAbandonInput,
+  maintenant: Date,
+): AbandonFieldErrors {
+  const errors: AbandonFieldErrors = {};
+  if (input.dossard === null || input.dossard < 1) {
+    errors.dossard = 'Indiquez un numéro de dossard.';
+  }
+  if (input.lieu.length === 0) {
+    errors.lieu = 'Le lieu est obligatoire (repère terrain : village, carrefour…).';
+  } else if (input.lieu.length > MAX_LIEU_ABANDON_LENGTH) {
+    errors.lieu = `${MAX_LIEU_ABANDON_LENGTH} caractères maximum pour le lieu.`;
+  }
+  if (input.motif === null) {
+    errors.motif = 'Choisissez un motif d’abandon parmi la liste.';
+  }
+  if (input.heure === null || !estHorodatageValide(input.heure)) {
+    errors.heure = 'Indiquez la date et l’heure de l’abandon.';
+  } else if (new Date(input.heure).getTime() > maintenant.getTime() + TOLERANCE_HORLOGE_MS) {
+    errors.heure = 'L’heure d’abandon ne peut pas être dans le futur (vérifie l’horloge du poste).';
+  }
+  return errors;
+}
+
+export function hasAbandonFieldErrors(errors: AbandonFieldErrors): boolean {
+  return Object.values(errors).some((message) => typeof message === 'string');
 }
 
 /** Bornes symétriques du CHECK SQL appareil_client (0025). */

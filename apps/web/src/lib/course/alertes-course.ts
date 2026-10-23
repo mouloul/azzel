@@ -19,8 +19,8 @@ export function libelleDepuisAttente(): string {
 /** Libellé inactif quand le secteur du checkpoint n'a pas de contact PC. */
 export const LIBELLE_CONTACT_NON_RENSEIGNE = 'Appeler le secteur — contact du secteur non renseigné';
 
-/** Libellé de l'action abandon : présente mais désactivée jusqu'à la saisie des abandons. */
-export const LIBELLE_ABANDON_A_VENIR = 'Saisir l’abandon — bientôt disponible';
+/** Story 5.3 — action abandon ACTIVE : ouvre le formulaire pré-rempli du dossard alerté. */
+export const LIBELLE_ACTION_ABANDON = 'Saisir l’abandon';
 
 /** Note « aucune alerte » : la place de l'alerte batterie (suivi GPS) est dite, sans numéro de story. */
 export const NOTE_SANS_ALERTE =

@@ -74,7 +74,7 @@ development_status:
   epic-5: in-progress
   5-1-tableau-de-bord-live-du-pc-course: review
   5-2-alertes-hors-délais: review
-  5-3-saisie-des-abandons: backlog
+  5-3-saisie-des-abandons: review
   5-4-annulation-auditable-des-passages: backlog
   epic-5-retrospective: optional
 

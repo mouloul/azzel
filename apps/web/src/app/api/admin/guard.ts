@@ -12,7 +12,14 @@ import type { SessionRecord } from '@/modules/iam/store';
 
 import { toAdminApiError, type ApiError } from '@/modules/inscriptions/errors';
 
-export function adminErrorResponse(apiError: ApiError): NextResponse {
+/**
+ * Réponse d'erreur commune des routes admin : n'expose QUE status + envelope.
+ * Typage structurel (Pick) : les mappers des autres modules (chrono…) portent
+ * leur propre `fields` — jamais lu ici, la signature reste compatible.
+ */
+export function adminErrorResponse(
+  apiError: Pick<ApiError, 'status' | 'envelope'>,
+): NextResponse {
   return NextResponse.json(apiError.envelope, { status: apiError.status });
 }
 

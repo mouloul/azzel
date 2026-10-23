@@ -11,10 +11,7 @@ import {
   MISSION_TYPES,
   chevauche,
   couverture,
-  datetimeLocalVersIso,
-  estHorodatageValide,
   estUuidValide,
-  isoVersDatetimeLocal,
   normalizeMissionInput,
   normalizeSecteurInput,
   validateMissionInput,
@@ -209,43 +206,6 @@ describe('validateMissionInput — type fermé, horaires, consignes', () => {
     );
     expect(errors.debutLe).toBeTruthy();
     expect(errors.finLe).toBeTruthy();
-  });
-
-  it('estHorodatageValide : RFC3339 STRICT en Z — refus des formes ambiguës', () => {
-    // Acceptés : secondes et fractions facultatives, toujours Z.
-    expect(estHorodatageValide('2027-05-16T06:00Z')).toBe(true);
-    expect(estHorodatageValide('2027-05-16T06:00:00Z')).toBe(true);
-    expect(estHorodatageValide('2027-05-16T06:00:00.000Z')).toBe(true);
-    // Refusés : année seule, sans Z (interprété en heure locale serveur),
-    // décalage explicite, espace au lieu de T, date impossible.
-    expect(estHorodatageValide('2027')).toBe(false);
-    expect(estHorodatageValide('2027-05-16T06:00')).toBe(false);
-    expect(estHorodatageValide('2027-05-16T06:00:00')).toBe(false);
-    expect(estHorodatageValide('2027-05-16T06:00:00+02:00')).toBe(false);
-    expect(estHorodatageValide('2027-05-16 06:00:00Z')).toBe(false);
-    expect(estHorodatageValide('16/05/2027')).toBe(false);
-    expect(estHorodatageValide('2027-13-45T99:99:00Z')).toBe(false);
-    expect(estHorodatageValide('')).toBe(false);
-  });
-
-  it('helpers datetime-local : aller-retour UTC → locale → UTC (même instant)', () => {
-    for (const iso of [
-      '2027-05-16T06:00:00.000Z',
-      '2027-12-31T23:59:00.000Z',
-      '2027-01-01T00:01:00.000Z',
-      '2027-05-16T22:30:00.000Z',
-    ]) {
-      expect(datetimeLocalVersIso(isoVersDatetimeLocal(iso))).toBe(iso);
-    }
-  });
-
-  it('isoVersDatetimeLocal : valeur d’input datetime-local bien formée ; invalide → vide', () => {
-    expect(isoVersDatetimeLocal('2027-05-16T06:05:07.000Z')).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/,
-    );
-    expect(isoVersDatetimeLocal('pas-une-date')).toBe('');
-    expect(datetimeLocalVersIso('nimporte')).toBe('');
-    expect(datetimeLocalVersIso('')).toBe('');
   });
 
   it('estUuidValide : UUID canoniques acceptés, le reste refusé', () => {

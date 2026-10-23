@@ -4,7 +4,8 @@
    pointillés (jamais de zébrage), lignes non cliquables. Fichier propre à la
    page /admin/course : hors du chunk CSS partagé (budget accueil). Seule
    animation : le clignotement borné du bloc alertes 5.2 (1 flash/s), coupé
-   sous prefers-reduced-motion. */
+   sous prefers-reduced-motion. Story 5.3 : en-tête + formulaire abandon sans
+   animation propre. */
 
 .course-live{display:grid;gap:var(--az-space-4)}
 .course-fraicheur{font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte-2);margin:0}
@@ -47,6 +48,15 @@
 .course-alerte-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--az-space-3)}
 .course-alerte-inactif{font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
 .course-sans-alerte{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte-2)}
+
+/* Story 5.3 — saisie des abandons : en-tête (fraîcheur + bouton dédié),
+   formulaire inline (champs globaux .field/.fieldset), bandeau succès
+   role="status" en écho du bloc alertes. Aucune animation propre. */
+.course-entete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--az-space-2)}
+.course-entete .course-fraicheur{margin:0}
+.course-abandon{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-abandon-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
+.course-abandon-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-2) var(--az-space-3)}
 
 @media (prefers-reduced-motion: reduce){
   .course-alertes{animation:none}
