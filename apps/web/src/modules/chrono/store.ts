@@ -18,6 +18,8 @@ import type {
   AlerteHorsDelais,
   AnnulationResultat,
   AppareilRecord,
+  ClassementsRecord,
+  EpreuveHeureDepartRecord,
   EtatCourseRecord,
   MotifAbandon,
   TerrainEvenementRecord,
@@ -32,6 +34,8 @@ import {
   AnnulationEvenementIntrouvableError,
   AnnulationRetraitRefuseError,
   AppareilRevokedError,
+  HeuresDepartEpreuveInconnueError,
+  HeuresDepartSansEditionError,
   PlafondAppareilsError,
 } from './errors';
 
@@ -109,6 +113,28 @@ export interface ChronoStore {
     motif: string;
     auteurEmail: string;
   }): Promise<AnnulationResultat>;
+  /**
+   * Story 7.1 — classements par épreuve de l'édition courante, lus en UNE
+   * SEULE transaction (NFR-4 : même instant pour partants, arrivées, abandons
+   * et heures de départ — jamais un classement partiel incohérent). Lecture
+   * seule au-dessus de l'arbitrage AD-3 : le service calcule rangs et temps.
+   */
+  classements(organisationId: string): Promise<ClassementsRecord>;
+  /** Story 7.1 — épreuves de l'édition courante avec leur heure de départ. */
+  listerHeuresDepart(organisationId: string): Promise<{
+    edition: { id: string; nom: string } | null;
+    epreuves: EpreuveHeureDepartRecord[];
+  }>;
+  /**
+   * Story 7.1 — enregistrement des heures de départ officielles : UNE
+   * transaction avecOrg, épreuves résolues dans l'org/édition courante (une
+   * inconnue → erreur champ), mise à jour ligne par ligne. Retourne l'état
+   * SERVEUR complet (la carte se resynchronise dessus).
+   */
+  enregistrerHeuresDepart(input: {
+    organisationId: string;
+    heures: { epreuveId: string; heureDepart: Date | null }[];
+  }): Promise<EpreuveHeureDepartRecord[]>;
 }
 
 /** Jeton BRUT du canal sync : 256 bits, base64url — hashé avant toute base. */
@@ -244,6 +270,33 @@ async function editionCourante(
     LIMIT 1
   `;
   return editions[0];
+}
+
+/**
+ * Story 7.1 — épreuves de l'édition avec heure de départ : LECTURE UNIQUE
+ * partagée par classements/listerHeuresDepart/enregistrerHeuresDepart (même
+ * SELECT, même tri canonique distance_km DESC puis id ASC — jamais copié).
+ */
+async function epreuvesHeuresDepart(
+  tx: postgres.TransactionSql,
+  organisationId: string,
+  editionId: string,
+): Promise<EpreuveHeureDepartRecord[]> {
+  const rows = await tx<
+    { id: string; slug: string; name: string; distance_km: number; heure_depart: Date | null }[]
+  >`
+    SELECT id, slug, name, distance_km::float8 AS distance_km, heure_depart
+    FROM epreuve
+    WHERE organisation_id = ${organisationId} AND edition_id = ${editionId}
+    ORDER BY distance_km DESC, id ASC
+  `;
+  return rows.map((row) => ({
+    epreuveId: row.id,
+    slug: row.slug,
+    nom: row.name,
+    distanceKm: row.distance_km,
+    heureDepart: row.heure_depart,
+  }));
 }
 
 export function createChronoStore(sql: Sql): ChronoStore {
@@ -1014,6 +1067,205 @@ export function createChronoStore(sql: Sql): ChronoStore {
         }),
       );
     },
+
+    // -----------------------------------------------------------------
+    // Story 7.1 — classements par épreuve (départs échelonnés). Gabarit
+    // direct d'etatCourse : UNE transaction withOrg (NFR-4), lectures
+    // arbitrées AD-3 (DISTINCT ON premier reçu + NOT EXISTS annulation — le
+    // scan de départ n'entre JAMAIS dans le calcul). Le store rend des FAITS
+    // (partants, arrivées, abandons, heures) ; rangs et temps sont assemblés
+    // par le service, au-dessus de ce seul instant cohérent.
+    // -----------------------------------------------------------------
+    async classements(organisationId: string): Promise<ClassementsRecord> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          const edition = await editionCourante(tx, organisationId);
+          if (!edition) {
+            return { edition: null, epreuves: [], fraicheur: null };
+          }
+
+          const [epreuvesHeures, partantRows, retraitRows, arriveeRows, abandonRows, fraicheurRows] =
+            await Promise.all([
+              epreuvesHeuresDepart(tx, organisationId, edition.id),
+              // Partants POTENTIELS : validés ∧ numérotés ∧ jeton résolu — le
+              // retrait arbitré (ci-dessous) fait le départ effectif (un
+              // validé/numéroté jamais retiré n'est PAS partant : absent).
+              tx<{
+                jeton: string;
+                dossard: number;
+                epreuve_id: string;
+                age_category: string;
+              }[]>`
+                SELECT jeton_edossard AS jeton, dossard, epreuve_id, age_category
+                FROM coureur
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+                  AND status = 'validé'
+                  AND jeton_edossard IS NOT NULL
+                  AND dossard IS NOT NULL
+              `,
+              // Retraits arbitrés (AD-3) — l'existence du PREMIER suffit à
+              // faire partir : son horodatage ne sert JAMAIS au classement.
+              tx<{ jeton_coureur: string }[]>`
+                SELECT DISTINCT ON (jeton_coureur) jeton_coureur
+                FROM terrain_evenement te
+                WHERE te.organisation_id = ${organisationId}
+                  AND te.edition_id = ${edition.id}
+                  AND te.type = 'retrait'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+                  )
+                ORDER BY jeton_coureur, horodatage_reception ASC, id ASC
+              `,
+              // Premiers passages ARRIVÉE arbitrés par coureur : checkpoint
+              // global à l'édition (est_arrivee), croisé avec le coureur pour
+              // l'épreuve côté service. horodatage_reception SERVEUR = base
+              // du temps (AD-3) ; annulés exclus (ré-arbitrage en lecture).
+              tx<{ jeton_coureur: string; horodatage_reception: Date }[]>`
+                SELECT DISTINCT ON (te.jeton_coureur)
+                       te.jeton_coureur, te.horodatage_reception
+                FROM terrain_evenement te
+                JOIN mission m ON m.id = te.checkpoint_id
+                JOIN secteur s ON s.id = m.secteur_id
+                WHERE te.organisation_id = ${organisationId}
+                  AND te.edition_id = ${edition.id}
+                  AND te.type = 'passage'
+                  AND m.organisation_id = ${organisationId}
+                  AND m.type = 'scan_checkpoint'
+                  AND m.est_arrivee
+                  AND s.edition_id = ${edition.id}
+                  AND NOT EXISTS (
+                    SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+                  )
+                ORDER BY te.jeton_coureur, te.horodatage_reception ASC, te.id ASC
+              `,
+              tx<{ jeton_coureur: string }[]>`
+                SELECT jeton_coureur
+                FROM abandon
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+              `,
+              // Fraîcheur du contrat classements : DERNIER PASSAGE reçu —
+              // les retraits ne la font pas bouger (un retrait plus récent
+              // qu'un passage reste invisible côté fraîcheur).
+              tx<{ fraicheur: Date | null }[]>`
+                SELECT max(horodatage_reception) AS fraicheur
+                FROM terrain_evenement
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+                  AND type = 'passage'
+              `,
+            ]);
+
+          const partis = new Set(retraitRows.map((row) => row.jeton_coureur));
+          const abandonnes = new Set(abandonRows.map((row) => row.jeton_coureur));
+          const arriveeParJeton = new Map(
+            arriveeRows.map((row) => [row.jeton_coureur, row.horodatage_reception]),
+          );
+          const epreuves: ClassementsRecord['epreuves'] = epreuvesHeures.map((epreuve) => ({
+            ...epreuve,
+            lignes: [],
+          }));
+          const epreuveParId = new Map(epreuves.map((epreuve) => [epreuve.epreuveId, epreuve]));
+          for (const row of partantRows) {
+            // Partant = résolu ∧ RETIRÉ (arbitré). Un coureur dont l'épreuve
+            // n'est pas celle d'une épreuve listée (défense : FK libre) reste
+            // neutre — il n'apparaît dans AUCUN classement.
+            if (!partis.has(row.jeton)) {
+              continue;
+            }
+            const epreuve = epreuveParId.get(row.epreuve_id);
+            if (epreuve === undefined) {
+              continue;
+            }
+            const arriveeRecue = arriveeParJeton.get(row.jeton) ?? null;
+            // L'abandon DOMINE l'arrivée : un scan d'arrivée tardif (réseau
+            // différé) ne fait jamais rebasculer un abandonné (calque 5.3).
+            const statut: 'arrivé' | 'en-course' | 'abandonné' = abandonnes.has(row.jeton)
+              ? 'abandonné'
+              : arriveeRecue !== null
+                ? 'arrivé'
+                : 'en-course';
+            epreuve.lignes.push({
+              dossard: row.dossard,
+              epreuveId: row.epreuve_id,
+              categorieAge: row.age_category,
+              statut,
+              arriveeRecue,
+            });
+          }
+
+          return {
+            edition: { id: edition.id, nom: edition.name },
+            epreuves,
+            fraicheur: fraicheurRows[0]?.fraicheur ?? null,
+          };
+        }),
+      );
+    },
+
+    // -----------------------------------------------------------------
+    // Story 7.1 — heures de départ officielles : lecture (carte admin) et
+    // écriture organisateur. L'écriture résout les épreuves DANS l'org/édition
+    // courante (RLS comprise — un id deviné d'une autre org est introuvable)
+    // et retourne l'état serveur complet.
+    // -----------------------------------------------------------------
+    async listerHeuresDepart(organisationId: string): Promise<{
+      edition: { id: string; nom: string } | null;
+      epreuves: EpreuveHeureDepartRecord[];
+    }> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          const edition = await editionCourante(tx, organisationId);
+          if (!edition) {
+            return { edition: null, epreuves: [] };
+          }
+          return {
+            edition: { id: edition.id, nom: edition.name },
+            epreuves: await epreuvesHeuresDepart(tx, organisationId, edition.id),
+          };
+        }),
+      );
+    },
+
+    async enregistrerHeuresDepart(input: {
+      organisationId: string;
+      heures: { epreuveId: string; heureDepart: Date | null }[];
+    }): Promise<EpreuveHeureDepartRecord[]> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          // « Aucune édition en cours » est un refus DÉDIÉ (409) : la carte
+          // n'a rien à configurer, ce n'est la faute d'AUCUN champ.
+          const edition = await editionCourante(tx, input.organisationId);
+          if (!edition) {
+            throw new HeuresDepartSansEditionError();
+          }
+          const connues = await tx<{ id: string }[]>`
+            SELECT id FROM epreuve
+            WHERE organisation_id = ${input.organisationId}
+              AND edition_id = ${edition.id}
+          `;
+          const idsConnus = new Set(connues.map((row) => row.id));
+          const inconnues = input.heures
+            .map((ligne) => ligne.epreuveId)
+            .filter((epreuveId) => !idsConnus.has(epreuveId));
+          if (inconnues.length > 0) {
+            // RLS comprise : une épreuve d'une autre org/édition est
+            // introuvable par construction — erreur champ par épreuve.
+            throw new HeuresDepartEpreuveInconnueError(inconnues);
+          }
+          for (const ligne of input.heures) {
+            await tx`
+              UPDATE epreuve SET heure_depart = ${ligne.heureDepart}
+              WHERE id = ${ligne.epreuveId}
+                AND organisation_id = ${input.organisationId}
+                AND edition_id = ${edition.id}
+            `;
+          }
+          return epreuvesHeuresDepart(tx, input.organisationId, edition.id);
+        }),
+      );
+    },
   };
 }
 
@@ -1032,6 +1284,9 @@ function createUnavailableStore(): ChronoStore {
     etatCourse: unavailable,
     saisirAbandon: unavailable,
     annulerPassage: unavailable,
+    classements: unavailable,
+    listerHeuresDepart: unavailable,
+    enregistrerHeuresDepart: unavailable,
   };
 }
 

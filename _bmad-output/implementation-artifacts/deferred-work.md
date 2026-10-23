@@ -13,3 +13,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-4-pédagogie-batterie-et-rappel-j-7.md`
   summary: Alerte batterie < 15 % côté coureur (Should balisé [ASSUMPTION: à confirmer] — exige expo-battery et un choix produit sur le comportement)
   evidence: Epics.md story 6.4 AC3 balise explicitement Should/à confirmer ; aucune dépendance batterie installée dans apps/runners.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-1-classements-par-épreuve-et-départs-échelonnés.md`
+  summary: Classement par sexe (balisé [ASSUMPTION: crédibilité fédération]) — exige d'ajouter la donnée sexe au formulaire d'inscription et au modèle
+  evidence: Epics.md 7.1 AC2 : aucune colonne sexe n'existe (grep vide sur le schéma inscriptions) ; ajout = évolution du formulaire public + migration, à confirmer produit.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-1-classements-par-épreuve-et-départs-échelonnés.md`
+  summary: Epingler NFR-4 par un test de lecture classements PENDANT une sync concurrente
+  evidence: Revue 7.1 (finding #4) : garantie structurelle (une transaction withOrg) ; le harnais d'intégration du dépôt n'injecte pas d'écritures concurrentes pendant une lecture.

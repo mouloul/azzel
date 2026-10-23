@@ -32,6 +32,7 @@ vi.mock(
 
 const chronoServiceMock = vi.hoisted(() => ({
   getEtatCourse: vi.fn(),
+  getHeuresDepart: vi.fn(),
 }));
 
 vi.mock(
@@ -132,9 +133,29 @@ function carteAbandons(html: string): string {
 beforeEach(() => {
   sessionMock.requireRolePage.mockReset();
   chronoServiceMock.getEtatCourse.mockReset();
+  chronoServiceMock.getHeuresDepart.mockReset();
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_ORGANISATEUR,
+  });
+  chronoServiceMock.getHeuresDepart.mockResolvedValue({
+    edition: { id: 'edition-1', nom: 'Édition 2027' },
+    epreuves: [
+      {
+        epreuveId: 'ep-1',
+        epreuveSlug: 'longue',
+        epreuveNom: 'La Longue — 35 km',
+        distanceKm: 35,
+        heureDepart: '2027-05-16T08:00:00.000Z',
+      },
+      {
+        epreuveId: 'ep-2',
+        epreuveSlug: 'moyenne',
+        epreuveNom: 'La Moyenne — 12 km',
+        distanceKm: 12,
+        heureDepart: null,
+      },
+    ],
   });
 });
 
@@ -364,5 +385,42 @@ describe('page /admin/course — annulation auditable des passages (story 5.4)',
     const blocReduit = css.slice(css.indexOf('@media (prefers-reduced-motion'));
     expect(blocReduit).toMatch(/\.course-alertes\s*\{\s*animation:\s*none/);
     expect(blocReduit).toMatch(/\.course-ligne-annuler\s*\{\s*transition:\s*none/);
+  });
+});
+
+describe('page /admin/course — carte Heures de départ (story 7.1)', () => {
+  it('carte rendue : une ligne par épreuve (nom, distance, datetime-local), heure locale enregistrée affichée', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('Heures de départ');
+    expect(html).toContain('La Longue — 35 km');
+    expect(html).toContain('La Moyenne — 12 km');
+    expect(html).toContain('type="datetime-local"');
+    expect(html).toContain('Enregistrer les heures de départ');
+    expect(html).toContain('Enregistrée :');
+    expect(html).toContain('Non configurée');
+  });
+
+  it('carte fournie par getHeuresDepart(session), lue en parallèle de l’état course (deux transactions distinctes)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    await rendu();
+    expect(chronoServiceMock.getHeuresDepart).toHaveBeenCalledWith(SESSION_ORGANISATEUR);
+  });
+
+  it('échec des heures au chargement : écran dédié (jamais une carte silencieusement absente)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    chronoServiceMock.getHeuresDepart.mockRejectedValue(new DbUnavailableError());
+    const html = await rendu();
+    expect(html).toContain('Tableau de bord indisponible');
+    expect(html).not.toContain('Heures de départ');
+  });
+
+  it('sans permission : requireRolePage REDIRIGE (volontaire) — la page ne rend jamais, la carte non plus', async () => {
+    // requireRolePage redirige en JETANT (next/navigation redirect) : un
+    // volontaire ne voit ni la page ni la carte « Heures de départ ».
+    sessionMock.requireRolePage.mockRejectedValue(new Error('NEXT_REDIRECT'));
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    await expect(rendu()).rejects.toThrow('NEXT_REDIRECT');
+    expect(chronoServiceMock.getHeuresDepart).not.toHaveBeenCalled();
   });
 });

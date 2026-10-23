@@ -1,9 +1,10 @@
 import { requireRolePage } from '@/modules/iam/session';
 import { toCourseApiError } from '@/modules/chrono/errors';
-import { getEtatCourse } from '@/modules/chrono/service';
+import { getEtatCourse, getHeuresDepart } from '@/modules/chrono/service';
 
 import { AdminIndisponible } from '../indisponible';
 import { CourseLive } from './course-live';
+import { HeuresDepart } from './heures-depart';
 import './course.css';
 
 export const dynamic = 'force-dynamic';
@@ -26,8 +27,12 @@ export default async function AdminCoursePage() {
   const session = guard.session;
 
   let etat: Awaited<ReturnType<typeof getEtatCourse>>;
+  let heures: Awaited<ReturnType<typeof getHeuresDepart>>;
   try {
-    etat = await getEtatCourse(session);
+    [etat, heures] = await Promise.all([
+      getEtatCourse(session),
+      getHeuresDepart(session),
+    ]);
   } catch (error) {
     const { envelope } = toCourseApiError(error);
     return (
@@ -51,6 +56,10 @@ export default async function AdminCoursePage() {
           5 secondes — leur fraîcheur reste affichée en toutes circonstances.
         </p>
         <CourseLive etatInitial={etat} />
+        {/* Story 7.1 — heures de départ officielles par épreuve : la carte
+            vit derrière la garde organisateur de la page (un volontaire ne
+            voit jamais /admin/course, la carte non plus). */}
+        <HeuresDepart epreuvesInitiales={heures.epreuves} />
       </article>
     </section>
   );

@@ -2,7 +2,11 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import type { AbandonFieldErrors, AnnulationFieldErrors } from './domain';
+import type {
+  AbandonFieldErrors,
+  AnnulationFieldErrors,
+  HeuresDepartFieldErrors,
+} from './domain';
 
 export { DbUnavailableError };
 
@@ -190,11 +194,57 @@ export class CorpsAnnulationTropGrandError extends Error {
   }
 }
 
+// Story 7.1 — erreurs de la configuration des heures de départ (surface PC
+// course, vouvoiement, enveloppes admin.course.* via toCourseApiError).
+
+/** Champs heures de départ invalides (heure non ISO, épreuve en double) : 400 + fields. */
+export class InvalidHeuresDepartFieldsError extends Error {
+  constructor(readonly fields: HeuresDepartFieldErrors) {
+    super('champs heures de départ invalides');
+    this.name = 'InvalidHeuresDepartFieldsError';
+  }
+}
+
+/**
+ * Une épreuve visée est introuvable dans l'org/édition courante (id inconnu,
+ * autre édition, autre organisation via RLS) : 400 + erreur champ PAR épreuve.
+ */
+export class HeuresDepartEpreuveInconnueError extends Error {
+  constructor(readonly epreuveIds: string[]) {
+    super('épreuve inconnue pour cette organisation');
+    this.name = 'HeuresDepartEpreuveInconnueError';
+  }
+}
+
+/** Aucune édition en cours : rien à configurer — refus DÉDIÉ (409), pas un champ. */
+export class HeuresDepartSansEditionError extends Error {
+  constructor() {
+    super('aucune édition en cours');
+    this.name = 'HeuresDepartSansEditionError';
+  }
+}
+
+/** Corps JSON de PUT /api/admin/course/heures-depart illisible : 400. */
+export class CorpsHeuresDepartInvalideError extends Error {
+  constructor() {
+    super('corps de requête heures de départ illisible');
+    this.name = 'CorpsHeuresDepartInvalideError';
+  }
+}
+
+/** Corps heures de départ au-delà de la garde taille (avant request.json()) : 413. */
+export class CorpsHeuresDepartTropGrandError extends Error {
+  constructor(readonly maxOctets: number) {
+    super(`corps de requête heures de départ trop volumineux (${maxOctets} octets maximum)`);
+    this.name = 'CorpsHeuresDepartTropGrandError';
+  }
+}
+
 export interface ApiError {
   status: number;
   envelope: ErrorEnvelope;
   /** Erreurs champ (400) — la route les ajoute au corps de réponse. */
-  fields?: AbandonFieldErrors & AnnulationFieldErrors;
+  fields?: AbandonFieldErrors & AnnulationFieldErrors & HeuresDepartFieldErrors;
 }
 
 /**
@@ -361,6 +411,10 @@ export function toChronoAdminApiError(error: unknown): ApiError {
  * Story 5.4 — porte aussi l'annulation auditable (POST
  * /api/admin/course/annulation) : 404 introuvable (RLS comprise), 409 retrait
  * refusé, erreurs champ (400 + fields), gardes de corps (400/413).
+ *
+ * Story 7.1 — porte aussi la configuration des heures de départ (PUT
+ * /api/admin/course/heures-depart) : erreurs champ par épreuve (400 + fields),
+ * épreuve inconnue (400 + fields), gardes de corps (400/413).
  */
 export function toCourseApiError(error: unknown): ApiError {
   if (error instanceof DbUnavailableError) {
@@ -505,6 +559,62 @@ export function toCourseApiError(error: unknown): ApiError {
         code: 'admin.course.annulation_corps_trop_grand',
         message: `Envoi trop volumineux (${error.maxOctets} octets maximum).`,
         action: 'Raccourcissez le motif puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof InvalidHeuresDepartFieldsError) {
+    return {
+      status: 400,
+      fields: error.fields,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.heures_depart_champs_invalides',
+        message: 'Certaines heures de départ sont manquantes ou invalides.',
+        action: 'Corrigez les champs signalés puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof HeuresDepartEpreuveInconnueError) {
+    const fields: HeuresDepartFieldErrors = {};
+    for (const epreuveId of error.epreuveIds) {
+      fields[epreuveId] = 'Épreuve inconnue sur l’édition en cours.';
+    }
+    return {
+      status: 400,
+      fields,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.heures_depart_epreuve_inconnue',
+        message: 'Une épreuve visée n’existe pas sur l’édition en cours.',
+        action: 'Rechargez la page — la liste des épreuves a peut-être changé.',
+      }),
+    };
+  }
+  if (error instanceof HeuresDepartSansEditionError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.heures_depart_sans_edition',
+        message: 'Aucune édition en cours : les heures de départ n’ont rien à configurer.',
+        action: 'Créez ou ouvrez l’édition de la course avant de configurer les départs.',
+      }),
+    };
+  }
+  if (error instanceof CorpsHeuresDepartInvalideError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.heures_depart_corps_invalide',
+        message: 'La requête est illisible.',
+        action: 'Rechargez la page puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof CorpsHeuresDepartTropGrandError) {
+    return {
+      status: 413,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.heures_depart_corps_trop_grand',
+        message: `Envoi trop volumineux (${error.maxOctets} octets maximum).`,
+        action: 'La page ne porte que quelques épreuves — rechargez-la puis réessayez.',
       }),
     };
   }

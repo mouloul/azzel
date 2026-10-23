@@ -12,7 +12,7 @@ import {
 import type { SessionRecord } from '@/modules/iam/store';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON, MAX_MOTIF_ANNULATION_LENGTH, normaliserSaisieAnnulation, validerSaisieAnnulation } from './domain';
+import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON, MAX_MOTIF_ANNULATION_LENGTH, normaliserSaisieAnnulation, validerSaisieAnnulation, HEURE_DEPART_MINIMALE_MS, normaliserSaisieHeuresDepart, validerSaisieHeuresDepart } from './domain';
 import {
   AbandonAvantDepartError,
   AbandonDejaAbandonneError,
@@ -28,9 +28,14 @@ import {
   CorpsAbandonTropGrandError,
   CorpsAnnulationInvalideError,
   CorpsAnnulationTropGrandError,
+  CorpsHeuresDepartInvalideError,
+  CorpsHeuresDepartTropGrandError,
   CorpsSyncInvalideError,
+  HeuresDepartEpreuveInconnueError,
+  HeuresDepartSansEditionError,
   InvalidAbandonFieldsError,
   InvalidAnnulationFieldsError,
+  InvalidHeuresDepartFieldsError,
   JetonAppareilInvalideError,
   LotTropGrandError,
   toCourseApiError,
@@ -39,7 +44,10 @@ import type { ChronoStore, StatutInsertion } from './store';
 import {
   annulerPassage,
   enregistrerAppareil,
+  enregistrerHeuresDepart,
+  getClassements,
   getEtatCourse,
+  getHeuresDepart,
   listerAppareils,
   premierRecu,
   revoquerAppareil,
@@ -150,6 +158,13 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
     })),
     saisirAbandon: vi.fn(async () => ABANDON_RECORD),
     annulerPassage: vi.fn(async () => ANNULATION_RESULTAT),
+    classements: vi.fn(async () => ({
+      edition: null,
+      epreuves: [],
+      fraicheur: null,
+    })),
+    listerHeuresDepart: vi.fn(async () => ({ edition: null, epreuves: [] })),
+    enregistrerHeuresDepart: vi.fn(async () => []),
     ...overrides,
   };
 }
@@ -803,5 +818,394 @@ describe('story 5.4 — toCourseApiError (mapper annulation)', () => {
       toCourseApiError(new CorpsAnnulationTropGrandError(1024)).envelope.error.code,
     ).toBe('admin.course.annulation_corps_trop_grand');
     expect(toCourseApiError(new CorpsAnnulationTropGrandError(1024)).status).toBe(413);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 7.1 — classements par épreuve (départs échelonnés) et heures de
+// départ : domaine (normalisation/validation), service (assemblage des rangs,
+// temps, statuts, configure) et mapper (400 + fields PAR ÉPREUVE).
+// ---------------------------------------------------------------------------
+
+const EPREUVE_LONGUE_ID = 'epreuve-longue';
+const EPREUVE_MOYENNE_ID = 'epreuve-moyenne';
+const EPREUVE_SPRINT_ID = 'epreuve-sprint';
+
+/** Record factice : longue 09:00, moyenne 09:30 (échelonnées), sprint NULL. */
+const CLASSEMENTS_RECORD = {
+  edition: { id: 'edition-1', nom: 'Édition 2027' },
+  epreuves: [
+    {
+      epreuveId: EPREUVE_LONGUE_ID,
+      slug: 'longue',
+      nom: 'La Longue — 35 km',
+      distanceKm: 35,
+      heureDepart: new Date('2027-05-16T09:00:00.000Z'),
+      lignes: [
+        {
+          dossard: 201,
+          epreuveId: EPREUVE_LONGUE_ID,
+          categorieAge: 'Senior',
+          statut: 'arrivé' as const,
+          arriveeRecue: new Date('2027-05-16T10:40:00.000Z'),
+        },
+        {
+          dossard: 202,
+          epreuveId: EPREUVE_LONGUE_ID,
+          categorieAge: 'V1',
+          statut: 'arrivé' as const,
+          // MÊME réception que 201 : ex æquo (1, 1, 3 attendu).
+          arriveeRecue: new Date('2027-05-16T10:40:00.000Z'),
+        },
+        {
+          dossard: 203,
+          epreuveId: EPREUVE_LONGUE_ID,
+          categorieAge: 'U20',
+          statut: 'arrivé' as const,
+          arriveeRecue: new Date('2027-05-16T11:20:00.000Z'),
+        },
+        {
+          dossard: 204,
+          epreuveId: EPREUVE_LONGUE_ID,
+          categorieAge: 'Senior',
+          statut: 'en-course' as const,
+          arriveeRecue: null,
+        },
+        {
+          // Scan d'arrivée TARDIF après abandon : reste abandonné, jamais rangé.
+          dossard: 205,
+          epreuveId: EPREUVE_LONGUE_ID,
+          categorieAge: 'V2',
+          statut: 'abandonné' as const,
+          arriveeRecue: new Date('2027-05-16T12:00:00.000Z'),
+        },
+      ],
+    },
+    {
+      epreuveId: EPREUVE_MOYENNE_ID,
+      slug: 'moyenne',
+      nom: 'La Moyenne — 12 km',
+      distanceKm: 12,
+      heureDepart: new Date('2027-05-16T09:30:00.000Z'),
+      lignes: [
+        {
+          dossard: 211,
+          epreuveId: EPREUVE_MOYENNE_ID,
+          categorieAge: 'Senior',
+          statut: 'arrivé' as const,
+          // Arrivée BRUTE plus tôt que 201/202 — temps RELATIF à 09:30.
+          arriveeRecue: new Date('2027-05-16T10:20:00.000Z'),
+        },
+      ],
+    },
+    {
+      epreuveId: EPREUVE_SPRINT_ID,
+      slug: 'sprint',
+      nom: 'Le Sprint — 5 km',
+      distanceKm: 5,
+      heureDepart: null,
+      lignes: [
+        {
+          dossard: 221,
+          epreuveId: EPREUVE_SPRINT_ID,
+          categorieAge: 'Senior',
+          statut: 'arrivé' as const,
+          arriveeRecue: new Date('2027-05-16T10:00:00.000Z'),
+        },
+      ],
+    },
+  ],
+  fraicheur: new Date('2027-05-16T12:00:00.000Z'),
+};
+
+describe('story 7.1 — domaine heures de départ : normalisation, validation', () => {
+  it('normaliserSaisieHeuresDepart : lignes {epreuveId, heureDepart} conservées, garbage → heures null', () => {
+    expect(
+      normaliserSaisieHeuresDepart({
+        heures: [{ epreuveId: ' ep-1 ', heureDepart: '2027-05-16T08:00:00.000Z' }, { epreuveId: 'ep-2', heureDepart: null }],
+      }),
+    ).toEqual({
+      heures: [
+        { epreuveId: 'ep-1', heureDepart: '2027-05-16T08:00:00.000Z' },
+        { epreuveId: 'ep-2', heureDepart: null },
+      ],
+    });
+    for (const garbage of [null, {}, { heures: 'matin' }, { heures: [null] }, { heures: [{ epreuveId: '', heureDepart: null }] }, { heures: [{ epreuveId: 'ep-1', heureDepart: 9 }] }]) {
+      expect(normaliserSaisieHeuresDepart(garbage).heures).toBeNull();
+    }
+  });
+
+  it('validerSaisieHeuresDepart : ISO UTC strict, null libre, borne 2000, doublon refusé — PAR ÉPREUVE', () => {
+    expect(
+      validerSaisieHeuresDepart({
+        heures: [
+          { epreuveId: 'ep-1', heureDepart: '2027-05-16T08:00:00.000Z' },
+          { epreuveId: 'ep-2', heureDepart: null },
+        ],
+      }),
+    ).toEqual({});
+    const invalide = validerSaisieHeuresDepart({
+      heures: [
+        // Sans Z : interprété en heure locale du serveur — refusé net.
+        { epreuveId: 'ep-1', heureDepart: '2027-05-16T08:00:00' },
+        { epreuveId: 'ep-2', heureDepart: '1999-12-31T23:59:59.000Z' },
+      ],
+    });
+    expect(invalide['ep-1']).toContain('valides');
+    expect(invalide['ep-2']).toContain('trop ancienne');
+    const doublon = validerSaisieHeuresDepart({
+      heures: [
+        { epreuveId: 'ep-1', heureDepart: null },
+        { epreuveId: 'ep-1', heureDepart: '2027-05-16T08:00:00.000Z' },
+      ],
+    });
+    expect(doublon.heures).toContain('plusieurs fois');
+    expect(HEURE_DEPART_MINIMALE_MS).toBe(Date.parse('2000-01-01T00:00:00.000Z'));
+  });
+});
+
+describe('story 7.1 — enregistrerHeuresDepart / getHeuresDepart (service)', () => {
+  it('corps illisible : CorpsHeuresDepartInvalideError, store non appelé', async () => {
+    const store = creerStoreFactice();
+    await expect(enregistrerHeuresDepart(SESSION, { heures: 3 }, { store })).rejects.toBeInstanceOf(
+      CorpsHeuresDepartInvalideError,
+    );
+    await expect(enregistrerHeuresDepart(SESSION, null, { store })).rejects.toBeInstanceOf(
+      CorpsHeuresDepartInvalideError,
+    );
+    expect(store.enregistrerHeuresDepart).not.toHaveBeenCalled();
+  });
+
+  it('heure invalide : InvalidHeuresDepartFieldsError avec fields PAR ÉPREUVE, store non appelé', async () => {
+    const store = creerStoreFactice();
+    await expect(
+      enregistrerHeuresDepart(
+        SESSION,
+        { heures: [{ epreuveId: 'ep-1', heureDepart: '08:00' }] },
+        { store },
+      ),
+    ).rejects.toBeInstanceOf(InvalidHeuresDepartFieldsError);
+    expect(store.enregistrerHeuresDepart).not.toHaveBeenCalled();
+  });
+
+  it('nominal : ISO → Date, null conservé, org de la session, état serveur sérialisé ISO', async () => {
+    const epreuveRecord = {
+      epreuveId: 'ep-1',
+      slug: 'longue',
+      nom: 'La Longue — 35 km',
+      distanceKm: 35,
+      heureDepart: new Date('2027-05-16T08:00:00.000Z'),
+    };
+    const store = creerStoreFactice({
+      enregistrerHeuresDepart: vi.fn(async () => [epreuveRecord]),
+    });
+    const epreuves = await enregistrerHeuresDepart(
+      SESSION,
+      { heures: [{ epreuveId: 'ep-1', heureDepart: '2027-05-16T08:00:00.000Z' }, { epreuveId: 'ep-2', heureDepart: null }] },
+      { store },
+    );
+    expect(store.enregistrerHeuresDepart).toHaveBeenCalledWith({
+      organisationId: 'org-1',
+      heures: [
+        { epreuveId: 'ep-1', heureDepart: new Date('2027-05-16T08:00:00.000Z') },
+        { epreuveId: 'ep-2', heureDepart: null },
+      ],
+    });
+    expect(epreuves).toEqual([
+      {
+        epreuveId: 'ep-1',
+        epreuveSlug: 'longue',
+        epreuveNom: 'La Longue — 35 km',
+        distanceKm: 35,
+        heureDepart: '2027-05-16T08:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('getHeuresDepart : lecture org de la session, ISO ou null', async () => {
+    const store = creerStoreFactice({
+      listerHeuresDepart: vi.fn(async () => ({
+        edition: { id: 'edition-1', nom: 'Édition 2027' },
+        epreuves: [
+          {
+            epreuveId: 'ep-1',
+            slug: 'longue',
+            nom: 'La Longue — 35 km',
+            distanceKm: 35,
+            heureDepart: new Date('2027-05-16T08:00:00.000Z'),
+          },
+        ],
+      })),
+    });
+    const heures = await getHeuresDepart(SESSION, { store });
+    expect(store.listerHeuresDepart).toHaveBeenCalledWith('org-1');
+    expect(heures.epreuves[0]?.heureDepart).toBe('2027-05-16T08:00:00.000Z');
+  });
+});
+
+describe('story 7.1 — getClassements (service : rangs, temps, statuts, configure)', () => {
+  it('libellé « Classement provisoire » + genereA ISO + fraîcheur ISO', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const classements = await getClassements('org-1', { store });
+    expect(classements.libelle).toBe('Classement provisoire');
+    expect(new Date(classements.genereA).toString()).not.toBe('Invalid Date');
+    expect(classements.fraicheur).toBe('2027-05-16T12:00:00.000Z');
+    expect(store.classements).toHaveBeenCalledWith('org-1');
+  });
+
+  it('scratch + EX ÆQUO : 1, 1, 3 — temps = réception ARRIVÉE − heure de départ de l’épreuve', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const classements = await getClassements('org-1', { store });
+    const longue = classements.epreuves.find((e) => e.epreuveSlug === 'longue');
+    expect(longue?.lignes.map((ligne) => [ligne.dossard, ligne.rang, ligne.tempsMs])).toEqual([
+      [201, 1, 100 * 60_000],
+      [202, 1, 100 * 60_000],
+      [203, 3, 140 * 60_000],
+      [204, null, null],
+      [205, null, null],
+    ]);
+  });
+
+  it('départs échelonnés : la Moyenne (09:30) a SES temps — ordre d’arrivée BRUT ≠ ordre des temps', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const classements = await getClassements('org-1', { store });
+    const moyenne = classements.epreuves.find((e) => e.epreuveSlug === 'moyenne');
+    // 211 est arrivé BRUT (10:20) AVANT 201/202 (10:40) mais court une autre
+    // course : 50 min contre 100 min, rangs incomparables entre épreuves.
+    expect(moyenne?.lignes).toEqual([
+      { dossard: 211, rang: 1, tempsMs: 50 * 60_000, statut: 'arrivé', categorieAge: 'Senior' },
+    ]);
+  });
+
+  it('abandonné : jamais rangé, dossard LISTÉ À PART ; en-course : sans rang ni temps, APRÈS les arrivés', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const classements = await getClassements('org-1', { store });
+    const longue = classements.epreuves.find((e) => e.epreuveSlug === 'longue');
+    expect(longue?.abandons).toEqual([205]);
+    const abandonne = longue?.lignes.find((ligne) => ligne.dossard === 205);
+    expect(abandonne).toEqual({
+      dossard: 205,
+      rang: null,
+      tempsMs: null,
+      statut: 'abandonné',
+      categorieAge: 'V2',
+    });
+    // Ordre : arrivés rangés, en course, abandonnés.
+    expect(longue?.lignes.map((ligne) => ligne.statut)).toEqual([
+      'arrivé',
+      'arrivé',
+      'arrivé',
+      'en-course',
+      'abandonné',
+    ]);
+  });
+
+  it('heure de départ ABSENTE : configure false, JAMAIS de temps faux à zéro', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const classements = await getClassements('org-1', { store });
+    const sprint = classements.epreuves.find((e) => e.epreuveSlug === 'sprint');
+    expect(sprint?.configure).toBe(false);
+    expect(sprint?.heureDepart).toBeNull();
+    expect(sprint?.lignes).toEqual([
+      { dossard: 221, rang: null, tempsMs: null, statut: 'arrivé', categorieAge: 'Senior' },
+    ]);
+  });
+
+  it('sans édition : état ZÉRO cohérent (épreuves vides), jamais une erreur', async () => {
+    const store = creerStoreFactice();
+    const classements = await getClassements('org-1', { store });
+    expect(classements.epreuves).toEqual([]);
+    expect(classements.fraicheur).toBeNull();
+    expect(classements.libelle).toBe('Classement provisoire');
+  });
+
+  it('garde categorieAge : valeur HORS union du contrat → repli « Senior », jamais un cast silencieux', async () => {
+    // Défense en profondeur : la base refuse déjà (CHECK coureur.age_category)
+    // — un record factice portant une catégorie inconnue ne fait pas mentir
+    // le type du contrat servi.
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => ({
+        edition: { id: 'edition-1', nom: 'Édition 2027' },
+        epreuves: [
+          {
+            epreuveId: 'epreuve-longue',
+            slug: 'longue',
+            nom: 'La Longue — 35 km',
+            distanceKm: 35,
+            heureDepart: new Date('2027-05-16T09:00:00.000Z'),
+            lignes: [
+              {
+                dossard: 201,
+                epreuveId: 'epreuve-longue',
+                categorieAge: 'XX99',
+                statut: 'arrivé' as const,
+                arriveeRecue: new Date('2027-05-16T10:00:00.000Z'),
+              },
+              {
+                dossard: 202,
+                epreuveId: 'epreuve-longue',
+                categorieAge: 'V1',
+                statut: 'arrivé' as const,
+                arriveeRecue: new Date('2027-05-16T10:30:00.000Z'),
+              },
+            ],
+          },
+        ],
+        fraicheur: null,
+      })),
+    });
+    const classements = await getClassements('org-1', { store });
+    expect(classements.epreuves[0]?.lignes.map((ligne) => ligne.categorieAge)).toEqual([
+      'Senior',
+      'V1',
+    ]);
+  });
+});
+
+describe('story 7.1 — toCourseApiError (mapper heures de départ)', () => {
+  it('champs invalides : 400 + fields PAR ÉPREUVE, enveloppe dédiée vouvoyée', () => {
+    const apiError = toCourseApiError(
+      new InvalidHeuresDepartFieldsError({
+        'ep-1': 'Indiquez une date et une heure de départ valides.',
+      }),
+    );
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields?.['ep-1']).toContain('valides');
+    expect(apiError.envelope.error.code).toBe('admin.course.heures_depart_champs_invalides');
+    expect(apiError.envelope.error.action).not.toMatch(/\b[Rr]éessaie\b/);
+  });
+
+  it('épreuve inconnue : 400 + erreur champ pour CHAQUE id (RLS comprise)', () => {
+    const apiError = toCourseApiError(new HeuresDepartEpreuveInconnueError(['ep-1', 'ep-2']));
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields?.['ep-1']).toContain('Épreuve inconnue');
+    expect(apiError.fields?.['ep-2']).toContain('Épreuve inconnue');
+    expect(apiError.envelope.error.code).toBe('admin.course.heures_depart_epreuve_inconnue');
+  });
+
+  it('AUCUNE édition en cours : 409 DÉDIÉ (enveloppe propre, « aucune édition »), SANS fields', () => {
+    const apiError = toCourseApiError(new HeuresDepartSansEditionError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.fields).toBeUndefined();
+    expect(apiError.envelope.error.code).toBe('admin.course.heures_depart_sans_edition');
+    expect(apiError.envelope.error.message).toMatch(/aucune édition en cours/i);
+  });
+
+  it('gardes de corps : 400 illisible, 413 trop grand', () => {
+    expect(toCourseApiError(new CorpsHeuresDepartInvalideError()).status).toBe(400);
+    expect(
+      toCourseApiError(new CorpsHeuresDepartTropGrandError(1024)).envelope.error.code,
+    ).toBe('admin.course.heures_depart_corps_trop_grand');
+    expect(toCourseApiError(new CorpsHeuresDepartTropGrandError(1024)).status).toBe(413);
   });
 });

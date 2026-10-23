@@ -1,9 +1,16 @@
 import {
   MOTIF_REJET_CONTRAT_INVALIDE,
   SYNC_TERRAIN_MAX_LOT,
+  CATEGORIES_AGE_CLASSEMENT,
+  departagerExAequo,
   estCorpsLotSyncTerrainValide,
   estEvenementSyncTerrainValide,
+  LIBELLE_CLASSEMENT,
+  type CategorieAgeClassement,
+  type ClassementEpreuve,
+  type ClassementsEdition,
   type EvenementSyncTerrain,
+  type LigneClassement,
   type ReponseLotSync,
 } from '@azzel/shared';
 
@@ -19,23 +26,30 @@ import {
   type AppareilRecord,
   type AlerteHorsDelais,
   type CheckpointCourse,
+  type ClassementsRecord,
+  type EpreuveHeureDepartRecord,
   type EtatCourseRecord,
   type MotifAbandon,
   type TerrainEvenementRecord,
   hasAbandonFieldErrors,
   hasAnnulationFieldErrors,
+  hasHeuresDepartFieldErrors,
   normaliserSaisieAbandon,
   normaliserSaisieAnnulation,
+  normaliserSaisieHeuresDepart,
   validerSaisieAbandon,
   validerSaisieAnnulation,
+  validerSaisieHeuresDepart,
 } from './domain';
 import {
   AppareilClientInvalideError,
   AppareilNotFoundError,
   AppareilRevokedError,
+  CorpsHeuresDepartInvalideError,
   CorpsSyncInvalideError,
   InvalidAbandonFieldsError,
   InvalidAnnulationFieldsError,
+  InvalidHeuresDepartFieldsError,
   JetonAppareilInvalideError,
   LotTropGrandError,
 } from './errors';
@@ -375,4 +389,168 @@ export async function annulerPassage(
     motif: input.motif,
     auteurEmail: session.email,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Story 7.1 — classements par épreuve et heures de départ officielles.
+//
+// getClassements : assemblage du contrat shared AU-DESSUS du record store —
+// temps = réception serveur du premier passage ARRIVÉE arbitré − heure de
+// départ OFFICIELLE de l'épreuve (AD-3 : jamais l'heure appareil, jamais le
+// scan de départ), rangs ex æquo via departagerExAequo (1, 1, 3), abandons
+// listés à part jamais rangés, « configure » par épreuve (sans heure de
+// départ : jamais de temps faux à zéro). Le libellé « Classement
+// provisoire » fait partie du contrat servi (jamais « officiel »).
+//
+// Heures de départ : la carte admin de /admin/course lit (getHeuresDepart)
+// et écrit (enregistrerHeuresDepart — PUT organisateur, ISO UTC stocké,
+// réaffichage heure locale côté client).
+// ---------------------------------------------------------------------------
+
+/** Épreuve avec heure de départ, sérialisée pour la page/route (ISO ou null). */
+export interface EpreuveHeureDepartSerde {
+  epreuveId: string;
+  epreuveSlug: string;
+  epreuveNom: string;
+  distanceKm: number;
+  heureDepart: string | null;
+}
+
+function versEpreuveHeureDepart(record: EpreuveHeureDepartRecord): EpreuveHeureDepartSerde {
+  return {
+    epreuveId: record.epreuveId,
+    epreuveSlug: record.slug,
+    epreuveNom: record.nom,
+    distanceKm: record.distanceKm,
+    heureDepart: record.heureDepart !== null ? record.heureDepart.toISOString() : null,
+  };
+}
+
+/** Priorité d'affichage des lignes : arrivés rangés, en course, abandonnés. */
+const ORDRE_STATUT_CLASSEMENT: Record<LigneClassement['statut'], number> = {
+  'arrivé': 0,
+  'en-course': 1,
+  'abandonné': 2,
+};
+
+/**
+ * Garde categorieAge : la valeur de base doit vivre dans l'union du CONTRAT
+ * (CATEGORIES_AGE_CLASSEMENT, calque du CHECK SQL) — une valeur inconnue
+ * (défense en profondeur : la base la refuse déjà) replie sur 'Senior',
+ * JAMAIS un cast silencieux qui ferait mentir le type.
+ */
+function categorieAgeContrat(valeur: string): CategorieAgeClassement {
+  return (CATEGORIES_AGE_CLASSEMENT as readonly string[]).includes(valeur)
+    ? (valeur as CategorieAgeClassement)
+    : 'Senior';
+}
+
+function versClassements(record: ClassementsRecord, genereA: Date): ClassementsEdition {
+  return {
+    genereA: genereA.toISOString(),
+    fraicheur: record.fraicheur !== null ? record.fraicheur.toISOString() : null,
+    libelle: LIBELLE_CLASSEMENT,
+    epreuves: record.epreuves.map((epreuve): ClassementEpreuve => {
+      const configure = epreuve.heureDepart !== null;
+      const lignes: LigneClassement[] = epreuve.lignes.map((ligne) => ({
+        dossard: ligne.dossard,
+        rang: null,
+        // Temps UNIQUEMENT pour un arrivé d'une épreuve configurée : jamais
+        // de temps faux à zéro, jamais de temps pour un abandonné (sorti de
+        // course) ni un coureur en course.
+        tempsMs:
+          configure && ligne.statut === 'arrivé' && ligne.arriveeRecue !== null
+            ? ligne.arriveeRecue.getTime() - (epreuve.heureDepart as Date).getTime()
+            : null,
+        statut: ligne.statut,
+        categorieAge: categorieAgeContrat(ligne.categorieAge),
+      }));
+      // Rangs : entre coureurs de la MÊME épreuve uniquement, par temps
+      // croissant (ex æquo : même rang, rang suivant sauté — 1, 1, 3).
+      const arrivees = lignes.filter((ligne) => ligne.tempsMs !== null);
+      arrivees.sort(
+        (a, b) => (a.tempsMs as number) - (b.tempsMs as number) || a.dossard - b.dossard,
+      );
+      const rangs = departagerExAequo(arrivees.map((ligne) => ligne.tempsMs as number));
+      arrivees.forEach((ligne, index) => {
+        ligne.rang = rangs[index] ?? null;
+      });
+      lignes.sort(
+        (a, b) =>
+          ORDRE_STATUT_CLASSEMENT[a.statut] - ORDRE_STATUT_CLASSEMENT[b.statut] ||
+          (a.rang ?? Number.POSITIVE_INFINITY) - (b.rang ?? Number.POSITIVE_INFINITY) ||
+          a.dossard - b.dossard,
+      );
+      return {
+        epreuveSlug: epreuve.slug,
+        epreuveNom: epreuve.nom,
+        distanceKm: epreuve.distanceKm,
+        heureDepart: epreuve.heureDepart !== null ? epreuve.heureDepart.toISOString() : null,
+        configure,
+        lignes,
+        abandons: epreuve.lignes
+          .filter((ligne) => ligne.statut === 'abandonné')
+          .map((ligne) => ligne.dossard)
+          .sort((a, b) => a - b),
+      };
+    }),
+  };
+}
+
+/**
+ * Classements par épreuve de l'édition courante de l'organisation : UNE
+ * transaction (NFR-4), lecture seule au-dessus de l'arbitrage 4.5 et des
+ * saisies 5.x. Sans édition : état ZÉRO cohérent (épreuves vides), jamais
+ * une erreur.
+ */
+export async function getClassements(
+  organisationId: string,
+  deps: ChronoServiceDeps = {},
+): Promise<ClassementsEdition> {
+  const store = deps.store ?? getChronoStore();
+  const record = await store.classements(organisationId);
+  return versClassements(record, new Date());
+}
+
+/**
+ * Carte « Heures de départ » (page /admin/course) : épreuves de l'édition
+ * courante avec leur heure de départ officielle (ISO UTC ou null).
+ */
+export async function getHeuresDepart(
+  session: SessionRecord,
+  deps: ChronoServiceDeps = {},
+): Promise<{ edition: { id: string; nom: string } | null; epreuves: EpreuveHeureDepartSerde[] }> {
+  const store = deps.store ?? getChronoStore();
+  const { edition, epreuves } = await store.listerHeuresDepart(session.organisationId);
+  return { edition, epreuves: epreuves.map(versEpreuveHeureDepart) };
+}
+
+/**
+ * PUT organisateur : validation de forme (heure ISO UTC ou null par épreuve,
+ * épreuve unique), puis écriture sous GUC dans UNE transaction — les épreuves
+ * inconnues de l'org/édition (RLS comprise) remontent en erreur champ.
+ * Retourne l'état serveur complet (la carte s'y resynchronise).
+ */
+export async function enregistrerHeuresDepart(
+  session: SessionRecord,
+  rawInput: unknown,
+  deps: ChronoServiceDeps = {},
+): Promise<EpreuveHeureDepartSerde[]> {
+  const store = deps.store ?? getChronoStore();
+  const input = normaliserSaisieHeuresDepart(rawInput);
+  if (input.heures === null) {
+    throw new CorpsHeuresDepartInvalideError();
+  }
+  const errors = validerSaisieHeuresDepart(input);
+  if (hasHeuresDepartFieldErrors(errors)) {
+    throw new InvalidHeuresDepartFieldsError(errors);
+  }
+  const epreuves = await store.enregistrerHeuresDepart({
+    organisationId: session.organisationId,
+    heures: (input.heures as { epreuveId: string; heureDepart: string | null }[]).map((ligne) => ({
+      epreuveId: ligne.epreuveId,
+      heureDepart: ligne.heureDepart !== null ? new Date(ligne.heureDepart) : null,
+    })),
+  });
+  return epreuves.map(versEpreuveHeureDepart);
 }

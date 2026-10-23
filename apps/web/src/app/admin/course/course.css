@@ -78,3 +78,16 @@
   .course-alertes{animation:none}
   .course-ligne-annuler{transition:none}
 }
+
+/* Story 7.1 — carte « Heures de départ » : une ligne par épreuve (nom +
+   distance, input datetime-local en heure locale du poste), heure serveur
+   réaffichée en heure locale, bouton Enregistrer. Aucune animation propre. */
+.course-heures{display:grid;gap:var(--az-space-2);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-heures-titre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--heading)}
+.course-heures-liste{list-style:none;margin:0;padding:0;display:grid;gap:var(--az-space-3)}
+.course-heures-ligne{display:grid;gap:calc(var(--az-space-1) / 2)}
+.course-heures-ligne label{font-family:var(--az-font-meta);font-weight:var(--az-font-weight-surtitre)}
+.course-heures-distance{color:var(--az-texte-2)}
+.course-heures-ligne .hint{margin:0}
+.course-heures-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
+.course-heures-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-2) var(--az-space-3)}

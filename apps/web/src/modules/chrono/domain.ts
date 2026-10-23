@@ -314,6 +314,134 @@ export function hasAnnulationFieldErrors(errors: AnnulationFieldErrors): boolean
   return Object.values(errors).some((message) => typeof message === 'string');
 }
 
+// ---------------------------------------------------------------------------
+// Story 7.1 — heures de départ officielles (départs échelonnés) + classements
+// par épreuve (lecture seule au-dessus de l'arbitrage 4.5 et des saisies 5.x).
+// ---------------------------------------------------------------------------
+
+/**
+ * Borne basse symétrique du CHECK SQL 0033 : une heure de départ vit
+ * strictement APRÈS 2000-01-01 (un epoch 0 ne se fait pas passer pour un
+ * départ). Même constante pour la validation service ET le CHECK SQL.
+ */
+export const HEURE_DEPART_MINIMALE_MS = Date.parse('2000-01-01T00:00:00.000Z');
+
+/** Clé d'erreur structurelle (liste illisible / épreuve en double). */
+export const HEURES_DEPART_FIELD_HEURES = 'heures' as const;
+
+/**
+ * Erreurs champ des heures de départ : clé 'heures' (structure) OU epreuveId
+ * (heure invalide pour CETTE épreuve) — la carte affiche l'erreur sous la
+ * ligne concernée.
+ */
+export type HeuresDepartFieldErrors = Record<string, string>;
+
+/** Saisie normalisée : une ligne par épreuve, heure ISO (…Z) ou null (effacer). */
+export interface SaisieHeuresDepart {
+  heures: { epreuveId: string; heureDepart: string | null }[] | null;
+}
+
+/**
+ * Normalise un corps PUT brut (API) : `heures` doit être un tableau d'objets
+ * {epreuveId non vide, heureDepart null|string} — toute autre forme reste
+ * `heures: null` (corps illisible, 400 route) : jamais d'avarage silencieuse.
+ */
+export function normaliserSaisieHeuresDepart(raw: unknown): SaisieHeuresDepart {
+  const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  if (!Array.isArray(record.heures)) {
+    return { heures: null };
+  }
+  const heures: { epreuveId: string; heureDepart: string | null }[] = [];
+  for (const entree of record.heures) {
+    if (typeof entree !== 'object' || entree === null) {
+      return { heures: null };
+    }
+    const { epreuveId, heureDepart } = entree as Record<string, unknown>;
+    if (typeof epreuveId !== 'string' || epreuveId.trim().length === 0) {
+      return { heures: null };
+    }
+    if (heureDepart !== null && typeof heureDepart !== 'string') {
+      return { heures: null };
+    }
+    heures.push({
+      epreuveId: epreuveId.trim(),
+      heureDepart: heureDepart === null ? null : heureDepart.trim(),
+    });
+  }
+  return { heures };
+}
+
+/**
+ * Validation de forme (mêmes règles client et serveur, vouvoiement PC) :
+ * heure ISO UTC stricte au-delà de la borne 2000 (CHECK 0033), épreuve unique
+ * par requête. Les erreurs sont portées PAR ÉPREUVE (clé epreuveId) pour
+ * remonter sous la ligne de la carte.
+ */
+export function validerSaisieHeuresDepart(input: SaisieHeuresDepart): HeuresDepartFieldErrors {
+  const errors: HeuresDepartFieldErrors = {};
+  if (input.heures === null) {
+    return { heures: 'La liste des heures de départ est illisible.' };
+  }
+  const vues = new Set<string>();
+  for (const ligne of input.heures) {
+    if (vues.has(ligne.epreuveId)) {
+      errors[HEURES_DEPART_FIELD_HEURES] = 'Une épreuve apparaît plusieurs fois dans la requête.';
+      continue;
+    }
+    vues.add(ligne.epreuveId);
+    if (ligne.heureDepart === null) {
+      continue;
+    }
+    if (!estHorodatageValide(ligne.heureDepart)) {
+      errors[ligne.epreuveId] = 'Indiquez une date et une heure de départ valides.';
+    } else if (new Date(ligne.heureDepart).getTime() <= HEURE_DEPART_MINIMALE_MS) {
+      errors[ligne.epreuveId] = 'L’heure de départ est trop ancienne pour être une heure de course.';
+    }
+  }
+  return errors;
+}
+
+export function hasHeuresDepartFieldErrors(errors: HeuresDepartFieldErrors): boolean {
+  return Object.values(errors).some((message) => typeof message === 'string');
+}
+
+/** Épreuve de l'édition courante avec son heure de départ (lue/écrite). */
+export interface EpreuveHeureDepartRecord {
+  epreuveId: string;
+  slug: string;
+  nom: string;
+  distanceKm: number;
+  heureDepart: Date | null;
+}
+
+/** Ligne de classement brute (store) : le service calcule rangs/temps. */
+export interface LigneClassementRecord {
+  dossard: number;
+  epreuveId: string;
+  categorieAge: string;
+  statut: 'arrivé' | 'en-course' | 'abandonné';
+  /** Réception SERVEUR du premier passage ARRIVÉE arbitré (null sinon). */
+  arriveeRecue: Date | null;
+}
+
+/** Classement d'une épreuve brut (store) : heureDepart null = non configurée. */
+export interface ClassementEpreuveRecord {
+  epreuveId: string;
+  slug: string;
+  nom: string;
+  distanceKm: number;
+  heureDepart: Date | null;
+  lignes: LigneClassementRecord[];
+}
+
+/** Classements de l'édition courante, lus en UNE transaction (NFR-4). */
+export interface ClassementsRecord {
+  edition: { id: string; nom: string } | null;
+  epreuves: ClassementEpreuveRecord[];
+  fraicheur: Date | null;
+}
+
+
 /** Bornes symétriques du CHECK SQL appareil_client (0025). */
 export const APPAREIL_CLIENT_MAX_LENGTH = 120;
 
