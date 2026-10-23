@@ -73,12 +73,23 @@ en échec repassent en file avec un backoff (`attempts × 5 min`, plafond 1 h) ;
 ```bash
 pnpm -F @azzel/web emails:send        # traite la file en attente (20 par défaut)
 pnpm -F @azzel/web emails:send 100    # limite explicite
+pnpm -F @azzel/web emails:j7          # rappel batterie J-7 : planifie puis envoie
 ```
 
 Rejeu cron VPS (exemple, toutes les 5 minutes) :
 
 ```cron
 */5 * * * * cd /srv/azzel && pnpm -F @azzel/web emails:send >>/var/log/azzel-emails.log 2>&1
+```
+
+Rappel batterie J-7 (story 6.4) — `emails:j7` enfile un email `rappel_j7` pour chaque
+coureur **validé** de l'édition courante quand `J-7 ≤ aujourd'hui < jour de course`
+(rattrapage inclus si le cron a raté un jour ; idempotent par index unique partiel —
+un rejeu ne double jamais l'envoi), puis délègue l'envoi au worker ci-dessus.
+Cron VPS (exemple, une fois par jour à 8 h) :
+
+```cron
+0 8 * * * cd /srv/azzel && pnpm -F @azzel/web emails:j7 >>/var/log/azzel-emails-j7.log 2>&1
 ```
 
 ## Conventions

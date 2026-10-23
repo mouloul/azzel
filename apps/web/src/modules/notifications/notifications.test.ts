@@ -25,10 +25,12 @@ import {
   DOSSIER_VALIDE_SUBJECT,
   INSCRIPTION_RECUE_SUBJECT,
   INVITATION_VOLONTAIRE_SUBJECT,
+  RAPPEL_J7_SUBJECT,
   buildInvitationUrl,
   buildNotificationEmail,
   normalizeNotificationPayload,
   readEspaceCoureurUrl,
+  readRunnersAppUrl,
   type NotificationPayload,
 } from './email-contents';
 import type { OutboxRow, OutboxStore } from './outbox-store';
@@ -40,6 +42,7 @@ const OPTIONS = {
   assistancePhone: ASSISTANCE_PHONE,
   espaceCoureurUrl: `${DEFAULT_APP_URL}/espace-coureur`,
   invitationUrl: `${DEFAULT_APP_URL}/invitation?jeton=jeton-test`,
+  runnersAppUrl: 'https://runners.azzel.dz',
 };
 
 describe('buildNotificationEmail — contenus français sobres (tutoiement)', () => {
@@ -144,6 +147,68 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
       vi.unstubAllEnvs();
     }
   });
+
+  // Story 6.4 — rappel batterie J-7 : date fr lisible, 3 conseils courts,
+  // lien app en évidence, assistance, signature — JAMAIS la citation.
+  it('story 6.4 — rappel J-7 : objet exact, date fr, 3 conseils, lien app, assistance, signature, pas de citation', () => {
+    const email = buildNotificationEmail(
+      'rappel_j7',
+      { prenom: 'Yani', dateCourse: '2027-03-26' },
+      OPTIONS,
+    );
+    expect(email.subject).toBe(RAPPEL_J7_SUBJECT);
+    expect(email.text).toContain('Salut Yani');
+    expect(email.text).toContain('26 mars 2027');
+    expect(email.text).toContain('100 %');
+    expect(email.text).toContain('Ne tue pas l’application Azzel');
+    expect(email.text).toContain('powerbank');
+    expect(email.text).toContain(OPTIONS.runnersAppUrl);
+    expect(email.text).toContain(ASSISTANCE_PHONE);
+    expect(email.text).toContain('L’équipe Azzel');
+    // Never : la citation kabyle ne quitte jamais la rubrique batterie de l'app.
+    expect(email.text).not.toContain('Un point après l’autre');
+    expect(email.text).not.toContain('Sagesse kabyle');
+  });
+
+  it('story 6.4 — readRunnersAppUrl : RUNNERS_APP_URL prioritaire, repli APP_URL, slash final retiré', () => {
+    vi.stubEnv('RUNNERS_APP_URL', 'https://runners.azzel.dz/');
+    vi.stubEnv('APP_URL', 'https://azzel.dz/');
+    try {
+      expect(readRunnersAppUrl()).toBe('https://runners.azzel.dz');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    vi.stubEnv('APP_URL', 'https://azzel.dz/');
+    try {
+      expect(readRunnersAppUrl()).toBe('https://azzel.dz');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('story 6.4 — readRunnersAppUrl : absentes/malformées/schéma non http(s) → repli valeur par défaut', () => {
+    for (const malformed of ['runners.azzel.dz/', 'not a url', 'ftp://azzel.dz']) {
+      vi.stubEnv('RUNNERS_APP_URL', malformed);
+      expect(readRunnersAppUrl(), malformed).toBe(DEFAULT_APP_URL);
+    }
+    vi.unstubAllEnvs();
+  });
+
+  // Story 6.4 (revue) — date dégradée : invalide/vide/inexistante → phrase
+  // de repli, jamais « Ta course est le  — » à motif vide.
+  it('story 6.4 — date de course invalide ou vide : phrase de repli « Ta course arrive bientôt »', () => {
+    for (const dateCourse of ['', '   ', 'pas-une-date', '2027-02-31']) {
+      const email = buildNotificationEmail(
+        'rappel_j7',
+        { prenom: 'Yani', dateCourse },
+        OPTIONS,
+      );
+      expect(email.subject, dateCourse).toBe(RAPPEL_J7_SUBJECT);
+      expect(email.text, dateCourse).toContain('Ta course arrive bientôt');
+      expect(email.text, dateCourse).not.toContain('est le  —');
+      expect(email.text, dateCourse).not.toMatch(/est le \S* — c’est bientôt/);
+    }
+  });
 });
 
 describe('normalizeNotificationPayload — payload jsonb relu de base', () => {
@@ -162,6 +227,20 @@ describe('normalizeNotificationPayload — payload jsonb relu de base', () => {
     expect(normalizeNotificationPayload('invitation_volontaire', { nom: 42, jeton: null })).toEqual(
       { nom: '', jeton: '' },
     );
+  });
+
+  it('story 6.4 — rappel_j7 : prenom et dateCourse extraits, valeurs non-chaînes vidées', () => {
+    expect(normalizeNotificationPayload('rappel_j7', { prenom: ' Yani ', dateCourse: '2027-03-26' })).toEqual(
+      { prenom: 'Yani', dateCourse: '2027-03-26' },
+    );
+    expect(normalizeNotificationPayload('rappel_j7', { prenom: 42, dateCourse: null })).toEqual({
+      prenom: '',
+      dateCourse: '',
+    });
+    expect(normalizeNotificationPayload('rappel_j7', 'pas un objet')).toEqual({
+      prenom: '',
+      dateCourse: '',
+    });
   });
 
   it('dossier_refuse exige le motif ; valeurs non objets tolérées', () => {
@@ -263,6 +342,27 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
     expect(sent[1]?.text).toContain('Motif : reçu flou');
   });
 
+  it('story 6.4 — ligne rappel_j7 : envoyée par le worker avec objet et contenu J-7', async () => {
+    const row = outboxRow({
+      id: 'outbox-j7',
+      type: 'rappel_j7',
+      payload: { prenom: 'Yani', dateCourse: '2027-03-26' },
+    });
+    const store = buildStore([row]);
+    const sent: { to: string; subject: string; text: string }[] = [];
+    const summary = await processOutbox(10, {
+      store,
+      send: async (to, subject, text) => {
+        sent.push({ to, subject, text });
+      },
+    });
+    expect(summary).toEqual({ processed: 1, sent: 1, failed: 0, storeError: null });
+    expect(sent[0]?.subject).toBe(RAPPEL_J7_SUBJECT);
+    expect(sent[0]?.text).toContain('26 mars 2027');
+    expect(sent[0]?.text).toContain('100 %');
+    expect(sent[0]?.text).toContain('powerbank');
+  });
+
   it('revendication refusée (ligne déjà prise par un worker concurrent) : sautée sans envoi ni marquage', async () => {
     const store = buildStore([outboxRow()]);
     store.claimOutboxRow.mockResolvedValue(false);
@@ -294,6 +394,7 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
           assistancePhone: ASSISTANCE_PHONE,
           espaceCoureurUrl: 'https://azzel.dz/espace-coureur',
           invitationUrl: 'https://azzel.dz/invitation?jeton=',
+          runnersAppUrl: 'https://azzel.dz',
         },
       );
       expect(sendMailMock).toHaveBeenCalledTimes(1);

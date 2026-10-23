@@ -4,7 +4,7 @@ import { listOrganisationIds, withOrg } from '@/db/org-scope';
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import type { NotificationType } from './email-contents';
+import type { NotificationType, RappelJ7Payload } from './email-contents';
 
 // 'cancelled' (0019) : email d'une invitation révoquée avant envoi — jamais
 // listé par la file, jamais rejoué.
@@ -47,6 +47,12 @@ export interface InsertOutboxInput {
   destinataire: string;
   type: NotificationType;
   payload: Record<string, unknown>;
+}
+
+/** Story 6.4 — payload du rappel J-7 (photo à l'enfilement : prénom + date de course). */
+export interface InsertRappelJ7Input {
+  destinataire: string;
+  payload: RappelJ7Payload;
 }
 
 type Queryable = Sql | postgres.TransactionSql;
@@ -109,6 +115,15 @@ export interface OutboxStore {
   markOutboxSent(organisationId: string, id: string): Promise<void>;
   markOutboxFailed(organisationId: string, id: string, error: string): Promise<void>;
   countDeadLetters(): Promise<number>;
+  /**
+   * Story 6.4 — insertion idempotente d'un rappel J-7 : le type est FORCÉ
+   * 'rappel_j7' et l'insertion se résorbe sur l'index unique partiel (ON
+   * CONFLICT DO NOTHING, expressions identiques à l'index) — false = un
+   * rappel existe déjà pour ce destinataire ET cette édition (rejeu du cron,
+   * rattrapage, ligne en échec en backoff : jamais de doublon ; deux saisons
+   * aux dateCourse distinctes rappellent chacune).
+   */
+  insertRappelJ7(organisationId: string, input: InsertRappelJ7Input): Promise<boolean>;
 }
 
 export const MAX_LAST_ERROR_LENGTH = 500;
@@ -212,6 +227,30 @@ export function createOutboxStore(sql: Sql): OutboxStore {
       }
       return total;
     },
+
+    // Story 6.4 — l'index unique partiel (migration 0032) fait l'idempotence,
+    // SCOPÉE PAR ÉDITION : ON CONFLICT DO NOTHING sur (organisation_id,
+    // destinataire, (payload->>'dateCourse')) WHERE type = 'rappel_j7'. Les
+    // expressions du conflit répètent EXACTEMENT celles de l'index (requis
+    // pour l'inférence d'un index partiel sur expressions).
+    async insertRappelJ7(
+      organisationId: string,
+      input: InsertRappelJ7Input,
+    ): Promise<boolean> {
+      return withOrg(sql, organisationId, async (tx) => {
+        const rows = await tx<{ id: string }[]>`
+          INSERT INTO email_outbox (organisation_id, destinataire, type, payload)
+          VALUES (
+            ${organisationId}, ${input.destinataire}, 'rappel_j7',
+            ${tx.json(input.payload as unknown as postgres.JSONValue)}
+          )
+          ON CONFLICT (organisation_id, destinataire, (payload->>'dateCourse')) WHERE (type = 'rappel_j7')
+          DO NOTHING
+          RETURNING id
+        `;
+        return rows.length > 0;
+      });
+    },
   };
 }
 
@@ -226,6 +265,7 @@ function createUnavailableOutboxStore(): OutboxStore {
     markOutboxSent: unavailable,
     markOutboxFailed: unavailable,
     countDeadLetters: unavailable,
+    insertRappelJ7: unavailable,
   };
 }
 

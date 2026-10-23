@@ -18,6 +18,8 @@ import { Bouton, BoutonAssistance, Carte, Surtitre, Titre } from './ui';
 // Story 6.3 — état « interrompu » (piège « Autoriser une fois » : phrase
 // factuelle, jamais culpabilisante) + bouton PERMANENT vers le guide
 // « Comment garder mon suivi actif ? » — même quand tout va bien.
+// Story 6.4 — bouton PERMANENT vers la rubrique batterie « Préparer ma
+// batterie pour le jour J » (suivi désactivé compris).
 
 /** Intervalle lisible par un humain (7 min — constante shared, jamais durcie ici). */
 const MINUTES_INTERVALLE = Math.round(INTERVALLE_POSITION_MS / 60_000);
@@ -34,6 +36,8 @@ export interface PropsEcranSuivi {
   onVoirJournal: () => void;
   /** 6.3 — accès PERMANENT au guide permission (bouton, même quand tout va bien). */
   onVoirGuide: () => void;
+  /** 6.4 — accès PERMANENT à la rubrique batterie (suivi désactivé compris). */
+  onVoirBatterie: () => void;
   onRetour: () => void;
 }
 
@@ -47,6 +51,7 @@ export function EcranSuivi({
   onToggleOptIn,
   onVoirJournal,
   onVoirGuide,
+  onVoirBatterie,
   onRetour,
 }: PropsEcranSuivi) {
   const interrompu = optIn && etatMoteur === 'interrompu';
@@ -157,6 +162,15 @@ export function EcranSuivi({
         label="Comment garder mon suivi actif ?"
         variante="contour"
         onPress={onVoirGuide}
+      />
+
+      {/* 6.4 — accès PERMANENT à la rubrique batterie : les conseils valent
+          avant l'activation aussi (départ à 100 %, powerbank…). */}
+      <Bouton
+        theme={theme}
+        label="Préparer ma batterie pour le jour J"
+        variante="contour"
+        onPress={onVoirBatterie}
       />
 
       <Bouton theme={theme} label="Retour" variante="contour" onPress={onRetour} />

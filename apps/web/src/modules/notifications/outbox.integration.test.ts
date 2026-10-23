@@ -23,10 +23,15 @@ import { LocalDiskProofStore } from '@/modules/inscriptions/proof-store';
 import { createInscriptionsStore, type InscriptionsStore } from '@/modules/inscriptions/store';
 
 import {
+  RAPPEL_J7_SUBJECT,
+  readRunnersAppUrl,
+} from './email-contents';
+import {
   createOutboxStore,
   OUTBOX_CLAIM_LEASE_MINUTES,
   type OutboxStore,
 } from './outbox-store';
+import { planifierRappelsJ7 } from './rappel-j7';
 import { processOutbox } from './worker';
 
 const testUrls = resolveTestDatabaseUrls('notifications');
@@ -89,6 +94,14 @@ if (testUrls !== null && !mailpitReady) {
 }
 
 const RACE_DATE = '2027-03-26';
+
+/** Story 6.4 — décale une date civile `YYYY-MM-DD` de N jours (sans fuseau). */
+function decalerDate(dateIso: string, jours: number): string {
+  const [annee = 0, mois = 1, jour = 1] = dateIso.split('-').map(Number);
+  return new Date(Date.UTC(annee, mois - 1, jour) + jours * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
 
 function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionFormInput {
   return {
@@ -440,6 +453,295 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
     expect(replay.sent).toBe(1);
   });
 
+  it('story 6.4 — rappel J-7 : fenêtre, validés seulement, payload figé, idempotence au rejeu, rien le jour J ni après', async () => {
+    // Coureurs : un validé, un non validé (les coureurs validés par les tests
+    // précédents restent en base — l'attendu est compté, pas deviné).
+    const valideSession = await createSession();
+    await submitInscription(valideSession, validInput(), { store, triggerOutbox: noTrigger });
+    await completerDossier(valideSession);
+    const valideCoureur = await coureurIdFor(valideSession.accountId);
+    await decideDossier(await organisateurSession(), valideCoureur, { decision: 'valider' }, {
+      store,
+      triggerOutbox: noTrigger,
+    });
+    const attenteSession = await createSession();
+    await submitInscription(attenteSession, validInput({ prenom: 'Iness' }), {
+      store,
+      triggerOutbox: noTrigger,
+    });
+
+    const edition = await store.findCurrentEdition(organisationId);
+    expect(edition).not.toBeNull();
+    const dateCourse = (edition as NonNullable<typeof edition>).dateCourse;
+    const valides = await sql<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM coureur
+      WHERE organisation_id = ${organisationId} AND status = 'validé'
+    `;
+    const attendu = valides[0]?.count ?? 0;
+    expect(attendu).toBeGreaterThanOrEqual(1);
+
+    // Avant J-7 : aucun enfilement.
+    const avant = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, -8));
+    expect(avant.enfiles).toBe(0);
+    expect(avant.horsFenetre).toBe(1);
+
+    // J-7 : chaque validé reçoit UNE ligne, le non validé est exclu.
+    const j7 = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, -7));
+    expect(j7.enfiles).toBe(attendu);
+    expect(j7.erreur).toBeNull();
+
+    let rows = (await outboxRows()).filter((row) => row.type === 'rappel_j7');
+    expect(rows).toHaveLength(attendu);
+    const mien = rows.find((row) => row.destinataire === valideSession.email);
+    expect(mien).toBeDefined();
+    expect(mien?.statut).toBe('pending');
+    expect(mien?.payload).toEqual({ prenom: 'Yani', dateCourse });
+    expect(rows.some((row) => row.destinataire === attenteSession.email)).toBe(false);
+
+    // Rejeu le même jour PUIS rattrapage J-5 : AUCUN doublon (index unique partiel).
+    const rejeu = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, -7));
+    expect(rejeu.enfiles).toBe(0);
+    expect(rejeu.dejaEnfiles).toBe(attendu);
+    const rattrapage = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, -5));
+    expect(rattrapage.enfiles).toBe(0);
+    rows = (await outboxRows()).filter((row) => row.type === 'rappel_j7');
+    expect(rows).toHaveLength(attendu);
+
+    // Jour de course puis après : aucun enfilement.
+    const jourJ = await planifierRappelsJ7({ outbox, inscriptions: store }, dateCourse);
+    expect(jourJ.enfiles).toBe(0);
+    const apres = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, 1));
+    expect(apres.enfiles).toBe(0);
+  });
+
+  it('story 6.4 — envoi effectif par le worker : échec → failed + backoff, rejeu → sent, jamais re-enfilé pendant l’échec', async () => {
+    const session = await createSession();
+    await submitInscription(session, validInput(), { store, triggerOutbox: noTrigger });
+    await completerDossier(session);
+    const coureurId = await coureurIdFor(session.accountId);
+    await decideDossier(await organisateurSession(), coureurId, { decision: 'valider' }, {
+      store,
+      triggerOutbox: noTrigger,
+    });
+    const edition = await store.findCurrentEdition(organisationId);
+    const dateCourse = (edition as NonNullable<typeof edition>).dateCourse;
+
+    const plan = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, -5));
+    expect(plan.enfiles).toBeGreaterThanOrEqual(1);
+
+    // Échec SMTP : la ligne passe failed avec backoff — l'événement métier est déjà là.
+    const echec = await processOutbox(50, {
+      store: outbox,
+      send: async () => {
+        throw new Error('connect ECONNREFUSED 127.0.0.1:2525');
+      },
+    });
+    expect(echec.failed).toBeGreaterThanOrEqual(1);
+    const failed = (await outboxRows()).find(
+      (row) => row.type === 'rappel_j7' && row.destinataire === session.email,
+    );
+    expect(failed?.statut).toBe('failed');
+    expect(failed?.next_attempt_at).not.toBeNull();
+
+    // Pendant l’échec, un rejeu du cron NE double PAS (l’index prime sur le statut).
+    const rejeu = await planifierRappelsJ7({ outbox, inscriptions: store }, decalerDate(dateCourse, -4));
+    expect(rejeu.enfiles).toBe(0);
+    expect(
+      (await outboxRows()).filter((row) => row.type === 'rappel_j7' && row.destinataire === session.email),
+    ).toHaveLength(1);
+
+    // Réparation + backoff expiré : le worker envoie, objet et lien app exacts.
+    await sql`
+      UPDATE email_outbox SET next_attempt_at = now() - interval '1 minute'
+      WHERE type = 'rappel_j7' AND destinataire = ${session.email}
+    `;
+    const envoyes: { to: string; subject: string; text: string }[] = [];
+    const envoi = await processOutbox(50, {
+      store: outbox,
+      send: async (to, subject, text) => {
+        envoyes.push({ to, subject, text });
+      },
+    });
+    expect(envoi.sent).toBeGreaterThanOrEqual(1);
+    const mien = envoyes.find((entry) => entry.to === session.email);
+    expect(mien?.subject).toBe(RAPPEL_J7_SUBJECT);
+    expect(mien?.text).toContain('Salut Yani');
+    expect(mien?.text).toContain('100 %');
+    expect(mien?.text).toContain('powerbank');
+    expect(mien?.text).toContain(readRunnersAppUrl());
+    expect(mien?.text).not.toContain('Un point après l’autre');
+
+    const sent = (await outboxRows()).find(
+      (row) => row.type === 'rappel_j7' && row.destinataire === session.email,
+    );
+    expect(sent?.statut).toBe('sent');
+    expect(sent?.attempts).toBe(2);
+  });
+
+  it('story 6.4 (revue) — idempotence scopée par édition : deux saisons → le même destinataire reçoit les DEUX rappels, rejeu même saison → zéro doublon', async () => {
+    // Saison 1 : l'édition seedée (2027), le coureur validé reçoit son rappel.
+    const session = await createSession();
+    await submitInscription(session, validInput(), { store, triggerOutbox: noTrigger });
+    await completerDossier(session);
+    const coureurId = await coureurIdFor(session.accountId);
+    await decideDossier(await organisateurSession(), coureurId, { decision: 'valider' }, {
+      store,
+      triggerOutbox: noTrigger,
+    });
+    const edition1 = await store.findCurrentEdition(organisationId);
+    const date1 = (edition1 as NonNullable<typeof edition1>).dateCourse;
+    const saison1 = await planifierRappelsJ7(
+      { outbox, inscriptions: store },
+      decalerDate(date1, -7),
+    );
+    expect(saison1.enfiles).toBeGreaterThanOrEqual(1);
+    expect(
+      (await outboxRows()).filter(
+        (row) => row.type === 'rappel_j7' && row.destinataire === session.email,
+      ),
+    ).toHaveLength(1);
+
+    // Saison 2 : une édition ULTÉRIEURE devient courante ; le MÊME compte s'y
+    // réinscrit (l'email est unique par organisation — même destinataire).
+    const evenement = await sql<{ id: string }[]>`
+      SELECT id FROM evenement WHERE slug = 'trail-ait-aissi'
+    `;
+    const evenementId = evenement[0]?.id;
+    if (!evenementId) {
+      throw new Error('evenement seed absent');
+    }
+    let edition2Id = '';
+    let date2 = '';
+    try {
+      const edition2 = await sql<{ id: string; race_date: string }[]>`
+        INSERT INTO edition (organisation_id, evenement_id, slug, name, race_date, registration_closes_at)
+        VALUES (
+          ${organisationId}, ${evenementId}, '2028-recette-j7', 'Édition suivante',
+          ${decalerDate(date1, 400)}::date, now() + interval '30 days'
+        )
+        RETURNING id, race_date::text AS race_date
+      `;
+      edition2Id = edition2[0]?.id as string;
+      date2 = edition2[0]?.race_date as string;
+      const epreuve2 = await sql<{ id: string }[]>`
+        INSERT INTO epreuve (organisation_id, edition_id, slug, name, distance_km)
+        VALUES (${organisationId}, ${edition2Id}, 'longue', 'La Longue — 35 km', 35.0)
+        RETURNING id
+      `;
+      const epreuve2Id = epreuve2[0]?.id;
+      if (!epreuve2Id) {
+        throw new Error('épreuve saison 2 non créée');
+      }
+      await sql`
+        INSERT INTO coureur (
+          organisation_id, account_id, edition_id, epreuve_id,
+          first_name, last_name, phone, emergency_contact_name, emergency_contact_phone,
+          birth_date, tshirt_size, age, age_category, status
+        )
+        VALUES (
+          ${organisationId}, ${session.accountId}, ${edition2Id}, ${epreuve2Id},
+          'Yani', 'Ulahianne', '+213 555 010 203', 'Lounis', '0555 010 204',
+          '1990-05-12', 'M', 36, 'Senior', 'validé'
+        )
+      `;
+      // L'édition suivante est désormais courante (race_date max) et dans SA
+      // fenêtre J-7 : le même destinataire reçoit le SECOND rappel.
+      const courante = await store.findCurrentEdition(organisationId);
+      expect(courante?.id).toBe(edition2Id);
+      const saison2 = await planifierRappelsJ7(
+        { outbox, inscriptions: store },
+        decalerDate(date2, -7),
+      );
+      expect(saison2.enfiles).toBeGreaterThanOrEqual(1);
+
+      const rappels = (await outboxRows()).filter(
+        (row) => row.type === 'rappel_j7' && row.destinataire === session.email,
+      );
+      expect(rappels).toHaveLength(2);
+      expect(new Set(rappels.map((row) => row.payload.dateCourse))).toEqual(
+        new Set([date1, date2]),
+      );
+
+      // Rejeu même saison (rattrapage J-5) : zéro doublon.
+      const rejeu = await planifierRappelsJ7(
+        { outbox, inscriptions: store },
+        decalerDate(date2, -5),
+      );
+      expect(rejeu.enfiles).toBe(0);
+      expect(rejeu.dejaEnfiles).toBeGreaterThanOrEqual(1);
+      expect(
+        (await outboxRows()).filter(
+          (row) => row.type === 'rappel_j7' && row.destinataire === session.email,
+        ),
+      ).toHaveLength(2);
+    } finally {
+      if (edition2Id !== '') {
+        await sql`DELETE FROM coureur WHERE edition_id = ${edition2Id}`;
+        await sql`DELETE FROM epreuve WHERE edition_id = ${edition2Id}`;
+        await sql`DELETE FROM edition WHERE id = ${edition2Id}`;
+      }
+    }
+  });
+
+  it('story 6.4 (revue) — pagination : au-delà de 200 coureurs, les validés des pages suivantes reçoivent le rappel', async () => {
+    const edition = await store.findCurrentEdition(organisationId);
+    expect(edition).not.toBeNull();
+    const editionId = (edition as NonNullable<typeof edition>).id;
+    const dateCourse = (edition as NonNullable<typeof edition>).dateCourse;
+    const epreuve = await sql<{ id: string }[]>`
+      SELECT id FROM epreuve WHERE edition_id = ${editionId} LIMIT 1
+    `;
+    const epreuveId = epreuve[0]?.id;
+    if (!epreuveId) {
+      throw new Error('épreuve seed absente');
+    }
+    const ids = Array.from({ length: 205 }, () => randomUUID());
+    try {
+      await sql`
+        INSERT INTO account (id, organisation_id, email)
+        SELECT id, ${organisationId}, 'page-j7-' || id || '@test.azzel'
+        FROM unnest(${ids}::uuid[]) AS id
+      `;
+      await sql`
+        INSERT INTO coureur (
+          organisation_id, account_id, edition_id, epreuve_id,
+          first_name, last_name, phone, emergency_contact_name, emergency_contact_phone,
+          birth_date, tshirt_size, age, age_category, status
+        )
+        SELECT ${organisationId}, id, ${editionId}, ${epreuveId},
+               'Page', 'J7', '+213 555 010 203', 'Lounis', '0555 010 204',
+               '1990-05-12', 'M', 36, 'Senior', 'validé'
+        FROM unnest(${ids}::uuid[]) AS id
+      `;
+      const resume = await planifierRappelsJ7(
+        { outbox, inscriptions: store },
+        decalerDate(dateCourse, -7),
+      );
+      expect(resume.enfiles).toBeGreaterThanOrEqual(205);
+      const rappels = (await outboxRows()).filter(
+        (row) => row.type === 'rappel_j7' && row.destinataire.startsWith('page-j7-'),
+      );
+      expect(rappels).toHaveLength(205);
+      // Rejeu : idempotence sur les DEUX pages.
+      const rejeu = await planifierRappelsJ7(
+        { outbox, inscriptions: store },
+        decalerDate(dateCourse, -5),
+      );
+      expect(rejeu.enfiles).toBe(0);
+      expect(
+        (await outboxRows()).filter(
+          (row) => row.type === 'rappel_j7' && row.destinataire.startsWith('page-j7-'),
+        ),
+      ).toHaveLength(205);
+    } finally {
+      await sql`
+        DELETE FROM coureur
+        WHERE account_id IN (SELECT id FROM account WHERE email LIKE 'page-j7-%@test.azzel')
+      `;
+      await sql`DELETE FROM account WHERE email LIKE 'page-j7-%@test.azzel'`;
+    }
+  });
+
   it('poison (attempts ≥ 5) : exclu de la file, ligne visible en base, comptée par le CLI', async () => {
     const session = await createSession();
     await submitInscription(session, validInput(), { store, triggerOutbox: noTrigger });
@@ -528,8 +830,12 @@ describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi r�
   let store: InscriptionsStore;
   let outbox: OutboxStore;
   let organisationId: string;
+  let storageDir = '';
+  let proofStore: LocalDiskProofStore;
 
   beforeAll(async () => {
+    storageDir = mkdtempSync(path.join(tmpdir(), 'azzel-j7-mailpit-'));
+    proofStore = new LocalDiskProofStore(storageDir);
     connections = await reuseAzzelTestDb(ownerUrl, appUrl);
     ({ owner: sql, app } = connections);
     store = createInscriptionsStore(app);
@@ -542,6 +848,9 @@ describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi r�
   afterAll(async () => {
     if (connections) {
       await closeAzzelTestDb(connections);
+    }
+    if (storageDir) {
+      rmSync(storageDir, { recursive: true, force: true });
     }
   });
 
@@ -643,6 +952,56 @@ describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi r�
       const text = await mailpitMessageText((message as MailpitMessageListItem).ID);
       expect(text).toContain('Motif : Reçu de paiement illisible');
       expect(text).toContain('Appeler l’équipe');
+    } finally {
+      await mailpitPurge();
+    }
+  });
+
+  it('story 6.4 — rappel J-7 → email texte brut avec conseils et lien app dans Mailpit', async () => {
+    try {
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store, triggerOutbox: async () => {} });
+      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
+      await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      const coureurRows = await sql`SELECT id FROM coureur WHERE account_id = ${session.accountId}`;
+      const organisateurId = randomUUID();
+      await sql`
+        INSERT INTO account (id, organisation_id, email, role)
+        VALUES (${organisateurId}, ${organisationId}, ${`organisateur-${organisateurId}@test.azzel`}, 'organisateur')
+      `;
+      await decideDossier(
+        {
+          accountId: organisateurId,
+          organisationId,
+          email: `organisateur-${organisateurId}@test.azzel`,
+          role: 'organisateur',
+          createdAt: new Date(),
+        },
+        coureurRows[0]?.id as string,
+        { decision: 'valider' },
+        { store, triggerOutbox: async () => {} },
+      );
+
+      const edition = await store.findCurrentEdition(organisationId);
+      const dateCourse = (edition as NonNullable<typeof edition>).dateCourse;
+      const plan = await planifierRappelsJ7(
+        { outbox, inscriptions: store },
+        decalerDate(dateCourse, -7),
+      );
+      expect(plan.enfiles).toBeGreaterThanOrEqual(1);
+
+      const summary = await processOutbox(50, { store: outbox });
+      expect(summary.sent).toBeGreaterThanOrEqual(1);
+
+      const message = await findMailpitMessage(session.email, RAPPEL_J7_SUBJECT);
+      expect(message).not.toBeNull();
+      const text = await mailpitMessageText((message as MailpitMessageListItem).ID);
+      expect(text).toContain('Salut Yani');
+      expect(text).toContain('Ta course est le');
+      expect(text).toContain('100 %');
+      expect(text).toContain('powerbank');
+      expect(text).toContain(readRunnersAppUrl());
+      expect(text).not.toContain('Un point après l’autre');
     } finally {
       await mailpitPurge();
     }

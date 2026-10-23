@@ -11,6 +11,8 @@ import { BandeauHorsLigne, Bouton, BoutonAssistance, Carte, Surtitre } from './u
 // PRÊT » mono. Le QR est rendu LOCALEMENT depuis payloadQr (contrat shared
 // `azzel-e1:<jeton>`) sur carte blanche coins 16 px : lisible réseau coupé,
 // même des semaines plus tard.
+// Story 6.4 — bouton vers la rubrique batterie : l'e-dossard est la première
+// surface du jour J, la pédagogie batterie y vit en permanence.
 
 /** Couleurs fixes de la carte sombre (rôles *-sombre des tokens shared). */
 const CARTE_SOMBRE = {
@@ -31,6 +33,8 @@ interface PropsEdossard {
   depuisCache: boolean;
   onRevoirDossier: () => void;
   onVoirSuivi: () => void;
+  /** 6.4 — accès PERMANENT à la rubrique batterie depuis l'e-dossard. */
+  onVoirBatterie: () => void;
   onDeconnexion: () => void;
 }
 
@@ -41,6 +45,7 @@ export function EcranEdossard({
   depuisCache,
   onRevoirDossier,
   onVoirSuivi,
+  onVoirBatterie,
   onDeconnexion,
 }: PropsEdossard) {
   return (
@@ -170,6 +175,12 @@ export function EcranEdossard({
         </Text>
         <Bouton theme={theme} label="Revoir mon dossier" variante="contour" onPress={onRevoirDossier} />
         <Bouton theme={theme} label="Suivi GPS de ma course" variante="contour" onPress={onVoirSuivi} />
+        <Bouton
+          theme={theme}
+          label="Préparer ma batterie pour le jour J"
+          variante="contour"
+          onPress={onVoirBatterie}
+        />
         <Bouton theme={theme} label="Se déconnecter" variante="contour" onPress={onDeconnexion} />
         <BoutonAssistance theme={theme} telephone={telephone} />
       </Carte>

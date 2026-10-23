@@ -6,6 +6,7 @@ import {
   buildNotificationEmail,
   normalizeNotificationPayload,
   readEspaceCoureurUrl,
+  readRunnersAppUrl,
   type NotificationType,
 } from './email-contents';
 import { getOutboxStore, type OutboxRow, type OutboxStore } from './outbox-store';
@@ -51,6 +52,8 @@ function contentFor(row: OutboxRow): { subject: string; text: string } {
     assistancePhone: readAssistancePhone(),
     espaceCoureurUrl: readEspaceCoureurUrl(),
     invitationUrl: buildInvitationUrl(jeton),
+    // Story 6.4 — lien app coureurs du rappel J-7 (RUNNERS_APP_URL, repli APP_URL).
+    runnersAppUrl: readRunnersAppUrl(),
   });
 }
 

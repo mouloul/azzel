@@ -155,6 +155,8 @@ export interface ListCoureursInput {
   organisationId: string;
   editionId: string;
   search?: string;
+  /** Story 6.4 (revue) — pagination : décalage de la fenêtre (défaut 0). */
+  offset?: number;
 }
 
 export interface DossierListItem {
@@ -862,6 +864,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               }
             ORDER BY c.created_at DESC
             LIMIT ${LIST_COUREURS_LIMIT}
+            OFFSET ${Math.max(0, Math.floor(input.offset ?? 0))}
           `;
           return {
             items: rows.map((row) => ({

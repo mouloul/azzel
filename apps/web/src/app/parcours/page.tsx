@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { CITATION_BATTERIE_SOURCE } from '@azzel/shared';
+
 import { CorpsContenu } from '@/components/corps-contenu';
 import { Crete, Frise } from '@/components/frise';
 import { isHttpsUrl } from '@/modules/contenus/domain';
@@ -8,9 +10,10 @@ import { getParcoursPage } from '@/modules/contenus/service';
 import '../vitrine-textes.css';
 
 // Citation kabyle exclusivement aux ravitaillements (charte) : jamais sur
-// l'accueil, jamais en zone critique, source notée (Hanoteau, 1867).
+// l'accueil, jamais en zone critique, source notée (Hanoteau, 1867). La
+// source vit dans packages/shared (formulation canonique, partagée avec la
+// rubrique batterie de l'app coureurs — story 6.4).
 const CITATION_AMAN = 'Aman d laman — l’eau est sûre';
-const CITATION_SOURCE = 'Sagesse kabyle (Hanoteau, 1867)';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +92,7 @@ export default async function ParcoursPage() {
               </h2>
               <blockquote className="aa-citation__bloc">
                 <p>« {CITATION_AMAN}. »</p>
-                <footer>— {CITATION_SOURCE}</footer>
+                <footer>— {CITATION_BATTERIE_SOURCE}</footer>
               </blockquote>
             </aside>
           ) : null}

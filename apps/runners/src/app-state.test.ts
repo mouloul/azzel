@@ -4,11 +4,13 @@ import type { ChecklistState } from '@azzel/shared';
 
 import {
   dossierValide,
+  ecranApresBasculeOptin,
   ecranApresDossier,
   ecranApresReprise,
   motifRefusDossier,
   type EntreeEcranApresReprise,
 } from './app-state';
+import type { MiseAJourSuivi } from './tracking/orchestration-suivi';
 
 // Story 6.1 — décisions de la machine à états : dossier vert → e-dossard
 // direct (étapes court-circuitées), refus → motif, inconnu/hors-ligne →
@@ -139,5 +141,44 @@ describe('6.3 ecranApresReprise', () => {
     expect(ecranApresReprise(entreeReprise({ ecranCourant: 'dossier', repris: true }))).toBe(
       'dossier',
     );
+  });
+});
+
+// Story 6.4 — navigation auto vers la rubrique batterie à l'activation
+// RÉUSSIE du suivi (toggle ON) ; jamais sur désactivation ni sur échec.
+
+describe('6.4 ecranApresBasculeOptin', () => {
+  it('activation réussie (toggle ON) : rubrique batterie', () => {
+    const maj: MiseAJourSuivi = {
+      optIn: true,
+      etatMoteur: 'actif',
+      enAttente: 0,
+      erreurOptin: null,
+    };
+    expect(ecranApresBasculeOptin(maj)).toBe('batterie');
+  });
+
+  it('échec de mémorisation du choix : on reste sur Suivi (jamais de pédagogie sur l’échec)', () => {
+    expect(ecranApresBasculeOptin({ erreurOptin: 'Impossible de mémoriser…' })).toBe('suivi');
+  });
+
+  it('désactivation (toggle OFF) : on reste sur Suivi', () => {
+    const maj: MiseAJourSuivi = {
+      optIn: false,
+      etatMoteur: 'inactif',
+      enAttente: 0,
+      erreurOptin: null,
+    };
+    expect(ecranApresBasculeOptin(maj)).toBe('suivi');
+  });
+
+  it('activation réussie mais permission refusée : la rubrique reste montrée (l’opt-in a réussi)', () => {
+    const maj: MiseAJourSuivi = {
+      optIn: true,
+      etatMoteur: 'permission-refusee',
+      enAttente: 0,
+      erreurOptin: null,
+    };
+    expect(ecranApresBasculeOptin(maj)).toBe('batterie');
   });
 });

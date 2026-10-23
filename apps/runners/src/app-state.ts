@@ -1,6 +1,7 @@
 import type { ChecklistState } from '@azzel/shared';
 
 import type { EtatSuivi } from './tracking/moteur';
+import type { MiseAJourSuivi } from './tracking/orchestration-suivi';
 
 // Story 6.1 — machine à états de l'app (écrans utiles + connexion) :
 // décisions PURES testées ici, câblées par App.tsx. Dossier déjà validé à
@@ -10,6 +11,9 @@ import type { EtatSuivi } from './tracking/moteur';
 // Story 6.3 — écran 'guide-permission' : auto-affiché UNE fois par
 // interruption au retour au premier plan, accessible EN PERMANENCE depuis
 // l'écran Suivi (bouton « Comment garder mon suivi actif ? »).
+// Story 6.4 — écran 'batterie' (rubrique pédagogie batterie) : navigation
+// AUTO à l'activation RÉUSSIE du suivi, accessible en permanence depuis
+// Suivi et e-dossard.
 
 export type Ecran =
   | 'chargement'
@@ -19,6 +23,7 @@ export type Ecran =
   | 'suivi'
   | 'guide-permission'
   | 'journal-sync'
+  | 'batterie'
   | 'hors-ligne';
 
 /** La pièce « validation » de la checklist est verte (dossier validé). */
@@ -86,4 +91,14 @@ export function ecranApresReprise(entree: EntreeEcranApresReprise): Ecran {
     return 'suivi';
   }
   return entree?.ecranCourant ?? 'chargement';
+}
+
+/**
+ * 6.4 — écran consécutif à un toggle du suivi : navigation AUTO vers la
+ * rubrique batterie UNIQUEMENT si l'activation a RÉUSSI (optIn vrai, aucune
+ * erreur de mémorisation). Désactivation ou échec : on reste sur Suivi —
+ * la pédagogie accompagne l'activation, jamais l'échec.
+ */
+export function ecranApresBasculeOptin(miseAJour: MiseAJourSuivi): 'suivi' | 'batterie' {
+  return miseAJour.optIn === true && miseAJour.erreurOptin == null ? 'batterie' : 'suivi';
 }

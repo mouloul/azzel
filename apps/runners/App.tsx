@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, SafeAreaView, ScrollView, Text, useColorScheme, View } from 'react-native';
 
 import { creerClientApi } from './src/api-client';
-import { ecranApresReprise, type Ecran } from './src/app-state';
+import { ecranApresBasculeOptin, ecranApresReprise, type Ecran } from './src/app-state';
 import {
   chargerDossier as chargerDossierOrchestre,
   connecter as connecterOrchestre,
@@ -33,6 +33,7 @@ import { EcranHorsLigne } from './src/ecrans/hors-ligne';
 import { EcranSuivi } from './src/ecrans/suivi';
 import { EcranGuidePermission } from './src/ecrans/guide-permission';
 import { EcranJournalSync } from './src/ecrans/journal-sync';
+import { EcranBatterie } from './src/ecrans/batterie';
 import { creerMoteurSuivi, creerDepsMoteurSuivi, lirePermissions } from './src/tracking/moteur';
 import {
   creerDepsSyncPositions,
@@ -124,6 +125,8 @@ export default function App() {
   // écran d'ORIGINE au moment de l'affichage auto (Retour y revient).
   const guideAutoAfficheRef = useRef(false);
   const origineGuideRef = useRef<Ecran>('suivi');
+  /** 6.4 — écran d'ORIGINE de la rubrique batterie (Suivi ou e-dossard) : le Retour y revient. */
+  const origineBatterieRef = useRef<Ecran>('suivi');
   /** 6.3 — une reprise à la fois : un 2ᵉ événement 'active' pendant le traitement est ignoré. */
   const repriseEnCours = useRef(false);
 
@@ -359,10 +362,23 @@ export default function App() {
 
   const onToggleOptin = useCallback(
     async (actif: boolean) => {
+      // 6.4 (revue) — écran capturé AVANT l'attente du basculement : si la
+      // navigation a changé pendant celle-ci (ex. guide auto 6.3 au retour au
+      // premier plan), elle PRIME — pas de navigation vers la rubrique.
+      const ecranAuToggle = ecranRef.current;
       const maj = await basculerOptin(portsSuivi, actif);
       appliquerSuivi(maj);
+      // 6.4 — activation RÉUSSIE : navigation auto vers la rubrique batterie
+      // (pédagogie au point d'usage) ; désactivation/échec : rien.
+      if (
+        ecranApresBasculeOptin(maj) === 'batterie' &&
+        ecranRef.current === ecranAuToggle
+      ) {
+        origineBatterieRef.current = ecranRef.current;
+        appliquer({ ecran: 'batterie' });
+      }
     },
-    [portsSuivi, appliquerSuivi],
+    [portsSuivi, appliquerSuivi, appliquer],
   );
 
   const onVoirJournal = useCallback(() => {
@@ -376,6 +392,14 @@ export default function App() {
     origineGuideRef.current = 'suivi';
     guideAutoAfficheRef.current = false;
     appliquer({ ecran: 'guide-permission' });
+  }, [appliquer]);
+
+  // 6.4 — rubrique batterie accessible EN PERMANENCE depuis Suivi et
+  // e-dossard (suivi désactivé compris) : l'écran d'origine est mémorisé
+  // pour le Retour.
+  const onVoirBatterie = useCallback(() => {
+    origineBatterieRef.current = ecranRef.current;
+    appliquer({ ecran: 'batterie' });
   }, [appliquer]);
 
   const onDeconnexion = useCallback(async () => {
@@ -471,6 +495,7 @@ export default function App() {
             void onRevoirDossier();
           }}
           onVoirSuivi={onVoirSuivi}
+          onVoirBatterie={onVoirBatterie}
           onDeconnexion={() => {
             void onDeconnexion();
           }}
@@ -489,6 +514,7 @@ export default function App() {
           }}
           onVoirJournal={onVoirJournal}
           onVoirGuide={onVoirGuide}
+          onVoirBatterie={onVoirBatterie}
           onRetour={() => {
             appliquer({ ecran: edossard ? 'edossard' : dossier ? 'dossier' : 'hors-ligne' });
           }}
@@ -511,6 +537,17 @@ export default function App() {
           entrees={etatSuivi.journal}
           onRetour={() => {
             appliquer({ ecran: 'suivi' });
+          }}
+        />
+      ) : null}
+      {ecran === 'batterie' ? (
+        <EcranBatterie
+          theme={theme}
+          telephone={ASSISTANCE_PHONE}
+          onRetour={() => {
+            // Retour à l'écran d'origine mémorisé à l'ouverture (Suivi,
+            // e-dossard, ou Suivi pour la navigation auto de l'activation).
+            appliquer({ ecran: origineBatterieRef.current });
           }}
         />
       ) : null}
