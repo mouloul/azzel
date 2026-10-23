@@ -16,6 +16,11 @@
 # est dépassé, si une ressource est inaccessible ou si le contenu attendu est
 # absent (égide, CTA /connexion, chiffres officiels 2026).
 #
+# Story 7.3 — mesure AUSSI /resultats (pare-chemin-critique de la carte) : le
+# HTML servi ne doit référencer NI leaflet NI une URL de tuile (la lib et son
+# CSS ne vivent que dans des chunks asynchrones chargés au clic « Afficher la
+# carte », qui doit être présent).
+#
 # Usage :
 #   pnpm budget                                      # build + mesure
 #   bash scripts/check-budget.sh                     # mesure seule (build requis)
@@ -148,8 +153,28 @@ verifier_contenu ">222<"
 verifier_contenu ">214<"
 verifier_contenu ">116<"
 
-if [ "$DEPASSE" != "0" ] || [ "$CONTENU_OK" != "1" ]; then
+# Story 7.3 — pare-chemin-critique de la carte publique : /resultats servi sans
+# AUCUNE référence carto dans le HTML initial (la section est fermée par
+# défaut ; Leaflet, son CSS et les tuiles ne chargent qu'au clic).
+if ! RESULTATS_BYTES=$(curl -sf --compressed --max-time 10 "${BASE_URL}/resultats" -o "${WORK}/resultats.html" -w '%{size_download}'); then
+  echo "Erreur : page /resultats inaccessible sur ${BASE_URL}/resultats." >&2
+  exit 1
+fi
+printf '%9s  %s\n' "$RESULTATS_BYTES" "/resultats (HTML, hors chemin critique carte)"
+
+CARTE_OK=1
+if grep -qiE 'leaflet|openstreetmap|\{z\}' "${WORK}/resultats.html"; then
+  echo "ÉCHEC carte : /resultats référence la carto (leaflet/tuiles) dans le HTML initial." >&2
+  CARTE_OK=0
+fi
+if ! grep -q "Afficher la carte" "${WORK}/resultats.html"; then
+  echo "ÉCHEC carte : le bouton « Afficher la carte » est absent de /resultats." >&2
+  CARTE_OK=0
+fi
+
+if [ "$DEPASSE" != "0" ] || [ "$CONTENU_OK" != "1" ] || [ "$CARTE_OK" != "1" ]; then
   exit 1
 fi
 
 echo "OK : contenu attendu présent (égide, CTA /connexion, chiffres officiels 2026)."
+echo "OK : /resultats sans chunk carto dans le HTML initial (carte différée au clic)."

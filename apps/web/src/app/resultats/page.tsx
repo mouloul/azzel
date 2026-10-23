@@ -6,6 +6,7 @@ import { assistancePhoneHref } from '@/components/assistance-button';
 import { DEFAULT_ASSISTANCE_PHONE, readAssistancePhone } from '@/lib/assistance-phone';
 import { compterVisitePartage, getResultatsPublic } from '@/modules/chrono/service';
 
+import { CarteCourse } from './carte-course';
 import { ResultatsLive } from './resultats-live';
 
 import './resultats.css';
@@ -85,8 +86,13 @@ export default async function ResultatsPage({
 
           {/* Le rafraîchisseur vit AUSSI sur la page dégradée : sans état
               initial, il affiche les squelettes puis remplit au premier
-              polling réussi — jamais un écran d’échec figé. */}
+              polling réussi — jamais un écran d'échec figé. */}
           <ResultatsLive initial={resultats} />
+
+          {/* Story 7.3 — carte publique anonyme, APRÈS les classements :
+              FERMÉE par défaut, hors du chemin critique (aucun script/tuile
+              avant le clic — le bouton seul vit dans le HTML initial). */}
+          <CarteCourse />
 
           <p className="aa-liens-vitrine">
             <Link className="aa-lien-texte" href="/parcours">

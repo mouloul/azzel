@@ -171,6 +171,7 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
     listerHeuresDepart: vi.fn(async () => ({ edition: null, epreuves: [] })),
     enregistrerHeuresDepart: vi.fn(async () => []),
     organisationParDefautId: vi.fn(async () => 'org-1'),
+    editionCouranteId: vi.fn(async () => 'edition-1'),
     compterVisitePartage: vi.fn(async () => undefined),
     ...overrides,
   };

@@ -69,7 +69,16 @@ export interface ContenusStore {
    * obsolète (conflit d'édition concurrente).
    */
   saveContenu(input: SaveContenuInput): Promise<SaveContenuResult | null>;
-  listEpreuvesParcours(organisationId: string): Promise<EpreuveParcoursRecord[]>;
+  /**
+   * Épreuves « parcours » de l'org. Story 7.3 : `editionId` optionnel — fourni
+   * par la carte publique, la liste est SCOPÉE à cette édition (plus de doublon
+   * de slug ni de tracé d'une édition passée) ; sans paramètre, comportement
+   * historique (toutes les épreuves de l'org, surfaces admin V1 mono-édition).
+   */
+  listEpreuvesParcours(
+    organisationId: string,
+    editionId?: string,
+  ): Promise<EpreuveParcoursRecord[]>;
   /** Lecture publique de /parcours : organisation par défaut, sans session. */
   readDefaultOrgPageParcours(): Promise<PageParcoursRecord>;
   /** Lecture publique de /region : organisation par défaut, sans session. */
@@ -234,15 +243,21 @@ export function createContenusStore(sql: Sql): ContenusStore {
       );
     },
 
-    async listEpreuvesParcours(organisationId: string): Promise<EpreuveParcoursRecord[]> {
+    async listEpreuvesParcours(
+      organisationId: string,
+      editionId?: string,
+    ): Promise<EpreuveParcoursRecord[]> {
       return withDb(async () =>
         withOrg(sql, organisationId, async (tx) => {
           // V1 : une seule édition par organisation — les épreuves parcourues
           // sont celles créées pour elle (ordre de création, longue d'abord).
+          // Story 7.3 : filtre édition OPTIONNEL (carte publique — l'épreuve
+          // « longue » d'une édition passée ne doit plus jamais y fuiter).
           const rows = await tx<EpreuveRow[]>`
             SELECT ${tx.unsafe(EPREUVE_COLUMNS)}
             FROM epreuve
             WHERE organisation_id = ${organisationId}
+              ${editionId === undefined ? tx`` : tx`AND edition_id = ${editionId}`}
             ORDER BY created_at ASC, id ASC
           `;
           return rows.map(toEpreuveRecord);

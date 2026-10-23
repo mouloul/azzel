@@ -17,6 +17,19 @@ import { AppareilRevokedError } from './errors';
 // — un échec DB n'importe rien). La recherche d'appareil par hash reste HORS
 // GUC (pattern 0011 : le secret précède l'organisation, la sync n'a pas de
 // session). Gabarit exact du store chrono (0025), décliné pour les coureurs.
+//
+// Story 7.3 — lecture seule de la carte publique : dernieresPositions lit
+// PAR-DESSUS l'ingestion (jamais dedans), DISTINCT ON par COUREUR.
+
+/** Dernière position d'un coureur, lue pour la carte publique (story 7.3). */
+export interface DernierePositionRecord {
+  dossard: number;
+  epreuveSlug: string;
+  epreuveNom: string;
+  latitude: number;
+  longitude: number;
+  capteAt: Date;
+}
 
 export type StatutInsertionPosition = 'accepté' | 'déjà-connu' | { rejeté: string };
 
@@ -47,6 +60,13 @@ export interface TrackingStore {
   }): Promise<('accepté' | 'déjà-connu')[]>;
   /** Audit admin : liste les appareils coureurs de l'org. */
   listerAppareils(organisationId: string): Promise<AppareilCoureurRecord[]>;
+  /**
+   * Story 7.3 — dernières positions de la carte publique : UNE par COUREUR
+   * (la plus récente de ses appareils), coureurs VALIDÉS et NUMÉROTÉS de
+   * l'édition courante uniquement, avec l'épreuve (slug/nom) qui qualifie le
+   * dossard. Lecture seule sous withOrg (RLS) — jamais touchée par l'ingestion.
+   */
+  dernieresPositions(organisationId: string): Promise<DernierePositionRecord[]>;
 }
 
 /** Jeton BRUT du canal sync : 256 bits, base64url — hashé avant toute base. */
@@ -114,6 +134,25 @@ function toAppareilCoureurRecord(row: AppareilCoureurRow): AppareilCoureurRecord
     lastSyncAt: row.last_sync_at,
     createdAt: row.created_at,
   };
+}
+
+/**
+ * Édition courante de l'org (story 7.3) : COPIE ASSUMÉE du helper privé du
+ * store chrono (même SQL race_date DESC, id ASC — les modules ne partagent pas
+ * leurs internals). Toute dérive entre les deux copies doit être attrapée par
+ * les tests d'intégration ; un refactor les réunira si un troisième consommateur naît.
+ */
+async function editionCourante(
+  tx: postgres.TransactionSql,
+  organisationId: string,
+): Promise<{ id: string } | undefined> {
+  const editions = await tx<{ id: string }[]>`
+    SELECT id FROM edition
+    WHERE organisation_id = ${organisationId}
+    ORDER BY race_date DESC, id ASC
+    LIMIT 1
+  `;
+  return editions[0];
 }
 
 export function createTrackingStore(sql: Sql): TrackingStore {
@@ -250,6 +289,72 @@ export function createTrackingStore(sql: Sql): TrackingStore {
         }),
       );
     },
+
+    async dernieresPositions(organisationId: string): Promise<DernierePositionRecord[]> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          // Sans édition courante : état ZÉRO cohérent (calque classements),
+          // jamais une erreur — la carte affiche ses tracés sans pastilles.
+          const edition = await editionCourante(tx, organisationId);
+          if (!edition) {
+            return [];
+          }
+          // DISTINCT ON par COUREUR : plusieurs appareils d'un même compte ne
+          // font QU'UNE pastille (la position la plus récente fait foi —
+          // capture appareil d'abord, réception serveur puis id en tie-break).
+          // Coureurs VALIDÉS ∧ NUMÉROTÉS de l'édition courante uniquement
+          // (calque partantRows du store chrono) : l'existence de positions
+          // EST l'opt-in (6.2 ne stocke que sur activation) — un coureur non
+          // validé/normé n'est JAMAIS exposé. Colonnes EXACTES : dossard +
+          // épreuve + position horodatée, rien d'autre ne remonte (FR-19).
+          // Revue 7.3 — fenêtre 48 h sur la RÉCEPTION SERVEUR : le scan ne
+          // couvre plus toute la table (comportement jour J, l'index
+          // position_appareil_recu_idx sert la borne) ; un appareil RÉVOQUÉ
+          // n'est plus JAMAIS servi (assistance humaine : la révocation coupe
+          // la diffusion, pas seulement la sync).
+          const rows = await tx<
+            {
+              dossard: number;
+              epreuve_slug: string;
+              epreuve_nom: string;
+              latitude: string;
+              longitude: string;
+              capte_at: Date;
+            }[]
+          >`
+            SELECT DISTINCT ON (c.id)
+                   c.dossard AS dossard,
+                   e.slug AS epreuve_slug,
+                   e.name AS epreuve_nom,
+                   p.latitude AS latitude,
+                   p.longitude AS longitude,
+                   p.capte_at AS capte_at
+            FROM position p
+            JOIN appareil_coureur ac ON ac.id = p.appareil_coureur_id
+            JOIN coureur c ON c.account_id = ac.account_id
+            JOIN epreuve e ON e.id = c.epreuve_id
+            WHERE p.organisation_id = ${organisationId}
+              AND p.recu_a > now() - interval '48 hours'
+              AND ac.revoked_at IS NULL
+              AND c.organisation_id = ${organisationId}
+              AND c.edition_id = ${edition.id}
+              AND c.status = 'validé'
+              AND c.dossard IS NOT NULL
+            ORDER BY c.id, p.capte_at DESC, p.recu_a DESC, p.id DESC
+          `;
+          // numeric(9,6) revient en texte : conversion explicite, la garde
+          // shared a déjà validé les bornes GPS à l'ingestion.
+          return rows.map((row) => ({
+            dossard: row.dossard,
+            epreuveSlug: row.epreuve_slug,
+            epreuveNom: row.epreuve_nom,
+            latitude: Number(row.latitude),
+            longitude: Number(row.longitude),
+            capteAt: row.capte_at,
+          }));
+        }),
+      );
+    },
   };
 }
 
@@ -262,6 +367,7 @@ function createUnavailableStore(): TrackingStore {
     enregistrerAppareilCoureur: unavailable,
     insererLotPositions: unavailable,
     listerAppareils: unavailable,
+    dernieresPositions: unavailable,
   };
 }
 

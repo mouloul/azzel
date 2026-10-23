@@ -655,3 +655,31 @@ export function toResultatsPublicApiError(error: unknown): ApiError {
     }),
   };
 }
+
+/**
+ * Story 7.3 — mapper de la surface PUBLIQUE carte (GET /api/carte-positions,
+ * /api/carte-trace) : vouvoiement vitrine, namespace vitrine.carte.*, aucun
+ * détail technique (le public anonyme ne voit jamais un code admin.* ni
+ * volontaires.*). Base KO → 503 douce : la carte se dégrade avec un message
+ * sobre, la page résultats reste intacte.
+ */
+export function toCartePubliqueApiError(error: unknown): ApiError {
+  if (error instanceof DbUnavailableError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'vitrine.carte.db_unavailable',
+        message: 'Connexion indisponible.',
+        action: 'Réessayez dans un instant — la carte reviendra d’elle-même.',
+      }),
+    };
+  }
+  return {
+    status: 500,
+    envelope: createErrorEnvelope({
+      code: 'vitrine.carte.erreur_inconnue',
+      message: 'La carte n’est pas disponible pour le moment.',
+      action: 'Réessayez dans un instant.',
+    }),
+  };
+}

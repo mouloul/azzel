@@ -22,3 +22,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-7-2-résultats-en-direct-partageables.md`
   summary: Harnais d'exécution d'effets client (jsdom/faux timers/e2e) pour tester les boucles de polling (resultats-live, course-live)
   evidence: Revue 7.2 (finding #14) : vitest env node, zéro DOM, zéro e2e dans le dépôt ; le polling admin 5.1 vit dans le même état.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-3-carte-publique-anonyme.md`
+  summary: Marqueurs de checkpoints sur la carte publique — exige d'ajouter lat/lon aux secteurs/missions (aucune coordonnée dans le modèle)
+  evidence: Revue pré-spéc 7.3 : tables secteur (nom, lieu text) et mission sans géométrie ; l'AC épopée mentionne « tracé GPX + checkpoints » mais le modèle ne porte pas de coordonnées de checkpoint.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-3-carte-publique-anonyme.md`
+  summary: Cache/proxy de tuiles OSM + identification client (usage policy) pour la carte publique jour J
+  evidence: Revue 7.3 (finding #14) : tuiles servies directement par tile.openstreetmap.org à un public massif ; la policy OSM demande identification/limitation au-delà d'un usage modéré.

@@ -143,6 +143,12 @@ export interface ChronoStore {
    */
   organisationParDefautId(): Promise<string | null>;
   /**
+   * Story 7.3 — id de l'ÉDITION COURANTE de l'org (calque editionCourante :
+   * race_date DESC, id ASC) : la carte publique scope traces ET positions à
+   * cette édition. Sans édition : null (état zéro côté service).
+   */
+  editionCouranteId(organisationId: string): Promise<string | null>;
+  /**
    * Story 7.2 — comptage ANONYME d'une visite partagée : upsert atomique (+1)
    * de l'agrégat (organisation, édition, jour) en UNE transaction withOrg.
    * Aucune donnée personnelle ne transite ici (ni IP, ni user-agent) — le
@@ -1293,6 +1299,15 @@ export function createChronoStore(sql: Sql): ChronoStore {
       return withDb(() => findOrganisationIdBySlug(sql, DEFAULT_ORGANISATION_SLUG));
     },
 
+    async editionCouranteId(organisationId: string): Promise<string | null> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          const edition = await editionCourante(tx, organisationId);
+          return edition?.id ?? null;
+        }),
+      );
+    },
+
     async compterVisitePartage(organisationId: string): Promise<void> {
       return withDb(() =>
         withOrg(sql, organisationId, async (tx) => {
@@ -1335,6 +1350,7 @@ function createUnavailableStore(): ChronoStore {
     listerHeuresDepart: unavailable,
     enregistrerHeuresDepart: unavailable,
     organisationParDefautId: unavailable,
+    editionCouranteId: unavailable,
     compterVisitePartage: unavailable,
   };
 }

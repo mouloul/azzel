@@ -192,3 +192,49 @@ describe('page /resultats — comptage des partages (story 7.2)', () => {
     expect(chronoServiceMock.compterVisitePartage).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('page /resultats — section carte (story 7.3, pare-chemin-critique)', () => {
+  // Tutoiem* RÉELS (la vitrine vouvoie TOUJOURS) : possessifs + noms de surface,
+  // impératifs et pronoms caractéristiques. Contrôlée par canari ci-dessous —
+  // une regex qui ne détecte plus rien ne prouve rien.
+  const TUTOIEMENT =
+    /\b(?:[Tt]on|[Tt]a|[Tt]es)\s+(?:dossard|dossier|course|carte|appareil|scans?|positions?|numéro)|\b[Rr]éessaie\b|\b[Ss]uis\s+(?:le|la)\b|\b[Tt]u\s+(?:peux|as|es|verras|restes|scanne)/;
+
+  it('registre vouvoyé : aucun tutoiement dans la page publique (regex contrôlée par canari)', async () => {
+    // Canaris : la regex DOIT attraper des tutoiem* réels.
+    expect('Réessaie dans un instant').toMatch(TUTOIEMENT);
+    expect('suis le parcours').toMatch(TUTOIEMENT);
+    expect('Ta course continue').toMatch(TUTOIEMENT);
+    expect('tu peux suivre').toMatch(TUTOIEMENT);
+    expect('ton dossard').toMatch(TUTOIEMENT);
+    const html = await rendu();
+    expect(html).not.toMatch(TUTOIEMENT);
+  });
+
+  it('la section « Carte de la course » existe, FERMÉE : bouton « Afficher la carte » seul', async () => {
+    const html = await rendu();
+    expect(html).toContain('Carte de la course');
+    expect(html).toContain('Afficher la carte');
+    // Fermée : ni squelette ni conteneur de carte dans le HTML initial.
+    expect(html).not.toContain('carte-course-squelette');
+    expect(html).not.toContain('carte-course-carte');
+  });
+
+  it('AUCUNE référence carto dans le HTML servi (3G : rien ne charge avant le clic)', async () => {
+    const html = await rendu();
+    const bas = html.toLowerCase();
+    expect(bas).not.toContain('leaflet');
+    expect(bas).not.toContain('openstreetmap');
+    expect(bas).not.toContain('tile.');
+    // Aucun chunk JS dédié carto dans le HTML initial.
+    expect(html).not.toMatch(/<script[^>]+src="[^"]*carte/);
+  });
+
+  it('la carte vit APRÈS les classements : ResultatsLive précède la section carte', async () => {
+    const html = await rendu();
+    const positionLive = html.indexOf('resultats-live');
+    const positionCarte = html.indexOf('carte-course');
+    expect(positionLive).toBeGreaterThan(-1);
+    expect(positionCarte).toBeGreaterThan(positionLive);
+  });
+});
