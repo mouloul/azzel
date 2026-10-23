@@ -60,4 +60,15 @@ describe('layout racine — rendu statique', () => {
     expect(nav).toContain('href="/parcours"');
     expect(nav).toContain('href="/retour-en-images"');
   });
+
+  it('pied de page : lien texte « Résultats » vers /resultats (story 7.2)', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    expect(html).toContain('href="/resultats"');
+    expect(html).toContain('>Résultats</a>');
+    // Même navigation sobre que /parcours et /region.
+    const nav = html.slice(html.indexOf('footer-nav'), html.indexOf('</nav>'));
+    expect(nav).toContain('href="/resultats"');
+  });
 });

@@ -19,3 +19,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-7-1-classements-par-épreuve-et-départs-échelonnés.md`
   summary: Epingler NFR-4 par un test de lecture classements PENDANT une sync concurrente
   evidence: Revue 7.1 (finding #4) : garantie structurelle (une transaction withOrg) ; le harnais d'intégration du dépôt n'injecte pas d'écritures concurrentes pendant une lecture.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-2-résultats-en-direct-partageables.md`
+  summary: Harnais d'exécution d'effets client (jsdom/faux timers/e2e) pour tester les boucles de polling (resultats-live, course-live)
+  evidence: Revue 7.2 (finding #14) : vitest env node, zéro DOM, zéro e2e dans le dépôt ; le polling admin 5.1 vit dans le même état.

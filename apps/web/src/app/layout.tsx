@@ -70,6 +70,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {/* Story 2.5 — un simple lien texte : le trailer et la page retour en
                 images restent hors du budget de premier chargement de l'accueil. */}
             <Link href="/retour-en-images">Retour en images</Link>
+            {/* Story 7.2 — résultats en direct partageables : la course devient
+                lisible de l'extérieur le jour J, lien sobre dans la même nav. */}
+            <Link href="/resultats">Résultats</Link>
           </nav>
           <p className="meta">Plateforme Azzel</p>
         </footer>

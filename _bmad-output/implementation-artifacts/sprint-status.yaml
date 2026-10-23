@@ -87,7 +87,7 @@ development_status:
 
   epic-7: in-progress
   7-1-classements-par-épreuve-et-départs-échelonnés: review
-  7-2-résultats-en-direct-partageables: backlog
+  7-2-résultats-en-direct-partageables: review
   7-3-carte-publique-anonyme: backlog
   7-4-rapports-post-course-et-export-commande: backlog
   epic-7-retrospective: optional

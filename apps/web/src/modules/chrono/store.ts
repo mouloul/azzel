@@ -8,7 +8,8 @@ import {
   type EvenementSyncTerrain,
 } from '@azzel/shared';
 
-import { withOrg } from '@/db/org-scope';
+import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
+import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
 import { DbUnavailableError } from '@/modules/iam/errors';
 import { sha256Hex } from '@/modules/iam/service';
 import { readDatabaseUrl } from '@/modules/iam/env';
@@ -135,6 +136,19 @@ export interface ChronoStore {
     organisationId: string;
     heures: { epreuveId: string; heureDepart: Date | null }[];
   }): Promise<EpreuveHeureDepartRecord[]>;
+  /**
+   * Story 7.2 — id de l'organisation publique par défaut (slug V1) : lecture
+   * pré-session hors GUC (pattern readDefaultOrgPartenaires, exception
+   * documentée spec 1.9), mémoïsée slug → id.
+   */
+  organisationParDefautId(): Promise<string | null>;
+  /**
+   * Story 7.2 — comptage ANONYME d'une visite partagée : upsert atomique (+1)
+   * de l'agrégat (organisation, édition, jour) en UNE transaction withOrg.
+   * Aucune donnée personnelle ne transite ici (ni IP, ni user-agent) — le
+   * rapport 7.4 lira les agrégats, personne d'autre.
+   */
+  compterVisitePartage(organisationId: string): Promise<void>;
 }
 
 /** Jeton BRUT du canal sync : 256 bits, base64url — hashé avant toute base. */
@@ -1266,6 +1280,39 @@ export function createChronoStore(sql: Sql): ChronoStore {
         }),
       );
     },
+
+    // -----------------------------------------------------------------
+    // Story 7.2 — résultats publics partageables. L'organisation par défaut
+    // est résolue hors GUC (gabarit sponsors readDefaultOrgPartenaires) ;
+    // le comptage des visites partagées est un AGRÉGAT quotidien anonyme :
+    // upsert (+1) dans UNE transaction, la clé naturelle (org, édition,
+    // jour) arbitre structurellement les chargements concurrents — aucune
+    // donnée personnelle n'approche cette table.
+    // -----------------------------------------------------------------
+    async organisationParDefautId(): Promise<string | null> {
+      return withDb(() => findOrganisationIdBySlug(sql, DEFAULT_ORGANISATION_SLUG));
+    },
+
+    async compterVisitePartage(organisationId: string): Promise<void> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          // Sans édition courante : rien à compter (la page reste honnête,
+          // jamais une erreur — calque de l'état zéro de classements()).
+          const edition = await editionCourante(tx, organisationId);
+          if (!edition) {
+            return;
+          }
+          // Upsert atomique : le jour vient de l'horloge de la BASE
+          // (CURRENT_DATE), la même pour le rapport 7.4 qui lira l'agrégat.
+          await tx`
+            INSERT INTO resultats_visite (organisation_id, edition_id, jour, visites)
+            VALUES (${organisationId}, ${edition.id}, CURRENT_DATE, 1)
+            ON CONFLICT (organisation_id, edition_id, jour)
+              DO UPDATE SET visites = resultats_visite.visites + 1
+          `;
+        }),
+      );
+    },
   };
 }
 
@@ -1287,6 +1334,8 @@ function createUnavailableStore(): ChronoStore {
     classements: unavailable,
     listerHeuresDepart: unavailable,
     enregistrerHeuresDepart: unavailable,
+    organisationParDefautId: unavailable,
+    compterVisitePartage: unavailable,
   };
 }
 

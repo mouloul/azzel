@@ -627,3 +627,31 @@ export function toCourseApiError(error: unknown): ApiError {
     }),
   };
 }
+
+/**
+ * Story 7.2 — mapper de la surface PUBLIQUE /resultats (page + polling
+ * /api/resultats) : vouvoiement vitrine, namespace vitrine.resultats.*, aucun
+ * détail technique (le public anonyme ne voit jamais un code admin.* ni
+ * volontaires.*). Base KO → 503 douce : le dernier état affiché vieillit, la
+ * page reprend d'elle-même.
+ */
+export function toResultatsPublicApiError(error: unknown): ApiError {
+  if (error instanceof DbUnavailableError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'vitrine.resultats.db_unavailable',
+        message: 'Connexion indisponible.',
+        action: 'Réessayez dans un instant — les résultats reviendront d’eux-mêmes.',
+      }),
+    };
+  }
+  return {
+    status: 500,
+    envelope: createErrorEnvelope({
+      code: 'vitrine.resultats.erreur_inconnue',
+      message: 'Les résultats ne sont pas disponibles pour le moment.',
+      action: 'Réessayez dans un instant.',
+    }),
+  };
+}

@@ -12,7 +12,8 @@ import {
 import type { SessionRecord } from '@/modules/iam/store';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON, MAX_MOTIF_ANNULATION_LENGTH, normaliserSaisieAnnulation, validerSaisieAnnulation, HEURE_DEPART_MINIMALE_MS, normaliserSaisieHeuresDepart, validerSaisieHeuresDepart } from './domain';
+import {
+  compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON, MAX_MOTIF_ANNULATION_LENGTH, normaliserSaisieAnnulation, validerSaisieAnnulation, HEURE_DEPART_MINIMALE_MS, normaliserSaisieHeuresDepart, validerSaisieHeuresDepart } from './domain';
 import {
   AbandonAvantDepartError,
   AbandonDejaAbandonneError,
@@ -39,17 +40,21 @@ import {
   JetonAppareilInvalideError,
   LotTropGrandError,
   toCourseApiError,
+  toResultatsPublicApiError,
 } from './errors';
 import type { ChronoStore, StatutInsertion } from './store';
 import {
   annulerPassage,
+  compterVisitePartage,
   enregistrerAppareil,
   enregistrerHeuresDepart,
   getClassements,
   getEtatCourse,
   getHeuresDepart,
+  getResultatsPublic,
   listerAppareils,
   premierRecu,
+  resetResultatsPublicCacheForTests,
   revoquerAppareil,
   saisirAbandon,
   synchroniserLot,
@@ -165,12 +170,17 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
     })),
     listerHeuresDepart: vi.fn(async () => ({ edition: null, epreuves: [] })),
     enregistrerHeuresDepart: vi.fn(async () => []),
+    organisationParDefautId: vi.fn(async () => 'org-1'),
+    compterVisitePartage: vi.fn(async () => undefined),
     ...overrides,
   };
 }
 
 beforeEach(() => {
   vi.resetModules();
+  // Le micro-cache de getResultatsPublic est un état module : invalidé entre
+  // chaque test (isolation des stores factices).
+  resetResultatsPublicCacheForTests();
 });
 
 describe('domaine chrono — pures', () => {
@@ -1207,5 +1217,161 @@ describe('story 7.1 — toCourseApiError (mapper heures de départ)', () => {
       toCourseApiError(new CorpsHeuresDepartTropGrandError(1024)).envelope.error.code,
     ).toBe('admin.course.heures_depart_corps_trop_grand');
     expect(toCourseApiError(new CorpsHeuresDepartTropGrandError(1024)).status).toBe(413);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 7.2 — résultats publics : getResultatsPublic (classements 7.1 TELS
+// QUELS + derniers arrivés sur les mêmes faits), comptage anonyme (service),
+// mapper vitrine douce. Derniers arrivés attendus sur CLASSEMENTS_RECORD :
+// réception DESC = 203 (11:20), 201/202 (10:40, ex æquo → dossard ASC),
+// 211 (10:20), 221 (10:00, sprint non configuré → tempsMs null) — l'abandonné
+// 205 (scan tardif 12:00) et l'en-course 204 JAMAIS listés.
+// ---------------------------------------------------------------------------
+
+describe('story 7.2 — getResultatsPublic (service : org par défaut, sans session)', () => {
+  it('contrat ResultatsPublic : classements 7.1 TELS QUELS + derniers arrivés réception DESC', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const resultats = await getResultatsPublic({ store });
+    expect(resultats.classements.libelle).toBe('Classement provisoire');
+    expect(resultats.classements.epreuves.map((e) => e.epreuveSlug)).toEqual([
+      'longue',
+      'moyenne',
+      'sprint',
+    ]);
+    expect(store.organisationParDefautId).toHaveBeenCalled();
+    expect(store.classements).toHaveBeenCalledWith('org-1');
+    expect(resultats.derniersArrives).toEqual([
+      { dossard: 203, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 140 * 60_000 },
+      { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 100 * 60_000 },
+      { dossard: 202, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 100 * 60_000 },
+      { dossard: 211, epreuveSlug: 'moyenne', epreuveNom: 'La Moyenne — 12 km', tempsMs: 50 * 60_000 },
+      { dossard: 221, epreuveSlug: 'sprint', epreuveNom: 'Le Sprint — 5 km', tempsMs: null },
+    ]);
+  });
+
+  it('anonymat : le contrat ne porte QUE des dossards — abandonné (scan tardif) et en-course JAMAIS arrivés', async () => {
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => CLASSEMENTS_RECORD),
+    });
+    const { derniersArrives } = await getResultatsPublic({ store });
+    expect(derniersArrives.some((arrive) => arrive.dossard === 205)).toBe(false);
+    expect(derniersArrives.some((arrive) => arrive.dossard === 204)).toBe(false);
+    expect(JSON.stringify(derniersArrives)).not.toMatch(/jeton|prenom|first_name|last_name|email/i);
+  });
+
+  it('borné à 10 arrivés : les PLUS RÉCENTS gardés, les plus anciens tronqués', async () => {
+    const lignes = Array.from({ length: 12 }, (_, index) => ({
+      dossard: 300 + index,
+      epreuveId: EPREUVE_LONGUE_ID,
+      categorieAge: 'Senior',
+      statut: 'arrivé' as const,
+      arriveeRecue: new Date(Date.parse('2027-05-16T10:00:00.000Z') + index * 60_000),
+    }));
+    const store = creerStoreFactice({
+      classements: vi.fn(async () => ({
+        edition: { id: 'edition-1', nom: 'Édition 2027' },
+        epreuves: [
+          {
+            epreuveId: EPREUVE_LONGUE_ID,
+            slug: 'longue',
+            nom: 'La Longue — 35 km',
+            distanceKm: 35,
+            heureDepart: new Date('2027-05-16T09:00:00.000Z'),
+            lignes,
+          },
+        ],
+        fraicheur: null,
+      })),
+    });
+    const { derniersArrives } = await getResultatsPublic({ store });
+    expect(derniersArrives).toHaveLength(10);
+    // Plus récent en tête (dossard 311 = 11 min), le plus ancien tronqué (300).
+    expect(derniersArrives[0]?.dossard).toBe(311);
+    expect(derniersArrives[9]?.dossard).toBe(302);
+    expect(derniersArrives.some((arrive) => arrive.dossard === 301)).toBe(false);
+    expect(derniersArrives.some((arrive) => arrive.dossard === 300)).toBe(false);
+  });
+
+  it('organisation par défaut ABSENTE : état ZÉRO cohérent (épreuves vides), jamais une erreur', async () => {
+    const store = creerStoreFactice({
+      organisationParDefautId: vi.fn(async () => null),
+    });
+    const resultats = await getResultatsPublic({ store });
+    expect(resultats.classements.epreuves).toEqual([]);
+    expect(resultats.classements.libelle).toBe('Classement provisoire');
+    expect(resultats.derniersArrives).toEqual([]);
+    expect(store.classements).not.toHaveBeenCalled();
+  });
+
+  it('base indisponible : l’erreur se propage (la page rendra l’état dégradé, pas un faux vide)', async () => {
+    const store = creerStoreFactice({
+      organisationParDefautId: vi.fn(async () => {
+        throw new DbUnavailableError();
+      }),
+    });
+    await expect(getResultatsPublic({ store })).rejects.toBeInstanceOf(DbUnavailableError);
+  });
+
+  it('micro-cache ~5 s : deux appels rapprochés = UNE lecture store (snapshot servi tel quel), après expiration = nouvelle lecture', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = creerStoreFactice({
+        classements: vi.fn(async () => CLASSEMENTS_RECORD),
+      });
+      const premier = await getResultatsPublic({ store });
+      const second = await getResultatsPublic({ store });
+      expect(store.classements).toHaveBeenCalledTimes(1);
+      // Snapshot identique, genereA compris : la fraîcheur affichée décrit
+      // le snapshot servi, jamais un âge rajeuni par le cache.
+      expect(second).toEqual(premier);
+
+      vi.advanceTimersByTime(5_100);
+      const troisieme = await getResultatsPublic({ store });
+      expect(store.classements).toHaveBeenCalledTimes(2);
+      // Nouveau snapshot : genereA avance avec l'horloge (jamais figé > 5 s).
+      expect(new Date(troisieme.classements.genereA).getTime()).toBeGreaterThan(
+        new Date(premier.classements.genereA).getTime(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('story 7.2 — compterVisitePartage (service : best effort, org par défaut)', () => {
+  it('délègue au store pour l’organisation par défaut résolue', async () => {
+    const store = creerStoreFactice();
+    await compterVisitePartage({ store });
+    expect(store.compterVisitePartage).toHaveBeenCalledWith('org-1');
+    expect(store.compterVisitePartage).toHaveBeenCalledTimes(1);
+  });
+
+  it('organisation absente : AUCUN comptage (store non appelé), pas d’erreur', async () => {
+    const store = creerStoreFactice({
+      organisationParDefautId: vi.fn(async () => null),
+    });
+    await compterVisitePartage({ store });
+    expect(store.compterVisitePartage).not.toHaveBeenCalled();
+  });
+});
+
+describe('story 7.2 — toResultatsPublicApiError (mapper vitrine douce)', () => {
+  it('base indisponible : 503 enveloppe vitrine.resultats.*, vouvoiement, jamais admin.*/volontaires.*', () => {
+    const apiError = toResultatsPublicApiError(new DbUnavailableError());
+    expect(apiError.status).toBe(503);
+    expect(apiError.envelope.error.code).toBe('vitrine.resultats.db_unavailable');
+    expect(apiError.envelope.error.message).toBe('Connexion indisponible.');
+    expect(apiError.envelope.error.action).toMatch(/Réessayez/);
+    expect(apiError.envelope.error.code).not.toMatch(/^(admin|volontaires)\./);
+  });
+
+  it('erreur inconnue : 500 douce, AUCUN détail technique exposé au public', () => {
+    const apiError = toResultatsPublicApiError(new Error('boom interne stack trace'));
+    expect(apiError.status).toBe(500);
+    expect(apiError.envelope.error.code).toBe('vitrine.resultats.erreur_inconnue');
+    expect(JSON.stringify(apiError.envelope)).not.toContain('boom');
   });
 });

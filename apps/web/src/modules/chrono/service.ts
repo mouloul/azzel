@@ -2,6 +2,7 @@ import {
   MOTIF_REJET_CONTRAT_INVALIDE,
   SYNC_TERRAIN_MAX_LOT,
   CATEGORIES_AGE_CLASSEMENT,
+  MAX_DERNIERS_ARRIVES,
   departagerExAequo,
   estCorpsLotSyncTerrainValide,
   estEvenementSyncTerrainValide,
@@ -9,9 +10,11 @@ import {
   type CategorieAgeClassement,
   type ClassementEpreuve,
   type ClassementsEdition,
+  type DernierArrive,
   type EvenementSyncTerrain,
   type LigneClassement,
   type ReponseLotSync,
+  type ResultatsPublic,
 } from '@azzel/shared';
 
 import type { SessionRecord } from '@/modules/iam/store';
@@ -510,6 +513,116 @@ export async function getClassements(
   const store = deps.store ?? getChronoStore();
   const record = await store.classements(organisationId);
   return versClassements(record, new Date());
+}
+
+// ---------------------------------------------------------------------------
+// Story 7.2 — résultats en direct partageables (FR-16, SM-5, AD-7).
+//
+// getResultatsPublic : le contrat public de /resultats, SANS session —
+// organisation par défaut (pattern sponsors readDefaultOrgPartenaires), les
+// classements 7.1 TELS QUELS (jamais recalculés) + les derniers arrivés
+// calculés sur les MÊMES faits de la MÊME transaction classements() (aucune
+// lecture supplémentaire : partants, arrivées arbitrées et heures de départ
+// décrivent déjà le même instant cohérent, NFR-4).
+//
+// compterVisitePartage : agrégat quotidien anonyme (+1), appelé UNIQUEMENT
+// par la page pour un chargement ?partage=1 — le polling ne compte jamais.
+// ---------------------------------------------------------------------------
+
+/**
+ * Derniers arrivés du record classements : réception SERVEUR de l'arrivée
+ * arbitrée DÉCROISSANTE (le plus récent en tête), bornés à
+ * MAX_DERNIERS_ARRIVES. Seuls les partants ARRIVÉS y figurent — un abandonné
+ * au scan d'arrivée tardif (réseau différé) reste abandonné (calque 5.3),
+ * jamais exhibé comme « arrivé ». tempsMs null pour une épreuve sans heure
+ * de départ : jamais de temps faux à zéro.
+ */
+function versDerniersArrives(record: ClassementsRecord): DernierArrive[] {
+  const arrivees: (DernierArrive & { recu: Date })[] = [];
+  for (const epreuve of record.epreuves) {
+    for (const ligne of epreuve.lignes) {
+      if (ligne.statut !== 'arrivé' || ligne.arriveeRecue === null) {
+        continue;
+      }
+      arrivees.push({
+        dossard: ligne.dossard,
+        epreuveSlug: epreuve.slug,
+        epreuveNom: epreuve.nom,
+        tempsMs:
+          epreuve.heureDepart !== null
+            ? ligne.arriveeRecue.getTime() - epreuve.heureDepart.getTime()
+            : null,
+        recu: ligne.arriveeRecue,
+      });
+    }
+  }
+  arrivees.sort((a, b) => b.recu.getTime() - a.recu.getTime() || a.dossard - b.dossard);
+  return arrivees.slice(0, MAX_DERNIERS_ARRIVES).map(({ recu: _recu, ...arrive }) => arrive);
+}
+
+/** Fenêtre du micro-cache partagé de getResultatsPublic (jamais > 5 s). */
+const RESULTATS_PUBLIC_TTL_MS = 5_000;
+
+/**
+ * Micro-cache module : le snapshot servi (genereA compris) est renvoyé TEL
+ * QUEL tant qu'il n'a pas expiré — la fraîcheur affichée décrit toujours le
+ * SNAPSHOT, jamais un âge rajeuni.
+ */
+let cacheResultatsPublic: { valeur: ResultatsPublic; expireLe: number } | null = null;
+
+/** Tests uniquement : invalide le micro-cache (isolation entre suites). */
+export function resetResultatsPublicCacheForTests(): void {
+  cacheResultatsPublic = null;
+}
+
+/**
+ * Résultats publics de l'organisation PAR DÉFAUT (aucune session, AD-7 : tout
+ * transite par le backend). Sans organisation par défaut : état ZÉRO cohérent
+ * (épreuves vides), jamais une erreur — la vitrine affiche l'état vide.
+ *
+ * Micro-cache ~5 s PARTAGÉ page + polling : le jour J, N visiteurs pollant
+ * toutes les 10 s n'imposent à la base qu'UNE lecture par fenêtre (AD-7 — le
+ * backend absorbe la charge, jamais la base). Le snapshot (genereA compris)
+ * est servi tel quel : l'âge affiché reste cohérent avec ce qui est montré.
+ */
+export async function getResultatsPublic(
+  deps: ChronoServiceDeps = {},
+): Promise<ResultatsPublic> {
+  if (cacheResultatsPublic !== null && Date.now() < cacheResultatsPublic.expireLe) {
+    return cacheResultatsPublic.valeur;
+  }
+  const store = deps.store ?? getChronoStore();
+  const organisationId = await store.organisationParDefautId();
+  const valeur: ResultatsPublic =
+    organisationId === null
+      ? {
+          classements: versClassements({ edition: null, epreuves: [], fraicheur: null }, new Date()),
+          derniersArrives: [],
+        }
+      : await lireResultats(store, organisationId);
+  cacheResultatsPublic = { valeur, expireLe: Date.now() + RESULTATS_PUBLIC_TTL_MS };
+  return valeur;
+}
+
+async function lireResultats(store: ChronoStore, organisationId: string): Promise<ResultatsPublic> {
+  const record = await store.classements(organisationId);
+  return {
+    classements: versClassements(record, new Date()),
+    derniersArrives: versDerniersArrives(record),
+  };
+}
+
+/**
+ * Comptage anonyme d'un chargement partagé (org par défaut, aucune session) :
+ * la page l'appelle en BEST EFFORT — un échec n'affecte JAMAIS son rendu.
+ */
+export async function compterVisitePartage(deps: ChronoServiceDeps = {}): Promise<void> {
+  const store = deps.store ?? getChronoStore();
+  const organisationId = await store.organisationParDefautId();
+  if (organisationId === null) {
+    return;
+  }
+  await store.compterVisitePartage(organisationId);
 }
 
 /**
