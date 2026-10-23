@@ -17,11 +17,23 @@ export type EtatSuivi =
   | 'actif'
   /** Avant-plan SEUL accordé : capture tant que l'app vit, pas écran verrouillé. */
   | 'actif-avant-plan'
+  /**
+   * 6.3 — piège iOS « Autoriser une fois » : le suivi TOURNAIT et la
+   * permission a expiré au verrouillage. Posé par l'orchestration (le
+   * moteur seul ne peut pas le savoir) après arrêt du watcher mort.
+   */
+  | 'interrompu'
   | 'permission-refusee'
   | 'inactif';
 
 /** Verdict des permissions : l'avant-plan seul n'est PAS un refus. */
 export type PermissionsSuivi = 'accordees' | 'avant-plan' | 'refusees';
+
+/** Lecture non intrusive (get* SANS request*) — détection premier plan 6.3. */
+export interface PermissionsLues {
+  avantPlanAccordee: boolean;
+  arrierePlanAccordee: boolean;
+}
 
 export interface PositionCapturee {
   lat: number;
@@ -62,6 +74,13 @@ export function versPositionTerrain(capture: PositionCapturee): PositionTerrain 
 
 export interface MoteurSuivi {
   demarrer(): Promise<EtatSuivi>;
+  /**
+   * 6.3 — reprise SANS demande de permission (aucun pop-up système) :
+   * pose le watcher directement, l'appelant a DÉJÀ lu (get*) les
+   * permissions accordées. Arrière-plan accordé → 'actif', sinon
+   * 'actif-avant-plan'.
+   */
+  demarrerSansDemande(arrierePlanAccordee: boolean): Promise<EtatSuivi>;
   arreter(): void;
   /** True si un watcher vit (l'écran affiche l'état réel). */
   estActif(): boolean;
@@ -87,80 +106,97 @@ export function creerMoteurSuivi(deps: DepsMoteurSuivi): MoteurSuivi {
   let dernierEtat: EtatSuivi | null = null;
   let demarrageEnCours: Promise<EtatSuivi> | null = null;
 
+  /** Pose du watcher pour des permissions DÉJÀ accordées (chemin commun démarrer/demarrerSansDemande). */
+  async function poserWatcher(
+    permissions: Exclude<PermissionsSuivi, 'refusees'>,
+  ): Promise<EtatSuivi> {
+    const appareilId = await deps.lireAppareilId();
+    enCours = true;
+    let abonnementArrive: { remove(): void };
+    try {
+      abonnementArrive = await deps.watcher(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: INTERVALLE_POSITION_MS,
+          deferredUpdatesInterval: INTERVALLE_POSITION_MS,
+          deferredUpdatesTimeout: DEFERRED_UPDATES_TIMEOUT_MS,
+        },
+        (capture) => {
+          if (!enCours) {
+            return;
+          }
+          const position = versPositionTerrain(capture);
+          if (!estPositionValide(position)) {
+            // Position hors contrat : JAMAIS insérée — elle n'existe ni
+            // côté app ni côté serveur.
+            return;
+          }
+          let inseree = false;
+          try {
+            inseree = deps.outbox.enregistrerPosition(appareilId, position);
+          } catch {
+            // Exception SQLite native (stockage corrompu, disque plein) :
+            // absorbée — le callback d'un watcher ne doit JAMAIS devenir
+            // une exception non gérée au milieu de l'app.
+            return;
+          }
+          if (inseree && deps.surCapture) {
+            deps.surCapture();
+          }
+        },
+      );
+    } catch (erreur) {
+      // Rejet du watcher : la porte est refermée — un prochain demarrer
+      // repartira proprement au lieu de croire « enCours » à jamais.
+      enCours = false;
+      throw erreur;
+    }
+    if (!enCours) {
+      // arreter() a été appelé PENDANT l'attente du watcher : cet
+      // abonnement arrivé après l'arrêt est retiré immédiatement,
+      // JAMAIS mémorisé.
+      abonnementArrive.remove();
+      return 'inactif';
+    }
+    abonnement = abonnementArrive;
+    dernierEtat = permissions === 'avant-plan' ? 'actif-avant-plan' : 'actif';
+    return dernierEtat;
+  }
+
+  /**
+   * Démarrage MÉMOÏSÉ (deux appels concurrents = UN watcher) ; watcher
+   * déjà vivant : son état est la vérité, jamais un second watcher.
+   */
+  async function enVol(travail: () => Promise<EtatSuivi>): Promise<EtatSuivi> {
+    if (demarrageEnCours !== null) {
+      return demarrageEnCours;
+    }
+    if (abonnement !== null && dernierEtat !== null) {
+      return dernierEtat;
+    }
+    demarrageEnCours = travail();
+    try {
+      return await demarrageEnCours;
+    } finally {
+      demarrageEnCours = null;
+    }
+  }
+
   return {
     async demarrer(): Promise<EtatSuivi> {
-      // Démarrage en vol : MÊME promesse (un seul watcher posé).
-      if (demarrageEnCours !== null) {
-        return demarrageEnCours;
-      }
-      // Watcher déjà vivant : son état est la vérité, jamais un second watcher.
-      if (abonnement !== null && dernierEtat !== null) {
-        return dernierEtat;
-      }
-      demarrageEnCours = (async (): Promise<EtatSuivi> => {
+      return enVol(async () => {
         const permissions = await deps.demanderPermissions();
         if (permissions === 'refusees') {
           // Refus = inactif silencieux : aucun watcher, aucune insertion,
           // aucune requête — le coureur réactive quand il veut.
           return 'permission-refusee';
         }
-        const appareilId = await deps.lireAppareilId();
-        enCours = true;
-        let abonnementArrive: { remove(): void };
-        try {
-          abonnementArrive = await deps.watcher(
-            {
-              accuracy: Location.Accuracy.Balanced,
-              timeInterval: INTERVALLE_POSITION_MS,
-              deferredUpdatesInterval: INTERVALLE_POSITION_MS,
-              deferredUpdatesTimeout: DEFERRED_UPDATES_TIMEOUT_MS,
-            },
-            (capture) => {
-              if (!enCours) {
-                return;
-              }
-              const position = versPositionTerrain(capture);
-              if (!estPositionValide(position)) {
-                // Position hors contrat : JAMAIS insérée — elle n'existe ni
-                // côté app ni côté serveur.
-                return;
-              }
-              let inseree = false;
-              try {
-                inseree = deps.outbox.enregistrerPosition(appareilId, position);
-              } catch {
-                // Exception SQLite native (stockage corrompu, disque plein) :
-                // absorbée — le callback d'un watcher ne doit JAMAIS devenir
-                // une exception non gérée au milieu de l'app.
-                return;
-              }
-              if (inseree && deps.surCapture) {
-                deps.surCapture();
-              }
-            },
-          );
-        } catch (erreur) {
-          // Rejet du watcher : la porte est refermée — un prochain demarrer
-          // repartira proprement au lieu de croire « enCours » à jamais.
-          enCours = false;
-          throw erreur;
-        }
-        if (!enCours) {
-          // arreter() a été appelé PENDANT l'attente du watcher : cet
-          // abonnement arrivé après l'arrêt est retiré immédiatement,
-          // JAMAIS mémorisé.
-          abonnementArrive.remove();
-          return 'inactif';
-        }
-        abonnement = abonnementArrive;
-        dernierEtat = permissions === 'avant-plan' ? 'actif-avant-plan' : 'actif';
-        return dernierEtat;
-      })();
-      try {
-        return await demarrageEnCours;
-      } finally {
-        demarrageEnCours = null;
-      }
+        return poserWatcher(permissions);
+      });
+    },
+
+    async demarrerSansDemande(arrierePlanAccordee: boolean): Promise<EtatSuivi> {
+      return enVol(() => poserWatcher(arrierePlanAccordee ? 'accordees' : 'avant-plan'));
     },
 
     arreter(): void {
@@ -205,6 +241,23 @@ async function demanderPermissionsNatives(): Promise<PermissionsSuivi> {
   await Location.requestBackgroundPermissionsAsync().catch(() => null);
   const arrierePlan = await Location.getBackgroundPermissionsAsync().catch(() => null);
   return arrierePlan?.granted ? 'accordees' : 'avant-plan';
+}
+
+/**
+ * 6.3 — lecture NON INTRUSIVE des permissions (get* uniquement, JAMAIS
+ * request* : aucune pop-up système depuis ici — les demandes restent
+ * déclenchées par le toggle opt-in). Réutilisable par l'orchestration au
+ * retour au premier plan. TOTALE : échec natif → false, jamais d'exception.
+ */
+export async function lirePermissions(): Promise<PermissionsLues> {
+  const [avantPlan, arrierePlan] = await Promise.all([
+    Location.getForegroundPermissionsAsync().catch(() => null),
+    Location.getBackgroundPermissionsAsync().catch(() => null),
+  ]);
+  return {
+    avantPlanAccordee: avantPlan?.granted === true,
+    arrierePlanAccordee: arrierePlan?.granted === true,
+  };
 }
 
 /** Deps réelles de l'app (expo-location + outbox SQLite + suivi-store). */

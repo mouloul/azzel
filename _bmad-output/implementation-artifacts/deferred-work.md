@@ -7,3 +7,6 @@
 - source_spec: none
   summary: Mode sombre avec override mémorisé (pattern UX épopée 6) à implémenter dans une story ultérieure de l'app coureurs
   evidence: Revue 6.1 (finding #19) : l'épopée 6 exige « défaut préférence système, override mémorisé » ; seule la détection système est en place (useColorScheme), aucun contrôle utilisateur.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-3-guide-permission-ios-autoriser-une-fois.md`
+  summary: Harnais de rendu RN runners pour tester écrans (guide permission : échec openSettings, variante Android)
+  evidence: Revue 6.3 (finding #14) : vitest.config.ts n'inclut aucun chemin .test.tsx côté runners ; introduire react-test-renderer/@testing-library juste pour deux assertions d'écran serait disproportionné.

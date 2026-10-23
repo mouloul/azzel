@@ -15,6 +15,9 @@ import { Bouton, BoutonAssistance, Carte, Surtitre, Titre } from './ui';
 // (elles attendent la réactivation pour partir). Permission refusée :
 // suivi silencieusement inactif, aucune culpabilisation. Avant-plan seul :
 // texte honnête sur ce qui est réellement capturé.
+// Story 6.3 — état « interrompu » (piège « Autoriser une fois » : phrase
+// factuelle, jamais culpabilisante) + bouton PERMANENT vers le guide
+// « Comment garder mon suivi actif ? » — même quand tout va bien.
 
 /** Intervalle lisible par un humain (7 min — constante shared, jamais durcie ici). */
 const MINUTES_INTERVALLE = Math.round(INTERVALLE_POSITION_MS / 60_000);
@@ -29,6 +32,8 @@ export interface PropsEcranSuivi {
   erreurOptin: string | null;
   onToggleOptIn: (actif: boolean) => void;
   onVoirJournal: () => void;
+  /** 6.3 — accès PERMANENT au guide permission (bouton, même quand tout va bien). */
+  onVoirGuide: () => void;
   onRetour: () => void;
 }
 
@@ -41,8 +46,10 @@ export function EcranSuivi({
   erreurOptin,
   onToggleOptIn,
   onVoirJournal,
+  onVoirGuide,
   onRetour,
 }: PropsEcranSuivi) {
+  const interrompu = optIn && etatMoteur === 'interrompu';
   const permissionRefusee = optIn && etatMoteur === 'permission-refusee';
   const avantPlanSeul = optIn && etatMoteur === 'actif-avant-plan';
 
@@ -73,7 +80,11 @@ export function EcranSuivi({
         </View>
 
         {optIn ? (
-          permissionRefusee ? (
+          interrompu ? (
+            <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
+              Le suivi s’est arrêté quand l’app a été verrouillée — suis le guide pour le reprendre.
+            </Text>
+          ) : permissionRefusee ? (
             <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
               La localisation n’est pas autorisée sur ce téléphone — le suivi est simplement en
               pause. Tu peux l’autoriser dans les Réglages quand tu veux : il repartira tout seul.
@@ -103,7 +114,7 @@ export function EcranSuivi({
             Désactivé : rien n’est enregistré.
           </Text>
         )}
-        {optIn && !permissionRefusee && !avantPlanSeul ? (
+        {optIn && !interrompu && !permissionRefusee && !avantPlanSeul ? (
           <Text style={[theme.fonts.meta, { color: theme.colors.ink2 }]}>
             Aucune position n’est capturée hors de cet intervalle — jamais plus souvent, la
             fréquence est fixe.
@@ -138,6 +149,15 @@ export function EcranSuivi({
           retour du réseau.
         </Text>
       </Carte>
+
+      {/* 6.3 — accès PERMANENT au guide : même quand tout va bien, même
+          désactivé (savoir AVANT la course comment garder le suivi actif). */}
+      <Bouton
+        theme={theme}
+        label="Comment garder mon suivi actif ?"
+        variante="contour"
+        onPress={onVoirGuide}
+      />
 
       <Bouton theme={theme} label="Retour" variante="contour" onPress={onRetour} />
       <BoutonAssistance theme={theme} telephone={telephone} />

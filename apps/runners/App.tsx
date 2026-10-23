@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, SafeAreaView, ScrollView, Text, useColorScheme, View } from 'react-native';
 
 import { creerClientApi } from './src/api-client';
+import { ecranApresReprise, type Ecran } from './src/app-state';
 import {
   chargerDossier as chargerDossierOrchestre,
   connecter as connecterOrchestre,
@@ -30,8 +31,9 @@ import { EcranDossier } from './src/ecrans/dossier';
 import { EcranEdossard } from './src/ecrans/edossard';
 import { EcranHorsLigne } from './src/ecrans/hors-ligne';
 import { EcranSuivi } from './src/ecrans/suivi';
+import { EcranGuidePermission } from './src/ecrans/guide-permission';
 import { EcranJournalSync } from './src/ecrans/journal-sync';
-import { creerMoteurSuivi, creerDepsMoteurSuivi } from './src/tracking/moteur';
+import { creerMoteurSuivi, creerDepsMoteurSuivi, lirePermissions } from './src/tracking/moteur';
 import {
   creerDepsSyncPositions,
   synchroniserPositionsAvecEnregistrement,
@@ -43,7 +45,7 @@ import {
   deconnecterSuivi,
   initialiserSuivi,
   lireJournalSuivi,
-  revenirAuPremierPlan,
+  reprendreAuPremierPlan,
   type EtatSuiviApp,
   type MiseAJourSuivi,
   type PortsOrchestrationSuivi,
@@ -67,6 +69,11 @@ import { themeFor } from './src/theme';
 // câble moteur/outbox/SecureStore + garde anti-course logout/sync par
 // « génération » de session (un jeton appareil reçu après un logout ou un
 // changement de compte n'est JAMAIS écrit).
+//
+// Story 6.3 — piège iOS « Autoriser une fois » : au retour au premier plan
+// (listener AppState ci-dessous), lecture NON intrusive des permissions +
+// reprendreAuPremierPlan → guide auto UNE fois par interruption, ou
+// redémarrage silencieux du watcher (permission rétablie), ou rien.
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -100,6 +107,25 @@ export default function App() {
   const appliquerSuivi = useCallback((miseAJour: MiseAJourSuivi) => {
     setEtatSuivi((precedent) => ({ ...precedent, ...miseAJour }));
   }, []);
+
+  // Miroirs pour les listeners AppState (enregistrés une fois, sinon
+  // l'état y serait figé à sa première clôture) — mis à jour en effet,
+  // jamais pendant le rendu.
+  const etatSuiviRef = useRef(etatSuivi);
+  useEffect(() => {
+    etatSuiviRef.current = etatSuivi;
+  }, [etatSuivi]);
+  const ecranRef = useRef(etat.ecran);
+  useEffect(() => {
+    ecranRef.current = etat.ecran;
+  }, [etat.ecran]);
+
+  // 6.3 — mémoire du guide : ouvert automatiquement (vs par le bouton) et
+  // écran d'ORIGINE au moment de l'affichage auto (Retour y revient).
+  const guideAutoAfficheRef = useRef(false);
+  const origineGuideRef = useRef<Ecran>('suivi');
+  /** 6.3 — une reprise à la fois : un 2ᵉ événement 'active' pendant le traitement est ignoré. */
+  const repriseEnCours = useRef(false);
 
   // ------------------------------------------------------------------
   // Suivi GPS (story 6.2) — moteur de capture + moteur de sync + garde
@@ -155,7 +181,10 @@ export default function App() {
       lireOptin,
       ecrireOptin,
       demarrerMoteur: () => moteur.demarrer(),
+      demarrerSansDemande: (arrierePlanAccordee: boolean) =>
+        moteur.demarrerSansDemande(arrierePlanAccordee),
       arreterMoteur: () => moteur.arreter(),
+      lirePermissions,
       lireJournal: () => outboxSuivi.lireJournal(),
       compterEnAttente: () => outboxSuivi.compterEnAttente(),
       synchroniser: declencherSync,
@@ -212,16 +241,71 @@ export default function App() {
       });
   }, [demarrer, portsSuivi, appliquerSuivi]);
 
-  // Sync au retour au premier plan (réseau revenu, permission rétablie).
+  // 6.3 — retour au premier plan : lecture NON intrusive des permissions
+  // (get*, aucun pop-up) + reprise orchestrée, SÉRIALISÉE (un 2ᵉ événement
+  // 'active' pendant le traitement est ignoré). Piège « Autoriser une
+  // fois » → guide auto UNE fois par interruption (mémorise l'écran
+  // d'origine pour le Retour) ; permission rétablie → le watcher repart
+  // SEUL et le guide AUTO-affiché disparaît (jamais celui ouvert par le
+  // bouton) ; opt-in désactivé → AUCUNE vérification. Le résultat n'est
+  // appliqué que si la session a survécu (génération + token) et que le
+  // coureur n'a pas désactivé le suivi pendant le vol.
   useEffect(() => {
     const abonnement = AppState.addEventListener('change', (etatApp) => {
-      if (etatApp !== 'active') {
+      if (etatApp !== 'active' || repriseEnCours.current) {
         return;
       }
-      void revenirAuPremierPlan(portsSuivi).then(appliquerSuivi);
+      repriseEnCours.current = true;
+      const depart = etatSuiviRef.current;
+      const generation = generationSession.current;
+      void reprendreAuPremierPlan(portsSuivi, depart)
+        .then((resultat) => {
+          // Résultat périmé (logout/changement de compte pendant le vol,
+          // ou plus de session) : RIEN n'est appliqué — ni état, ni guide,
+          // ni écran. Jamais d'optIn ressuscité après une déconnexion.
+          if (generationSession.current !== generation || tokenRef.current === null) {
+            return;
+          }
+          // Désactivation du suivi pendant le vol : l'état affiché (le
+          // toggle) prime — on ne ressuscite ni optIn ni état moteur, et
+          // le guide ne s'affiche pas.
+          const desactivePendantVol = depart.optIn && !etatSuiviRef.current.optIn;
+          let miseAJour = resultat.miseAJour;
+          if (desactivePendantVol) {
+            const reste: MiseAJourSuivi = { ...miseAJour };
+            delete reste.optIn;
+            delete reste.etatMoteur;
+            miseAJour = reste;
+          }
+          appliquerSuivi(miseAJour);
+          const afficherGuide = resultat.afficherGuide && !desactivePendantVol;
+          const repris =
+            miseAJour.etatMoteur === 'actif' || miseAJour.etatMoteur === 'actif-avant-plan';
+          const ecranCible = ecranApresReprise({
+            afficherGuide,
+            etatMoteurPrecedent: depart.etatMoteur,
+            repris,
+            ecranCourant: ecranRef.current,
+            guideAutoAffiche: guideAutoAfficheRef.current,
+          });
+          if (ecranCible !== ecranRef.current) {
+            if (afficherGuide) {
+              // Mémorise l'écran d'ORIGINE : « Retour » du guide y revient.
+              origineGuideRef.current = ecranRef.current;
+              guideAutoAfficheRef.current = true;
+            } else {
+              // Fermeture automatique : le guide n'est plus « auto ».
+              guideAutoAfficheRef.current = false;
+            }
+            appliquer({ ecran: ecranCible });
+          }
+        })
+        .finally(() => {
+          repriseEnCours.current = false;
+        });
     });
     return () => abonnement.remove();
-  }, [portsSuivi, appliquerSuivi]);
+  }, [portsSuivi, appliquerSuivi, appliquer]);
 
   // Le rejet (ex. refus keychain dans ecrireToken) remonte à l'écran
   // connexion pour affichage — jamais de « chargement » infini.
@@ -285,6 +369,14 @@ export default function App() {
     appliquerSuivi(lireJournalSuivi(portsSuivi));
     appliquer({ ecran: 'journal-sync' });
   }, [appliquer, appliquerSuivi, portsSuivi]);
+
+  // 6.3 — guide permission accessible EN PERMANENCE depuis le suivi :
+  // ouvert par bouton → jamais refermé automatiquement, retour au suivi.
+  const onVoirGuide = useCallback(() => {
+    origineGuideRef.current = 'suivi';
+    guideAutoAfficheRef.current = false;
+    appliquer({ ecran: 'guide-permission' });
+  }, [appliquer]);
 
   const onDeconnexion = useCallback(async () => {
     if (tokenRef.current) {
@@ -396,8 +488,20 @@ export default function App() {
             void onToggleOptin(actif);
           }}
           onVoirJournal={onVoirJournal}
+          onVoirGuide={onVoirGuide}
           onRetour={() => {
             appliquer({ ecran: edossard ? 'edossard' : dossier ? 'dossier' : 'hors-ligne' });
+          }}
+        />
+      ) : null}
+      {ecran === 'guide-permission' ? (
+        <EcranGuidePermission
+          theme={theme}
+          onRetour={() => {
+            guideAutoAfficheRef.current = false;
+            // Retour à l'écran d'origine mémorisé à l'ouverture (auto :
+            // écran au moment du piège ; bouton : suivi).
+            appliquer({ ecran: origineGuideRef.current });
           }}
         />
       ) : null}

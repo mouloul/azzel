@@ -4,6 +4,7 @@ import { INTERVALLE_POSITION_MS, type PositionTerrain } from '@azzel/shared';
 import {
   DEFERRED_UPDATES_TIMEOUT_MS,
   creerMoteurSuivi,
+  lirePermissions,
   versPositionTerrain,
   type OptionsWatcherSuivi,
   type PermissionsSuivi,
@@ -18,12 +19,15 @@ import type { OutboxSuivi } from './outbox-sqlite';
 // silencieux, avant-plan seul → état dédié, courses durcies : démarrages
 // concurrents (UN watcher), rejet du watcher (état réinitialisé), arreter
 // pendant l'attente (abonnement tardif retiré), exception SQLite absorbée.
+// Story 6.3 — lirePermissions : lecture NON intrusive (get*, JAMAIS
+// request*), échec natif absorbé (false/false, aucune exception).
 
 const locationMock = vi.hoisted(() => ({
   Accuracy: { Balanced: 3, High: 4, Highest: 5, Low: 2, Lowest: 1 },
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
   requestForegroundPermissionsAsync: vi.fn(),
   requestBackgroundPermissionsAsync: vi.fn(),
+  getForegroundPermissionsAsync: vi.fn(),
   getBackgroundPermissionsAsync: vi.fn(),
   watchPositionAsync: vi.fn(),
 }));
@@ -122,6 +126,7 @@ function capture(surcharge: Partial<PositionCapturee> = {}): PositionCapturee {
 beforeEach(() => {
   locationMock.requestForegroundPermissionsAsync.mockReset();
   locationMock.requestBackgroundPermissionsAsync.mockReset();
+  locationMock.getForegroundPermissionsAsync.mockReset();
   locationMock.getBackgroundPermissionsAsync.mockReset();
   locationMock.watchPositionAsync.mockReset();
 });
@@ -334,6 +339,60 @@ describe('versPositionTerrain', () => {
       lat: 36.712345,
       lon: 3.187654,
       capteA: '2027-05-16T07:05:09.000Z',
+    });
+  });
+});
+
+describe('6.3 demarrerSansDemande — reprise SANS pop-up système', () => {
+  it('AUCUNE demande request* : watcher posé directement, état actif', async () => {
+    const harness = creerHarness();
+    const etat = await harness.moteur.demarrerSansDemande(true);
+    expect(etat).toBe('actif');
+    expect(harness.moteur.estActif()).toBe(true);
+    expect(harness.optionsVues).toHaveLength(1);
+    expect(locationMock.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(locationMock.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('arrière-plan absent → état honnête actif-avant-plan, capture vivante', async () => {
+    const harness = creerHarness();
+    const etat = await harness.moteur.demarrerSansDemande(false);
+    expect(etat).toBe('actif-avant-plan');
+    harness.capturer(capture());
+    expect(harness.enregistrerPosition).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('6.3 lirePermissions — lecture NON intrusive', () => {
+  it('get* uniquement : AUCUNE requête request*, booléens exacts', async () => {
+    locationMock.getForegroundPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted' });
+    locationMock.getBackgroundPermissionsAsync.mockResolvedValue({ granted: false, status: 'denied' });
+    const lues = await lirePermissions();
+    expect(lues).toEqual({ avantPlanAccordee: true, arrierePlanAccordee: false });
+    expect(locationMock.getForegroundPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(locationMock.getBackgroundPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(locationMock.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(locationMock.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('« Toujours » rétablie : les deux à true', async () => {
+    locationMock.getForegroundPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted' });
+    locationMock.getBackgroundPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted' });
+    expect(await lirePermissions()).toEqual({ avantPlanAccordee: true, arrierePlanAccordee: true });
+  });
+
+  it('« Autoriser une fois » expirée : les deux à false', async () => {
+    locationMock.getForegroundPermissionsAsync.mockResolvedValue({ granted: false, status: 'denied' });
+    locationMock.getBackgroundPermissionsAsync.mockResolvedValue({ granted: false, status: 'denied' });
+    expect(await lirePermissions()).toEqual({ avantPlanAccordee: false, arrierePlanAccordee: false });
+  });
+
+  it('échec natif → false/false, JAMAIS d’exception', async () => {
+    locationMock.getForegroundPermissionsAsync.mockRejectedValue(new Error('module absent'));
+    locationMock.getBackgroundPermissionsAsync.mockRejectedValue(new Error('module absent'));
+    await expect(lirePermissions()).resolves.toEqual({
+      avantPlanAccordee: false,
+      arrierePlanAccordee: false,
     });
   });
 });
