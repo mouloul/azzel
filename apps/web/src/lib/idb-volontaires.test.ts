@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ANNUAIRE_SCHEMA_VERSION,
+  cleIdempotenceEvenement,
   cleIdempotencePassage,
   cleIdempotenceRetrait,
   PASSAGE_SCHEMA_VERSION,
@@ -18,22 +19,34 @@ import {
   IDB_NOM_BASE,
   IDB_STORE_ANNUAIRE,
   IDB_STORE_APPAREIL,
+  IDB_STORE_ENVOYES,
   IDB_STORE_ETAT,
+  IDB_STORE_JOURNAL,
   IDB_STORE_OUTBOX,
   IDB_VERSION,
+  JOURNAL_SYNC_MAX_ENTREES,
   effacerEtatVolontaires,
+  ajouterEntreeJournal,
   ajouterPassage,
   ajouterRetrait,
   cleIndexPassage,
+  compterEnAttente,
   ecrireAnnuaire,
   ecrireEtatVolontaires,
+  enregistrerJetonSync,
   lireAnnuaire,
   lireEtatVolontaires,
+  lireJournal,
+  lireJetonSync,
+  lireEtatFileAttente,
+  listerEvenementsASynchroniser,
   listerPassages,
   listerRetraits,
   obtenirAppareilId,
   passagesParJetonCheckpoint,
   retraitsParJeton,
+  marquerEnvoyes,
+  type EntreeJournalSync,
   type EtatVolontaires,
 } from './idb-volontaires';
 
@@ -150,6 +163,14 @@ function creerIndexedDbMemoire() {
             });
             return r;
           },
+          delete: (cle: string) => {
+            const r = requete<undefined>();
+            apres(() => {
+              stores.get(nomStore)?.delete(cle);
+              r.onsuccess?.();
+            });
+            return r;
+          },
         }),
       };
     },
@@ -212,6 +233,32 @@ function creerIndexedDbMemoire() {
     keyPaths.set(IDB_STORE_ANNUAIRE, 'id');
   };
 
+  /** Simule une base restée en v3 (épopée 4.3/4.4) : + outbox et appareil. */
+  const semerBaseV3 = (appareilId: string, ...outbox: Record<string, unknown>[]): void => {
+    versionBase = 3;
+    const etatStore = new Map<string, unknown>();
+    etatStore.set(IDB_CLE_COURANT, { ...etatExemple('2026-10-22T08:00:00.000Z'), id: IDB_CLE_COURANT });
+    stores.set(IDB_STORE_ETAT, etatStore);
+    keyPaths.set(IDB_STORE_ETAT, 'id');
+    const annuaireStore = new Map<string, unknown>();
+    annuaireStore.set(
+      IDB_CLE_COURANT,
+      { ...annuaireExemple('2026-10-22T08:00:00.000Z'), id: IDB_CLE_COURANT },
+    );
+    stores.set(IDB_STORE_ANNUAIRE, annuaireStore);
+    keyPaths.set(IDB_STORE_ANNUAIRE, 'id');
+    const outboxStore = new Map<string, unknown>();
+    for (const enregistrement of outbox) {
+      outboxStore.set(String(enregistrement.cle ?? ''), enregistrement);
+    }
+    stores.set(IDB_STORE_OUTBOX, outboxStore);
+    keyPaths.set(IDB_STORE_OUTBOX, 'cle');
+    const appareilStore = new Map<string, unknown>();
+    appareilStore.set(IDB_CLE_COURANT, { id: IDB_CLE_COURANT, appareilId });
+    stores.set(IDB_STORE_APPAREIL, appareilStore);
+    keyPaths.set(IDB_STORE_APPAREIL, 'id');
+  };
+
   return {
     fabrique,
     stores,
@@ -219,6 +266,7 @@ function creerIndexedDbMemoire() {
     suppressions,
     semerBaseV1,
     semerBaseV2,
+    semerBaseV3,
   };
 }
 
@@ -793,5 +841,244 @@ describe('effacerEtatVolontaires — purge logout conservatrice (AD-5)', () => {
     await expect(listerRetraits()).resolves.toHaveLength(1);
     expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(1);
     expect(stores.get(IDB_STORE_APPAREIL)?.size).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 4.5 — v4 : stores « envoyes » (marquage hors outbox) + « journal »
+// (borné ~100) + jeton du canal sync. Upgrade v3→v4 SANS toucher à l'existant.
+// ---------------------------------------------------------------------------
+
+describe('upgrade v3 → v4 (story 4.5)', () => {
+  it('les stores envoyes/journal sont créés, l’existant (outbox/appareil) INTACT', async () => {
+    const cleRetrait = cleIdempotenceRetrait(APPAREIL, 'edition-1', 'jeton-coureur-1-aaaaaa');
+    const { fabrique, stores, semerBaseV3 } = creerIndexedDbMemoire();
+    semerBaseV3(APPAREIL, { ...retraitExemple(), cle: cleRetrait });
+    vi.stubGlobal('indexedDB', fabrique);
+
+    expect(await compterEnAttente()).toBe(1);
+    expect(stores.has(IDB_STORE_ENVOYES)).toBe(true);
+    expect(stores.has(IDB_STORE_JOURNAL)).toBe(true);
+    // L'outbox v3 n'a pas bougé d'un octet : même clé, même événement.
+    expect(stores.get(IDB_STORE_OUTBOX)?.get(cleRetrait)).toEqual({
+      ...retraitExemple(),
+      cle: cleRetrait,
+    });
+    expect(stores.get(IDB_STORE_APPAREIL)?.get(IDB_CLE_COURANT)).toEqual({
+      id: IDB_CLE_COURANT,
+      appareilId: APPAREIL,
+    });
+  });
+
+  it('une base NEUVE part directement avec les six stores (v4 d’origine)', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await compterEnAttente();
+    expect(IDB_VERSION).toBe(4);
+    for (const store of [
+      IDB_STORE_ETAT,
+      IDB_STORE_ANNUAIRE,
+      IDB_STORE_OUTBOX,
+      IDB_STORE_APPAREIL,
+      IDB_STORE_ENVOYES,
+      IDB_STORE_JOURNAL,
+    ]) {
+      expect(stores.has(store), store).toBe(true);
+    }
+  });
+});
+
+describe('compterEnAttente / listerEvenementsASynchroniser / marquerEnvoyes (story 4.5)', () => {
+  it('SSR-safe : sans indexedDB — compteur 0, liste vide, marquage false, journal vide, jeton null', async () => {
+    expect(typeof indexedDB).toBe('undefined');
+    await expect(compterEnAttente()).resolves.toBe(0);
+    // Stockage ABSENT (SSR) : vide honnête, PAS une erreur de comptage.
+    await expect(lireEtatFileAttente()).resolves.toEqual({
+      enAttente: 0,
+      erreurStockage: false,
+    });
+    await expect(listerEvenementsASynchroniser()).resolves.toEqual([]);
+    await expect(marquerEnvoyes(['cle-1'])).resolves.toBe(false);
+    await expect(lireJournal()).resolves.toEqual([]);
+    await expect(lireJetonSync()).resolves.toBeNull();
+    await expect(enregistrerJetonSync('jeton')).resolves.toBe(false);
+  });
+
+  it('stockage DÉFAILLANT (présent mais illisible) : erreurStockage distingué du vide', async () => {
+    const requeteQuiEchoue = () => {
+      const requete = {
+        result: undefined,
+        error: new Error('QuotaExceededError'),
+        onsuccess: null,
+        onerror: null,
+      } as unknown as IDBOpenDBRequest;
+      queueMicrotask(() => (requete.onerror as ((evenement: unknown) => void) | null)?.(null));
+      return requete;
+    };
+    vi.stubGlobal('indexedDB', { open: requeteQuiEchoue } as unknown as IDBFactory);
+    await expect(lireEtatFileAttente()).resolves.toEqual({
+      enAttente: 0,
+      erreurStockage: true,
+    });
+    // Le compteur simple reste absorbé (0) — seul l'état détaillé distingue.
+    await expect(compterEnAttente()).resolves.toBe(0);
+  });
+
+  it('retraits ET passages comptés ensemble ; marquage partiel recompte exactement', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterRetrait(retraitExemple());
+    await ajouterPassage(passageExemple());
+    await ajouterPassage(passageExemple({ checkpointId: CHECKPOINT_KM30 }));
+    expect(await compterEnAttente()).toBe(3);
+
+    const clePremierPassage = cleIdempotencePassage(
+      APPAREIL,
+      'edition-1',
+      'jeton-coureur-1-aaaaaa',
+      CHECKPOINT_KM12,
+    );
+    expect(await marquerEnvoyes([clePremierPassage])).toBe(true);
+    expect(await compterEnAttente()).toBe(2);
+
+    // Le marquage vit dans SON store : l'outbox reste append-only immuable.
+    expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(3);
+    expect(stores.get(IDB_STORE_ENVOYES)?.size).toBe(1);
+    expect(
+      (stores.get(IDB_STORE_ENVOYES)?.get(clePremierPassage) as { envoyeA: string })
+        .envoyeA,
+    ).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('listerEvenementsASynchroniser : événements avec leur clé du CONTRAT, hors contrat exclu', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterRetrait(retraitExemple());
+    await ajouterPassage(passageExemple());
+    // Enregistrement d'une autre époque (clé corrompue) : jamais parti.
+    stores.get(IDB_STORE_OUTBOX)?.set('cle-fantomme', { cle: 'cle-fantomme', nimporte: 'quoi' });
+
+    const aSynchroniser = await listerEvenementsASynchroniser();
+    expect(aSynchroniser.map((evenement) => evenement.type).sort()).toEqual([
+      'passage',
+      'retrait',
+    ]);
+    for (const evenement of aSynchroniser) {
+      expect(evenement.cle).toBe(cleIdempotenceEvenement(evenement));
+    }
+
+    // MÊME filtre côté compteur : le corrompu n'existe ni dans la liste NI
+    // dans « N en attente » (jamais de compteur à vie pour une clé morte).
+    await expect(compterEnAttente()).resolves.toBe(2);
+    await expect(lireEtatFileAttente()).resolves.toEqual({
+      enAttente: 2,
+      erreurStockage: false,
+    });
+
+    await marquerEnvoyes(aSynchroniser.map((evenement) => evenement.cle));
+    await expect(listerEvenementsASynchroniser()).resolves.toEqual([]);
+    await expect(compterEnAttente()).resolves.toBe(0);
+  });
+
+  it('marquerEnvoyes([]) : true sans effet ; les rejets restés en file comptent toujours', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterRetrait(retraitExemple());
+    expect(await marquerEnvoyes([])).toBe(true);
+    expect(await compterEnAttente()).toBe(1);
+  });
+});
+
+describe('journal sync — append borné, lecture triée (story 4.5)', () => {
+  function entree(horodatage: string, surcharge: Partial<EntreeJournalSync> = {}): Omit<EntreeJournalSync, 'id'> {
+    return {
+      horodatage,
+      envoyes: 10,
+      dejaConnus: 2,
+      rejetes: 0,
+      motifs: [],
+      offsetMoyenMs: 1_000,
+      ...surcharge,
+    };
+  }
+
+  it('aller-retour : entrées relues du plus RÉCENT au plus ancien', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterEntreeJournal(entree('2027-05-16T07:06:10.000Z'));
+    await ajouterEntreeJournal(entree('2027-05-16T08:06:10.000Z'));
+    await ajouterEntreeJournal(entree('2027-05-16T09:06:10.000Z'));
+
+    const journal = await lireJournal();
+    expect(journal.map((e) => e.horodatage)).toEqual([
+      '2027-05-16T09:06:10.000Z',
+      '2027-05-16T08:06:10.000Z',
+      '2027-05-16T07:06:10.000Z',
+    ]);
+    expect(journal[0]).toMatchObject({ envoyes: 10, dejaConnus: 2, offsetMoyenMs: 1_000 });
+    // Ids uniques (clés React du journal).
+    expect(new Set(journal.map((e) => e.id)).size).toBe(3);
+  });
+
+  it(`borné à ${JOURNAL_SYNC_MAX_ENTREES} : les plus ANCIENNES partent`, async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    // Dates strictement croissantes via rollover natif de Date (minute index).
+    for (let index = 0; index < JOURNAL_SYNC_MAX_ENTREES + 5; index += 1) {
+      const horodatage = new Date(Date.UTC(2027, 4, 16, 0, index)).toISOString();
+      await ajouterEntreeJournal(entree(horodatage));
+    }
+    const journal = await lireJournal();
+    expect(journal).toHaveLength(JOURNAL_SYNC_MAX_ENTREES);
+    expect(stores.get(IDB_STORE_JOURNAL)?.size).toBe(JOURNAL_SYNC_MAX_ENTREES);
+    // Les 5 plus anciennes (minutes 0→4) sont parties : la plus ancienne
+    // restante est la minute 5, la plus récente la minute 104.
+    expect(journal[journal.length - 1]?.horodatage).toBe('2027-05-16T00:05:00.000Z');
+    expect(journal[0]?.horodatage).toBe('2027-05-16T01:44:00.000Z');
+  });
+
+  it('le journal et le marquage SURVIVENT à la déconnexion (AD-5 : ils appartiennent à l’appareil)', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterPassage(passageExemple());
+    const cle = cleIdempotencePassage(APPAREIL, 'edition-1', 'jeton-coureur-1-aaaaaa', CHECKPOINT_KM12);
+    await marquerEnvoyes([cle]);
+    await ajouterEntreeJournal(entree('2027-05-16T07:06:10.000Z'));
+
+    await effacerEtatVolontaires();
+
+    await expect(compterEnAttente()).resolves.toBe(0);
+    await expect(lireJournal()).resolves.toHaveLength(1);
+  });
+});
+
+describe('jeton du canal sync — enregistrerJetonSync / lireJetonSync (story 4.5)', () => {
+  it('sans appareil enregistré : le jeton ne peut pas vivre seul (false)', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    expect(await enregistrerJetonSync('jeton-brut')).toBe(false);
+    await expect(lireJetonSync()).resolves.toBeNull();
+  });
+
+  it('aller-retour après obtainAppareilId : le jeton survit à la déconnexion (AD-5)', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    const appareilId = await obtenirAppareilId();
+    expect(appareilId).not.toBeNull();
+
+    expect(await enregistrerJetonSync('jeton-canal-sync-1')).toBe(true);
+    await expect(lireJetonSync()).resolves.toBe('jeton-canal-sync-1');
+
+    await effacerEtatVolontaires();
+    // Le jeton appartient à l'APPAREIL, pas au compte : conservé.
+    await expect(lireJetonSync()).resolves.toBe('jeton-canal-sync-1');
+  });
+
+  it('jeton vide : refus (false) sans écriture', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await obtenirAppareilId();
+    expect(await enregistrerJetonSync('')).toBe(false);
+    await expect(lireJetonSync()).resolves.toBeNull();
   });
 });

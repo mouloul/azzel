@@ -17,6 +17,17 @@ import { importVolontaires, renvoyerInvitation } from '@/modules/missions/servic
 import { MissionNotFoundError, VolontaireNotFoundError } from '@/modules/missions/errors';
 import { createMissionsStore } from '@/modules/missions/store';
 import {
+  enregistrerAppareil,
+  synchroniserLot,
+  verifierJetonAppareil,
+} from '@/modules/chrono/service';
+import { createChronoStore } from '@/modules/chrono/store';
+import {
+  PASSAGE_SCHEMA_VERSION,
+  cleIdempotenceEvenement,
+  type PassageTerrain,
+} from '@azzel/shared';
+import {
   recreateAzzelTestDb,
   resolveTestDatabaseUrls,
   closeAzzelTestDb,
@@ -44,6 +55,10 @@ const ORG_TABLES = [
   'secteur',
   'mission',
   'affectation',
+  // Story 4.5 — ingestion chrono : isolation stricte (toujours sous GUC).
+  'terrain_evenement',
+  // (appareil : pattern 0011, cherché par secret AVANT l'org — voir le test
+  // dédié « story 4.5 : appareil » ci-dessous.)
 ] as const;
 
 function validInput(epreuve: string): InscriptionFormInput {
@@ -290,6 +305,7 @@ describe.skipIf(testUrls === null)(
       // Story 3.2 — secteurs + missions + affectations dans CHAQUE organisation
       // via le store réel : peuple secteur/mission/affectation pour les preuves
       // d'isolation ci-dessous (ORG_TABLES étendu aux 3 tables).
+      const missionsParOrg = new Map<string, string>();
       for (const [orgId, editionId, volontaireId] of [
         [orgAId, editionAId, volontaireAId],
         [orgBId, editionBId, volontaireBId],
@@ -301,15 +317,19 @@ describe.skipIf(testUrls === null)(
           lieu: 'Place du village',
           contact: null,
         });
+        // Story 4.5 (revue) — le checkpoint du passage doit être une mission
+        // scan_checkpoint (validation chrono) : la mission peuplée sert des
+        // deux rôles (isolation 3.2 + checkpoint 4.5).
         const mission = await missionsStore.createMission({
           organisationId: orgId,
           secteurId: secteur.id,
-          type: 'accueil',
+          type: 'scan_checkpoint',
           titre: 'Accueil village',
           debutLe: new Date('2027-05-16T06:00:00.000Z'),
           finLe: new Date('2027-05-16T12:00:00.000Z'),
           consignes: null,
         });
+        missionsParOrg.set(orgId, mission.id);
         const affectation = await missionsStore.affecter({
           organisationId: orgId,
           missionId: mission.id,
@@ -317,6 +337,55 @@ describe.skipIf(testUrls === null)(
         });
         if (!affectation.cree) {
           throw new Error(`affectation initiale non créée pour ${orgId}`);
+        }
+      }
+
+      // Story 4.5 — appareils + événements terrain dans CHAQUE organisation
+      // via le module chrono réel (find-or-create, Bearer, ingestion
+      // idempotente) : peuple appareil/terrain_evenement pour les preuves
+      // d'isolation ci-dessous (ORG_TABLES étendu aux 2 tables).
+      for (const [orgId, editionId, accountId, coureurId] of [
+        [orgAId, editionAId, accountAId, coureurAId],
+        [orgBId, editionBId, accountBId, coureurBId],
+      ] as const) {
+        const jeton = `jeton-multi-org-${orgId.slice(0, 8)}`.padEnd(22, 'z').slice(0, 22);
+        await sql`
+          UPDATE coureur
+          SET status = 'validé', dossard = 900, jeton_edossard = ${jeton}
+          WHERE id = ${coureurId}
+        `;
+        const chronoStore = createChronoStore(app);
+        const sessionVolontaire: SessionRecord = {
+          accountId,
+          organisationId: orgId,
+          email: `volontaire-sync-${orgId}@test.azzel`,
+          role: 'volontaire',
+          createdAt: new Date(),
+        };
+        const enregistrement = await enregistrerAppareil(
+          sessionVolontaire,
+          `appareil-${orgId.slice(0, 8)}`,
+          { store: chronoStore },
+        );
+        const auth = await verifierJetonAppareil(enregistrement.jeton, { store: chronoStore });
+        // Checkpoint = id de la mission créée ci-dessus (V1 documentée).
+        const checkpointId = missionsParOrg.get(orgId) as string;
+        const evenement: PassageTerrain = {
+          version: PASSAGE_SCHEMA_VERSION,
+          type: 'passage',
+          editionId,
+          jeton,
+          checkpointId,
+          horodatage: '2027-05-16T07:05:09.000Z',
+          appareilId: `appareil-${orgId.slice(0, 8)}`,
+        };
+        const reponse = await synchroniserLot(
+          auth,
+          { evenements: [{ ...evenement, cle: cleIdempotenceEvenement(evenement) }] },
+          { store: chronoStore },
+        );
+        if (reponse.compteurs.acceptes !== 1) {
+          throw new Error(`population chrono inattendue pour ${orgId}`);
         }
       }
     }, 120_000);
@@ -544,6 +613,42 @@ describe.skipIf(testUrls === null)(
         }),
       ).rejects.toBeInstanceOf(MissionNotFoundError);
       expect(etatA.affectations).toHaveLength(1);
+    });
+
+    // --- Story 4.5 — module chrono (canal sync) -------------------------------
+
+    it('story 4.5 : terrain_evenement — chaque organisation ne voit QUE ses événements (GUC)', async () => {
+      for (const orgId of [orgAId, orgBId] as const) {
+        const rows = (await withOrg(app, orgId, (tx) =>
+          tx.unsafe('SELECT organisation_id FROM terrain_evenement'),
+        )) as unknown as { organisation_id: string }[];
+        expect(rows.length).toBeGreaterThan(0);
+        expect(rows.every((row) => row.organisation_id === orgId)).toBe(true);
+      }
+    });
+
+    it('story 4.5 : appareil — pattern 0011 (secret d’abord) : lisible hors GUC pour la résolution par hash, CLOISONNÉ sous GUC', async () => {
+      // Hors GUC : les lignes existent (la garde sync résout l'org depuis le
+      // hash du jeton — le secret EST le contrôle d'accès, cf. session 0011).
+      const sansGuc = await app.unsafe('SELECT organisation_id FROM appareil');
+      expect(sansGuc.length).toBe(2);
+
+      // Sous GUC : chaque organisation ne voit QUE son appareil, aucune
+      // écriture croisée possible (WITH CHECK).
+      for (const [orgId, autreOrgId] of [
+        [orgAId, orgBId],
+        [orgBId, orgAId],
+      ] as const) {
+        const rows = (await withOrg(app, orgId, (tx) =>
+          tx<{ count: number; autres: number }[]>`
+            SELECT count(*)::int AS count,
+              count(*) FILTER (WHERE organisation_id = ${autreOrgId})::int AS autres
+            FROM appareil
+          `,
+        )) as unknown as { count: number; autres: number }[];
+        expect(rows[0]?.count).toBe(1);
+        expect(rows[0]?.autres).toBe(0);
+      }
     });
   },
 );

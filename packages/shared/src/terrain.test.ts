@@ -235,3 +235,117 @@ describe('cleIdempotencePassage — appareil + édition + jeton + checkpoint (AD
     ).not.toBe(cleIdempotenceRetrait('app-1', 'edition-1', 'ZyXwVuTsRqPoNmLkJiHgFe'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 4.5 — union terrain + contrat du lot sync (AD-2, AD-3, AD-5).
+// ---------------------------------------------------------------------------
+
+import {
+  MOTIF_REJET_CHECKPOINT_INCONNU,
+  MOTIF_REJET_CONTRAT_INVALIDE,
+  MOTIF_REJET_COUREUR_INCONNU,
+  SYNC_TERRAIN_MAX_LOT,
+  STATUTS_SYNC_TERRAIN,
+  cleIdempotenceEvenement,
+  estCorpsLotSyncTerrainValide,
+  estEvenementSyncTerrainValide,
+  estEvenementTerrainValide,
+  type EvenementSyncTerrain,
+} from './terrain';
+
+describe('story 4.5 — union et bornes du canal sync', () => {
+  it('SYNC_TERRAIN_MAX_LOT = 200 (tranches de reprise), statuts fermés', () => {
+    expect(SYNC_TERRAIN_MAX_LOT).toBe(200);
+    expect(STATUTS_SYNC_TERRAIN).toEqual(['accepté', 'déjà-connu', 'rejeté']);
+  });
+
+  it('motifs de rejet côté serveur : libellés stables du journal sync', () => {
+    expect(MOTIF_REJET_COUREUR_INCONNU).toBe('coureur inconnu');
+    expect(MOTIF_REJET_CONTRAT_INVALIDE).toBe('contrat invalide');
+    expect(MOTIF_REJET_CHECKPOINT_INCONNU).toBe('checkpoint inconnu');
+  });
+
+  it('estEvenementTerrainValide accepte les DEUX contrats, rien d’autre', () => {
+    expect(estEvenementTerrainValide(retraitValide())).toBe(true);
+    expect(estEvenementTerrainValide(passageValide())).toBe(true);
+    expect(estEvenementTerrainValide({ type: 'autre' })).toBe(false);
+    expect(estEvenementTerrainValide(null)).toBe(false);
+  });
+
+  it('cleIdempotenceEvenement aiguille par le type, vers les clés 4.3/4.4', () => {
+    expect(cleIdempotenceEvenement(retraitValide())).toBe(
+      cleIdempotenceRetrait('appareil-1', 'edition-1', JETON),
+    );
+    expect(cleIdempotenceEvenement(passageValide())).toBe(
+      cleIdempotencePassage('appareil-1', 'edition-1', JETON, CHECKPOINT),
+    );
+  });
+});
+
+describe('estEvenementSyncTerrainValide — clé transportée = clé du contrat, jamais forgée', () => {
+  it('accepte un événement augmenté de SA clé exacte', () => {
+    const retrait = retraitValide();
+    const surFil: EvenementSyncTerrain = {
+      ...retrait,
+      cle: cleIdempotenceEvenement(retrait),
+    };
+    expect(estEvenementSyncTerrainValide(surFil)).toBe(true);
+  });
+
+  it('refuse une clé absente, tronquée ou réécrite (contrat invalide)', () => {
+    const passage = passageValide();
+    expect(estEvenementSyncTerrainValide(passage)).toBe(false);
+    expect(
+      estEvenementSyncTerrainValide({
+        ...passage,
+        cle: cleIdempotenceEvenement(passage).slice(0, 10),
+      }),
+    ).toBe(false);
+    // Clé du retrait portée par un passage : même forme, mauvais contrat.
+    expect(
+      estEvenementSyncTerrainValide({
+        ...passage,
+        cle: cleIdempotenceRetrait(passage.appareilId, passage.editionId, passage.jeton),
+      }),
+    ).toBe(false);
+  });
+
+  it('refuse un événement hors contrat même avec une clé plausible', () => {
+    const retrait = retraitValide();
+    expect(
+      estEvenementSyncTerrainValide({ ...retrait, jeton: 'court', cle: 'x' }),
+    ).toBe(false);
+  });
+});
+
+describe('estCorpsLotSyncTerrainValide — corps de POST /api/volontaires/sync', () => {
+  function lot(...evenements: unknown[]) {
+    return { evenements };
+  }
+
+  function surFil(evenement: RetraitTerrain | PassageTerrain): EvenementSyncTerrain {
+    return { ...evenement, cle: cleIdempotenceEvenement(evenement) };
+  }
+
+  it('accepte un lot mixte retrait + passage, et le lot vide (no-op)', () => {
+    expect(estCorpsLotSyncTerrainValide(lot(surFil(retraitValide()), surFil(passageValide())))).toBe(
+      true,
+    );
+    expect(estCorpsLotSyncTerrainValide(lot())).toBe(true);
+  });
+
+  it('refuse non-objets et champ evenements non tableau — 400 AVANT tout traitement', () => {
+    expect(estCorpsLotSyncTerrainValide(null)).toBe(false);
+    expect(estCorpsLotSyncTerrainValide('evenements')).toBe(false);
+    expect(estCorpsLotSyncTerrainValide({})).toBe(false);
+    expect(estCorpsLotSyncTerrainValide({ evenements: 'pas-un-tableau' })).toBe(false);
+  });
+
+  it('un événement hors contrat ne rend PAS le lot illisible : rejet INDIVIDUEL côté service', () => {
+    // La matrice de la spec 4.5 : « payload invalide côté serveur » →
+    // « rejeté — contrat invalide » PAR ÉVÉNEMENT, jamais un 400 du lot.
+    expect(estCorpsLotSyncTerrainValide(lot(surFil(retraitValide()), { ...passageValide(), cle: 'forgée' }))).toBe(
+      true,
+    );
+  });
+});

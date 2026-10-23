@@ -19,6 +19,8 @@ import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-sc
 import { readStoredTheme, writeStoredTheme } from '@/lib/theme';
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
+import { BandeauSync } from './bandeau-sync';
+
 // Stories 3.3/3.4 — PWA volontaires : revalidation à CHAQUE ouverture en ligne
 // (réponse persistée en IndexedDB → fiche dans la poche dès l'affectation),
 // badge d'état role="status" (« synchronisé à HH:MM » / « HORS-LIGNE PRÊT »),
@@ -34,6 +36,37 @@ const ERREUR_SESSION_EXPIREE = {
   message: 'Ta session a expiré ou a été fermée.',
   action: 'Reconnecte-toi pour rafraîchir ta fiche mission.',
 };
+
+/**
+ * Écran « session expirée » (composant pur, testé) : la reconnexion reste le
+ * chemin pour la FICHE, mais le bandeau sync RESTE MONTÉ (AD-5) — la boîte
+ * d'envoi appartient à l'appareil, le Bearer sync survit à la session morte.
+ */
+export function EcranSessionExpiree({ assistancePhone }: { assistancePhone: string }) {
+  return (
+    <section className="auth">
+      <article className="card">
+        <p className="surtitre">Espace volontaire</p>
+        <h1>Tu es déconnecté</h1>
+        <div role="alert" aria-live="assertive" className="error-box">
+          <p className="error-message">{ERREUR_SESSION_EXPIREE.message}</p>
+          <p className="error-action">
+            <a className="btn-lien" href="/connexion-volontaire">
+              Se reconnecter
+            </a>
+          </p>
+        </div>
+        <div className="auth-alt">
+          <a className="btn-contour" href="/connexion-volontaire">
+            Se reconnecter
+          </a>
+          <AssistanceButton phone={assistancePhone} />
+        </div>
+      </article>
+      <BandeauSync assistancePhone={assistancePhone} />
+    </section>
+  );
+}
 
 function Consignes({ texte }: { texte: string | null }) {
   if (texte === null || texte.trim().length === 0) {
@@ -143,6 +176,12 @@ export function VolontairesPwa({
   const [statutAnnuaire, setStatutAnnuaire] = useState<StatutAnnuaire>(
     statutInitialAnnuaire(annuaireInitial),
   );
+  // Story 4.5 — signal « ouverture en ligne » pour le bandeau sync : incrémenté
+  // quand le fetch etat a réussi. AD-5 : même SANS ce signal (session morte,
+  // fetch 401), le bandeau tente la sync à son montage dès que le réseau est
+  // là — le Bearer appareil n'exige aucune session ; ce signal ne fait que
+  // réveiller un bandeau déjà monté après un rapatriement d'état.
+  const [declenchementSync, setDeclenchementSync] = useState(0);
 
   // Revalidation : à chaque ouverture, on rappelle l'API en ligne. Succès →
   // IndexedDB (la poche). Échec → IndexedDB d'abord (le plus frais gagne,
@@ -170,6 +209,9 @@ export function VolontairesPwa({
         }
         setEtat(payload);
         setStatut('synchrone');
+        // Fetch etat OK : l'ouverture en ligne est établie — on réveille le
+        // bandeau sync (qui, de toute façon, tente aussi à son montage, AD-5).
+        setDeclenchementSync((precedent) => precedent + 1);
         await ecrireEtatVolontaires(payload);
       } catch {
         const enCache = await lireEtatVolontaires();
@@ -303,28 +345,7 @@ export function VolontairesPwa({
   }, [noticeScan, router]);
 
   if (sessionExpiree) {
-    return (
-      <section className="auth">
-        <article className="card">
-          <p className="surtitre">Espace volontaire</p>
-          <h1>Tu es déconnecté</h1>
-          <div role="alert" aria-live="assertive" className="error-box">
-            <p className="error-message">{ERREUR_SESSION_EXPIREE.message}</p>
-            <p className="error-action">
-              <a className="btn-lien" href="/connexion-volontaire">
-                Se reconnecter
-              </a>
-            </p>
-          </div>
-          <div className="auth-alt">
-            <a className="btn-contour" href="/connexion-volontaire">
-              Se reconnecter
-            </a>
-            <AssistanceButton phone={etat.assistancePhone} />
-          </div>
-        </article>
-      </section>
-    );
+    return <EcranSessionExpiree assistancePhone={etat.assistancePhone} />;
   }
 
   return (
@@ -377,6 +398,10 @@ export function VolontairesPwa({
           </div>
         )}
       </header>
+
+      {/* Story 4.5 (UX-DR-8) — bandeau sync PERMANENT : compteur d'attente,
+          états ◷/envoi/✓/révoqué, journal en lecture seule. */}
+      <BandeauSync assistancePhone={etat.assistancePhone} declenchement={declenchementSync} />
 
       {noticeAffichee !== null && (
         <p role="status" aria-live="polite" className="volontaires-notice">

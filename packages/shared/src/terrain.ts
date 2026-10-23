@@ -155,3 +155,109 @@ export function cleIdempotencePassage(
 ): string {
   return `passage:v${PASSAGE_SCHEMA_VERSION}:${appareilId}:${editionId}:${jeton}:${checkpointId}`;
 }
+
+// ---------------------------------------------------------------------------
+// Story 4.5 (AD-2, AD-3, AD-5) — union des événements terrain + contrat du
+// canal sync par lots idempotents. Le client compose les lots (outbox −
+// envoyés), le serveur valide par les gardes CI-DESSUS (jamais réinventées),
+// résout les jetons et arbitre le premier reçu. La réponse par événement
+// ({ cle, statut, motif? }) est la SEULE vérité du client sur ce que le
+// serveur connaît.
+// ---------------------------------------------------------------------------
+
+/** Union discriminée par `type` : tout événement de l'outbox terrain. */
+export type EvenementTerrain = RetraitTerrain | PassageTerrain;
+
+/** Taille maximale d'un lot sync (au-delà : 413, reprise par tranches). */
+export const SYNC_TERRAIN_MAX_LOT = 200;
+
+/** Événement terrain AUGMENTÉ de sa clé d'idempotence (forme fil du lot). */
+export type EvenementSyncTerrain = EvenementTerrain & { cle: string };
+
+/** Corps de POST /api/volontaires/sync : { evenements: [...] }. */
+export interface LotSyncTerrain {
+  evenements: EvenementSyncTerrain[];
+}
+
+export const MOTIF_REJET_COUREUR_INCONNU = 'coureur inconnu';
+export const MOTIF_REJET_CONTRAT_INVALIDE = 'contrat invalide';
+export const MOTIF_REJET_CHECKPOINT_INCONNU = 'checkpoint inconnu';
+
+export const STATUTS_SYNC_TERRAIN = ['accepté', 'déjà-connu', 'rejeté'] as const;
+
+export type StatutSyncTerrain = (typeof STATUTS_SYNC_TERRAIN)[number];
+
+/** Réponse par événement : ce que le serveur a fait de CHAQUE clé. */
+export interface ResultatEvenementSync {
+  cle: string;
+  statut: StatutSyncTerrain;
+  motif?: string;
+}
+
+export interface CompteursLotSync {
+  acceptes: number;
+  dejaConnus: number;
+  rejetes: number;
+}
+
+/** Réponse 200 du lot : détail par événement + compteurs + référence serveur. */
+export interface ReponseLotSync {
+  resultats: ResultatEvenementSync[];
+  compteurs: CompteursLotSync;
+  /** ISO UTC serveur à la réception du lot — base de l'offset client. */
+  recuA: string;
+}
+
+/** Garde d'union : l'événement respecte l'UN des contrats versionnés. */
+export function estEvenementTerrainValide(valeur: unknown): valeur is EvenementTerrain {
+  return estRetraitValide(valeur) || estPassageValide(valeur);
+}
+
+/**
+ * Clé d'idempotence d'un événement quelconque (retrait OU passage) — simple
+ * aiguillage sur le discriminant `type` vers les générateurs ci-dessus. Le
+ * serveur s'en sert pour RECALCULER la clé du lot reçu : une clé transportée
+ * qui ne correspond pas à l'événement = rejet « contrat invalide ».
+ */
+export function cleIdempotenceEvenement(evenement: EvenementTerrain): string {
+  return evenement.type === RETRAIT_TERRAIN_TYPE
+    ? cleIdempotenceRetrait(
+        evenement.appareilId,
+        evenement.editionId,
+        evenement.jeton,
+      )
+    : cleIdempotencePassage(
+        evenement.appareilId,
+        evenement.editionId,
+        evenement.jeton,
+        evenement.checkpointId,
+      );
+}
+
+/**
+ * Garde du format fil d'un événement de lot : contrat terrain VALIDE et clé
+ * EXACTEMENT celle que le contrat shared génère (jamais de clé forgée).
+ */
+export function estEvenementSyncTerrainValide(valeur: unknown): valeur is EvenementSyncTerrain {
+  if (!estEvenementTerrainValide(valeur)) {
+    return false;
+  }
+  const candidat = valeur as EvenementSyncTerrain;
+  return candidat.cle === cleIdempotenceEvenement(candidat);
+}
+
+/**
+ * Garde du corps de POST sync : objet avec `evenements` TABLEAU (vide permis —
+ * no-op utile au client). Les événements HORS contrat ne rendent PAS le lot
+ * illisible : chacun est rejeté individuellement (« contrat invalide ») dans
+ * la réponse — un événement corrompu ne doit JAMAIS bloquer la file d'un
+ * appareil de terrain (la garde par événement est
+ * estEvenementSyncTerrainValide).
+ */
+export function estCorpsLotSyncTerrainValide(valeur: unknown): valeur is LotSyncTerrain {
+  if (typeof valeur !== 'object' || valeur === null) {
+    return false;
+  }
+  const candidat = valeur as { evenements?: unknown };
+  return Array.isArray(candidat.evenements);
+}

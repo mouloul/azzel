@@ -1,39 +1,52 @@
 import {
+  cleIdempotenceEvenement,
   cleIdempotencePassage,
   cleIdempotenceRetrait,
   estAnnuaireValide,
+  estEvenementTerrainValide,
   estPassageValide,
   estRetraitValide,
+  nowIsoUtc,
   type AnnuaireEdition,
+  type EvenementSyncTerrain,
   type PassageTerrain,
   type RetraitTerrain,
 } from '@azzel/shared';
 
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
-// Stories 3.3/3.4/4.3/4.4 — persistance IndexedDB de la poche volontaires.
-// Une base nommée + versionnée : v1 = store « etat » (fiche missions),
-// v2 = store « annuaire » (réplique des coureurs), v3 = stores « outbox »
-// (événements terrain append-only : retraits 4.3 ET passages 4.4, préfixes de
-// clé distincts) + « appareil » (identifiant d'appareil stable) — chaque
-// upgrade crée SANS toucher les stores précédents.
+// Stories 3.3/3.4/4.3/4.4/4.5 — persistance IndexedDB de la poche
+// volontaires. Une base nommée + versionnée : v1 = store « etat » (fiche
+// missions), v2 = store « annuaire » (réplique des coureurs), v3 = stores
+// « outbox » (événements terrain append-only : retraits 4.3 ET passages 4.4,
+// préfixes de clé distincts) + « appareil » (identifiant d'appareil stable)
+// — chaque upgrade crée SANS toucher les stores précédents.
+//
+// v4 (story 4.5) : stores « envoyes » (marquage d'envoi PAR CLÉ, dans SON
+// store — l'outbox demeure append-only immuable, AD-2/AD-8) et « journal »
+// (journal sync borné ~100 entrées : lots, acceptés/doublons/rejets, offsets
+// horloge). L'appareil enregistre aussi son jeton de canal sync dans le store
+// « appareil » (AD-5).
 //
 // L'outbox appartient à l'APPAREIL (AD-5) : il survit à la déconnexion (la
-// purge logout vide etat/annuaire mais CONSERVE outbox/appareil). Append-only
-// strict (AD-2, AD-8) : insertion (add, clé d'idempotence en keyPath → un
-// doublon physique est impossible) et lecture uniquement — jamais de mutation
-// ni de suppression locale ; 4.5 marquera l'envoi.
+// purge logout vide etat/annuaire mais CONSERVE outbox/appareil/envoyes/
+// journal). Append-only strict (AD-2, AD-8) : insertion (add, clé
+// d'idempotence en keyPath → un doublon physique est impossible) et lecture
+// uniquement — jamais de mutation ni de suppression locale ; le marquage
+// d'envoi vit dans le store « envoyes », jamais dans l'outbox.
 //
 // SSR-safe : sans indexedDB (serveur, vieux navigateur, mode privé iOS qui
 // jette), lire renvoie null/vide et écrire renvoie false — le rendu serveur
 // reste le plan A, jamais d'écran vide pour un échec de stockage.
 
 export const IDB_NOM_BASE = 'azzel-volontaires';
-export const IDB_VERSION = 3;
+export const IDB_VERSION = 4;
 export const IDB_STORE_ETAT = 'etat';
 export const IDB_STORE_ANNUAIRE = 'annuaire';
 export const IDB_STORE_OUTBOX = 'outbox';
 export const IDB_STORE_APPAREIL = 'appareil';
+export const IDB_STORE_ENVOYES = 'envoyes';
+export const IDB_STORE_JOURNAL = 'journal';
 export const IDB_CLE_COURANT = 'courant';
 
 /** Préfixe des caches du service worker volontaires (voir public/sw-volontaires.js). */
@@ -88,6 +101,8 @@ function ouvrirBase(): Promise<IDBDatabase> {
       // v3 : « outbox » (keyPath = clé d'idempotence du contrat terrain —
       // l'append d'une clé existante est un no-op physique) + « appareil »
       // (identifiant stable, clé « courant »).
+      // v4 (story 4.5) : « envoyes » (keyPath = même clé d'idempotence, le
+      // marquage d'envoi vit ICI, hors outbox) + « journal » (append borné).
       const base = requete.result;
       if (!base.objectStoreNames.contains(IDB_STORE_ETAT)) {
         base.createObjectStore(IDB_STORE_ETAT, { keyPath: 'id' });
@@ -100,6 +115,12 @@ function ouvrirBase(): Promise<IDBDatabase> {
       }
       if (!base.objectStoreNames.contains(IDB_STORE_APPAREIL)) {
         base.createObjectStore(IDB_STORE_APPAREIL, { keyPath: 'id' });
+      }
+      if (!base.objectStoreNames.contains(IDB_STORE_ENVOYES)) {
+        base.createObjectStore(IDB_STORE_ENVOYES, { keyPath: 'cle' });
+      }
+      if (!base.objectStoreNames.contains(IDB_STORE_JOURNAL)) {
+        base.createObjectStore(IDB_STORE_JOURNAL, { keyPath: 'id' });
       }
     };
     requete.onsuccess = () => resolve(requete.result);
@@ -252,6 +273,8 @@ interface EnregistrementOutbox extends RetraitTerrain {
 interface EnregistrementAppareil {
   id: typeof IDB_CLE_COURANT;
   appareilId: string;
+  /** Story 4.5 — jeton du canal sync (Bearer), stocké BRUT côté appareil. */
+  jetonSync?: string;
 }
 
 function genererAppareilId(): string {
@@ -484,4 +507,295 @@ export async function passagesParJetonCheckpoint(): Promise<Map<string, Date>> {
     }
   }
   return index;
+}
+
+// ---------------------------------------------------------------------------
+// Story 4.5 — sync par lots idempotents : marquage d'envoi (store DÉDIÉ,
+// l'outbox reste immuable), compteur d'attente, journal sync borné, jeton du
+// canal sync (AD-5). « déjà-connu » marque AUSSI envoyé : le serveur connaît
+// l'événement, c'est tout ce qui compte.
+// ---------------------------------------------------------------------------
+
+interface EnregistrementEnvoye {
+  cle: string;
+  envoyeA: string;
+}
+
+/** Journal de terrain : fraîcheur et rejets, PAS un audit (borné ~100). */
+export interface EntreeJournalSync {
+  id: string;
+  /** ISO UTC de la clôture du lot côté client. */
+  horodatage: string;
+  envoyes: number;
+  dejaConnus: number;
+  rejetes: number;
+  /** Motifs des rejets du lot (« coureur inconnu », « contrat invalide »…). */
+  motifs: string[];
+  /** Offset horloge moyen du lot (ms, référence serveur recuA) — AD-3. */
+  offsetMoyenMs: number | null;
+}
+
+/** Borne du journal sync : fraîcheur de terrain, l'audit vit côté serveur. */
+export const JOURNAL_SYNC_MAX_ENTREES = 100;
+
+/**
+ * Événements de l'outbox NON ENCORE envoyés — filtre PARTAGÉ par la liste ET
+ * le compteur du bandeau : contrat terrain validé ET clé stockée EXACTEMENT
+ * celle du contrat shared. Un enregistrement à clé corrompue est ignoré des
+ * DEUX côtés (il ne part jamais en lot ET ne gonfle jamais « N en attente »).
+ * Lève en cas de stockage défaillant (absorbé par les deux garde-robes ci-
+ * dessus selon qu'elles veulent distinguer l'échec ou non).
+ */
+async function collecterNonEnvoyes(): Promise<EvenementSyncTerrain[]> {
+  const base = await ouvrirBase();
+  try {
+    const enregistrements = await promettreRequete(
+      base.transaction(IDB_STORE_OUTBOX, 'readonly').objectStore(IDB_STORE_OUTBOX).getAll() as IDBRequest<
+        { cle: string }[]
+      >,
+    );
+    const envoyes = await promettreRequete(
+      base
+        .transaction(IDB_STORE_ENVOYES, 'readonly')
+        .objectStore(IDB_STORE_ENVOYES)
+        .getAll() as IDBRequest<EnregistrementEnvoye[]>,
+    );
+    const clesEnvoyes = new Set(envoyes.map((enregistrement) => enregistrement.cle));
+    return enregistrements
+      .filter(
+        (enregistrement): enregistrement is EvenementSyncTerrain =>
+          estEvenementTerrainValide(enregistrement) &&
+          enregistrement.cle === cleIdempotenceEvenement(enregistrement) &&
+          !clesEnvoyes.has(enregistrement.cle),
+      )
+      .map((enregistrement) => ({
+        ...enregistrement,
+        cle: cleIdempotenceEvenement(enregistrement),
+      }));
+  } finally {
+    base.close();
+  }
+}
+
+/**
+ * Événements prêts pour un lot (même filtre que le compteur) ; échec de
+ * stockage absorbé en liste vide.
+ */
+export async function listerEvenementsASynchroniser(): Promise<EvenementSyncTerrain[]> {
+  if (!indexedDbDisponible()) {
+    return [];
+  }
+  try {
+    return await collecterNonEnvoyes();
+  } catch {
+    return [];
+  }
+}
+
+/** État de la file pour le bandeau : distingue l’échec de comptage du vide. */
+export interface EtatFileAttente {
+  enAttente: number;
+  /** true = stockage illisible — « Comptage impossible », pas « file : 0 ». */
+  erreurStockage: boolean;
+}
+
+/**
+ * Compteur d'attente du bandeau sync (UX-DR-8) AVEC signal d'erreur : le
+ * stockage absent (SSR, vieux navigateur) reste un vide honnête ; un échec de
+ * lecture alors qu'IndexedDB existe remonte erreurStockage.
+ */
+export async function lireEtatFileAttente(): Promise<EtatFileAttente> {
+  if (!indexedDbDisponible()) {
+    return { enAttente: 0, erreurStockage: false };
+  }
+  try {
+    const evenements = await collecterNonEnvoyes();
+    return { enAttente: evenements.length, erreurStockage: false };
+  } catch {
+    return { enAttente: 0, erreurStockage: true };
+  }
+}
+
+/**
+ * Compteur simple (même filtre que listerEvenementsASynchroniser — retraits ET
+ * passages, clés corrompues ignorées des deux côtés).
+ */
+export async function compterEnAttente(): Promise<number> {
+  return (await lireEtatFileAttente()).enAttente;
+}
+
+/**
+ * UNE SEULE transaction pour tout le groupe d'écritures (vs une connexion par
+ * clé) : les marquages d'un lot partent ensemble. Les requêtes sont attendues
+ * individuellement — la transaction committe quand la dernière réussit.
+ */
+async function avecStoreGroupe(
+  store: string,
+  mode: IDBTransactionMode,
+  operation: (objectStore: IDBObjectStore) => Promise<void>,
+): Promise<void> {
+  const base = await ouvrirBase();
+  try {
+    const transaction = base.transaction(store, mode);
+    await operation(transaction.objectStore(store));
+  } finally {
+    base.close();
+  }
+}
+
+/**
+ * Marque des clés comme envoyées (dans LEUR store, en UNE transaction —
+ * l'outbox n'est jamais touché). Renvoie false (jamais d'exception) si le
+ * stockage est absent/refusé : le lot sera rejoué, idempotence côté serveur.
+ */
+export async function marquerEnvoyes(cles: string[]): Promise<boolean> {
+  if (!indexedDbDisponible() || cles.length === 0) {
+    return cles.length === 0;
+  }
+  try {
+    const envoyeA = nowIsoUtc();
+    await avecStoreGroupe(IDB_STORE_ENVOYES, 'readwrite', async (store) => {
+      await Promise.all(
+        cles.map((cle) =>
+          promettreRequete(store.put({ cle, envoyeA } satisfies EnregistrementEnvoye)),
+        ),
+      );
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Journal sync en lecture seule, du plus récent au plus ancien. */
+export async function lireJournal(): Promise<EntreeJournalSync[]> {
+  if (!indexedDbDisponible()) {
+    return [];
+  }
+  try {
+    const entrees = await avecStore<EntreeJournalSync[]>(
+      IDB_STORE_JOURNAL,
+      'readonly',
+      (store) => store.getAll() as IDBRequest<EntreeJournalSync[]>,
+    );
+    // Tri par valeur (jamais par ordre physique IDB) : horodatage ISO puis id.
+    return entrees.sort((a, b) =>
+      a.horodatage === b.horodatage ? b.id.localeCompare(a.id) : b.horodatage.localeCompare(a.horodatage),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function identifiantEntreeJournal(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/**
+ * Append d'une entrée de journal en UNE SEULE transaction (écriture + relecture
+ * pour bornage + suppressions), bornée à JOURNAL_SYNC_MAX_ENTREES : les plus
+ * anciennes partent quand la borne est dépassée (journal de terrain, pas
+ * d'audit). Renvoie false (jamais d'exception) si stockage absent/refusé.
+ */
+export async function ajouterEntreeJournal(
+  entree: Omit<EntreeJournalSync, 'id'>,
+): Promise<boolean> {
+  if (!indexedDbDisponible()) {
+    return false;
+  }
+  try {
+    await avecStoreGroupe(IDB_STORE_JOURNAL, 'readwrite', async (store) => {
+      await promettreRequete(
+        store.put({ ...entree, id: identifiantEntreeJournal() } satisfies EntreeJournalSync),
+      );
+      const entrees = await promettreRequete(
+        store.getAll() as IDBRequest<EntreeJournalSync[]>,
+      );
+      if (entrees.length > JOURNAL_SYNC_MAX_ENTREES) {
+        const ordre = entrees.sort((a, b) =>
+          a.horodatage === b.horodatage
+            ? a.id.localeCompare(b.id)
+            : a.horodatage.localeCompare(b.horodatage),
+        );
+        const aSupprimer = ordre.slice(0, entrees.length - JOURNAL_SYNC_MAX_ENTREES);
+        await Promise.all(
+          aSupprimer.map((cible) => promettreRequete(store.delete(cible.id))),
+        );
+      }
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mémorise le jeton du canal sync (retourné UNE fois par le serveur à
+ * l'enregistrement) dans le store appareil — il survit à la déconnexion
+ * (AD-5) et n'est JAMAIS renvoyé par le serveur ensuite.
+ */
+export async function enregistrerJetonSync(jeton: string): Promise<boolean> {
+  if (!indexedDbDisponible() || jeton.length === 0) {
+    return false;
+  }
+  let base: IDBDatabase;
+  try {
+    base = await ouvrirBase();
+  } catch {
+    return false;
+  }
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      const transaction = base.transaction(IDB_STORE_APPAREIL, 'readwrite');
+      const store = transaction.objectStore(IDB_STORE_APPAREIL);
+      const lecture = store.get(IDB_CLE_COURANT) as IDBRequest<EnregistrementAppareil | undefined>;
+      lecture.onsuccess = () => {
+        const enregistrement = lecture.result;
+        if (
+          enregistrement === undefined ||
+          typeof enregistrement.appareilId !== 'string' ||
+          enregistrement.appareilId.length === 0
+        ) {
+          // Pas d'appareil connu : le jeton ne peut pas vivre seul —
+          // l'enregistrement complet repassera à la prochaine ouverture.
+          resolve(false);
+          return;
+        }
+        const ecriture = store.put({
+          id: IDB_CLE_COURANT,
+          appareilId: enregistrement.appareilId,
+          jetonSync: jeton,
+        } satisfies EnregistrementAppareil);
+        ecriture.onsuccess = () => resolve(true);
+        ecriture.onerror = () => reject(ecriture.error ?? new Error('IndexedDB indisponible'));
+      };
+      lecture.onerror = () => reject(lecture.error ?? new Error('IndexedDB indisponible'));
+    });
+  } catch {
+    return false;
+  } finally {
+    base.close();
+  }
+}
+
+/** Jeton du canal sync mémorisé, null si l'appareil n'est pas enregistré. */
+export async function lireJetonSync(): Promise<string | null> {
+  if (!indexedDbDisponible()) {
+    return null;
+  }
+  try {
+    const enregistrement = await avecStore<EnregistrementAppareil | undefined>(
+      IDB_STORE_APPAREIL,
+      'readonly',
+      (store) => store.get(IDB_CLE_COURANT) as IDBRequest<EnregistrementAppareil | undefined>,
+    );
+    return typeof enregistrement?.jetonSync === 'string' && enregistrement.jetonSync.length > 0
+      ? enregistrement.jetonSync
+      : null;
+  } catch {
+    return null;
+  }
 }

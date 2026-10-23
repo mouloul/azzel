@@ -43,6 +43,7 @@ vi.mock('next/navigation', () => ({
 
 import { DbUnavailableError } from '@/modules/iam/errors';
 import VolontairesPage, { MESSAGE_SCAN_PASSAGE, MESSAGE_SCAN_RETRAIT } from './page';
+import { EcranSessionExpiree } from './volontaires-pwa';
 
 const SESSION_VOLONTAIRE = {
   accountId: 'account-volontaire',
@@ -121,6 +122,26 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
     expect(html).toContain('href="tel:+213555010203"');
     expect(html).toContain('Appeler le PC du secteur');
     expect(html).toContain('Arrive 15 min avant.');
+  });
+
+  it('bandeau sync (story 4.5, UX-DR-8) : TOUJOURS dans le rendu nominal — état initial et journal', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('Sync de la file…');
+    expect(html).toMatch(/Journal sync \((?:<!-- -->)?0/);
+    expect(html).toContain('Envoyer maintenant');
+  });
+
+  it('écran « session expirée » (composant pur) : le bandeau sync RESTE MONTÉ (AD-5 — la file survit au re-login)', async () => {
+    const flux = await renderToReadableStream(
+      <EcranSessionExpiree assistancePhone="+213 555 010 200" />,
+    );
+    const html = await new Response(flux).text();
+    expect(html).toContain('Tu es déconnecté');
+    expect(html).toContain('Se reconnecter');
+    expect(html).toContain('Sync de la file…');
+    expect(html).toMatch(/Journal sync \((?:<!-- -->)?0/);
+    expect(html).toContain('Envoyer maintenant');
   });
 
   it('en-tête : email du compte, édition, assistance transmise, badge synchronisé', async () => {

@@ -348,3 +348,97 @@
 [data-theme="dark"] .volontaires-barre-assistance {
   background: var(--az-surface);
 }
+
+/* --- Bandeau sync (story 4.5, UX-DR-8) --------------------------------------
+   Toujours visible : compteur d'attente → envoi → « ✓ envoyés — file : 0 »,
+   ou « Appelle le PC » (appareil révoqué). Couleurs opérationnelles dédiées
+   (paires clair/sombre testées) — jamais la couleur seule : ◷/⏳/✓/⚠ + textes
+   intégraux. Journal en lecture seule sous <details>. */
+
+.volontaires-sync {
+  display: grid;
+  gap: var(--az-space-2);
+  padding: var(--az-space-3);
+  border-radius: 12px;
+  background: var(--az-sync-attente);
+  color: var(--az-sync-attente-encre);
+}
+
+.volontaires-sync--envoi,
+.volontaires-sync--envoye {
+  background: var(--az-sync-envoye);
+  color: var(--az-sync-envoye-encre);
+}
+
+.volontaires-sync--revoque {
+  background: var(--az-danger);
+  color: var(--az-danger-encre);
+}
+
+.volontaires-sync-etat {
+  margin: 0;
+  font-size: var(--az-font-size-body-lg);
+  font-weight: 700;
+  line-height: var(--az-line-height-body-lg);
+}
+
+.volontaires-sync-bouton,
+.volontaires-sync-appelle {
+  justify-self: start;
+  min-height: 48px;
+  padding: var(--az-space-1) var(--az-space-3);
+  border-radius: 10px;
+  border: 2px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-size: var(--az-font-size-body);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.volontaires-sync-journal {
+  color: inherit;
+}
+
+.volontaires-sync-journal summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-1);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.volontaires-sync-journal-vide,
+.volontaires-sync-journal-entree {
+  margin: 0;
+}
+
+.volontaires-sync-journal-liste {
+  list-style: none;
+  margin: var(--az-space-1) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+.volontaires-sync-journal-entree {
+  display: grid;
+  gap: 2px;
+  font-size: var(--az-font-size-meta);
+  line-height: 1.4;
+}
+
+.volontaires-sync-journal-date {
+  font-weight: 700;
+}
+
+.volontaires-sync-journal-motifs {
+  font-weight: 600;
+}
+
+.volontaires-sync-journal-offset {
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
