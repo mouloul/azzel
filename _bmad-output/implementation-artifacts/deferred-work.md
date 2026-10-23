@@ -4,3 +4,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-import-excel-des-volontaires-et-invitations.md`
   summary: Ajouter un test de rendu du lien statique « Volontaire ? Connecte-toi ici » (a[href="/connexion-volontaire"]) sur la page /connexion
   evidence: Aucun test ne rend /connexion (convention page.test.tsx du repo) ; la suppression ou corruption du href ne ferait échouer aucune suite. Dégradation UX de découverte seulement — l'enveloppe iam.volontaire_code_refused, elle testée, oriente déjà vers /connexion-volontaire (finding verification-gap story 3.1).
+- source_spec: none
+  summary: Mode sombre avec override mémorisé (pattern UX épopée 6) à implémenter dans une story ultérieure de l'app coureurs
+  evidence: Revue 6.1 (finding #19) : l'épopée 6 exige « défaut préférence système, override mémorisé » ; seule la détection système est en place (useColorScheme), aucun contrôle utilisateur.

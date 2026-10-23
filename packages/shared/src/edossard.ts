@@ -50,3 +50,28 @@ export function decoderPayloadEdossard(payload: unknown): string | null {
   const jeton = payload.slice(EDOSSARD_PAYLOAD_PREFIX.length);
   return estJetonEdossardValide(jeton) ? jeton : null;
 }
+
+// Story 6.1 — contrat JSON de l'e-dossard servi par le monolithe
+// (GET /api/coureur/e-dossard) et consommé par l'app native. Le payload QR
+// (`azzel-e1:<jeton>`) est calculé CÔTÉ SERVEUR via encoderPayloadEdossard ;
+// l'app le rend localement (react-native-qrcode-svg) sans jamais réinventer
+// le préfixe. Un seul tenant de ces types : ici.
+
+/** État e-dossard d'un coureur validé (tout ce que la carte affiche). */
+export interface EdossardState {
+  jeton: string;
+  dossard: number | null;
+  prenom: string;
+  nom: string;
+  epreuveNom: string;
+  editionNom: string;
+}
+
+/**
+ * Réponse de GET /api/coureur/e-dossard : dossier non validé →
+ * `{ disponible: false }` (message d'attente côté client, AUCUN QR) ;
+ * dossier validé → état complet + `payloadQr` prêt à rendre.
+ */
+export type ReponseEdossardApi =
+  | { disponible: false }
+  | (EdossardState & { disponible: true; payloadQr: string });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DbUnavailableError } from './errors';
-import { requireRole, requireRolePage } from './session';
+import { readBearerToken, requireRole, requireRolePage, requireSession } from './session';
 
 const iamServiceMock = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -27,6 +27,7 @@ vi.mock(
 
 const headersMock = vi.hoisted(() => ({
   cookies: vi.fn(),
+  headers: vi.fn(),
 }));
 
 vi.mock(
@@ -64,10 +65,17 @@ function withCookie(token: string | undefined): void {
   });
 }
 
+function withHeaders(authorization: string | null): void {
+  headersMock.headers.mockResolvedValue({
+    get: (name: string) => (name === 'authorization' ? authorization : null),
+  });
+}
+
 beforeEach(() => {
   iamServiceMock.getSession.mockReset();
   navigationMock.redirect.mockClear();
   headersMock.cookies.mockReset();
+  headersMock.headers.mockReset();
 });
 
 describe('requireRole — garde IAM par rôle', () => {
@@ -157,6 +165,86 @@ describe('requireRolePage — gardes des pages (redirections)', () => {
     withCookie('jeton');
     iamServiceMock.getSession.mockRejectedValue(new DbUnavailableError());
     const result = await requireRolePage('organisateur');
+    expect(result).toEqual({ status: 'db-unavailable' });
+    expect(navigationMock.redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe('readBearerToken — extraction du jeton natif (story 6.1)', () => {
+  it('Bearer bien formé : le jeton est extrait tel quel', () => {
+    expect(readBearerToken('Bearer jeton-natif-abc123')).toBe('jeton-natif-abc123');
+  });
+
+  it('schème insensible à la casse (RFC 7235)', () => {
+    expect(readBearerToken('bearer jeton')).toBe('jeton');
+    expect(readBearerToken('BEARER jeton')).toBe('jeton');
+  });
+
+  it('espaces de tête tolérés, argument unique non vide exigé', () => {
+    expect(readBearerToken('  Bearer jeton')).toBe('jeton');
+    expect(readBearerToken('Bearer ')).toBeNull();
+    expect(readBearerToken('Bearer jeton autre')).toBeNull();
+  });
+
+  it('autres schèmes ou absence d’en-tête : null', () => {
+    expect(readBearerToken('Basic dXNlcjpwYXNz')).toBeNull();
+    expect(readBearerToken('')).toBeNull();
+    expect(readBearerToken(null)).toBeNull();
+    expect(readBearerToken(undefined)).toBeNull();
+  });
+});
+
+describe('requireSession — Bearer natif en plus du cookie (story 6.1)', () => {
+  it('Bearer seul : même lookup, même sémantique que le cookie', async () => {
+    withCookie(undefined);
+    withHeaders('Bearer jeton-natif');
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+
+    const result = await requireSession();
+
+    expect(result).toEqual({ status: 'authenticated', session: SESSION_ORGANISATEUR });
+    expect(iamServiceMock.getSession).toHaveBeenCalledWith('jeton-natif');
+  });
+
+  it('le Bearer prime sur le cookie', async () => {
+    withCookie('jeton-cookie');
+    withHeaders('Bearer jeton-natif');
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+
+    await requireSession();
+
+    expect(iamServiceMock.getSession).toHaveBeenCalledWith('jeton-natif');
+    expect(iamServiceMock.getSession).not.toHaveBeenCalledWith('jeton-cookie');
+  });
+
+  it('sans Bearer, le cookie continue de fonctionner (web inchangé)', async () => {
+    withCookie('jeton-cookie');
+    withHeaders(null);
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+
+    const result = await requireSession();
+
+    expect(result).toEqual({ status: 'authenticated', session: SESSION_ORGANISATEUR });
+    expect(iamServiceMock.getSession).toHaveBeenCalledWith('jeton-cookie');
+  });
+
+  it('Bearer invalide (session inconnue/révoquée AD-5) : redirection connexion, comme un cookie périmé', async () => {
+    withCookie(undefined);
+    withHeaders('Bearer jeton-revoque');
+    iamServiceMock.getSession.mockResolvedValue(null);
+
+    await requireSession().catch((error: unknown) => error);
+
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/connexion');
+  });
+
+  it('base indisponible via Bearer : db-unavailable sans redirection', async () => {
+    withCookie(undefined);
+    withHeaders('Bearer jeton');
+    iamServiceMock.getSession.mockRejectedValue(new DbUnavailableError());
+
+    const result = await requireSession();
+
     expect(result).toEqual({ status: 'db-unavailable' });
     expect(navigationMock.redirect).not.toHaveBeenCalled();
   });

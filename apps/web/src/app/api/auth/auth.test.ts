@@ -6,7 +6,7 @@ import { POST as postLogout } from './logout/route';
 import { GET as getSessionRoute } from './session/route';
 import { POST as postVerify } from './verify/route';
 
-import { RateLimitedError } from '@/modules/iam/errors';
+import { InvalidCodeError, RateLimitedError } from '@/modules/iam/errors';
 
 const serviceMock = vi.hoisted(() => ({
   requestLoginCode: vi.fn(),
@@ -61,6 +61,49 @@ describe('POST /api/auth/verify', () => {
     expect(setCookie).toContain('Path=/');
     expect(setCookie).toContain('SameSite=lax');
     expect(serviceMock.verifyLoginCode).toHaveBeenCalledWith('coureur@exemple.dz', '123456');
+  });
+
+  it('story 6.1 — client natif : le jeton de session est renvoyé UNE fois dans le corps', async () => {
+    serviceMock.verifyLoginCode.mockResolvedValue({
+      token: 'jeton-natif-clair',
+      email: 'coureur@exemple.dz',
+    });
+
+    const response = await postVerify(
+      jsonRequest('/api/auth/verify', {
+        email: 'coureur@exemple.dz',
+        code: '123456',
+        client: 'native',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; email: string; token?: string };
+    expect(body).toEqual({ ok: true, email: 'coureur@exemple.dz', token: 'jeton-natif-clair' });
+    // Le token voyage dans le corps : aucun intermédiaire ne doit cacher la réponse.
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    // Le cookie httpOnly reste posé (web inchangé ; sans effet pour l'app).
+    const setCookie = response.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith('azzel_session=jeton-natif-clair'));
+    expect(setCookie).toBeDefined();
+  });
+
+  it('story 6.1 — client natif, code faux : enveloppe iam.code_invalid SANS cookie ni token', async () => {
+    serviceMock.verifyLoginCode.mockRejectedValue(new InvalidCodeError());
+
+    const response = await postVerify(
+      jsonRequest('/api/auth/verify', {
+        email: 'coureur@exemple.dz',
+        code: '000000',
+        client: 'native',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { version: number; error: { code: string } };
+    expect(body.error.code).toBe('iam.code_invalid');
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 });
 
@@ -166,6 +209,42 @@ describe('GET /api/auth/session', () => {
       createdAt: '2026-10-01T10:00:00.000Z',
     });
   });
+
+  it('story 6.1 — session via Authorization: Bearer (app native)', async () => {
+    serviceMock.getSession.mockResolvedValue({
+      accountId: 'account-1',
+      organisationId: 'org-1',
+      email: 'coureur@exemple.dz',
+      role: 'coureur',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+    });
+
+    const response = await getSessionRoute(
+      new NextRequest(BASE + '/api/auth/session', {
+        headers: { authorization: 'Bearer jeton-natif' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceMock.getSession).toHaveBeenCalledWith('jeton-natif');
+    const body = (await response.json()) as { email: string; role: string };
+    expect(body.email).toBe('coureur@exemple.dz');
+    expect(body.role).toBe('coureur');
+  });
+
+  it('story 6.1 — Bearer invalide : 401 enveloppe iam.unauthenticated', async () => {
+    serviceMock.getSession.mockResolvedValue(null);
+
+    const response = await getSessionRoute(
+      new NextRequest(BASE + '/api/auth/session', {
+        headers: { authorization: 'Bearer jeton-revoque' },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('iam.unauthenticated');
+  });
 });
 
 describe('POST /api/auth/logout', () => {
@@ -186,5 +265,19 @@ describe('POST /api/auth/logout', () => {
       .find((cookie) => cookie.startsWith('azzel_session='));
     expect(setCookie).toBeDefined();
     expect(setCookie).toContain('Max-Age=0');
+  });
+
+  it('story 6.1 — déconnexion via Authorization: Bearer (app native)', async () => {
+    serviceMock.logout.mockResolvedValue(undefined);
+
+    const response = await postLogout(
+      new NextRequest(BASE + '/api/auth/logout', {
+        method: 'POST',
+        headers: { authorization: 'Bearer jeton-natif' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceMock.logout).toHaveBeenCalledWith('jeton-natif');
   });
 });

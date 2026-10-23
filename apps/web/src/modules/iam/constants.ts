@@ -35,6 +35,9 @@ export const ROLE_ORGANISATEUR: AccountRole = 'organisateur';
 
 export const ROLE_VOLONTAIRE: AccountRole = 'volontaire';
 
+// Story 6.1 — rôle de la surface API coureur (guard de /api/coureur/*).
+export const ROLE_COUREUR: AccountRole = 'coureur';
+
 // Story 3.1 — invitation volontaire : TTL 14 jours, consommée à l'usage.
 export const INVITATION_TTL_DAYS = 14;
 

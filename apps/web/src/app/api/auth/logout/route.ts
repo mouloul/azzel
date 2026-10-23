@@ -2,9 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { SESSION_COOKIE_NAME } from '@/modules/iam/constants';
 import { logout } from '@/modules/iam/service';
+import { sessionTokenFromRequest } from '@/modules/iam/session';
+
+// Story 6.1 — l'app native se déconnecte avec son Bearer : la session est
+// révoquée côté serveur (le jeton local est purgé par l'app elle-même, cache
+// compris — voir auth-store).
 
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const token = sessionTokenFromRequest(request);
   if (token) {
     try {
       await logout(token);

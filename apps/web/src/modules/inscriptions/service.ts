@@ -1,6 +1,17 @@
 import type { SessionRecord } from '@/modules/iam/store';
 import { processOutbox, type OutboxProcessSummary } from '@/modules/notifications/worker';
 
+// Story 6.1 — les contrats dossier/e-dossard vivent dans @azzel/shared
+// (consommés tels quels par l'app native) : réexportés ici pour les pages.
+import type {
+  ChecklistPiece,
+  ChecklistPieceId,
+  ChecklistRecap,
+  ChecklistState,
+  EditionSummary,
+  EdossardState,
+} from '@azzel/shared';
+
 import {
   AGE_CATEGORY_LABELS,
   COUREUR_STATUS_REFUSE,
@@ -59,14 +70,13 @@ export interface CoureurSummary {
   updatedAt: string;
 }
 
-export interface EditionSummary {
-  id: string;
-  slug: string;
-  nom: string;
-  dateCourse: string;
-  registrationClosesAt: string;
-  registrationOpen: boolean;
-}
+export type {
+  ChecklistPiece,
+  ChecklistPieceId,
+  ChecklistRecap,
+  ChecklistState,
+  EditionSummary,
+} from '@azzel/shared';
 
 export interface EpreuveSummary {
   id: string;
@@ -332,40 +342,6 @@ export async function acceptDocuments(
 export const CHECKLIST_VALIDATION_EN_ATTENTE = 'En attente de validation par l’organisation';
 
 export const CHECKLIST_PREUVE_INDISPONIBLE = 'Indisponible (réessaie plus tard)';
-
-export type ChecklistPieceId =
-  | 'email'
-  | 'epreuve'
-  | 'decharge'
-  | 'reglement'
-  | 'preuve'
-  | 'validation';
-
-export interface ChecklistPiece {
-  id: ChecklistPieceId;
-  libelle: string;
-  fait: boolean;
-  actionLabel?: string;
-  actionHref?: string;
-  texteSecondaire?: string;
-  motifRefus?: string;
-}
-
-export interface ChecklistRecap {
-  epreuve: string;
-  distanceKm: number;
-  categorieAge: string;
-  tshirt: string;
-  contactUrgenceNom: string;
-  contactUrgenceTelephone: string;
-  dateCourse: string;
-}
-
-export interface ChecklistState {
-  edition: EditionSummary | null;
-  pieces: ChecklistPiece[];
-  recap: ChecklistRecap | null;
-}
 
 function checklistPiece(
   id: ChecklistPieceId,
@@ -678,16 +654,10 @@ export async function attribuerDossards(
 // Story 4.1 — e-dossard du coureur : tout ce que la page /espace-coureur/
 // e-dossard affiche, SANS donnée d'un autre coureur. Le jeton naît ici
 // (première consultation du validé) et le service n'expose JAMAIS le payload
-// QR : l'encodage `azzel-e1:<jeton>` reste l'affaire de la page via shared.
+// QR : l'encodage `azzel-e1:<jeton>` reste l'affaire des clients (page web,
+// route API 6.1) via shared.
 
-export interface EdossardState {
-  jeton: string;
-  dossard: number | null;
-  prenom: string;
-  nom: string;
-  epreuveNom: string;
-  editionNom: string;
-}
+export type { EdossardState } from '@azzel/shared';
 
 /**
  * E-dossard du coureur de la session (édition courante). Null si le dossier

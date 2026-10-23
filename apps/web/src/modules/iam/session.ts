@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import {
@@ -12,12 +12,42 @@ import { DbUnavailableError } from './errors';
 import { getSession } from './service';
 import type { SessionRecord } from './store';
 
+// Story 6.1 — l'app native ne peut pas porter de cookie httpOnly : elle
+// présente le même jeton de session en `Authorization: Bearer <token>`.
+// Même lookup hashé, même sémantique de session (TTL 30 j, révocation AD-5) ;
+// le Bearer PRIME sur le cookie (un client natif n'en pose jamais).
+
+/**
+ * Extrait le jeton d'un en-tête `Authorization`. Schéma insensible à la casse
+ * (RFC 7235), un seul argument non vide — tout le reste est ignoré (null).
+ */
+export function readBearerToken(authorization: string | null | undefined): string | null {
+  if (typeof authorization !== 'string') {
+    return null;
+  }
+  const match = /^Bearer\s+(\S+)$/i.exec(authorization.trim());
+  return match ? (match[1] as string) : null;
+}
+
+/** Jeton de session d'une requête API : Bearer d'abord, cookie ensuite. */
+export function sessionTokenFromRequest(request: {
+  headers: { get(name: string): string | null };
+  cookies: { get(name: string): { value: string } | undefined };
+}): string | null {
+  return (
+    readBearerToken(request.headers.get('authorization')) ??
+    request.cookies.get(SESSION_COOKIE_NAME)?.value ??
+    null
+  );
+}
+
 export type RequireSessionResult =
   | { status: 'authenticated'; session: SessionRecord }
   | { status: 'db-unavailable' };
 
 export async function requireSession(): Promise<RequireSessionResult> {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const bearer = readBearerToken((await headers()).get('authorization'));
+  const token = bearer ?? (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   let session: SessionRecord | null = null;
   if (token) {
     try {

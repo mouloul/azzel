@@ -4,6 +4,15 @@
     "slug": "azzel-runners",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic"
+    "userInterfaceStyle": "automatic",
+    "scheme": "azzel",
+    "platforms": ["ios", "android"],
+    "plugins": ["expo-dev-client"],
+    "android": {
+      "package": "dz.azzel.runners"
+    },
+    "ios": {
+      "bundleIdentifier": "dz.azzel.runners"
+    }
   }
 }
