@@ -46,6 +46,49 @@ export interface TerrainEvenementRecord {
   appareilId: string;
 }
 
+// ---------------------------------------------------------------------------
+// Story 5.1 — agrégats du tableau de bord PC course (lecture seule, AD-3).
+// ---------------------------------------------------------------------------
+
+/** Ligne de board UX-DR-12 : un passage ARBITRÉ (premier reçu par coureur×checkpoint). */
+export interface PassageArbitre {
+  dossard: number;
+  horodatageReception: Date;
+}
+
+/** Board d'un checkpoint (mission scan_checkpoint de l'édition courante). */
+export interface CheckpointCourse {
+  id: string;
+  titre: string;
+  estArrivee: boolean;
+  /** Tri heure de réception serveur DÉCROISSANT (UX-DR-12). */
+  passages: PassageArbitre[];
+}
+
+/** Partants par épreuve : coureurs VALIDÉS de l'édition courante. */
+export interface PartantsEpreuve {
+  epreuveId: string;
+  epreuveNom: string;
+  total: number;
+}
+
+/** Agrégats PC course, org-scopés — tout horodatage est SERVEUR (AD-3). */
+export interface EtatCourseRecord {
+  edition: { id: string; nom: string } | null;
+  partants: PartantsEpreuve[];
+  /** Premiers retraits reçus, par coureur distinct. */
+  retraits: number;
+  /** Retirés ∧ passage arbitré au checkpoint est_arrivee (∧ = intersection). */
+  arrives: number;
+  /** retraits − abandonnés − arrivés (abandonnés = 0 en 5.1, réservé 5.3). */
+  enCourse: number;
+  /** Au plus un checkpoint d'arrivée par édition (garde service missions). */
+  arriveeDefinie: boolean;
+  checkpoints: CheckpointCourse[];
+  /** max(horodatage_reception) — null = aucune donnée reçue. */
+  fraicheur: Date | null;
+}
+
 /** Bornes symétriques du CHECK SQL appareil_client (0025). */
 export const APPAREIL_CLIENT_MAX_LENGTH = 120;
 

@@ -15,6 +15,8 @@ import {
   resultatEvenement,
   type AppareilAuth,
   type AppareilRecord,
+  type CheckpointCourse,
+  type EtatCourseRecord,
   type TerrainEvenementRecord,
 } from './domain';
 import {
@@ -208,4 +210,66 @@ export async function revoquerAppareil(
     throw new AppareilNotFoundError();
   }
   return appareil;
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.1 — tableau de bord live du PC course. Contrat sérialisé (API/page) :
+// horodatages ISO 8601 UTC, abandones = 0 (compteur RÉSERVÉ à 5.3 pour que la
+// carte existe dès maintenant), genereA = instant serveur (horloge de calcul
+// de la fraîcheur côté client). Le type est DÉRIVÉ d'EtatCourseRecord (Omit +
+// extensions) : toute colonne ajoutée au record remonte automatiquement ici,
+// la sérialisation ne duplique rien de non lié.
+// ---------------------------------------------------------------------------
+
+/** Passage board sérialisé : même forme que le record, horodatage en ISO. */
+export interface PassageCourseSerde {
+  dossard: number;
+  horodatageReception: string;
+}
+
+/** Checkpoint board sérialisé : même forme que le record, passages en ISO. */
+export interface CheckpointCourseSerde
+  extends Omit<CheckpointCourse, 'passages'> {
+  passages: PassageCourseSerde[];
+}
+
+export interface EtatCourse extends Omit<EtatCourseRecord, 'checkpoints' | 'fraicheur'> {
+  /** Réservé story 5.3 (saisie des abandons) — structure stable dès 5.1. */
+  abandones: number;
+  checkpoints: CheckpointCourseSerde[];
+  /** max(horodatage_reception) ISO — null = aucune donnée reçue. */
+  fraicheur: string | null;
+  /** Instant de génération SERVEUR (ISO), rafraîchi à chaque polling. */
+  genereA: string;
+}
+
+function versEtatCourse(record: EtatCourseRecord, genereA: Date): EtatCourse {
+  return {
+    ...record,
+    abandones: 0,
+    checkpoints: record.checkpoints.map((checkpoint) => ({
+      ...checkpoint,
+      passages: checkpoint.passages.map((passage) => ({
+        dossard: passage.dossard,
+        horodatageReception: passage.horodatageReception.toISOString(),
+      })),
+    })),
+    fraicheur: record.fraicheur !== null ? record.fraicheur.toISOString() : null,
+    genereA: genereA.toISOString(),
+  };
+}
+
+/**
+ * Agrégats du PC course pour la session organisateur : partants par épreuve,
+ * retraits/passages arbitrés (AD-3), arrivés, en course, fraîcheur — tout
+ * org-scopé (withOrg + RLS). Sans édition : état ZÉRO cohérent (jamais une
+ * erreur — le PC affiche des cartes vides, pas un écran d'échec).
+ */
+export async function getEtatCourse(
+  session: SessionRecord,
+  deps: ChronoServiceDeps = {},
+): Promise<EtatCourse> {
+  const store = deps.store ?? getChronoStore();
+  const record = await store.etatCourse(session.organisationId);
+  return versEtatCourse(record, new Date());
 }

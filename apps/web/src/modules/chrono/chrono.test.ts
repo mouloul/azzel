@@ -10,6 +10,7 @@ import {
 } from '@azzel/shared';
 
 import type { SessionRecord } from '@/modules/iam/store';
+import { DbUnavailableError } from '@/modules/iam/errors';
 
 import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs } from './domain';
 import {
@@ -19,10 +20,12 @@ import {
   CorpsSyncInvalideError,
   JetonAppareilInvalideError,
   LotTropGrandError,
+  toCourseApiError,
 } from './errors';
 import type { ChronoStore, StatutInsertion } from './store';
 import {
   enregistrerAppareil,
+  getEtatCourse,
   listerAppareils,
   premierRecu,
   revoquerAppareil,
@@ -98,6 +101,16 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
     premierRecu: vi.fn(async () => null),
     listerAppareils: vi.fn(async () => []),
     revoquerAppareil: vi.fn(async () => null),
+    etatCourse: vi.fn(async () => ({
+      edition: null,
+      partants: [],
+      retraits: 0,
+      arrives: 0,
+      enCourse: 0,
+      arriveeDefinie: false,
+      checkpoints: [],
+      fraicheur: null,
+    })),
     ...overrides,
   };
 }
@@ -344,5 +357,65 @@ describe('admin chrono — liste et révocation', () => {
       jeton: JETON_COUREUR,
       checkpointId: null,
     });
+  });
+});
+
+describe('story 5.1 — getEtatCourse (service PC course)', () => {
+  const RECORD_ETAT = {
+    edition: { id: 'edition-1', nom: 'Édition 2027' },
+    partants: [{ epreuveId: 'ep-1', epreuveNom: 'La Longue', total: 12 }],
+    retraits: 3,
+    arrives: 1,
+    enCourse: 2,
+    arriveeDefinie: true,
+    checkpoints: [
+      {
+        id: 'cp-1',
+        titre: 'Scan km 12',
+        estArrivee: true,
+        passages: [{ dossard: 101, horodatageReception: new Date('2027-05-16T07:05:09.000Z') }],
+      },
+    ],
+    fraicheur: new Date('2027-05-16T07:05:09.000Z'),
+  };
+
+  it('sérialise le record (ISO) + abandones réservé 0 + genereA serveur', async () => {
+    const etat = await getEtatCourse(SESSION, { store: creerStoreFactice({ etatCourse: vi.fn(async () => RECORD_ETAT) }) });
+    expect(etat).toEqual({
+      ...RECORD_ETAT,
+      abandones: 0,
+      checkpoints: [
+        {
+          id: 'cp-1',
+          titre: 'Scan km 12',
+          estArrivee: true,
+          passages: [{ dossard: 101, horodatageReception: '2027-05-16T07:05:09.000Z' }],
+        },
+      ],
+      fraicheur: '2027-05-16T07:05:09.000Z',
+      genereA: expect.any(String),
+    });
+    expect(new Date(etat.genereA).getTime()).not.toBeNaN();
+  });
+
+  it('store en échec DbUnavailableError : le service PROPAGE (route → 503 admin.db_unavailable)', async () => {
+    const store = creerStoreFactice({
+      etatCourse: vi.fn(async () => {
+        throw new DbUnavailableError(new Error('DATABASE_URL absente'));
+      }),
+    });
+    await expect(getEtatCourse(SESSION, { store })).rejects.toBeInstanceOf(DbUnavailableError);
+    // Et le mapper de la route en fait un 503 admin.db_unavailable (ci-dessous).
+    const apiError = toCourseApiError(new DbUnavailableError(new Error('base absente')));
+    expect(apiError.status).toBe(503);
+    expect(apiError.envelope.error.code).toBe('admin.db_unavailable');
+  });
+});
+
+describe('story 5.1 — toCourseApiError (mapper PC course)', () => {
+  it('erreur inconnue : 500 admin.course.erreur_inconnue, jamais une enveloppe terrain', () => {
+    const apiError = toCourseApiError(new Error('boom'));
+    expect(apiError.status).toBe(500);
+    expect(apiError.envelope.error.code).toBe('admin.course.erreur_inconnue');
   });
 });

@@ -267,6 +267,7 @@ interface MissionFormValues {
   debutLe: string;
   finLe: string;
   consignes: string;
+  estArrivee: boolean;
 }
 
 function valeursMissionInitiales(
@@ -280,10 +281,12 @@ function valeursMissionInitiales(
     debutLe: mission ? isoVersDatetimeLocal(mission.debutLe) : '',
     finLe: mission ? isoVersDatetimeLocal(mission.finLe) : '',
     consignes: mission?.consignes ?? '',
+    estArrivee: mission?.estArrivee ?? false,
   };
 }
 
-function MissionForm({
+// Exporté pour le test de rendu (case arrivée conditionnelle au type scan).
+export function MissionForm({
   secteurs,
   mission,
   onTermine,
@@ -291,8 +294,7 @@ function MissionForm({
   secteurs: SecteurSummary[];
   mission?: MissionSummary;
   onTermine: () => void;
-}) {
-  const prefix = mission ? `mission-${mission.id}` : 'mission-ajout';
+}) {  const prefix = mission ? `mission-${mission.id}` : 'mission-ajout';
   const [values, setValues] = useState<MissionFormValues>(() =>
     valeursMissionInitiales(secteurs, mission),
   );
@@ -337,7 +339,11 @@ function MissionForm({
             debutLe: datetimeLocalVersIso(values.debutLe),
             finLe: datetimeLocalVersIso(values.finLe),
             consignes: values.consignes.trim(),
+            estArrivee: values.estArrivee,
           }),
+          // NB : le PUT est un REMPLACEMENT COMPLET de la mission — omettre
+          // estArrivee DÉCOCHERAIT l'arrivée. L'UI envoie donc TOUJOURS le
+          // champ, même invisible (type non-scan : false par construction).
           signal: AbortSignal.timeout(15_000),
         },
       );
@@ -487,6 +493,29 @@ function MissionForm({
           />
           {champErreur('consignes')}
         </div>
+        {/* La marque arrivée n'existe que pour un checkpoint (validation
+            domaine + garde service) : la case n'est pas rendue autrement. */}
+        {values.type === 'scan_checkpoint' ? (
+          <div className="field missions-case">
+            <label htmlFor={`${prefix}-estArrivee`} className="missions-case-label">
+              <input
+                id={`${prefix}-estArrivee`}
+                name="estArrivee"
+                type="checkbox"
+                checked={values.estArrivee}
+                onChange={(event) => update('estArrivee', event.target.checked)}
+                aria-invalid={errorFor('estArrivee') !== null || undefined}
+                aria-describedby={`${prefix}-estArrivee-aide`}
+              />
+              Checkpoint d’arrivée
+            </label>
+            <p className="hint" id={`${prefix}-estArrivee-aide`}>
+              Un seul par édition : la carte « Arrivés » du PC course compte les
+              coureurs ayant franchi ce checkpoint.
+            </p>
+            {champErreur('estArrivee')}
+          </div>
+        ) : null}
       </fieldset>
       <div className="missions-actions">
         <button type="submit" className="btn-action" disabled={pending || secteurs.length === 0}>
@@ -677,6 +706,7 @@ function MissionLigne({
         >
           {mission.couvertureLabel}
         </span>
+        {mission.estArrivee ? <span className="chip-meta">— arrivée</span> : null}
         <span className="meta mission-horaires">
           {formatLocalDateTime(mission.debutLe)} → {formatLocalDateTime(mission.finLe)}
         </span>

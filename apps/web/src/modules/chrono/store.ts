@@ -13,7 +13,7 @@ import { DbUnavailableError } from '@/modules/iam/errors';
 import { sha256Hex } from '@/modules/iam/service';
 import { readDatabaseUrl } from '@/modules/iam/env';
 
-import type { AppareilRecord, TerrainEvenementRecord } from './domain';
+import type { AppareilRecord, EtatCourseRecord, TerrainEvenementRecord } from './domain';
 import { PLAFOND_APPAREILS_PAR_ORG, calculerOffsetEstimeMs, estUuidValide } from './domain';
 import { AppareilRevokedError, PlafondAppareilsError } from './errors';
 
@@ -61,6 +61,8 @@ export interface ChronoStore {
     appareilId: string;
     maintenant: Date;
   }): Promise<AppareilRecord | null>;
+  /** Story 5.1 — agrégats PC course (lecture seule, arbitrage AD-3, org-scopés). */
+  etatCourse(organisationId: string): Promise<EtatCourseRecord>;
 }
 
 /** Jeton BRUT du canal sync : 256 bits, base64url — hashé avant toute base. */
@@ -421,6 +423,172 @@ export function createChronoStore(sql: Sql): ChronoStore {
         }),
       );
     },
+
+    // -----------------------------------------------------------------
+    // Story 5.1 — agrégats PC course. Une SEULE transaction withOrg : les
+    // compteurs, les boards et la fraîcheur décrivent le même instant. Toutes
+    // les lectures passent par l'arbitrage premier-reçu (AD-3) : DISTINCT ON
+    // (jeton [, checkpoint]) ORDER BY horodatage_reception — le PC voit la
+    // vérité de classement, jamais le bruit des doublons d'appareils. La
+    // résolution jeton→coureur (dossard) reste ICI, côté serveur : le board ne
+    // transporte que des dossards.
+    // -----------------------------------------------------------------
+    async etatCourse(organisationId: string): Promise<EtatCourseRecord> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          // Édition courante (pattern findCurrentEdition répliqué localement —
+          // aucun import cross-module) : la plus proche date_course = la plus
+          // récente ; id ASC en tie-break canonique (dates égales).
+          const editions = await tx<{ id: string; name: string }[]>`
+            SELECT id, name FROM edition
+            WHERE organisation_id = ${organisationId}
+            ORDER BY race_date DESC, id ASC
+            LIMIT 1
+          `;
+          const edition = editions[0];
+          if (!edition) {
+            return {
+              edition: null,
+              partants: [],
+              retraits: 0,
+              arrives: 0,
+              enCourse: 0,
+              arriveeDefinie: false,
+              checkpoints: [],
+              fraicheur: null,
+            };
+          }
+
+          const [partantsRows, checkpointRows, retraitRows, passageRows, dossardRows, fraicheurRows] =
+            await Promise.all([
+              tx<{ id: string; name: string; total: number }[]>`
+                SELECT e.id, e.name,
+                       count(c.id) FILTER (WHERE c.status = 'validé')::int AS total
+                FROM epreuve e
+                LEFT JOIN coureur c
+                  ON c.epreuve_id = e.id
+                 AND c.organisation_id = ${organisationId}
+                 AND c.edition_id = ${edition.id}
+                WHERE e.organisation_id = ${organisationId} AND e.edition_id = ${edition.id}
+                GROUP BY e.id, e.name, e.distance_km
+                ORDER BY e.distance_km DESC, e.id ASC
+              `,
+              tx<{ id: string; titre: string; est_arrivee: boolean }[]>`
+                SELECT m.id, m.titre, m.est_arrivee
+                FROM mission m
+                JOIN secteur s ON s.id = m.secteur_id
+                WHERE m.organisation_id = ${organisationId}
+                  AND s.edition_id = ${edition.id}
+                  AND m.type = 'scan_checkpoint'
+                ORDER BY m.debut_le ASC, m.created_at ASC, m.id ASC
+              `,
+              tx<{ jeton_coureur: string; horodatage_reception: Date }[]>`
+                SELECT DISTINCT ON (jeton_coureur) jeton_coureur, horodatage_reception
+                FROM terrain_evenement
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+                  AND type = 'retrait'
+                ORDER BY jeton_coureur, horodatage_reception ASC, id ASC
+              `,
+              tx<{ checkpoint_id: string; jeton_coureur: string; horodatage_reception: Date }[]>`
+                SELECT DISTINCT ON (checkpoint_id, jeton_coureur)
+                       checkpoint_id, jeton_coureur, horodatage_reception
+                FROM terrain_evenement
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+                  AND type = 'passage'
+                ORDER BY checkpoint_id, jeton_coureur, horodatage_reception ASC, id ASC
+              `,
+              tx<{ jeton: string; dossard: number }[]>`
+                SELECT jeton_edossard AS jeton, dossard
+                FROM coureur
+                WHERE organisation_id = ${organisationId}
+                  AND edition_id = ${edition.id}
+                  AND status = 'validé'
+                  AND jeton_edossard IS NOT NULL
+                  AND dossard IS NOT NULL
+              `,
+              tx<{ fraicheur: Date | null }[]>`
+                SELECT max(horodatage_reception) AS fraicheur
+                FROM terrain_evenement
+                WHERE organisation_id = ${organisationId} AND edition_id = ${edition.id}
+              `,
+            ]);
+
+          // Dossards par jeton : résolution SERVEUR, l'identité coureur ne
+          // quitte jamais ce module sous forme de jeton. Un jeton RÉSOLU =
+          // coureur VALIDÉ, numéroté, ayant consulté son e-dossard : tout
+          // autre événement (coureur fantôme : jeton connu de l'ingestion mais
+          // jamais numéroté / non validé) reste en audit, NEUTRE pour le PC.
+          const dossardParJeton = new Map(dossardRows.map((row) => [row.jeton, row.dossard]));
+
+          // Retraits arbitrés RÉSOLUS : un coureur DISTINCT par ligne (premier
+          // reçu), uniquement si son dossard est résolu — un retrait fantôme
+          // ne gonfle NI retraits NI en course.
+          const jetonsRetires = new Set(
+            retraitRows
+              .map((row) => row.jeton_coureur)
+              .filter((jeton) => dossardParJeton.has(jeton)),
+          );
+
+          // Passages arbitrés par checkpoint : seuls les coureurs RÉSOLUS
+          // (dossard connu) montent sur un board — l'ingestion garantit
+          // l'existence du coureur, cette garde ne sert qu'à la forme.
+          const passagesParCheckpoint = new Map<string, { dossard: number; horodatageReception: Date }[]>();
+          const jetonsParCheckpoint = new Map<string, Set<string>>();
+          for (const row of passageRows) {
+            const dossard = dossardParJeton.get(row.jeton_coureur);
+            if (dossard === undefined) {
+              continue;
+            }
+            const jetons = jetonsParCheckpoint.get(row.checkpoint_id) ?? new Set<string>();
+            jetons.add(row.jeton_coureur);
+            jetonsParCheckpoint.set(row.checkpoint_id, jetons);
+            const liste = passagesParCheckpoint.get(row.checkpoint_id) ?? [];
+            liste.push({ dossard, horodatageReception: row.horodatage_reception });
+            passagesParCheckpoint.set(row.checkpoint_id, liste);
+          }
+
+          const checkpoints = checkpointRows.map((row) => ({
+            id: row.id,
+            titre: row.titre,
+            estArrivee: row.est_arrivee,
+            // Tri heure DÉCROISSANTE (UX-DR-12) : dernier passage en tête.
+            passages: (passagesParCheckpoint.get(row.id) ?? []).sort(
+              (a, b) =>
+                b.horodatageReception.getTime() - a.horodatageReception.getTime() ||
+                a.dossard - b.dossard,
+            ),
+          }));
+
+          // Arrivés = retirés RÉSOLUS ∧ passage AU checkpoint est_arrivee (∧ :
+          // intersection — la formule 5.1 reste exacte : arrivés ⊆ retirés,
+          // en course = retraits − abandonnés − arrivés ne descend jamais
+          // sous 0).
+          const arriveeCheckpoint = checkpointRows.find((row) => row.est_arrivee);
+          let arrives = 0;
+          if (arriveeCheckpoint !== undefined) {
+            const jetonsAArrivee = jetonsParCheckpoint.get(arriveeCheckpoint.id) ?? new Set<string>();
+            arrives = [...jetonsRetires].filter((jeton) => jetonsAArrivee.has(jeton)).length;
+          }
+
+          return {
+            edition: { id: edition.id, nom: edition.name },
+            partants: partantsRows.map((row) => ({
+              epreuveId: row.id,
+              epreuveNom: row.name,
+              total: row.total,
+            })),
+            retraits: jetonsRetires.size,
+            arrives,
+            enCourse: jetonsRetires.size - arrives,
+            arriveeDefinie: arriveeCheckpoint !== undefined,
+            checkpoints,
+            fraicheur: fraicheurRows[0]?.fraicheur ?? null,
+          };
+        }),
+      );
+    },
   };
 }
 
@@ -436,6 +604,7 @@ function createUnavailableStore(): ChronoStore {
     premierRecu: unavailable,
     listerAppareils: unavailable,
     revoquerAppareil: unavailable,
+    etatCourse: unavailable,
   };
 }
 

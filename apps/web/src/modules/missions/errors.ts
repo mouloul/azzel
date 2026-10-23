@@ -100,6 +100,14 @@ export class MissionNotFoundError extends Error {
   }
 }
 
+/** Story 5.1 — un seul checkpoint d'arrivée par édition (erreur champ estArrivee). */
+export class MissionArriveeUniqueError extends Error {
+  constructor() {
+    super('un seul checkpoint d’arrivée par édition');
+    this.name = 'MissionArriveeUniqueError';
+  }
+}
+
 /** Corps d'affectation illisible (missionId / volontaireId absents). */
 export class InvalidAffectationError extends Error {
   constructor() {
@@ -250,6 +258,17 @@ export function toMissionsApiError(error: unknown): ApiError {
         code: 'admin.missions.mission_not_found',
         message: 'Cette mission n’existe pas ou n’appartient pas à ton organisation.',
         action: 'Reviens à la liste des missions.',
+      }),
+    };
+  }
+  if (error instanceof MissionArriveeUniqueError) {
+    return {
+      status: 409,
+      fields: { estArrivee: 'Un seul checkpoint d’arrivée par édition — décoche d’abord l’autre mission.' },
+      envelope: createErrorEnvelope({
+        code: 'admin.missions.arrivee_unique',
+        message: 'Un seul checkpoint d’arrivée par édition.',
+        action: 'Décoche d’abord la mission actuellement marquée arrivée, puis réessaie.',
       }),
     };
   }

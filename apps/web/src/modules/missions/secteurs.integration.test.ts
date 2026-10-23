@@ -15,6 +15,7 @@ import { importVolontaires } from './service';
 import {
   AucuneEditionError,
   InvalidMissionFieldsError,
+  MissionArriveeUniqueError,
   SecteurNomDupliqueError,
   SecteurOccupeError,
   SecteurNotFoundError,
@@ -30,6 +31,7 @@ import {
   desaffecterVolontaire,
   getMissionsAdminState,
   getMissionsVolontaireState,
+  updateMission,
   updateSecteur,
 } from './service';
 import { createMissionsStore, type MissionsStore } from './store';
@@ -501,6 +503,147 @@ describe.skipIf(testUrls === null)(
           store: missionsStore,
         }),
       ).rejects.toBeInstanceOf(AucuneEditionError);
+    });
+
+    it('story 5.1 — est_arrivee : au plus UN checkpoint d’arrivée par édition (création, édition, re-coche, bascule)', async () => {
+      // Fixtures propres (les secteurs/missions des tests précédents ont pu
+      // être supprimés par les tests de cascade).
+      const secteur = await createSecteur(sessionAdmin(orgId), {
+        nom: 'Secteur arrivée',
+        lieu: 'Stade',
+        contact: null,
+      }, { store: missionsStore });
+      const missionScan = await createMission(sessionAdmin(orgId), {
+        secteurId: secteur.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan PK 20',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+        estArrivee: true,
+      }, { store: missionsStore });
+      expect(missionScan.estArrivee).toBe(true);
+
+      // Vues admin et volontaire exposent le drapeau.
+      const adminState = await getMissionsAdminState(sessionAdmin(orgId), { store: missionsStore });
+      expect(
+        adminState.secteurs.flatMap((s) => s.missions).find((m) => m.id === missionScan.id)?.estArrivee,
+      ).toBe(true);
+      const volontaireState = await getMissionsVolontaireState(sessionAdmin(orgId), {
+        store: missionsStore,
+      });
+      expect(
+        volontaireState.missions.find((m) => m.id === missionScan.id)?.estArrivee,
+      ).toBe(true);
+
+      // UNE seconde mission cochée sur la même édition : refusée, à la CRÉATION…
+      await expect(
+        createMission(sessionAdmin(orgId), {
+          secteurId: secteur.id,
+          type: 'scan_checkpoint',
+          titre: 'Scan arrivée stade',
+          debutLe: DEBUT_A.toISOString(),
+          finLe: FIN_A.toISOString(),
+          estArrivee: true,
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(MissionArriveeUniqueError);
+      // …comme à l'ÉDITION d'une mission scan existante (autre secteur, même
+      // édition). NB : cocher une mission NON-scan serait refusée plus tôt par
+      // le domaine (erreur champ estArrivee) — l'unicité se joue entre scans.
+      const autreSecteur = await createSecteur(sessionAdmin(orgId), {
+        nom: 'Autre secteur 5.1',
+        lieu: 'Carrefour',
+        contact: null,
+      }, { store: missionsStore });
+      const missionScanAutre = await createMission(sessionAdmin(orgId), {
+        secteurId: autreSecteur.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan autre secteur',
+        debutLe: DEBUT_A.toISOString(),
+        finLe: FIN_A.toISOString(),
+        estArrivee: false,
+      }, { store: missionsStore });
+      await expect(
+        updateMission(sessionAdmin(orgId), missionScanAutre.id, {
+          secteurId: autreSecteur.id,
+          type: 'scan_checkpoint',
+          titre: 'Scan autre secteur',
+          debutLe: DEBUT_A.toISOString(),
+          finLe: FIN_A.toISOString(),
+          estArrivee: true,
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(MissionArriveeUniqueError);
+
+      // Miroir domaine (revue) : la marque sur une mission ACCUEIL est refusée
+      // AVANT le store — erreur champ, pas MissionArriveeUniqueError.
+      await createMission(sessionAdmin(orgId), {
+        secteurId: autreSecteur.id,
+        type: 'accueil',
+        titre: 'Accueil 5.1',
+        debutLe: DEBUT_A.toISOString(),
+        finLe: FIN_A.toISOString(),
+        estArrivee: false,
+      }, { store: missionsStore });
+      await expect(
+        createMission(sessionAdmin(orgId), {
+          secteurId: autreSecteur.id,
+          type: 'accueil',
+          titre: 'Accueil refusé',
+          debutLe: DEBUT_A.toISOString(),
+          finLe: FIN_A.toISOString(),
+          estArrivee: true,
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(InvalidMissionFieldsError);
+
+      // Re-cocher la MÊME mission : idempotent (elle s'exclut elle-même).
+      const recochee = await updateMission(sessionAdmin(orgId), missionScan.id, {
+        secteurId: secteur.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan PK 20',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+        estArrivee: true,
+      }, { store: missionsStore });
+      expect(recochee.estArrivee).toBe(true);
+
+      // Décocher puis cocher une AUTRE mission : la bascule passe.
+      await updateMission(sessionAdmin(orgId), missionScan.id, {
+        secteurId: secteur.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan PK 20',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+        estArrivee: false,
+      }, { store: missionsStore });
+      const basculee = await createMission(sessionAdmin(orgId), {
+        secteurId: autreSecteur.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan arrivée stade',
+        debutLe: DEBUT_A.toISOString(),
+        finLe: FIN_A.toISOString(),
+        estArrivee: true,
+      }, { store: missionsStore });
+      expect(basculee.estArrivee).toBe(true);
+
+      // Supprimer la mission cochée LIBÈRE le slot : une nouvelle mission
+      // scan peut être cochée sans 409 (la garde ne compte que l'existant).
+      await deleteMission(sessionAdmin(orgId), basculee.id, { store: missionsStore });
+      const recocheeApresSuppression = await createMission(sessionAdmin(orgId), {
+        secteurId: secteur.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan PK 22',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+        estArrivee: true,
+      }, { store: missionsStore });
+      expect(recocheeApresSuppression.estArrivee).toBe(true);
+
+      // Exactement UNE mission cochée en base pour l'édition (index partiel 0026).
+      const cochees = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM mission m
+        JOIN secteur s ON s.id = m.secteur_id
+        WHERE s.edition_id = ${editionId} AND m.est_arrivee
+      `;
+      expect(cochees[0]?.count).toBe(1);
     });
   },
 );

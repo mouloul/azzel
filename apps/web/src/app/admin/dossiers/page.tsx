@@ -159,6 +159,13 @@ export default async function AdminDossiersPage({
           {state.dossiers.length} dossier(s) affiché(s) — 200 maximum.
           {state.hasMore ? ' Liste tronquée — affinez la recherche.' : ''}
         </p>
+        <p className="hint">
+          Le jour J :{' '}
+          <a className="btn-lien" href="/admin/course">
+            pilote la course en direct depuis le PC course
+          </a>
+          .
+        </p>
       </article>
     </section>
   );

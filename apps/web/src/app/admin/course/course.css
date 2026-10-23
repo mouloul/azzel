@@ -1,0 +1,28 @@
+/* Admin PC course (story 5.1, UX-DR-12) — cartes de synthèse (display-sm
+   24 px), fraîcheur mono 15 px (meta-lg) en pied, boards par checkpoint :
+   badge dossard mono, heure mono 15 px alignée à droite, séparateurs
+   pointillés (jamais de zébrage), lignes non cliquables. Fichier propre à la
+   page /admin/course : hors du chunk CSS partagé (budget accueil). Aucune
+   animation (prefers-reduced-motion respecté par construction). */
+
+.course-live{display:grid;gap:var(--az-space-4)}
+.course-fraicheur{font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte-2);margin:0}
+.course-reconnexion{margin-left:var(--az-space-2);color:var(--az-texte-2)}
+.course-reconnexion::before{content:"●";margin-right:calc(var(--az-space-1) / 2);font-size:8px;vertical-align:middle}
+.course-cartes{display:grid;gap:var(--az-space-3);grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))}
+.course-carte{display:grid;gap:var(--az-space-1);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-carte-chiffre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);line-height:1;font-variant-numeric:tabular-nums;color:var(--heading)}
+.course-carte-titre{margin:0;font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
+.course-carte-note{margin:0;font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
+.course-partants{list-style:none;margin:0;padding:0;display:grid;gap:calc(var(--az-space-1) / 2)}
+.course-partants li{display:flex;justify-content:space-between;gap:var(--az-space-2);font-size:var(--az-font-size-meta)}
+.course-partants-nombre{font-family:var(--az-font-meta);font-variant-numeric:tabular-nums;font-weight:600}
+.course-boards{display:grid;gap:var(--az-space-3)}
+.course-board{border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3);display:grid;gap:var(--az-space-2)}
+.course-board-titre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--heading)}
+.course-board-vide{margin:0;font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
+.course-board-liste{list-style:none;margin:0;padding:0;display:grid}
+.course-board-ligne{display:flex;align-items:center;gap:var(--az-space-2);padding:var(--az-space-2) 0}
+.course-board-ligne + .course-board-ligne{border-top:1px dashed var(--az-filet)}
+.course-dossard{font-family:var(--az-font-meta);font-weight:var(--az-font-weight-surtitre);font-variant-numeric:tabular-nums;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:0 calc(var(--az-space-1) * 1.5);line-height:1.6}
+.course-heure{margin-left:auto;font-family:var(--az-font-meta);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte)}

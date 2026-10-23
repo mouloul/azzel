@@ -281,6 +281,7 @@ const MISSION: MissionVolontaireView = {
   debutLe: '2027-05-16T06:00:00.000Z',
   finLe: '2027-05-16T12:00:00.000Z',
   consignes: 'Arrive 15 min avant.',
+  estArrivee: false,
   couverture: 'couverte',
   couvertureLabel: 'Couverte',
 };

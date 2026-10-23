@@ -20,6 +20,7 @@ import {
   validateMissionInput,
   validateSecteurInput,
   type Intervalle,
+  type MissionFieldErrors,
   type SecteurFieldErrors,
 } from './domain';
 import {
@@ -157,6 +158,34 @@ describe('validateMissionInput — type fermé, horaires, consignes', () => {
     expect(
       validateMissionInput(normalizeMissionInput({ ...base, consignes: 'Arrive 15 min avant.' })),
     ).toEqual({});
+  });
+
+  it('story 5.1 — estArrivee : booléen STRICT (true seul coche, absence/valeur truthy = false)', () => {
+    expect(normalizeMissionInput({ ...base, estArrivee: true }).estArrivee).toBe(true);
+    expect(normalizeMissionInput(base).estArrivee).toBe(false);
+    expect(normalizeMissionInput({ ...base, estArrivee: false }).estArrivee).toBe(false);
+    // Jamais de coercition truthy : une string/1 cocheraient l'arrivée par
+    // accident sinon.
+    expect(normalizeMissionInput({ ...base, estArrivee: 'true' }).estArrivee).toBe(false);
+    expect(normalizeMissionInput({ ...base, estArrivee: 1 }).estArrivee).toBe(false);
+  });
+
+  it('story 5.1 (revue) — marque arrivée RÉSERVÉE aux scan_checkpoint : coche sur accueil refusée', () => {
+    const accueil = { ...base, type: 'accueil', estArrivee: true };
+    const errors = validateMissionInput(normalizeMissionInput(accueil));
+    expect(errors.estArrivee).toContain('réservée aux missions Scan checkpoint');
+    // Enveloppe : erreur champ 400 (InvalidMissionFieldsError porte estArrivee).
+    const apiError = toMissionsApiError(new InvalidMissionFieldsError(errors));
+    expect(apiError.status).toBe(400);
+    expect((apiError.fields as MissionFieldErrors | undefined)?.estArrivee).toContain(
+      'Scan checkpoint',
+    );
+  });
+
+  it('story 5.1 (revue) — coche sur scan_checkpoint : aucune erreur estArrivee', () => {
+    const scan = validateMissionInput(normalizeMissionInput({ ...base, estArrivee: true }));
+    expect(scan.estArrivee).toBeUndefined();
+    expect(scan).toEqual({});
   });
 
   it('type hors liste fermée → erreur type (aucun type personnalisé)', () => {
@@ -357,6 +386,7 @@ describe('createMission — validation puis store', () => {
       debutLe: DEBUT,
       finLe: FIN,
       consignes: null,
+      estArrivee: false,
       createdAt: new Date(),
     }));
     const mission = await createMission(SESSION_ORGANISATEUR as SessionRecord, CORPS, {
@@ -366,7 +396,7 @@ describe('createMission — validation puis store', () => {
     expect(mission.couvertureLabel).toBe('Vacante');
     expect(mission.typeLabel).toBe('Accueil');
     expect(createMissionStore).toHaveBeenCalledWith(
-      expect.objectContaining({ debutLe: DEBUT, finLe: FIN, consignes: null }),
+      expect.objectContaining({ debutLe: DEBUT, finLe: FIN, consignes: null, estArrivee: false }),
     );
   });
 
@@ -462,6 +492,7 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
         debutLe: DEBUT,
         finLe: FIN,
         consignes: null,
+        estArrivee: false,
         createdAt: new Date(),
       },
       {
@@ -472,6 +503,7 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
         debutLe: FIN,
         finLe: new Date('2027-05-16T18:00:00.000Z'),
         consignes: null,
+        estArrivee: false,
         createdAt: new Date(),
       },
     ],

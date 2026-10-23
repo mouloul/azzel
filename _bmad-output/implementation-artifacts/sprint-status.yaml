@@ -71,8 +71,8 @@ development_status:
   4-5-synchronisation-par-lots-idempotente: review
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-tableau-de-bord-live-du-pc-course: backlog
+  epic-5: in-progress
+  5-1-tableau-de-bord-live-du-pc-course: review
   5-2-alertes-hors-délais: backlog
   5-3-saisie-des-abandons: backlog
   5-4-annulation-auditable-des-passages: backlog

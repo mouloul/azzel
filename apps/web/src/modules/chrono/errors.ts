@@ -228,3 +228,30 @@ export function toChronoAdminApiError(error: unknown): ApiError {
     }),
   };
 }
+
+/**
+ * Story 5.1 — mapper de la surface PC course (page + GET /api/admin/course/etat) :
+ * vouvoiement, namespace admin.course.*. La page n'affiche l'écran d'erreur
+ * qu'à l'OUVERTURE : en cours de polling, c'est le CLIENT qui garde le dernier
+ * état (jamais blanc, NFR-5).
+ */
+export function toCourseApiError(error: unknown): ApiError {
+  if (error instanceof DbUnavailableError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'admin.db_unavailable',
+        message: 'Connexion indisponible.',
+        action: 'Réessayez dans un instant — le tableau de bord reprendra de lui-même.',
+      }),
+    };
+  }
+  return {
+    status: 500,
+    envelope: createErrorEnvelope({
+      code: 'admin.course.erreur_inconnue',
+      message: 'Le tableau de bord n’a pas pu être calculé.',
+      action: 'Réessayez dans un instant.',
+    }),
+  };
+}

@@ -212,6 +212,7 @@ export const MISSION_FIELD_ORDER = [
   'debutLe',
   'finLe',
   'consignes',
+  'estArrivee',
 ] as const;
 
 export type MissionField = (typeof MISSION_FIELD_ORDER)[number];
@@ -225,6 +226,8 @@ export interface MissionInput {
   debutLe: string;
   finLe: string;
   consignes: string | null;
+  /** Story 5.1 — au plus une mission cochée par édition (garde service). */
+  estArrivee: boolean;
 }
 
 // RFC3339 STRICT se terminant par Z : un ISO sans Z serait interprété en heure
@@ -271,6 +274,9 @@ export function normalizeMissionInput(raw: unknown): MissionInput {
     debutLe: typeof record.debutLe === 'string' ? record.debutLe.trim() : '',
     finLe: typeof record.finLe === 'string' ? record.finLe.trim() : '',
     consignes: consignes.length > 0 ? consignes : null,
+    // Strict === true : toute autre valeur (absente, string, nombre) = décochée,
+    // jamais de coercition truthy qui cocherait l'arrivée par accident.
+    estArrivee: record.estArrivee === true,
   };
 }
 
@@ -304,6 +310,11 @@ export function validateMissionInput(input: MissionInput): MissionFieldErrors {
   }
   if (input.consignes !== null && input.consignes.length > MAX_CONSIGNES_LENGTH) {
     errors.consignes = `${MAX_CONSIGNES_LENGTH} caractères maximum pour les consignes.`;
+  }
+  // Story 5.1 — la marque arrivée n'a de sens que sur un checkpoint : un
+  // coureur ne « franchit » pas une mission accueil. Erreur champ, jamais 500.
+  if (input.estArrivee && input.type !== 'scan_checkpoint') {
+    errors.estArrivee = 'La marque arrivée est réservée aux missions Scan checkpoint.';
   }
   return errors;
 }

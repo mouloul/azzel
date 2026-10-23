@@ -231,6 +231,7 @@ export interface MissionSummary {
   debutLe: string;
   finLe: string;
   consignes: string | null;
+  estArrivee: boolean;
   affectations: { volontaireId: string; volontaireNom: string }[];
   couverture: Couverture;
   couvertureLabel: string;
@@ -260,6 +261,8 @@ export interface MissionVolontaireView {
   debutLe: string;
   finLe: string;
   consignes: string | null;
+  /** Story 5.1 — exposition du checkpoint d'arrivée dans la vue volontaire. */
+  estArrivee: boolean;
   couverture: Couverture;
   couvertureLabel: string;
 }
@@ -286,6 +289,7 @@ function toMissionSummary(
     debutLe: mission.debutLe.toISOString(),
     finLe: mission.finLe.toISOString(),
     consignes: mission.consignes,
+    estArrivee: mission.estArrivee,
     affectations,
     couverture: etat,
     couvertureLabel: LIBELLES_COUVERTURE[etat],
@@ -376,6 +380,7 @@ export async function getMissionsVolontaireState(
       debutLe: mission.debutLe.toISOString(),
       finLe: mission.finLe.toISOString(),
       consignes: mission.consignes,
+      estArrivee: mission.estArrivee,
       couverture: etatCouverture,
       couvertureLabel: LIBELLES_COUVERTURE[etatCouverture],
     };
@@ -494,6 +499,7 @@ function missionVersStoreInput(input: ReturnType<typeof normalizeMissionInput>) 
     debutLe: new Date(input.debutLe),
     finLe: new Date(input.finLe),
     consignes: input.consignes,
+    estArrivee: input.estArrivee,
   };
 }
 

@@ -15,6 +15,7 @@ import type { LigneValide, MissionType, StatutInvitation } from './domain';
 import { statutInvitation } from './domain';
 import {
   AucuneEditionError,
+  MissionArriveeUniqueError,
   MissionNotFoundError,
   SecteurNomDupliqueError,
   SecteurNotFoundError,
@@ -70,6 +71,7 @@ export interface MissionRecord {
   debutLe: Date;
   finLe: Date;
   consignes: string | null;
+  estArrivee: boolean;
   createdAt: Date;
 }
 
@@ -115,6 +117,7 @@ export interface SauverMissionInput {
   debutLe: Date;
   finLe: Date;
   consignes: string | null;
+  estArrivee: boolean;
 }
 
 /** Mission du volontaire en conflit horaire avec l'affectation en cours. */
@@ -275,6 +278,7 @@ interface MissionRow {
   debut_le: Date;
   fin_le: Date;
   consignes: string | null;
+  est_arrivee: boolean;
   created_at: Date;
 }
 
@@ -288,12 +292,12 @@ interface AffectationRow {
 const SECTEUR_COLUMNS = 'id, edition_id, nom, lieu, contact, created_at';
 
 // Requête mission SANS jointure : colonnes non qualifiées possibles.
-const MISSION_COLUMNS = 'id, secteur_id, type, titre, debut_le, fin_le, consignes, created_at';
+const MISSION_COLUMNS = 'id, secteur_id, type, titre, debut_le, fin_le, consignes, est_arrivee, created_at';
 
 // Requête mission AVEC jointure secteur (listMissionsEtat) : tout qualifier —
 // id/created_at existent dans les deux tables.
 const MISSION_COLUMNS_JOINT =
-  'm.id, m.secteur_id, m.type, m.titre, m.debut_le, m.fin_le, m.consignes, m.created_at';
+  'm.id, m.secteur_id, m.type, m.titre, m.debut_le, m.fin_le, m.consignes, m.est_arrivee, m.created_at';
 
 function toSecteurRecord(row: SecteurRow): SecteurRecord {
   return {
@@ -315,6 +319,7 @@ function toMissionRecord(row: MissionRow): MissionRecord {
     debutLe: row.debut_le,
     finLe: row.fin_le,
     consignes: row.consignes,
+    estArrivee: row.est_arrivee,
     createdAt: row.created_at,
   };
 }
@@ -343,6 +348,44 @@ function estViolationSecteurNomUnique(error: unknown): boolean {
           ? candidat.message
           : '';
   return nomContrainte.includes('secteur_edition_id_nom_key');
+}
+
+/**
+ * Story 5.1 — « au plus UN checkpoint d'arrivée par édition ». Garde MÉTIER
+ * (mission n'a pas de edition_id direct : une contrainte SQL croisant secteur
+ * serait fragile). Le FOR UPDATE sur la ligne édition SÉRIALISE les cochages
+ * concurrents de la même édition : deux créations/éditions simultanées ne
+ * peuvent pas passer toutes deux le comptage (la seconde voit le commit de la
+ * première). `missionId` exclut la mission elle-même en édition (re-cocher
+ * l'arrivée existante reste idempotent).
+ */
+async function assertArriveeUnique(
+  tx: postgres.TransactionSql,
+  input: {
+    organisationId: string;
+    editionId: string;
+    missionId: string | null;
+    estArrivee: boolean;
+  },
+): Promise<void> {
+  if (!input.estArrivee) {
+    // Décocher ne verrouille RIEN : retour AVANT le FOR UPDATE édition.
+    return;
+  }
+  await tx`SELECT id FROM edition WHERE id = ${input.editionId} FOR UPDATE`;
+  const dejaCochees = await tx<{ count: number }[]>`
+    SELECT count(*)::int AS count
+    FROM mission m
+    JOIN secteur s ON s.id = m.secteur_id
+    WHERE m.organisation_id = ${input.organisationId}
+      AND s.edition_id = ${input.editionId}
+      AND m.est_arrivee
+      AND m.type = 'scan_checkpoint'
+      AND (${input.missionId}::uuid IS NULL OR m.id <> ${input.missionId}::uuid)
+  `;
+  if ((dejaCochees[0]?.count ?? 0) > 0) {
+    throw new MissionArriveeUniqueError();
+  }
 }
 
 const LISTE_COLUMNS = `
@@ -630,18 +673,25 @@ export function createMissionsStore(sql: Sql): MissionsStore {
         withOrg(sql, input.organisationId, async (tx) => {
           // Le secteur doit exister ET appartenir à l'organisation (défense en
           // profondeur : la FK vérifie l'existence, le WHERE l'appartenance).
-          const secteurs = await tx<{ id: string }[]>`
-            SELECT id FROM secteur
+          const secteurs = await tx<{ id: string; edition_id: string }[]>`
+            SELECT id, edition_id FROM secteur
             WHERE id = ${input.secteurId} AND organisation_id = ${input.organisationId}
             LIMIT 1
           `;
-          if (!secteurs[0]) {
+          const secteur = secteurs[0];
+          if (!secteur) {
             throw new SecteurNotFoundError();
           }
+          await assertArriveeUnique(tx, {
+            organisationId: input.organisationId,
+            editionId: secteur.edition_id,
+            missionId: null,
+            estArrivee: input.estArrivee,
+          });
           const rows = await tx<MissionRow[]>`
-            INSERT INTO mission (organisation_id, secteur_id, type, titre, debut_le, fin_le, consignes)
+            INSERT INTO mission (organisation_id, secteur_id, type, titre, debut_le, fin_le, consignes, est_arrivee)
             VALUES (${input.organisationId}, ${input.secteurId}, ${input.type}, ${input.titre},
-                    ${input.debutLe}, ${input.finLe}, ${input.consignes})
+                    ${input.debutLe}, ${input.finLe}, ${input.consignes}, ${input.estArrivee})
             RETURNING ${tx.unsafe(MISSION_COLUMNS)}
           `;
           const row = rows[0];
@@ -659,14 +709,21 @@ export function createMissionsStore(sql: Sql): MissionsStore {
     ): Promise<MissionRecord | null> {
       return withDb(() =>
         withOrg(sql, input.organisationId, async (tx) => {
-          const secteurs = await tx<{ id: string }[]>`
-            SELECT id FROM secteur
+          const secteurs = await tx<{ id: string; edition_id: string }[]>`
+            SELECT id, edition_id FROM secteur
             WHERE id = ${input.secteurId} AND organisation_id = ${input.organisationId}
             LIMIT 1
           `;
-          if (!secteurs[0]) {
+          const secteur = secteurs[0];
+          if (!secteur) {
             throw new SecteurNotFoundError();
           }
+          await assertArriveeUnique(tx, {
+            organisationId: input.organisationId,
+            editionId: secteur.edition_id,
+            missionId,
+            estArrivee: input.estArrivee,
+          });
           const rows = await tx<MissionRow[]>`
             UPDATE mission SET
               secteur_id = ${input.secteurId},
@@ -674,7 +731,8 @@ export function createMissionsStore(sql: Sql): MissionsStore {
               titre = ${input.titre},
               debut_le = ${input.debutLe},
               fin_le = ${input.finLe},
-              consignes = ${input.consignes}
+              consignes = ${input.consignes},
+              est_arrivee = ${input.estArrivee}
             WHERE id = ${missionId} AND organisation_id = ${input.organisationId}
             RETURNING ${tx.unsafe(MISSION_COLUMNS)}
           `;

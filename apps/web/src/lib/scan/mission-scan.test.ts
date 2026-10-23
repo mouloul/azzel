@@ -28,6 +28,7 @@ function mission(
     debutLe: new Date(2027, 4, 16, debutHeure, 0, 0).toISOString(),
     finLe: new Date(2027, 4, 16, finHeure, 0, 0).toISOString(),
     consignes: null,
+    estArrivee: false,
     couverture: 'couverte' as const,
     couvertureLabel: 'Couverte',
   };
