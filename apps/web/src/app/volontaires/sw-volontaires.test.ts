@@ -407,3 +407,61 @@ describe('sw-volontaires — statiques cache-first', () => {
     expect(appels).toBe(1);
   });
 });
+
+describe('sw-volontaires — variantes ?mode= du scanner (story 4.3)', () => {
+  const SCAN_HTML = '<!doctype html><html><body>scanner checkpoints</body></html>';
+  const RETRAIT_HTML = '<!doctype html><html><body>scanner retrait</body></html>';
+
+  it('en ligne : la variante ?mode=retrait est cachée sous SA clé (chemin + querystring)', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(RETRAIT_HTML, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      }),
+    );
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan?mode=retrait', 'navigate'),
+    );
+    expect(await reponse?.text()).toBe(RETRAIT_HTML);
+    const shell = ctx.cachesParNom.get(CACHE_SHELL)?.stock ?? new Map();
+    expect(shell.has('/volontaires/scan?mode=retrait')).toBe(true);
+    // La page NUE garde SA propre entrée : la variante visitée n'écrase rien.
+    expect(shell.has('/volontaires/scan')).toBe(false);
+  });
+
+  it('hors-ligne : les deux variantes coexistent, chacune servie à l’identique', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires/scan', reponseFactice(SCAN_HTML));
+    cache.stock.set('/volontaires/scan?mode=retrait', reponseFactice(RETRAIT_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+
+    const checkpoints = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    expect(await checkpoints.reponse?.text()).toBe(SCAN_HTML);
+
+    const retrait = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan?mode=retrait', 'navigate'),
+    );
+    expect(await retrait.reponse?.text()).toBe(RETRAIT_HTML);
+  });
+
+  it('hors-ligne, variante jamais visitée : repli dédié, PAS l’autre mode sous fausse URL', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires/scan', reponseFactice(SCAN_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan?mode=retrait', 'navigate'),
+    );
+    const corps = await reponse?.text();
+    // Jamais le scanner checkpoints servi pour le mode retrait (des passages
+    // seraient appendés comme retraits) : page dédiée honnête.
+    expect(corps).not.toBe(SCAN_HTML);
+    expect(corps).toContain('Scanner non enregistré sur cet appareil');
+  });
+});

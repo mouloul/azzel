@@ -9,6 +9,8 @@ import { getAnnuaireEdition, getMissionsVolontaireState } from '@/modules/missio
 
 import { VolontairesPwa } from './volontaires-pwa';
 
+import { NOTICE_SCAN_RETRAIT } from './scan/page';
+
 import './volontaires.css';
 
 // Stories 3.3/3.4 — page serveur de la PWA volontaires : requireRolePage
@@ -24,7 +26,15 @@ export const metadata = {
   title: 'Espace volontaire',
 };
 
-export default async function VolontairesPage() {
+/** Story 4.3 — message affiché quand le mode retrait est demandé sans mission guichet. */
+export const MESSAGE_SCAN_RETRAIT =
+  'Le scan de retrait est réservé aux volontaires avec une mission « Distribution des dossards ». Ta fiche mission ci-dessous liste tes missions.';
+
+export default async function VolontairesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const assistancePhone = readAssistancePhone();
   const guard = await requireRolePage('volontaire');
   if (guard.status === 'db-unavailable') {
@@ -79,6 +89,15 @@ export default async function VolontairesPage() {
     annuaireInitial = null;
   }
 
+  // Story 4.3 — redirection douce du scanner retrait sans mission guichet :
+  // le message est affiché une fois sur la fiche (?scan=retrait-sans-mission,
+  // clé unique du côté scanner). Le paramètre peut être répété : seul le
+  // PREMIER élément compte.
+  const parametres = (await searchParams) ?? {};
+  const scanBrut = parametres.scan;
+  const scan = Array.isArray(scanBrut) ? scanBrut[0] : scanBrut;
+  const noticeScan = scan === NOTICE_SCAN_RETRAIT ? MESSAGE_SCAN_RETRAIT : null;
+
   return (
     <VolontairesPwa
       email={session.email}
@@ -90,6 +109,7 @@ export default async function VolontairesPage() {
         generéA: nowIsoUtc(),
       }}
       annuaireInitial={annuaireInitial}
+      noticeScan={noticeScan}
     />
   );
 }

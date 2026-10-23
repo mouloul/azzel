@@ -208,6 +208,20 @@
 
 /* --- Entrée scanner (story 4.2) — visible si mission scan_checkpoint ------- */
 
+/* Story 4.3 — message éphémère (ex. mode retrait sans mission guichet) :
+   encart attention doux, annoncé au lecteur d'écran par la composante. */
+.volontaires-notice {
+  margin: 0;
+  padding: var(--az-space-3) var(--az-space-4);
+  border: 1px solid var(--az-attention);
+  border-left: 4px solid var(--az-attention);
+  border-radius: var(--az-radius-sm);
+  background: var(--az-surface);
+  font-size: var(--az-font-size-body-lg);
+  line-height: var(--az-line-height-body-lg);
+  color: var(--az-texte);
+}
+
 .volontaires-scan {
   display: grid;
   gap: var(--az-space-2);

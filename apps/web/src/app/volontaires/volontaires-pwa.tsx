@@ -1,6 +1,7 @@
 'use client';
 
 import { estAnnuaireValide, formatLocalDateTime, type AnnuaireEdition } from '@azzel/shared';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { AssistanceButton, assistancePhoneHref } from '@/components/assistance-button';
@@ -14,7 +15,7 @@ import {
   lireEtatVolontaires,
   type EtatVolontaires,
 } from '@/lib/idb-volontaires';
-import { missionScanEnCours } from '@/lib/scan/mission-scan';
+import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-scan';
 import { readStoredTheme, writeStoredTheme } from '@/lib/theme';
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
@@ -120,10 +121,13 @@ export function VolontairesPwa({
   etatInitial,
   annuaireInitial,
   email,
+  noticeScan = null,
 }: {
   etatInitial: EtatVolontaires;
   annuaireInitial: AnnuaireEdition | null;
   email: string;
+  /** Message éphémère (ex. mode retrait sans mission guichet) — null sinon. */
+  noticeScan?: string | null;
 }) {
   const [etat, setEtat] = useState<EtatVolontaires>(etatInitial);
   // Rendu serveur = données fraîches au chargement : le badge démarre
@@ -273,6 +277,30 @@ export function VolontairesPwa({
   // affectée au volontaire. Le libellé suit la mission scan en cours (helper
   // pur partagé avec la page scanner).
   const missionScan = missionScanEnCours(etat.mesMissions, new Date());
+  // Story 4.3 — même règle pour le guichet : « Scan retrait » n'apparaît que
+  // si une mission distribution_dossards est affectée (le mode du scanner est
+  // débloqué par la mission).
+  const missionRetrait = missionRetraitEnCours(etat.mesMissions, new Date());
+
+  // Story 4.3 — intitulé de section selon les missions : guichet pur →
+  // « Retrait des dossards » ; sinon le libellé générique (scan seul ou les
+  // deux modes ensemble).
+  const titreSectionScan =
+    missionRetrait !== null && missionScan === null
+      ? 'Retrait des dossards'
+      : 'Scan des e-dossards';
+
+  // Story 4.3 (revue) — la notice est PONCTUELLE : après affichage, le
+  // paramètre d'URL est nettoyé (router.replace sans scroll ni historique)
+  // pour ne pas réapparaître au rechargement ; l'état local garde le texte à
+  // l'écran malgré la revalidation déclenchée par le replace.
+  const router = useRouter();
+  const [noticeAffichee] = useState(noticeScan);
+  useEffect(() => {
+    if (noticeScan !== null) {
+      router.replace('/volontaires', { scroll: false });
+    }
+  }, [noticeScan, router]);
 
   if (sessionExpiree) {
     return (
@@ -350,6 +378,12 @@ export function VolontairesPwa({
         )}
       </header>
 
+      {noticeAffichee !== null && (
+        <p role="status" aria-live="polite" className="volontaires-notice">
+          {noticeAffichee}
+        </p>
+      )}
+
       <h2 className="volontaires-titre">Ta fiche mission</h2>
       {etat.mesMissions.length === 0 ? (
         <p className="hint volontaires-attente">
@@ -365,19 +399,35 @@ export function VolontairesPwa({
         </div>
       )}
 
-      {missionScan !== null && (
+      {(missionScan !== null || missionRetrait !== null) && (
         <section className="volontaires-scan" aria-labelledby="volontaires-scan-titre">
           <h2 className="volontaires-titre" id="volontaires-scan-titre">
-            Scan des e-dossards
+            {titreSectionScan}
           </h2>
-          <a className="volontaires-scan-lien" href="/volontaires/scan">
-            <span className="volontaires-scan-libelle">Démarrer le scan</span>
-            <span className="volontaires-scan-mission">{missionScan.titre}</span>
-          </a>
-          <p className="volontaires-annuaire-texte">
-            Le scanner lit les e-dossards des coureurs et fonctionne même sans réseau — l’annuaire
-            ci-dessous suffit.
-          </p>
+          {missionScan !== null && (
+            <a className="volontaires-scan-lien" href="/volontaires/scan">
+              <span className="volontaires-scan-libelle">Démarrer le scan</span>
+              <span className="volontaires-scan-mission">{missionScan.titre}</span>
+            </a>
+          )}
+          {missionRetrait !== null && (
+            <a className="volontaires-scan-lien" href="/volontaires/scan?mode=retrait">
+              <span className="volontaires-scan-libelle">Scan retrait</span>
+              <span className="volontaires-scan-mission">{missionRetrait.titre}</span>
+            </a>
+          )}
+          {missionRetrait !== null ? (
+            <p className="volontaires-annuaire-texte">
+              Le scanner lit les e-dossards des coureurs et fonctionne même sans réseau — l’annuaire
+              ci-dessous suffit. Au guichet, « Scan retrait » enregistre chaque dossard remis, même
+              hors-ligne.
+            </p>
+          ) : (
+            <p className="volontaires-annuaire-texte">
+              Le scanner lit les e-dossards des coureurs et fonctionne même sans réseau — l’annuaire
+              ci-dessous suffit.
+            </p>
+          )}
         </section>
       )}
 

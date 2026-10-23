@@ -131,8 +131,11 @@ self.addEventListener('activate', (event) => {
 
 /**
  * Navigation : réseau d'abord. Story 4.2 — chaque page volontaires (fiche,
- * scanner /volontaires/scan) est cachée sous SON PROPRE chemin ; le repli
- * hors-ligne sert la page demandée en cache, puis :
+ * scanner /volontaires/scan) est cachée sous SA PROPRE clé ; Story 4.3 — la
+ * clé est chemin + querystring (pattern sw-coureur) : les deux modes du
+ * scanner (?mode=retrait) ne partagent PAS d'entrée, hors-ligne chaque
+ * variante est servie à l'identique (jamais la dernière visitée sur l'autre).
+ * Le repli hors-ligne sert la page demandée en cache, puis :
  *   - /volontaires → page d'explication fiche (jamais le scanner sous une
  *     fausse URL) ;
  *   - toute autre page (le scanner) JAMAIS visitée en ligne → page dédiée
@@ -141,19 +144,21 @@ self.addEventListener('activate', (event) => {
  * Ne rejette JAMAIS.
  */
 async function navigationVolontaires(request) {
-  const chemin = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const chemin = url.pathname;
+  const cle = url.pathname + url.search;
   try {
     const reponse = await fetch(request);
     if (reponse && reponse.ok) {
       if (!reponse.redirected && new URL(reponse.url).pathname === chemin) {
-        await mettreEnCache(CACHE_SHELL, chemin, reponse);
+        await mettreEnCache(CACHE_SHELL, cle, reponse);
       }
       // Redirection suivie (connexion) : rendue telle quelle, jamais cachée.
       return reponse;
     }
     throw new Error('réponse serveur dégradée');
   } catch (erreur) {
-    const enCache = await caches.match(chemin, { cacheName: CACHE_SHELL });
+    const enCache = await caches.match(cle, { cacheName: CACHE_SHELL });
     if (enCache) {
       return enCache;
     }

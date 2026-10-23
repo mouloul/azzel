@@ -12,9 +12,11 @@ export function LogoutButton() {
 
   async function onLogout(): Promise<void> {
     setPending(true);
-    // Appareil partagé (stories 3.3/4.1) : les poches locales — fiche et
-    // annuaire volontaires en IndexedDB + caches des service workers
-    // volontaires ET coureur (le QR e-dossard) — ne survivent pas au compte.
+    // Appareil partagé (stories 3.3/4.1) : les poches liées au COMPTE — fiche
+    // et annuaire volontaires en IndexedDB + caches des service workers
+    // volontaires ET coureur (le QR e-dossard) — ne survivent pas à la
+    // déconnexion. Story 4.3 (AD-5) : l'outbox terrain et l'appareilId
+    // appartiennent à l'APPAREIL, ils sont conservés (jetons opaques seulement).
     // Purge SYSTÉMATIQUE, parallèle à l'appel d'API et indépendante de son
     // succès : la redirection a lieu de toute façon, et le QR ne doit jamais
     // rester sur l'appareil si le serveur est injoignable. Silencieuse par

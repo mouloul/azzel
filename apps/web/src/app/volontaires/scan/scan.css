@@ -182,6 +182,17 @@
   letter-spacing: 0.06em;
 }
 
+/* Story 4.3 — note d'honnêteté du voyant succès retrait : « NON enregistré
+   sur cet appareil » quand IndexedDB refuse l'append (jamais de mensonge,
+   texte intégral lisible, contraste sur les deux encres du voyant). */
+.scan-voyant-note {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--az-font-weight-surtitre);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Trois états, sémantique des couleurs opérationnelles (paires sombres
    fixes — jamais la couleur seule : icônes ✓/↻/⚠ + textes intégraux). */
 .scan-voyant--succes {

@@ -38,13 +38,23 @@ vi.mock(
   () => assistanceMock as unknown as typeof import('@/lib/assistance-phone'),
 );
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: () => undefined, push: () => undefined }),
-  redirect: () => undefined,
+const navigationMock = vi.hoisted(() => ({
+  redirect: vi.fn(),
 }));
 
-import ScanPage from './page';
-import { DUREE_CLIGNOTEMENT_MS, EcranAnnuaireAbsent, EcranCameraRefusee } from './scan-client';
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: () => undefined, push: () => undefined }),
+  redirect: navigationMock.redirect,
+}));
+
+import ScanPage, { NOTICE_SCAN_RETRAIT } from './page';
+import {
+  DUREE_CLIGNOTEMENT_MS,
+  NOTE_NON_ENREGISTRE,
+  TEXTES_SCAN,
+  EcranAnnuaireAbsent,
+  EcranCameraRefusee,
+} from './scan-client';
 
 const SESSION_VOLONTAIRE = {
   accountId: 'account-volontaire',
@@ -69,9 +79,28 @@ const MISSION_SCAN = {
   couvertureLabel: 'Couverte',
 };
 
-async function rendu(): Promise<string> {
-  const flux = await renderToReadableStream(<ScanPage />);
+const MISSION_GUICHET = {
+  ...MISSION_SCAN,
+  id: 'mission-guichet-1',
+  type: 'distribution_dossards',
+  typeLabel: 'Distribution des dossards',
+  titre: 'Guichet dossards',
+};
+
+async function rendu(searchParams?: Promise<{ mode?: string | string[] }>): Promise<string> {
+  const flux = await renderToReadableStream(<ScanPage searchParams={searchParams} />);
   return await new Response(flux).text();
+}
+
+/** rendu interrompu par redirect() — retourne l'erreur interceptée pour vérifier que c'est bien la redirection. */
+async function renduRedirige(searchParams?: Promise<{ mode?: string | string[] }>): Promise<unknown> {
+  try {
+    const flux = await renderToReadableStream(<ScanPage searchParams={searchParams} />);
+    await new Response(flux).text();
+    return null;
+  } catch (erreur) {
+    return erreur;
+  }
 }
 
 async function renduComposant(element: React.ReactElement): Promise<string> {
@@ -82,6 +111,12 @@ async function renduComposant(element: React.ReactElement): Promise<string> {
 beforeEach(() => {
   sessionMock.requireRolePage.mockReset();
   missionsServiceMock.getMissionsVolontaireState.mockReset();
+  navigationMock.redirect.mockReset();
+  // Le vrai redirect() de Next JETTE (NEXT_REDIRECT) : le mock doit interrompre
+  // le rendu pareillement, sinon la page continue sur une mission absente.
+  navigationMock.redirect.mockImplementation(() => {
+    throw new Error('NEXT_REDIRECT');
+  });
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_VOLONTAIRE,
@@ -212,5 +247,89 @@ describe('scan.css — garde-fous UX-DR-6/7, SCOPÉS au sélecteur concerné', (
 describe('clignotement borné dans le temps', () => {
   it('le voyant clignote 6 s puis reste statique (constante du client)', () => {
     expect(DUREE_CLIGNOTEMENT_MS).toBe(6000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 4.3 — mode retrait (?mode=retrait) : débloqué par une mission
+// distribution_dossards « en cours », libellés dédiés, redirection douce.
+// ---------------------------------------------------------------------------
+
+describe('page /volontaires/scan?mode=retrait — gating par mission guichet', () => {
+  it('mission distribution_dossards en cours : scanner rendu en mode retrait, mission en badge', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_GUICHET],
+      missions: [MISSION_GUICHET],
+    });
+    const html = await rendu(Promise.resolve({ mode: 'retrait' }));
+    expect(html).toContain('Retrait des dossards');
+    expect(html).toContain('Lecture de l’annuaire enregistré');
+    expect(navigationMock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('URL directe sans mission guichet : redirection douce vers la fiche AVEC message', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_SCAN],
+      missions: [MISSION_SCAN],
+    });
+    const erreur = await renduRedirige(Promise.resolve({ mode: 'retrait' }));
+    // L'interruption vient bien de la redirection (NEXT_REDIRECT), pas d'un crash.
+    expect((erreur as Error | null)?.message).toMatch(/NEXT_REDIRECT/);
+    expect(navigationMock.redirect).toHaveBeenCalledWith(
+      `/volontaires?scan=${NOTICE_SCAN_RETRAIT}`,
+    );
+  });
+
+  it('état missions en échec : redirection SILENCIEUSE (pas de message « réservé »)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockRejectedValue(new Error('db down'));
+    const erreur = await renduRedirige(Promise.resolve({ mode: 'retrait' }));
+    expect((erreur as Error | null)?.message).toMatch(/NEXT_REDIRECT/);
+    // L'indisponibilité n'est pas l'absence de mission : fiche sans message.
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/volontaires');
+    expect(navigationMock.redirect.mock.calls.join(' ')).not.toContain('scan=');
+  });
+
+  it('mode répété (?mode=retrait&mode=retrait) : seul le PREMIER élément compte', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_GUICHET],
+      missions: [MISSION_GUICHET],
+    });
+    const html = await rendu(Promise.resolve({ mode: ['retrait', 'checkpoint'] }));
+    expect(html).toContain('Retrait des dossards');
+    expect(navigationMock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('sans paramètre de mode : scanner checkpoints inchangé (4.2)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_SCAN],
+      missions: [MISSION_SCAN],
+    });
+    const html = await rendu(Promise.resolve({}));
+    expect(html).toContain('Scan des e-dossards');
+    expect(html).not.toContain('Retrait des dossards');
+    expect(navigationMock.redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe('libellés dédiés du mode retrait (mêmes écrans, textes distincts)', () => {
+  it('TEXTES_SCAN.retrait : surtitre, écran prêt et zone aria dédiés', () => {
+    expect(TEXTES_SCAN.retrait.surtitre).toBe('Retrait des dossards');
+    expect(TEXTES_SCAN.retrait.titrePret).toBe('Retirer les dossards');
+    expect(TEXTES_SCAN.retrait.hintPret).toContain('DÉJÀ PASSÉ');
+    expect(TEXTES_SCAN.checkpoint.surtitre).toBe('Scan des e-dossards');
+  });
+
+  it('note d’honnêteté exacte quand l’outbox refuse l’écriture', () => {
+    expect(NOTE_NON_ENREGISTRE).toBe('NON enregistré sur cet appareil');
+  });
+
+  it('écran annuaire absent en mode retrait : surtitre dédié', async () => {
+    const html = await renduComposant(<EcranAnnuaireAbsent mode="retrait" />);
+    expect(html).toContain('Retrait des dossards');
+    expect(html).toContain('Annuaire non chargé');
   });
 });

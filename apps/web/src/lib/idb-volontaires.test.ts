@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ANNUAIRE_SCHEMA_VERSION, type AnnuaireEdition } from '@azzel/shared';
+import {
+  ANNUAIRE_SCHEMA_VERSION,
+  cleIdempotenceRetrait,
+  RETRAIT_SCHEMA_VERSION,
+  type AnnuaireEdition,
+  type RetraitTerrain,
+} from '@azzel/shared';
 
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
@@ -8,21 +14,30 @@ import {
   IDB_CLE_COURANT,
   IDB_NOM_BASE,
   IDB_STORE_ANNUAIRE,
+  IDB_STORE_APPAREIL,
   IDB_STORE_ETAT,
+  IDB_STORE_OUTBOX,
   IDB_VERSION,
   effacerEtatVolontaires,
+  ajouterRetrait,
   ecrireAnnuaire,
   ecrireEtatVolontaires,
   lireAnnuaire,
   lireEtatVolontaires,
+  listerRetraits,
+  obtenirAppareilId,
+  retraitsParJeton,
   type EtatVolontaires,
 } from './idb-volontaires';
 
-// Stories 3.3/3.4 — tests du wrapper IndexedDB : aller-retour écriture/lecture
-// (etat ET annuaire), SSR-safe sans indexedDB (node), clé unique « courant »
-// (le dernier sync gagne), upgrade v1→v2 (store annuaire créé sans toucher
-// etat). Le stub maison imite le strict contrat utilisé : open + upgrade,
-// transaction → objectStore → get/put, requêtes promessifiées.
+// Stories 3.3/3.4/4.3 — tests du wrapper IndexedDB : aller-retour
+// écriture/lecture (etat ET annuaire), SSR-safe sans indexedDB (node), clé
+// unique « courant » (le dernier sync gagne), upgrades successives SANS
+// toucher aux stores précédents (v1→v2 annuaire, v2→v3 outbox+appareil),
+// outbox append-only idempotent (clé d'idempotence en keyPath), appareilId
+// stable, purge logout conservatrice (AD-5). Le stub maison imite le strict
+// contrat utilisé : open + upgrade, transaction → objectStore →
+// get/put/add/getAll/clear, requêtes promessifiées.
 
 interface RequeteFactice<T> {
   result: T | undefined;
@@ -33,10 +48,19 @@ interface RequeteFactice<T> {
 
 function creerIndexedDbMemoire() {
   const stores = new Map<string, Map<string, unknown>>();
+  const keyPaths = new Map<string, string>();
   const suppressions: string[] = [];
   let fermetures = 0;
-  // Version de la base « sur disque » : 0 = neuve, 1 = époque 3.3, 2 = 3.4.
+  // Version de la base « sur disque » : 0 = neuve, 1 = époque 3.3, 2 = 3.4,
+  // 3 = époque 4.3 (outbox + appareil).
   let versionBase = 0;
+
+  // Sérialisation des transactions readwrite PAR store (contrat réel : une
+  // seule écriture à la fois sur un store, même entre connexions — c'est ce
+  // qui rend obtenirAppareilId atomique). Le verrou se libère un macrotask
+  // après acquisition : les microtâches de la transaction (lecture puis
+  // écriture chaînées) terminent avant que la suivante ne démarre.
+  const verrous = new Map<string, Promise<void>>();
 
   const requete = <T>(): RequeteFactice<T> => ({
     result: undefined,
@@ -47,30 +71,80 @@ function creerIndexedDbMemoire() {
 
   const base = {
     objectStoreNames: { contains: (nom: string) => stores.has(nom) },
-    createObjectStore: (nom: string) => {
+    createObjectStore: (nom: string, options?: { keyPath?: string }) => {
       stores.set(nom, stores.get(nom) ?? new Map());
+      keyPaths.set(nom, options?.keyPath ?? 'id');
     },
-    transaction: () => ({
-      objectStore: (nom: string) => ({
-        get: (cle: string) => {
-          const r = requete<unknown>();
-          queueMicrotask(() => {
-            r.result = stores.get(nom)?.get(cle);
-            r.onsuccess?.();
-          });
-          return r;
-        },
-        put: (valeur: { id?: string }) => {
-          const r = requete<string>();
-          queueMicrotask(() => {
-            stores.get(nom)?.set(valeur.id ?? '', valeur);
-            r.result = valeur.id ?? '';
-            r.onsuccess?.();
-          });
-          return r;
-        },
-      }),
-    }),
+    transaction: (nom: string, mode?: IDBTransactionMode) => {
+      const acquis =
+        mode === 'readwrite' ? (verrous.get(nom) ?? Promise.resolve()) : Promise.resolve();
+      if (mode === 'readwrite') {
+        verrous.set(
+          nom,
+          acquis.then(() => new Promise<void>((resolve) => setTimeout(resolve, 0))),
+        );
+      }
+      const apres = (travail: () => void): void => {
+        void acquis.then(() => queueMicrotask(travail));
+      };
+      return {
+        objectStore: (nomStore: string) => ({
+          get: (cle: string) => {
+            const r = requete<unknown>();
+            apres(() => {
+              r.result = stores.get(nomStore)?.get(cle);
+              r.onsuccess?.();
+            });
+            return r;
+          },
+          put: (valeur: Record<string, unknown>) => {
+            const r = requete<string>();
+            apres(() => {
+              const cle = String(valeur[keyPaths.get(nomStore) ?? 'id'] ?? '');
+              stores.get(nomStore)?.set(cle, valeur);
+              r.result = cle;
+              r.onsuccess?.();
+            });
+            return r;
+          },
+          add: (valeur: Record<string, unknown>) => {
+            const r = requete<string>();
+            apres(() => {
+              const cle = String(valeur[keyPaths.get(nomStore) ?? 'id'] ?? '');
+              const store = stores.get(nomStore);
+              if (store !== undefined && store.has(cle)) {
+                // Contrat réel : add sur clé existante → ConstraintError.
+                r.error = Object.assign(new Error('clé déjà présente'), {
+                  name: 'ConstraintError',
+                });
+                r.onerror?.();
+                return;
+              }
+              store?.set(cle, valeur);
+              r.result = cle;
+              r.onsuccess?.();
+            });
+            return r;
+          },
+          getAll: () => {
+            const r = requete<unknown[]>();
+            apres(() => {
+              r.result = [...(stores.get(nomStore)?.values() ?? [])];
+              r.onsuccess?.();
+            });
+            return r;
+          },
+          clear: () => {
+            const r = requete<undefined>();
+            apres(() => {
+              stores.get(nomStore)?.clear();
+              r.onsuccess?.();
+            });
+            return r;
+          },
+        }),
+      };
+    },
     close: () => {
       fermetures += 1;
     },
@@ -114,9 +188,30 @@ function creerIndexedDbMemoire() {
     const store = new Map<string, unknown>();
     store.set(IDB_CLE_COURANT, { ...etat, id: IDB_CLE_COURANT });
     stores.set(IDB_STORE_ETAT, store);
+    keyPaths.set(IDB_STORE_ETAT, 'id');
   };
 
-  return { fabrique, stores, fermetures: () => fermetures, suppressions, semerBaseV1 };
+  /** Simule une base restée en v2 (épopée 3.4) : etat + annuaire peuplés. */
+  const semerBaseV2 = (etat: EtatVolontaires, annuaire: AnnuaireEdition): void => {
+    versionBase = 2;
+    const etatStore = new Map<string, unknown>();
+    etatStore.set(IDB_CLE_COURANT, { ...etat, id: IDB_CLE_COURANT });
+    stores.set(IDB_STORE_ETAT, etatStore);
+    keyPaths.set(IDB_STORE_ETAT, 'id');
+    const annuaireStore = new Map<string, unknown>();
+    annuaireStore.set(IDB_CLE_COURANT, { ...annuaire, id: IDB_CLE_COURANT });
+    stores.set(IDB_STORE_ANNUAIRE, annuaireStore);
+    keyPaths.set(IDB_STORE_ANNUAIRE, 'id');
+  };
+
+  return {
+    fabrique,
+    stores,
+    fermetures: () => fermetures,
+    suppressions,
+    semerBaseV1,
+    semerBaseV2,
+  };
 }
 
 const MISSION: MissionVolontaireView = {
@@ -164,6 +259,20 @@ function annuaireExemple(genereA: string): AnnuaireEdition {
         jeton: 'jeton-coureur-12-aaaaa',
       },
     ],
+  };
+}
+
+const APPAREIL = 'appareil-test-1';
+
+function retraitExemple(surcharge: Partial<RetraitTerrain> = {}): RetraitTerrain {
+  return {
+    version: RETRAIT_SCHEMA_VERSION,
+    type: 'retrait',
+    editionId: 'edition-1',
+    jeton: 'jeton-coureur-1-aaaaaa',
+    horodatage: '2027-05-16T06:12:30.000Z',
+    appareilId: APPAREIL,
+    ...surcharge,
   };
 }
 
@@ -296,18 +405,20 @@ describe('lireAnnuaire / ecrireAnnuaire — store dédié v2 (story 3.4)', () =>
     const etatV1 = etatExemple('2026-10-20T08:00:00.000Z');
     semerBaseV1(etatV1);
 
-    // Toute opération réouvre la base en v2 : l'upgrade part, crée « annuaire »…
+    // Toute opération réouvre la base en v3 : l'upgrade part, crée « annuaire »…
     expect(await ecrireAnnuaire(annuaireExemple('2026-10-22T08:00:00.000Z'))).toBe(true);
     expect(stores.has(IDB_STORE_ANNUAIRE)).toBe(true);
     // …et l'état v1 (données ET store) survit intact.
     await expect(lireEtatVolontaires()).resolves.toEqual(etatV1);
 
-    // Base neuve (v0) : les deux stores sont créés d'un coup.
+    // Base neuve (v0) : tous les stores sont créés d'un coup.
     const neuve = creerIndexedDbMemoire();
     vi.stubGlobal('indexedDB', neuve.fabrique);
     expect(await ecrireEtatVolontaires(etatV1)).toBe(true);
     expect(neuve.stores.has(IDB_STORE_ETAT)).toBe(true);
     expect(neuve.stores.has(IDB_STORE_ANNUAIRE)).toBe(true);
+    expect(neuve.stores.has(IDB_STORE_OUTBOX)).toBe(true);
+    expect(neuve.stores.has(IDB_STORE_APPAREIL)).toBe(true);
   });
 
   it('réécriture : le dernier annuaire synchronisé gagne', async () => {
@@ -350,10 +461,143 @@ describe('lireAnnuaire / ecrireAnnuaire — store dédié v2 (story 3.4)', () =>
   });
 });
 
-describe('effacerEtatVolontaires — purge à la déconnexion (appareil partagé)', () => {
-  it('supprime la base IndexedDB ET les caches az-volontaires-* (rien d’autre)', async () => {
-    const { fabrique, suppressions } = creerIndexedDbMemoire();
+describe('outbox + appareil — stores v3 (story 4.3)', () => {
+  it('upgrade v2 → v3 : outbox et appareil créés SANS toucher etat/annuaire', async () => {
+    const { fabrique, stores, semerBaseV2 } = creerIndexedDbMemoire();
     vi.stubGlobal('indexedDB', fabrique);
+    const etatV2 = etatExemple('2026-10-20T08:00:00.000Z');
+    const annuaireV2 = annuaireExemple('2026-10-20T08:00:00.000Z');
+    semerBaseV2(etatV2, annuaireV2);
+
+    // Toute opération réouvre la base en v3 : l'upgrade part, crée les
+    // nouveaux stores…
+    expect(await obtenirAppareilId()).toBeTruthy();
+    expect(stores.has(IDB_STORE_OUTBOX)).toBe(true);
+    expect(stores.has(IDB_STORE_APPAREIL)).toBe(true);
+    // …et les données v2 (etat ET annuaire) survivent intactes.
+    await expect(lireEtatVolontaires()).resolves.toEqual(etatV2);
+    await expect(lireAnnuaire()).resolves.toEqual(annuaireV2);
+  });
+
+  it('SSR-safe : sans indexedDB — appareilId null, append false, listes vides', async () => {
+    expect(typeof indexedDB).toBe('undefined');
+    await expect(obtenirAppareilId()).resolves.toBeNull();
+    await expect(ajouterRetrait(retraitExemple())).resolves.toBe(false);
+    await expect(listerRetraits()).resolves.toEqual([]);
+    await expect(retraitsParJeton()).resolves.toEqual(new Map());
+  });
+
+  it('appareilId généré UNE fois puis stable (relu tel quel aux appels suivants)', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    const premier = await obtenirAppareilId();
+    const second = await obtenirAppareilId();
+    expect(premier).toBeTruthy();
+    expect(second).toBe(premier);
+  });
+
+  it('concurrence simulée : deux appels PARALLÈLES → UN SEUL appareilId (get+put atomiques)', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    const [premier, second] = await Promise.all([obtenirAppareilId(), obtenirAppareilId()]);
+    // La transaction readwrite du second appel attend la fin de la première
+    // (sérialisation IndexedDB) : sa lecture voit l’écriture du premier —
+    // jamais deux identifiants générés.
+    expect(premier).toBeTruthy();
+    expect(second).toBe(premier);
+    expect(stores.get(IDB_STORE_APPAREIL)?.size).toBe(1);
+  });
+
+  it('ajouterRetrait : append avec la clé d’idempotence du contrat en clé primaire', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    expect(await ajouterRetrait(retraitExemple())).toBe(true);
+    const cle = cleIdempotenceRetrait(APPAREIL, 'edition-1', 'jeton-coureur-1-aaaaaa');
+    expect(stores.get(IDB_STORE_OUTBOX)?.has(cle)).toBe(true);
+
+    const retraits = await listerRetraits();
+    expect(retraits).toEqual([retraitExemple()]);
+    // La clé interne n'est jamais exposée à l'appelant.
+    expect(JSON.stringify(retraits)).not.toContain('"cle"');
+  });
+
+  it('append idempotent : même clé → true mais UN SEUL événement (no-op physique)', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    expect(await ajouterRetrait(retraitExemple())).toBe(true);
+    // Re-scan du même coureur avec un horodatage différent : l'append est
+    // refusé par la clé primaire (ConstraintError) mais l'événement EST dans
+    // l'outbox — true sans doublon, le PREMIER reste la référence (AD-3).
+    expect(await ajouterRetrait(retraitExemple({ horodatage: '2027-05-16T07:00:00.000Z' }))).toBe(
+      true,
+    );
+    expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(1);
+    expect(await listerRetraits()).toHaveLength(1);
+    expect((await listerRetraits())[0]?.horodatage).toBe('2027-05-16T06:12:30.000Z');
+  });
+
+  it('deux coureurs distincts : deux événements, clés distinctes', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    await ajouterRetrait(retraitExemple());
+    await ajouterRetrait(retraitExemple({ jeton: 'jeton-coureur-12-aaaaa' }));
+    expect(await listerRetraits()).toHaveLength(2);
+  });
+
+  it('retrait hors contrat : append refusé (false), rien en outbox', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    expect(await ajouterRetrait(retraitExemple({ version: 9 as RetraitTerrain['version'] }))).toBe(
+      false,
+    );
+    expect(await ajouterRetrait(retraitExemple({ jeton: 'court' }))).toBe(false);
+    expect(stores.get(IDB_STORE_OUTBOX)?.size ?? 0).toBe(0);
+  });
+
+  it('enregistrement corrompu en outbox : ignoré à la lecture, jamais d’exception', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ajouterRetrait(retraitExemple());
+    const store = stores.get(IDB_STORE_OUTBOX);
+    store?.set('cle-fantomme', { cle: 'cle-fantomme', nimporte: 'quoi' });
+    const retraits = await listerRetraits();
+    expect(retraits).toHaveLength(1);
+  });
+
+  it('retraitsParJeton : Map jeton → horodatage, le PREMIER retrait gagne', async () => {
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+
+    await ajouterRetrait(retraitExemple({ jeton: 'jeton-coureur-1-aaaaaa', horodatage: '2027-05-16T06:12:30.000Z' }));
+    await ajouterRetrait(retraitExemple({ jeton: 'jeton-coureur-12-aaaaa', horodatage: '2027-05-16T06:30:00.000Z' }));
+    // Même jeton, édition suivante, horodatage plus tardif : le premier reste.
+    await ajouterRetrait(
+      retraitExemple({
+        jeton: 'jeton-coureur-1-aaaaaa',
+        editionId: 'edition-2',
+        horodatage: '2027-05-16T07:00:00.000Z',
+      }),
+    );
+
+    const index = await retraitsParJeton();
+    expect(index.size).toBe(2);
+    expect(index.get('jeton-coureur-1-aaaaaa')?.toISOString()).toBe('2027-05-16T06:12:30.000Z');
+    expect(index.get('jeton-coureur-12-aaaaa')?.toISOString()).toBe('2027-05-16T06:30:00.000Z');
+  });
+});
+
+describe('effacerEtatVolontaires — purge logout conservatrice (AD-5)', () => {
+  it('vide etat et annuaire, purge les caches az-volontaires-*, NE supprime PAS la base', async () => {
+    const { fabrique, stores, suppressions } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ecrireEtatVolontaires(etatExemple('2026-10-22T08:00:00.000Z'));
+    await ecrireAnnuaire(annuaireExemple('2026-10-22T08:00:00.000Z'));
+    await ajouterRetrait(retraitExemple());
     const cachesSupprimes: string[] = [];
     vi.stubGlobal('caches', {
       keys: async () => [
@@ -369,7 +613,12 @@ describe('effacerEtatVolontaires — purge à la déconnexion (appareil partagé
 
     await effacerEtatVolontaires();
 
-    expect(suppressions).toEqual([IDB_NOM_BASE]);
+    // La base SURVIT (pas de deleteDatabase) : outbox et appareil restent.
+    expect(suppressions).toEqual([]);
+    // Fiche et annuaire purgés — l'appareil est partagé, ils ne survivent pas
+    // au compte.
+    expect(stores.get(IDB_STORE_ETAT)?.size).toBe(0);
+    expect(stores.get(IDB_STORE_ANNUAIRE)?.size).toBe(0);
     expect(cachesSupprimes.sort()).toEqual(['az-volontaires-etat-v0', 'az-volontaires-shell-v1']);
   });
 
@@ -379,16 +628,21 @@ describe('effacerEtatVolontaires — purge à la déconnexion (appareil partagé
     await expect(effacerEtatVolontaires()).resolves.toBeUndefined();
   });
 
-  it('la purge emporte aussi l’annuaire : etat ET annuaire disparaissent avec la base', async () => {
+  it('l’outbox et l’appareilId survivent à la déconnexion (cross-session, AD-5)', async () => {
     const { fabrique, stores } = creerIndexedDbMemoire();
     vi.stubGlobal('indexedDB', fabrique);
     await ecrireEtatVolontaires(etatExemple('2026-10-22T08:00:00.000Z'));
-    await ecrireAnnuaire(annuaireExemple('2026-10-22T08:00:00.000Z'));
-    expect(stores.has(IDB_STORE_ETAT)).toBe(true);
-    expect(stores.has(IDB_STORE_ANNUAIRE)).toBe(true);
+    const appareilAvant = await obtenirAppareilId();
+    await ajouterRetrait(retraitExemple());
+    expect(await listerRetraits()).toHaveLength(1);
 
     await effacerEtatVolontaires();
 
-    expect(stores.size).toBe(0);
+    // Le volontaire se reconnecte : même appareilId, même outbox, doublons
+    // toujours détectables.
+    await expect(obtenirAppareilId()).resolves.toBe(appareilAvant);
+    await expect(listerRetraits()).resolves.toHaveLength(1);
+    expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(1);
+    expect(stores.get(IDB_STORE_APPAREIL)?.size).toBe(1);
   });
 });

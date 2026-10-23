@@ -6,12 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { assistancePhoneHref } from '@/components/assistance-button';
-import { lireAnnuaire } from '@/lib/idb-volontaires';
+import { lireAnnuaire, obtenirAppareilId, retraitsParJeton } from '@/lib/idb-volontaires';
 import { creerAudioScan, type AudioScan } from '@/lib/scan/audio-scan';
 import {
   formatHeureVoyant,
+  libelleVoyantRetrait,
   libelleVoyantScan,
   resoudreEtEnregistrer,
+  traiterScanRetrait,
+  type ResultatRetrait,
   type ResultatScan,
 } from '@/lib/scan/etats-scan';
 import {
@@ -20,15 +23,64 @@ import {
   type Decodeur,
 } from '@/lib/scan/decodeur-qr';
 
+// Ré-export (la note vit avec l'orchestrateur dans etats-scan, les tests de
+// la page l'attendent depuis ce module).
+export { NOTE_NON_ENREGISTRE } from '@/lib/scan/etats-scan';
+
 // Story 4.2 — moteur de scan caméra et états de retour (UX-DR-6/7/18). Page
 // 100 % locale : la validation se fait contre la réplique IndexedDB (jamais
 // de réseau), le dédoublonnage est de SESSION (en mémoire — 4.3/4.4 le
 // remplaceront). Le bip + le voyant SONT la confirmation (< 1 s), aucun
 // bouton « valider ». L'audio et la vibration ne partent qu'après le geste
 // « Démarrer le scan ». Tutoiement (surface volontaire).
+//
+// Story 4.3 — le mode est un PARAMÈTRE (mêmes moteur, écrans, bips) :
+// `retrait` (guichet) résout contre l'outbox IndexedDB — dédoublonnage
+// PERSISTANT cross-session, append-only au succès, note « NON enregistré sur
+// cet appareil » si IDB refuse (jamais de mensonge). 4.4 greffera le mode
+// passage pareillement.
 
 /** Clignotement du voyant borné dans le temps : statique passé ce délai. */
 export const DUREE_CLIGNOTEMENT_MS = 6000;
+
+/** Mode du scanner : paramètre unique, pas une page séparée. */
+export type ModeScan = 'checkpoint' | 'retrait';
+
+export interface TextesScan {
+  surtitre: string;
+  titrePreparation: string;
+  annoncePreparation: string;
+  titrePret: string;
+  leadPret: (nombreCoureurs: number) => string;
+  hintPret: string;
+  ariaEcran: string;
+}
+
+/** Libellés dédiés par mode (mêmes écrans, textes distincts). */
+export const TEXTES_SCAN: Record<ModeScan, TextesScan> = {
+  checkpoint: {
+    surtitre: 'Scan des e-dossards',
+    titrePreparation: 'Préparation du scanner…',
+    annoncePreparation: 'Lecture de l’annuaire enregistré sur cet appareil…',
+    titrePret: 'Scanner les e-dossards',
+    leadPret: (nombreCoureurs) =>
+      `Annuaire prêt — ${nombreCoureurs} coureurs enregistrés sur cet appareil. Le scan fonctionne même sans réseau.`,
+    hintPret:
+      'Vise le QR du coureur : le bip et le voyant confirment chaque lecture en moins d’une seconde. Aucun bouton à valider.',
+    ariaEcran: 'Scanner les e-dossards',
+  },
+  retrait: {
+    surtitre: 'Retrait des dossards',
+    titrePreparation: 'Préparation du scanner…',
+    annoncePreparation: 'Lecture de l’annuaire enregistré sur cet appareil…',
+    titrePret: 'Retirer les dossards',
+    leadPret: (nombreCoureurs) =>
+      `Annuaire prêt — ${nombreCoureurs} coureurs enregistrés sur cet appareil. Le retrait fonctionne même sans réseau.`,
+    hintPret:
+      'Vise le QR du coureur au guichet : le bip et le voyant confirment le retrait en moins d’une seconde. Un coureur déjà retiré (même après reconnexion) affiche DÉJÀ PASSÉ.',
+    ariaEcran: 'Retirer les dossards',
+  },
+};
 
 type Phase =
   | 'chargement'
@@ -40,9 +92,11 @@ type Phase =
   | 'module';
 
 interface Voyant {
-  resultat: ResultatScan;
+  resultat: ResultatScan | ResultatRetrait;
   /** Heure de l'appareil du scan affiché (donnée locale, AD-3). */
   heure: Date;
+  /** Succès retrait uniquement : IDB a refusé l'append (jamais de mensonge). */
+  note?: string;
 }
 
 /** Chemins Réglages complets (UX-DR-18) — texte intégral, jamais la couleur seule. */
@@ -71,16 +125,19 @@ export function EcranCameraRefusee({
   variante,
   assistancePhone,
   onReessayer,
+  mode = 'checkpoint',
 }: {
   variante: 'permission' | 'indisponible';
   assistancePhone: string;
   onReessayer?: () => void;
+  mode?: ModeScan;
 }) {
   const refusee = variante === 'permission';
+  const textes = TEXTES_SCAN[mode];
   return (
     <section className="scan-page-etat">
       <article className="card scan-cadre">
-        <p className="surtitre">Scan des e-dossards</p>
+        <p className="surtitre">{textes.surtitre}</p>
         <h1>{refusee ? 'Autoriser la caméra' : 'Caméra indisponible'}</h1>
         {refusee ? (
           <>
@@ -119,11 +176,11 @@ export function EcranCameraRefusee({
 }
 
 /** État bloquant : pas de scan à l'aveugle sans annuaire chargé (IndexedDB). */
-export function EcranAnnuaireAbsent() {
+export function EcranAnnuaireAbsent({ mode = 'checkpoint' }: { mode?: ModeScan }) {
   return (
     <section className="scan-page-etat">
       <article className="card scan-cadre">
-        <p className="surtitre">Scan des e-dossards</p>
+        <p className="surtitre">{TEXTES_SCAN[mode].surtitre}</p>
         <h1>Annuaire non chargé</h1>
         <p className="lead">
           L’annuaire des coureurs n’est pas encore sur cet appareil : impossible de valider un scan
@@ -142,9 +199,11 @@ export function EcranAnnuaireAbsent() {
 export function ScanClient({
   assistancePhone,
   missionLabel,
+  mode = 'checkpoint',
 }: {
   assistancePhone: string;
   missionLabel: string;
+  mode?: ModeScan;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('chargement');
@@ -161,13 +220,24 @@ export function ScanClient({
   // Dédoublonnage de SESSION (en mémoire) : jeton → première lecture. 4.3/4.4
   // le remplaceront par leurs clés naturelles persistées.
   const dejaVusRef = useRef<Map<string, Date>>(new Map());
+  // Story 4.3 — mode retrait : index outbox (chargé au démarrage, mis à jour
+  // par l'orchestrateur) + contexte d'append (appareil + édition) + numéro de
+  // séquence (seul le DERNIER scan rend).
+  const retraitsRef = useRef<Map<string, Date>>(new Map());
+  const appareilIdRef = useRef<string | null>(null);
+  const editionIdRef = useRef<string | null>(null);
+  const sequenceRef = useRef(0);
+
+  const textes = TEXTES_SCAN[mode];
 
   // (Revue) — l'écran actif vit dans UN booléen : les effets et leurs deps
   // lisent `actif`, jamais un booléen inline recomposé.
   const actif = phase === 'active';
 
   // Annuaire local : IndexedDB uniquement (jamais de réseau ici). Vide ou
-  // absent → état bloquant, le scan refuse de démarrer à l'aveugle.
+  // absent → état bloquant, le scan refuse de démarrer à l'aveugle. En mode
+  // retrait : l'outbox (dédoublonnage persistant cross-session) et
+  // l'appareilId (clé d'idempotence) sont chargés en même temps.
   useEffect(() => {
     let annule = false;
     (async () => {
@@ -183,34 +253,84 @@ export function ScanClient({
       }
       indexRef.current = index;
       setNombreCoureurs(index.size);
+      if (mode === 'retrait') {
+        const [appareilId, retraits] = await Promise.all([
+          obtenirAppareilId(),
+          retraitsParJeton(),
+        ]);
+        if (annule) {
+          return;
+        }
+        appareilIdRef.current = appareilId;
+        editionIdRef.current = annuaire !== null ? annuaire.editionId : null;
+        retraitsRef.current = retraits;
+      }
       setPhase('prete');
     })();
     return () => {
       annule = true;
     };
-  }, []);
+  }, [mode]);
 
-  // Un payload décodé → resolution + enregistrement de session → voyant +
-  // bip + vibration (< 1 s).
-  const surPayload = useCallback((payload: string) => {
-    const index = indexRef.current;
-    if (index === null) {
+  // Un payload décodé → resolution + enregistrement → voyant + bip +
+  // vibration (< 1 s). Checkpoint : session en mémoire. Retrait :
+  // l'orchestrateur pur émet immédiatement (voyant+bip JAMAIS derrière
+  // l'outbox), l'append part en arrière-plan — une note « NON enregistré »
+  // ne complète le voyant QUE si aucun scan plus récent n'a eu lieu entre
+  // temps (numéro de séquence : seul le dernier scan rend).
+  const surPayload = useCallback(
+    (payload: string) => {
+      const index = indexRef.current;
+      if (index === null) {
+        return;
+      }
+      const maintenant = new Date();
+
+      if (mode === 'retrait') {
+        const numero = sequenceRef.current + 1;
+        sequenceRef.current = numero;
+        const { retour, termine } = traiterScanRetrait(
+          payload,
+          index,
+          retraitsRef.current,
+          appareilIdRef.current,
+          editionIdRef.current,
+          maintenant,
+        );
+        setVoyant({ resultat: retour.resultat, note: retour.note, heure: maintenant });
+        emettreRetourAudio(retour.resultat.etat);
+        void termine.then((final) => {
+          // Un scan antérieur résolu trop tard n'écrase jamais le voyant
+          // récent ; sans note (append ok), rien à compléter.
+          if (final.note !== undefined && numero === sequenceRef.current) {
+            setVoyant((precedent) =>
+              precedent === null ? precedent : { ...precedent, note: final.note },
+            );
+          }
+        });
+        return;
+      }
+
+      const resultat = resoudreEtEnregistrer(payload, index, dejaVusRef.current, maintenant);
+      setVoyant({ resultat, heure: maintenant });
+      emettreRetourAudio(resultat.etat);
+    },
+    [mode],
+  );
+
+  const emettreRetourAudio = useCallback((etat: ResultatScan['etat']) => {
+    const audio = audioRef.current;
+    if (audio === null) {
       return;
     }
-    const maintenant = new Date();
-    const resultat = resoudreEtEnregistrer(payload, index, dejaVusRef.current, maintenant);
-    setVoyant({ resultat, heure: maintenant });
-    const audio = audioRef.current;
-    if (audio !== null) {
-      if (resultat.etat === 'succès') {
-        audio.bipSucces();
-      } else if (resultat.etat === 'doublon') {
-        audio.bipDoublon();
-      } else {
-        audio.bipInconnu();
-      }
-      audio.vibrer(resultat.etat);
+    if (etat === 'succès') {
+      audio.bipSucces();
+    } else if (etat === 'doublon') {
+      audio.bipDoublon();
+    } else {
+      audio.bipInconnu();
     }
+    audio.vibrer(etat);
   }, []);
 
   // Démarrage/arrêt du décodeur suit l'écran actif : la caméra vit
@@ -304,14 +424,17 @@ export function ScanClient({
     router.push('/volontaires');
   }, [router]);
 
+  const libelleVoyant = (resultat: ResultatScan | ResultatRetrait): string =>
+    mode === 'retrait' ? libelleVoyantRetrait(resultat) : libelleVoyantScan(resultat);
+
   if (phase === 'chargement') {
     return (
       <section className="scan-page-etat">
         <article className="card scan-cadre">
-          <p className="surtitre">Scan des e-dossards</p>
-          <h1>Préparation du scanner…</h1>
+          <p className="surtitre">{textes.surtitre}</p>
+          <h1>{textes.titrePreparation}</h1>
           <p className="hint" role="status">
-            Lecture de l’annuaire enregistré sur cet appareil…
+            {textes.annoncePreparation}
           </p>
         </article>
       </section>
@@ -319,7 +442,7 @@ export function ScanClient({
   }
 
   if (phase === 'sans-annuaire') {
-    return <EcranAnnuaireAbsent />;
+    return <EcranAnnuaireAbsent mode={mode} />;
   }
 
   if (phase === 'permission' || phase === 'indisponible') {
@@ -328,6 +451,7 @@ export function ScanClient({
         variante={phase}
         assistancePhone={assistancePhone}
         onReessayer={demarrer}
+        mode={mode}
       />
     );
   }
@@ -336,7 +460,7 @@ export function ScanClient({
     return (
       <section className="scan-page-etat">
         <article className="card scan-cadre">
-          <p className="surtitre">Scan des e-dossards</p>
+          <p className="surtitre">{textes.surtitre}</p>
           <h1>Lecteur QR indisponible</h1>
           <p className="lead">
             Le module de lecture des QR n’a pas pu être chargé sur cet appareil. Connecte-toi une
@@ -359,16 +483,10 @@ export function ScanClient({
     return (
       <section className="scan-page-etat">
         <article className="card scan-cadre">
-          <p className="surtitre">Scan des e-dossards</p>
-          <h1>Scanner les e-dossards</h1>
-          <p className="lead">
-            Annuaire prêt — {nombreCoureurs} coureurs enregistrés sur cet appareil. Le scan
-            fonctionne même sans réseau.
-          </p>
-          <p className="hint">
-            Vise le QR du coureur : le bip et le voyant confirment chaque lecture en moins d’une
-            seconde. Aucun bouton à valider.
-          </p>
+          <p className="surtitre">{textes.surtitre}</p>
+          <h1>{textes.titrePret}</h1>
+          <p className="lead">{textes.leadPret(nombreCoureurs)}</p>
+          <p className="hint">{textes.hintPret}</p>
           <button type="button" className="scan-demarrer" onClick={demarrer}>
             Démarrer le scan
           </button>
@@ -384,7 +502,7 @@ export function ScanClient({
 
   // --- Écran actif : caméra plein écran, voile quasi opaque, voyants.
   return (
-    <section className="scan-ecran" aria-label="Scanner les e-dossards">
+    <section className="scan-ecran" aria-label={textes.ariaEcran}>
       <video
         ref={videoRef}
         className="scan-video"
@@ -414,7 +532,8 @@ export function ScanClient({
             aria-live="assertive"
             className={`scan-voyant scan-voyant--${voyant.resultat.etat === 'succès' ? 'succes' : 'doublon'}${voyantClignote ? ' scan-voyant--vif' : ''}`}
           >
-            <p className="scan-voyant-texte">{libelleVoyantScan(voyant.resultat)}</p>
+            <p className="scan-voyant-texte">{libelleVoyant(voyant.resultat)}</p>
+            {voyant.note !== undefined && <p className="scan-voyant-note">{voyant.note}</p>}
             <p className="scan-voyant-heure" suppressHydrationWarning>
               {formatHeureVoyant(voyant.heure)}
             </p>
@@ -430,7 +549,7 @@ export function ScanClient({
               aria-live="assertive"
               className={`scan-voyant scan-voyant--inconnu${voyantClignote ? ' scan-voyant--vif' : ''}`}
             >
-              <p className="scan-voyant-texte">{libelleVoyantScan(voyant.resultat)}</p>
+              <p className="scan-voyant-texte">{libelleVoyant(voyant.resultat)}</p>
               <a className="scan-voyant-action" href={assistancePhoneHref(assistancePhone)}>
                 Appeler le PC
               </a>

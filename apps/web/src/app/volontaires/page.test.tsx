@@ -42,7 +42,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { DbUnavailableError } from '@/modules/iam/errors';
-import VolontairesPage from './page';
+import VolontairesPage, { MESSAGE_SCAN_RETRAIT } from './page';
 
 const SESSION_VOLONTAIRE = {
   accountId: 'account-volontaire',
@@ -67,6 +67,14 @@ const MISSION = {
   couvertureLabel: 'Couverte',
 };
 
+const MISSION_GUICHET = {
+  ...MISSION,
+  id: 'mission-guichet-1',
+  type: 'distribution_dossards',
+  typeLabel: 'Distribution des dossards',
+  titre: 'Guichet dossards',
+};
+
 const ETAT = {
   editionNom: 'Édition 2027',
   mesMissions: [MISSION],
@@ -84,8 +92,10 @@ const ANNUAIRE = {
   ],
 };
 
-async function rendu(): Promise<string> {
-  const flux = await renderToReadableStream(<VolontairesPage />);
+async function rendu(
+  searchParams?: Promise<Record<string, string | string[]>>,
+): Promise<string> {
+  const flux = await renderToReadableStream(<VolontairesPage searchParams={searchParams} />);
   return await new Response(flux).text();
 }
 
@@ -227,5 +237,88 @@ describe('page /volontaires — entrée « Démarrer le scan » (story 4.2)', ()
     });
     const html = await rendu();
     expect(html).not.toContain('href="/volontaires/scan"');
+  });
+});
+
+describe('page /volontaires — entrée « Scan retrait » (story 4.3)', () => {
+  it('mission distribution_dossards affectée : CTA « Scan retrait » vers ?mode=retrait avec le titre de la mission', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [MISSION_GUICHET],
+      missions: [MISSION_GUICHET],
+    });
+    const html = await rendu();
+    expect(html).toContain('Scan retrait');
+    expect(html).toContain('href="/volontaires/scan?mode=retrait"');
+    expect(html).toContain('Guichet dossards');
+    // Pas de mission scan_checkpoint : le CTA passages n’apparaît pas.
+    expect(html).not.toContain('Démarrer le scan');
+    // Guichet pur : intitulé de section dédié, pas le générique checkpoints.
+    expect(html).toContain('Retrait des dossards');
+    expect(html).not.toContain('Scan des e-dossards');
+  });
+
+  it('sans mission distribution_dossards : PAS de CTA retrait (le mode est débloqué par la mission)', async () => {
+    const missionScan = { ...MISSION, id: 'mission-scan', type: 'scan_checkpoint', typeLabel: 'Scan checkpoint', titre: 'Scan km 12' };
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [missionScan],
+      missions: [missionScan],
+    });
+    const html = await rendu();
+    expect(html).not.toContain('Scan retrait');
+    expect(html).not.toContain('mode=retrait');
+    // Le CTA passages reste, à côté.
+    expect(html).toContain('Démarrer le scan');
+  });
+
+  it('volontaire guichet ET scan : les DEUX CTA côte à côte, intitulé générique', async () => {
+    const missionScan = { ...MISSION, id: 'mission-scan', type: 'scan_checkpoint', typeLabel: 'Scan checkpoint', titre: 'Scan km 12' };
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [missionScan, MISSION_GUICHET],
+      missions: [missionScan, MISSION_GUICHET],
+    });
+    const html = await rendu();
+    expect(html).toContain('Démarrer le scan');
+    expect(html).toContain('href="/volontaires/scan"');
+    expect(html).toContain('Scan retrait');
+    expect(html).toContain('href="/volontaires/scan?mode=retrait"');
+    // Les deux modes ensemble : l’intitulé générique couvre les deux.
+    expect(html).toContain('Scan des e-dossards');
+  });
+
+  it('mission guichet publiée mais affectée à un autre : PAS de CTA retrait', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [MISSION],
+      missions: [MISSION, MISSION_GUICHET],
+    });
+    const html = await rendu();
+    expect(html).not.toContain('mode=retrait');
+  });
+});
+
+describe('page /volontaires — message du mode retrait refusé (story 4.3)', () => {
+  it('?scan=retrait-sans-mission : message affiché UNE SEULE fois, annoncé au lecteur d’écran', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu(Promise.resolve({ scan: 'retrait-sans-mission' }));
+    // Unicité : le texte intégral apparaît exactement une fois.
+    expect(html.split(MESSAGE_SCAN_RETRAIT).length - 1).toBe(1);
+    const position = html.indexOf(MESSAGE_SCAN_RETRAIT);
+    const ouverture = html.lastIndexOf('<p', position);
+    expect(html.slice(ouverture, position)).toContain('role="status"');
+  });
+
+  it('paramètre répété (scan[]=…) : seul le PREMIER élément compte', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu(Promise.resolve({ scan: ['retrait-sans-mission', 'autre'] }));
+    expect(html.split(MESSAGE_SCAN_RETRAIT).length - 1).toBe(1);
+  });
+
+  it('sans paramètre : aucun message (fiche ordinaire)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).not.toContain(MESSAGE_SCAN_RETRAIT);
   });
 });
