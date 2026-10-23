@@ -4,4 +4,5 @@ export * from './datetime';
 export * from './annuaire';
 export * from './edossard';
 export * from './terrain';
+export * from './tracking';
 export * from './dossier';

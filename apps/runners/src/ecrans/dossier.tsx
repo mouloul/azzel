@@ -16,6 +16,7 @@ interface PropsDossier {
   dossier: ChecklistState;
   depuisCache: boolean;
   onVoirEdossard: () => void;
+  onVoirSuivi: () => void;
   onActualiser: () => void;
   onDeconnexion: () => void;
 }
@@ -26,6 +27,7 @@ export function EcranDossier({
   dossier,
   depuisCache,
   onVoirEdossard,
+  onVoirSuivi,
   onActualiser,
   onDeconnexion,
 }: PropsDossier) {
@@ -111,6 +113,7 @@ export function EcranDossier({
         <Bouton theme={theme} label="Actualiser" variante="contour" onPress={onActualiser} />
       </Carte>
       <Bouton theme={theme} label="Voir mon e-dossard" onPress={onVoirEdossard} />
+      <Bouton theme={theme} label="Suivi GPS de ma course" variante="contour" onPress={onVoirSuivi} />
       <Bouton theme={theme} label="Se déconnecter" variante="contour" onPress={onDeconnexion} />
       <BoutonAssistance theme={theme} telephone={telephone} />
     </ScrollView>

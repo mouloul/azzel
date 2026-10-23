@@ -19,6 +19,7 @@ export const MIGRATION_DIRS = [
   path.join(MODULES_DIR, 'contenus', 'migrations'),
   path.join(MODULES_DIR, 'retour-images', 'migrations'),
   path.join(MODULES_DIR, 'chrono', 'migrations'),
+  path.join(MODULES_DIR, 'tracking', 'migrations'),
 ];
 
 // Placeholder du mot de passe du rôle applicatif dans 0008_rls_roles.sql :

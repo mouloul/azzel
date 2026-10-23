@@ -22,11 +22,13 @@ interface PropsConnexion {
   theme: AppTheme;
   telephone: string;
   sessionExpiree: boolean;
+  /** Story 6.2 — déconnexion incomplète (positions non effacées) : dit honnêtement. */
+  messageDeconnexion?: string | null;
   /** Rejette en cas d'échec de stockage du token (refus keychain) pour affichage. */
   onConnecte: (token: string, email: string) => Promise<void>;
 }
 
-export function EcranConnexion({ theme, telephone, sessionExpiree, onConnecte }: PropsConnexion) {
+export function EcranConnexion({ theme, telephone, sessionExpiree, messageDeconnexion, onConnecte }: PropsConnexion) {
   const [etape, setEtape] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -86,6 +88,11 @@ export function EcranConnexion({ theme, telephone, sessionExpiree, onConnecte }:
               <Text style={[theme.fonts.body, { color: theme.colors.warning }]}>
                 Ta session a expiré ou a été ouverte ailleurs : reconnecte-toi.
               </Text>
+          ) : null}
+          {messageDeconnexion !== null && messageDeconnexion !== undefined && etape === 'email' ? (
+            <Text accessibilityRole="alert" style={[theme.fonts.body, { color: theme.colors.danger }]}>
+              {messageDeconnexion}
+            </Text>
           ) : null}
           {etape === 'email' ? (
             <>

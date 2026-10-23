@@ -7,7 +7,16 @@
     "userInterfaceStyle": "automatic",
     "scheme": "azzel",
     "platforms": ["ios", "android"],
-    "plugins": ["expo-dev-client"],
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIOSBackgroundLocationEnabled": true
+        }
+      ]
+    ],
     "android": {
       "package": "dz.azzel.runners"
     },

@@ -1,10 +1,19 @@
 import type { ChecklistState } from '@azzel/shared';
 
-// Story 6.1 — machine à états de l'app (3 écrans utiles + connexion) :
+// Story 6.1 — machine à états de l'app (écrans utiles + connexion) :
 // décisions PURES testées ici, câblées par App.tsx. Dossier déjà validé à
 // l'ouverture → e-dossard direct, étapes court-circuitées.
+// Story 6.2 — écrans 'suivi' (activation GPS opt-in) et 'journal-sync'
+// (journal des synchronisations), accessibles depuis dossier et e-dossard.
 
-export type Ecran = 'chargement' | 'connexion' | 'dossier' | 'edossard' | 'hors-ligne';
+export type Ecran =
+  | 'chargement'
+  | 'connexion'
+  | 'dossier'
+  | 'edossard'
+  | 'suivi'
+  | 'journal-sync'
+  | 'hors-ligne';
 
 /** La pièce « validation » de la checklist est verte (dossier validé). */
 export function dossierValide(dossier: ChecklistState): boolean {

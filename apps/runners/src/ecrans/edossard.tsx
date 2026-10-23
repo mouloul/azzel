@@ -30,6 +30,7 @@ interface PropsEdossard {
   edossard: EdossardCache;
   depuisCache: boolean;
   onRevoirDossier: () => void;
+  onVoirSuivi: () => void;
   onDeconnexion: () => void;
 }
 
@@ -39,6 +40,7 @@ export function EcranEdossard({
   edossard,
   depuisCache,
   onRevoirDossier,
+  onVoirSuivi,
   onDeconnexion,
 }: PropsEdossard) {
   return (
@@ -167,6 +169,7 @@ export function EcranEdossard({
           sur ton téléphone.
         </Text>
         <Bouton theme={theme} label="Revoir mon dossier" variante="contour" onPress={onRevoirDossier} />
+        <Bouton theme={theme} label="Suivi GPS de ma course" variante="contour" onPress={onVoirSuivi} />
         <Bouton theme={theme} label="Se déconnecter" variante="contour" onPress={onDeconnexion} />
         <BoutonAssistance theme={theme} telephone={telephone} />
       </Carte>
