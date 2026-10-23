@@ -2,8 +2,9 @@
    24 px), fraîcheur mono 15 px (meta-lg) en pied, boards par checkpoint :
    badge dossard mono, heure mono 15 px alignée à droite, séparateurs
    pointillés (jamais de zébrage), lignes non cliquables. Fichier propre à la
-   page /admin/course : hors du chunk CSS partagé (budget accueil). Aucune
-   animation (prefers-reduced-motion respecté par construction). */
+   page /admin/course : hors du chunk CSS partagé (budget accueil). Seule
+   animation : le clignotement borné du bloc alertes 5.2 (1 flash/s), coupé
+   sous prefers-reduced-motion. */
 
 .course-live{display:grid;gap:var(--az-space-4)}
 .course-fraicheur{font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte-2);margin:0}
@@ -26,3 +27,27 @@
 .course-board-ligne + .course-board-ligne{border-top:1px dashed var(--az-filet)}
 .course-dossard{font-family:var(--az-font-meta);font-weight:var(--az-font-weight-surtitre);font-variant-numeric:tabular-nums;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:0 calc(var(--az-space-1) * 1.5);line-height:1.6}
 .course-heure{margin-left:auto;font-family:var(--az-font-meta);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte)}
+
+/* Story 5.2 — bloc alertes hors-délais (UX-DR-12) : danger, UNE ligne
+   intégrale par alerte (le texte porte l'alerte, jamais la couleur seule),
+   actions directes par ligne. Clignotement borné : période 1 s (1 flash/s
+   maximum), steps(2, jump-none) = deux paliers nets sans interpolation ; le
+   texte reste LISIBLE en permanence (seul le fond pulse). Sous
+   prefers-reduced-motion : animation coupée, le bloc reste statique. */
+.course-alertes{display:grid;gap:var(--az-space-2);border:2px solid var(--az-danger);border-radius:var(--az-radius-sm);padding:var(--az-space-3);background:color-mix(in srgb, var(--az-danger) 14%, transparent);animation:course-alertes-clignote 1s steps(2, jump-none) infinite}
+@keyframes course-alertes-clignote{
+  from{background:color-mix(in srgb, var(--az-danger) 20%, transparent)}
+  to{background:color-mix(in srgb, var(--az-danger) 8%, transparent)}
+}
+.course-alertes-titre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--az-danger)}
+.course-alertes-liste{list-style:none;margin:0;padding:0;display:grid}
+.course-alerte{display:grid;gap:var(--az-space-1);padding:var(--az-space-2) 0}
+.course-alerte + .course-alerte{border-top:1px dashed var(--az-filet)}
+.course-alerte-texte{margin:0;font-family:var(--az-font-meta);font-variant-numeric:tabular-nums;font-weight:600;color:var(--az-texte)}
+.course-alerte-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--az-space-3)}
+.course-alerte-inactif{font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
+.course-sans-alerte{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte-2)}
+
+@media (prefers-reduced-motion: reduce){
+  .course-alertes{animation:none}
+}

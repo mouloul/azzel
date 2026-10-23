@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { renderToReadableStream } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // CSS), fraîcheur TOUJOURS présente (NFR-5), note « aucun checkpoint
 // d’arrivée défini », branches d'erreur. Isolée par mocks (pattern
 // page.test.tsx) : session iam + service chrono.
+//
+// Story 5.2 — bloc alertes hors-délais : lignes intégrales clignotantes,
+// actions par ligne (tel: / libellé inactif / abandon désactivé), absence du
+// bloc quand vide, garde CSS du clignotement borné + reduced-motion.
 
 const sessionMock = vi.hoisted(() => ({
   requireRolePage: vi.fn(),
@@ -62,6 +69,22 @@ const ETAT = {
       titre: 'Scan arrivée',
       estArrivee: true,
       passages: [{ dossard: 104, horodatageReception: '2027-05-16T09:40:00.000Z' }],
+    },
+  ],
+  alertes: [
+    {
+      dossard: 101,
+      checkpointId: 'cp-km12',
+      checkpointTitre: 'Scan km 12',
+      barriereLe: '2027-05-16T10:00:00.000Z',
+      contactSecteur: '+213 555 010 203',
+    },
+    {
+      dossard: 102,
+      checkpointId: 'cp-km12',
+      checkpointTitre: 'Scan km 12',
+      barriereLe: '2027-05-16T10:00:00.000Z',
+      contactSecteur: null,
     },
   ],
   fraicheur: '2027-05-16T07:05:09.000Z',
@@ -164,5 +187,56 @@ describe('page /admin/course — rendu serveur PC course (story 5.1)', () => {
     const html = await rendu();
     expect(html).toContain('Connexion indisponible.');
     expect(html).toContain('Tableau de bord indisponible');
+  });
+});
+
+describe('page /admin/course — bloc alertes hors-délais (story 5.2)', () => {
+  it('bloc danger : lignes intégrales par alerte, tri dossard croissant, heure en attente avant montage', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('course-alertes');
+    // React insère un commentaire entre segments : « Alertes hors-délais (2) ».
+    expect(html).toMatch(/Alertes hors-délais \(<!-- -->2<!-- -->\)/);
+    // Texte intégral (UX-DR-12 : jamais la couleur seule) — l'heure locale
+    // n'est calculée qu'après montage client (emplacement --:--, calque board).
+    expect(html).toContain('⚠ Dossard 101 — pas vu à Scan km 12 depuis --:--');
+    expect(html).toContain('⚠ Dossard 102 — pas vu à Scan km 12 depuis --:--');
+    // Tri dossard croissant : 101 avant 102.
+    expect(html.indexOf('Dossard 101 — pas vu')).toBeLessThan(html.indexOf('Dossard 102 — pas vu'));
+  });
+
+  it('actions par ligne : tel: du secteur, libellé inactif sans contact, abandon désactivé « bientôt disponible »', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    // Contact renseigné (ligne 101) : lien tel: normalisé (espaces retirés).
+    expect(html).toContain('href="tel:+213555010203"');
+    expect(html).toContain('Appeler le secteur');
+    // Contact absent (ligne 102) : libellé inactif, jamais de lien mort.
+    expect(html).toContain('contact du secteur non renseigné');
+    // Abandon : bouton présent mais désactivé, libellé produit (sans numéro
+    // de story) — le disabled est ciblé sur LE bouton abandon.
+    expect(html).toMatch(
+      /<button[^>]*disabled[^>]*>Saisir l’abandon — bientôt disponible<\/button>/,
+    );
+  });
+
+  it('aucune alerte : le bloc est ABSENT, une note discrète le remplace (batterie = suivi GPS à venir)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue({ ...ETAT, alertes: [] });
+    const html = await rendu();
+    expect(html).not.toContain('course-alertes');
+    expect(html).not.toContain('pas vu à');
+    expect(html).toContain('course-sans-alerte');
+    expect(html).toContain('Aucune alerte hors-délais');
+    expect(html).toContain('suivi GPS');
+  });
+
+  it('CSS : clignotement borné (période ≥ 1 s, steps) et coupé sous prefers-reduced-motion', () => {
+    const css = readFileSync(fileURLToPath(new URL('./course.css', import.meta.url)), 'utf8');
+    // Période 1 s (≥ 1 s : ≤ 1 flash/s), deux paliers nets (steps) — espaces
+    // tolérés autour des jetons (reformatage mineur du CSS).
+    expect(css).toMatch(/animation:\s*course-alertes-clignote\s+1s\s+steps\(\s*2/);
+    // reduced-motion : animation coupée pour le bloc alertes.
+    const blocReduit = css.slice(css.indexOf('@media (prefers-reduced-motion'));
+    expect(blocReduit).toMatch(/\.course-alertes\s*\{\s*animation:\s*none/);
   });
 });

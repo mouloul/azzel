@@ -13,7 +13,12 @@ import { DbUnavailableError } from '@/modules/iam/errors';
 import { sha256Hex } from '@/modules/iam/service';
 import { readDatabaseUrl } from '@/modules/iam/env';
 
-import type { AppareilRecord, EtatCourseRecord, TerrainEvenementRecord } from './domain';
+import type {
+  AlerteHorsDelais,
+  AppareilRecord,
+  EtatCourseRecord,
+  TerrainEvenementRecord,
+} from './domain';
 import { PLAFOND_APPAREILS_PAR_ORG, calculerOffsetEstimeMs, estUuidValide } from './domain';
 import { AppareilRevokedError, PlafondAppareilsError } from './errors';
 
@@ -455,6 +460,7 @@ export function createChronoStore(sql: Sql): ChronoStore {
               enCourse: 0,
               arriveeDefinie: false,
               checkpoints: [],
+              alertes: [],
               fraicheur: null,
             };
           }
@@ -473,8 +479,14 @@ export function createChronoStore(sql: Sql): ChronoStore {
                 GROUP BY e.id, e.name, e.distance_km
                 ORDER BY e.distance_km DESC, e.id ASC
               `,
-              tx<{ id: string; titre: string; est_arrivee: boolean }[]>`
-                SELECT m.id, m.titre, m.est_arrivee
+              tx<{
+                id: string;
+                titre: string;
+                est_arrivee: boolean;
+                barriere_le: Date | null;
+                contact_secteur: string | null;
+              }[]>`
+                SELECT m.id, m.titre, m.est_arrivee, m.barriere_le, s.contact AS contact_secteur
                 FROM mission m
                 JOIN secteur s ON s.id = m.secteur_id
                 WHERE m.organisation_id = ${organisationId}
@@ -564,13 +576,56 @@ export function createChronoStore(sql: Sql): ChronoStore {
           // Arrivés = retirés RÉSOLUS ∧ passage AU checkpoint est_arrivee (∧ :
           // intersection — la formule 5.1 reste exacte : arrivés ⊆ retirés,
           // en course = retraits − abandonnés − arrivés ne descend jamais
-          // sous 0).
+          // sous 0). L'ensemble vit AU-DESSUS des alertes : un arrivé est aussi
+          // exclu du calcul d'alerte (5.2) — sa course est finie.
           const arriveeCheckpoint = checkpointRows.find((row) => row.est_arrivee);
-          let arrives = 0;
-          if (arriveeCheckpoint !== undefined) {
-            const jetonsAArrivee = jetonsParCheckpoint.get(arriveeCheckpoint.id) ?? new Set<string>();
-            arrives = [...jetonsRetires].filter((jeton) => jetonsAArrivee.has(jeton)).length;
+          const jetonsAArrivee =
+            arriveeCheckpoint !== undefined
+              ? (jetonsParCheckpoint.get(arriveeCheckpoint.id) ?? new Set<string>())
+              : new Set<string>();
+          const jetonsArrives = new Set(
+            [...jetonsRetires].filter((jeton) => jetonsAArrivee.has(jeton)),
+          );
+          const arrives = jetonsArrives.size;
+
+          // Story 5.2 — alertes hors-délais, MÊME instant que les agrégats :
+          // attendu = retiré RÉSOLU (dossard connu) et NON ARRIVÉ (passage
+          // arbitré au checkpoint est_arrivee = course finie, sécurité réglée) ;
+          // alerte si heure SERVEUR strictement APRÈS la barrière ET aucun
+          // passage arbitré au checkpoint. Barrière absente (NULL) ou future →
+          // jamais d'alerte. Le passage arbitré règle la question au polling
+          // suivant — aucune persistance.
+          const maintenant = new Date();
+          const alertes: AlerteHorsDelais[] = [];
+          for (const checkpoint of checkpointRows) {
+            if (checkpoint.barriere_le === null) {
+              continue;
+            }
+            if (maintenant.getTime() <= checkpoint.barriere_le.getTime()) {
+              continue;
+            }
+            const passes = jetonsParCheckpoint.get(checkpoint.id) ?? new Set<string>();
+            for (const jeton of jetonsRetires) {
+              // Arrivé : plus aucune alerte de sécurité, sur AUCUN checkpoint.
+              if (jetonsArrives.has(jeton)) {
+                continue;
+              }
+              const dossard = dossardParJeton.get(jeton);
+              if (dossard === undefined || passes.has(jeton)) {
+                continue;
+              }
+              alertes.push({
+                dossard,
+                checkpointId: checkpoint.id,
+                checkpointTitre: checkpoint.titre,
+                barriereLe: checkpoint.barriere_le,
+                contactSecteur: checkpoint.contact_secteur,
+              });
+            }
           }
+          alertes.sort(
+            (a, b) => a.dossard - b.dossard || a.checkpointId.localeCompare(b.checkpointId),
+          );
 
           return {
             edition: { id: edition.id, nom: edition.name },
@@ -584,6 +639,7 @@ export function createChronoStore(sql: Sql): ChronoStore {
             enCourse: jetonsRetires.size - arrives,
             arriveeDefinie: arriveeCheckpoint !== undefined,
             checkpoints,
+            alertes,
             fraicheur: fraicheurRows[0]?.fraicheur ?? null,
           };
         }),

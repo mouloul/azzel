@@ -109,6 +109,7 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
       enCourse: 0,
       arriveeDefinie: false,
       checkpoints: [],
+      alertes: [],
       fraicheur: null,
     })),
     ...overrides,
@@ -376,6 +377,15 @@ describe('story 5.1 — getEtatCourse (service PC course)', () => {
         passages: [{ dossard: 101, horodatageReception: new Date('2027-05-16T07:05:09.000Z') }],
       },
     ],
+    alertes: [
+      {
+        dossard: 101,
+        checkpointId: 'cp-1',
+        checkpointTitre: 'Scan km 12',
+        barriereLe: new Date('2027-05-16T10:00:00.000Z'),
+        contactSecteur: '+213 555 010 203',
+      },
+    ],
     fraicheur: new Date('2027-05-16T07:05:09.000Z'),
   };
 
@@ -390,6 +400,15 @@ describe('story 5.1 — getEtatCourse (service PC course)', () => {
           titre: 'Scan km 12',
           estArrivee: true,
           passages: [{ dossard: 101, horodatageReception: '2027-05-16T07:05:09.000Z' }],
+        },
+      ],
+      alertes: [
+        {
+          dossard: 101,
+          checkpointId: 'cp-1',
+          checkpointTitre: 'Scan km 12',
+          barriereLe: '2027-05-16T10:00:00.000Z',
+          contactSecteur: '+213 555 010 203',
         },
       ],
       fraicheur: '2027-05-16T07:05:09.000Z',

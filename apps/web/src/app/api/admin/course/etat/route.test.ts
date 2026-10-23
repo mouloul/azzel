@@ -63,6 +63,15 @@ const ETAT = {
       passages: [{ dossard: 101, horodatageReception: '2027-05-16T07:05:09.000Z' }],
     },
   ],
+  alertes: [
+    {
+      dossard: 101,
+      checkpointId: 'cp-1',
+      checkpointTitre: 'Scan km 12',
+      barriereLe: '2027-05-16T10:00:00.000Z',
+      contactSecteur: null,
+    },
+  ],
   fraicheur: '2027-05-16T07:05:09.000Z',
   genereA: '2027-05-16T07:05:12.000Z',
 };

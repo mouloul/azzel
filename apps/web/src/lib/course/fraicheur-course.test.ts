@@ -25,6 +25,7 @@ function etat(fraicheur: string | null): EtatCourse {
     abandones: 0,
     arriveeDefinie: true,
     checkpoints: [],
+    alertes: [],
     fraicheur,
     genereA: '2027-05-16T08:00:00.000Z',
   };
@@ -160,6 +161,23 @@ describe('interpreterReponseEtat — corps brut de GET /api/admin/course/etat', 
   it('etat absent ou null (garde == null) : échec — jamais d’état vide avalé', () => {
     expect(interpreterReponseEtat({ ok: true })).toEqual({ ok: false });
     expect(interpreterReponseEtat({ ok: true, etat: null })).toEqual({ ok: false });
+  });
+
+  it('story 5.2 (revue) — alertes absentes ou non-tableau : normalisées en [], jamais de crash de rendu', () => {
+    const sansAlertes = etat('2027-05-16T07:59:00.000Z') as { alertes?: unknown };
+    delete sansAlertes.alertes;
+    expect(interpreterReponseEtat({ ok: true, etat: sansAlertes })).toEqual({
+      ok: true,
+      etat: { ...sansAlertes, alertes: [] },
+    });
+    const etatCorrompu = {
+      ...etat('2027-05-16T07:59:00.000Z'),
+      alertes: 'oups' as unknown,
+    };
+    expect(interpreterReponseEtat({ ok: true, etat: etatCorrompu })).toEqual({
+      ok: true,
+      etat: { ...etatCorrompu, alertes: [] },
+    });
   });
 
   it('se branche directement sur appliquerResultatPolling : échec = dernier état conservé', () => {

@@ -256,6 +256,64 @@ describe('validateMissionInput — type fermé, horaires, consignes', () => {
     expect(estUuidValide('00000000-0000-0000-0000-0000000000f1x')).toBe(false);
   });
 
+  it('story 5.2 — barrière horaire : absente/vide → null, jamais d’erreur', () => {
+    expect(normalizeMissionInput(base).barriereLe).toBeNull();
+    expect(normalizeMissionInput({ ...base, barriereLe: '' }).barriereLe).toBeNull();
+    expect(normalizeMissionInput({ ...base, barriereLe: '   ' }).barriereLe).toBeNull();
+    expect(validateMissionInput(normalizeMissionInput(base)).barriereLe).toBeUndefined();
+    // Barrière valide = DANS la mission, sur un scan_checkpoint : aucune erreur.
+    expect(
+      validateMissionInput(
+        normalizeMissionInput({ ...base, barriereLe: '2027-05-16T10:00:00.000Z' }),
+      ).barriereLe,
+    ).toBeUndefined();
+    // Bornes INCLUSES : barrière == début et barrière == fin passent.
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, barriereLe: base.debutLe })).barriereLe,
+    ).toBeUndefined();
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, barriereLe: base.finLe })).barriereLe,
+    ).toBeUndefined();
+  });
+
+  it('story 5.2 — barrière NON-CHAÎNE (nombre/objet via API) : conservée brute, erreur champ (jamais de null silencieux)', () => {
+    expect(normalizeMissionInput({ ...base, barriereLe: 123 }).barriereLe).toBe('123');
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, barriereLe: 123 })).barriereLe,
+    ).toContain('date et une heure');
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, barriereLe: { iso: 'x' } })).barriereLe,
+    ).toContain('date et une heure');
+  });
+
+  it('story 5.2 — barrière mal formée / avant le début / après la fin / hors scan_checkpoint → erreurs champ', () => {
+    expect(
+      validateMissionInput(normalizeMissionInput({ ...base, barriereLe: '2027-05-16T10:00' }))
+        .barriereLe,
+    ).toContain('date et une heure');
+    expect(
+      validateMissionInput(
+        normalizeMissionInput({ ...base, barriereLe: '2027-05-16T05:00:00.000Z' }),
+      ).barriereLe,
+    ).toContain('après le début');
+    expect(
+      validateMissionInput(
+        normalizeMissionInput({ ...base, barriereLe: '2027-05-16T12:00:01.000Z' }),
+      ).barriereLe,
+    ).toContain('avant la fin');
+    expect(
+      validateMissionInput(
+        normalizeMissionInput({ ...base, type: 'accueil', barriereLe: '2027-05-16T10:00:00.000Z' }),
+      ).barriereLe,
+    ).toContain('réservée aux missions Scan checkpoint');
+    // Enveloppe : erreur champ 400 (InvalidMissionFieldsError porte barriereLe).
+    const apiError = toMissionsApiError(
+      new InvalidMissionFieldsError({ barriereLe: 'après le début' }),
+    );
+    expect(apiError.status).toBe(400);
+    expect((apiError.fields as MissionFieldErrors | undefined)?.barriereLe).toBeTruthy();
+  });
+
   it('titre manquant/trop long, secteur absent, consignes > 5000 → erreurs champ', () => {
     expect(validateMissionInput(normalizeMissionInput({ ...base, titre: '' })).titre).toContain(
       'obligatoire',
@@ -387,6 +445,7 @@ describe('createMission — validation puis store', () => {
       finLe: FIN,
       consignes: null,
       estArrivee: false,
+      barriereLe: null,
       createdAt: new Date(),
     }));
     const mission = await createMission(SESSION_ORGANISATEUR as SessionRecord, CORPS, {
@@ -396,8 +455,39 @@ describe('createMission — validation puis store', () => {
     expect(mission.couvertureLabel).toBe('Vacante');
     expect(mission.typeLabel).toBe('Accueil');
     expect(createMissionStore).toHaveBeenCalledWith(
-      expect.objectContaining({ debutLe: DEBUT, finLe: FIN, consignes: null, estArrivee: false }),
+      expect.objectContaining({
+        debutLe: DEBUT,
+        finLe: FIN,
+        consignes: null,
+        estArrivee: false,
+        barriereLe: null,
+      }),
     );
+  });
+
+  it('story 5.2 — barrière ISO convertie en Date pour le store, répercutée au summary', async () => {
+    const BARRIERE = new Date('2027-05-16T10:00:00.000Z');
+    const createMissionStore = vi.fn(async () => ({
+      id: 'mission-scan',
+      secteurId: '00000000-0000-0000-0000-00000000e5e1',
+      type: 'scan_checkpoint' as const,
+      titre: 'Scan km 12',
+      debutLe: DEBUT,
+      finLe: FIN,
+      consignes: null,
+      estArrivee: false,
+      barriereLe: BARRIERE,
+      createdAt: new Date(),
+    }));
+    const mission = await createMission(
+      SESSION_ORGANISATEUR as SessionRecord,
+      { ...CORPS, type: 'scan_checkpoint', barriereLe: '2027-05-16T10:00:00.000Z' },
+      { store: storeFactice({ createMission: createMissionStore }) },
+    );
+    expect(createMissionStore).toHaveBeenCalledWith(
+      expect.objectContaining({ barriereLe: BARRIERE }),
+    );
+    expect(mission.barriereLe).toBe('2027-05-16T10:00:00.000Z');
   });
 
   it('secteur d’une autre org → SecteurNotFoundError → 404', () => {
@@ -416,6 +506,83 @@ describe('createMission — validation puis store', () => {
     const apiError = toMissionsApiError(new AucuneEditionError());
     expect(apiError.status).toBe(409);
     expect(apiError.envelope.error.code).toBe('admin.missions.aucune_edition');
+  });
+});
+
+describe('story 5.2 — updateMission : barrière posée, modifiée puis effacée (Dates transmises au store)', () => {
+  const MISSION_ID = '00000000-0000-0000-0000-00000000e5f1';
+  const BARRIERE = new Date('2027-05-16T10:00:00.000Z');
+  const BARRIERE_DEPLACEE = new Date('2027-05-16T11:30:00.000Z');
+  const CORPS_SCAN = {
+    secteurId: '00000000-0000-0000-0000-00000000e5e1',
+    type: 'scan_checkpoint',
+    titre: 'Scan km 12',
+    debutLe: DEBUT.toISOString(),
+    finLe: FIN.toISOString(),
+  };
+
+  function storeUpdate(barriereLe: Date | null) {
+    const updateMissionStore = vi.fn(async () => ({
+      id: MISSION_ID,
+      secteurId: CORPS_SCAN.secteurId,
+      type: 'scan_checkpoint' as const,
+      titre: 'Scan km 12',
+      debutLe: DEBUT,
+      finLe: FIN,
+      consignes: null,
+      estArrivee: false,
+      barriereLe,
+      createdAt: new Date(),
+    }));
+    return { store: storeFactice({ updateMission: updateMissionStore }), updateMissionStore };
+  }
+
+  it('barrière POSÉE : l’ISO du corps devient une Date transmise au store, répercutée au summary', async () => {
+    const { store, updateMissionStore } = storeUpdate(BARRIERE);
+    const mission = await updateMission(
+      SESSION_ORGANISATEUR as SessionRecord,
+      MISSION_ID,
+      { ...CORPS_SCAN, barriereLe: BARRIERE.toISOString() },
+      { store },
+    );
+    expect(updateMissionStore).toHaveBeenCalledWith(
+      MISSION_ID,
+      expect.objectContaining({ barriereLe: BARRIERE }),
+    );
+    expect(mission.barriereLe).toBe(BARRIERE.toISOString());
+  });
+
+  it('barrière MODIFIÉE : la NOUVELLE Date remplace l’ancienne au store', async () => {
+    const { store, updateMissionStore } = storeUpdate(BARRIERE_DEPLACEE);
+    await updateMission(
+      SESSION_ORGANISATEUR as SessionRecord,
+      MISSION_ID,
+      { ...CORPS_SCAN, barriereLe: BARRIERE_DEPLACEE.toISOString() },
+      { store },
+    );
+    expect(updateMissionStore).toHaveBeenCalledWith(
+      MISSION_ID,
+      expect.objectContaining({ barriereLe: BARRIERE_DEPLACEE }),
+    );
+    expect(updateMissionStore).not.toHaveBeenCalledWith(
+      MISSION_ID,
+      expect.objectContaining({ barriereLe: BARRIERE }),
+    );
+  });
+
+  it('barrière EFFACÉE (absente du corps) : null transmis — l’alerte est désarmée explicitement', async () => {
+    const { store, updateMissionStore } = storeUpdate(null);
+    const mission = await updateMission(
+      SESSION_ORGANISATEUR as SessionRecord,
+      MISSION_ID,
+      CORPS_SCAN,
+      { store },
+    );
+    expect(updateMissionStore).toHaveBeenCalledWith(
+      MISSION_ID,
+      expect.objectContaining({ barriereLe: null }),
+    );
+    expect(mission.barriereLe).toBeNull();
   });
 });
 
@@ -493,6 +660,7 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
         finLe: FIN,
         consignes: null,
         estArrivee: false,
+        barriereLe: null,
         createdAt: new Date(),
       },
       {
@@ -504,6 +672,7 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
         finLe: new Date('2027-05-16T18:00:00.000Z'),
         consignes: null,
         estArrivee: false,
+        barriereLe: new Date('2027-05-16T14:30:00.000Z'),
         createdAt: new Date(),
       },
     ],
@@ -538,6 +707,11 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
       { volontaireId: '00000000-0000-0000-0000-0000000000b1', volontaireNom: 'Kahina' },
     ]);
     expect(state.volontaires).toEqual([{ id: 'v-1', nom: 'Kahina' }]);
+    // Story 5.2 — la barrière remonte au summary (ISO), null quand absente.
+    expect(state.secteurs[0]?.missions.map((m) => m.barriereLe)).toEqual([
+      null,
+      '2027-05-16T14:30:00.000Z',
+    ]);
   });
 
   it('volontaire : ses missions filtrées par son compte, couverture générale', async () => {

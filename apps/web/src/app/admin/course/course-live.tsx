@@ -4,6 +4,16 @@ import { formatLocalTime } from '@azzel/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
+  LIBELLE_ABANDON_A_VENIR,
+  LIBELLE_CONTACT_NON_RENSEIGNE,
+  NOTE_SANS_ALERTE,
+  lienAppelerSecteur,
+  libelleAlerte,
+  libelleDepuisAttente,
+  libelleDepuisBarriere,
+  trierAlertesCourse,
+} from '@/lib/course/alertes-course';
+import {
   appliquerResultatPolling,
   interpreterReponseEtat,
   libelleEtatCourse,
@@ -103,6 +113,55 @@ export function VueCourse({
           note={etat.abandones === 0 ? 'saisie des abandons à venir' : undefined}
         />
       </div>
+
+      {/* Story 5.2 — bloc alertes hors-délais (UX-DR-12) : clignotement CSS
+          borné 1 flash/s, désactivé sous prefers-reduced-motion — le texte
+          intégral porte l'alerte dans tous les cas. L'heure locale de la
+          barrière suit le calque board : emplacement avant montage, heure
+          client ensuite (aucun écart de fuseau masqué par l'hydratation).
+          Vide : bloc ABSENT, note discrète à la place (l'alerte batterie
+          n'existe pas avant le suivi GPS des coureurs). */}
+      {etat.alertes.length > 0 ? (
+        <section className="course-alertes" aria-labelledby="course-alertes-titre">
+          <h2 className="course-alertes-titre" id="course-alertes-titre">
+            Alertes hors-délais ({etat.alertes.length})
+          </h2>
+          <ul className="course-alertes-liste">
+            {trierAlertesCourse(etat.alertes).map((alerte) => {
+              const lien = lienAppelerSecteur(alerte.contactSecteur);
+              return (
+                <li
+                  className="course-alerte"
+                  key={`${alerte.dossard}-${alerte.checkpointId}`}
+                >
+                  <p className="course-alerte-texte">
+                    {libelleAlerte(
+                      alerte,
+                      maintenant === null
+                        ? libelleDepuisAttente()
+                        : libelleDepuisBarriere(alerte.barriereLe),
+                    )}
+                  </p>
+                  <div className="course-alerte-actions">
+                    {lien !== null ? (
+                      <a className="btn-lien" href={lien}>
+                        Appeler le secteur
+                      </a>
+                    ) : (
+                      <span className="course-alerte-inactif">{LIBELLE_CONTACT_NON_RENSEIGNE}</span>
+                    )}
+                    <button type="button" className="btn-lien" disabled>
+                      {LIBELLE_ABANDON_A_VENIR}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
+        <p className="course-sans-alerte">{NOTE_SANS_ALERTE}</p>
+      )}
 
       <div className="course-boards">
         {etat.checkpoints.length === 0 ? (

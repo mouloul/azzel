@@ -1,6 +1,6 @@
 'use client';
 
-import { formatLocalDateTime } from '@azzel/shared';
+import { formatLocalDateTime, formatLocalHeure } from '@azzel/shared';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
@@ -260,14 +260,48 @@ function SecteurForm({
 // Formulaire mission (secteur, type fermé, titre, horaires, consignes).
 // ---------------------------------------------------------------------------
 
-interface MissionFormValues {
+export interface MissionFormValues {
   secteurId: string;
   type: MissionType | '';
   titre: string;
   debutLe: string;
   finLe: string;
+  barriereLe: string;
   consignes: string;
   estArrivee: boolean;
+}
+
+/**
+ * Valeurs après changement de TYPE (story 5.2 revue) : hors scan_checkpoint,
+ * la barrière horaire et la marque arrivée n'ont pas de sens — reset
+ * IMMÉDIAT, sinon une valeur masquée partait au submit (400 invisible).
+ */
+export function valeursApresChangementType(
+  values: MissionFormValues,
+  type: MissionType | '',
+): MissionFormValues {
+  if (type === 'scan_checkpoint') {
+    return { ...values, type };
+  }
+  return { ...values, type, barriereLe: '', estArrivee: false };
+}
+
+/**
+ * Corps JSON soumis au POST/PUT (story 5.2 revue, pur et testé) : '' → null,
+ * datetime-local → ISO UTC, barriereLe et estArrivee TOUJOURS présents — le
+ * PUT est un remplacement complet, omettre un champ l'effacerait de facto.
+ */
+export function corpsMissionSoumis(values: MissionFormValues): Record<string, unknown> {
+  return {
+    secteurId: values.secteurId,
+    type: values.type,
+    titre: values.titre.trim(),
+    debutLe: datetimeLocalVersIso(values.debutLe),
+    finLe: datetimeLocalVersIso(values.finLe),
+    consignes: values.consignes.trim(),
+    estArrivee: values.estArrivee,
+    barriereLe: values.barriereLe === '' ? null : datetimeLocalVersIso(values.barriereLe),
+  };
 }
 
 function valeursMissionInitiales(
@@ -280,6 +314,7 @@ function valeursMissionInitiales(
     titre: mission?.titre ?? '',
     debutLe: mission ? isoVersDatetimeLocal(mission.debutLe) : '',
     finLe: mission ? isoVersDatetimeLocal(mission.finLe) : '',
+    barriereLe: mission?.barriereLe ? isoVersDatetimeLocal(mission.barriereLe) : '',
     consignes: mission?.consignes ?? '',
     estArrivee: mission?.estArrivee ?? false,
   };
@@ -332,18 +367,10 @@ export function MissionForm({
         {
           method: mission ? 'PUT' : 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            secteurId: values.secteurId,
-            type: values.type,
-            titre: values.titre.trim(),
-            debutLe: datetimeLocalVersIso(values.debutLe),
-            finLe: datetimeLocalVersIso(values.finLe),
-            consignes: values.consignes.trim(),
-            estArrivee: values.estArrivee,
-          }),
-          // NB : le PUT est un REMPLACEMENT COMPLET de la mission — omettre
-          // estArrivee DÉCOCHERAIT l'arrivée. L'UI envoie donc TOUJOURS le
-          // champ, même invisible (type non-scan : false par construction).
+          body: JSON.stringify(corpsMissionSoumis(values)),
+          // NB : le PUT est un REMPLACEMENT COMPLET de la mission — corpsMissionSoumis
+          // envoie donc TOUJOURS estArrivee et barriereLe, même invisibles
+          // (type non-scan : false / null par construction du reset de type).
           signal: AbortSignal.timeout(15_000),
         },
       );
@@ -424,7 +451,23 @@ export function MissionForm({
             id={`${prefix}-type`}
             name="type"
             value={values.type}
-            onChange={(event) => update('type', event.target.value as MissionType | '')}
+            onChange={(event) => {
+              const type = event.target.value as MissionType | '';
+              setValues((previous) => valeursApresChangementType(previous, type));
+              // Les erreurs des champs resetés partent avec eux (sinon une
+              // erreur masquée réapparaîtrait en revenant au type scan).
+              setFieldErrors((previous) => {
+                if (previous === null) {
+                  return previous;
+                }
+                const suivant: MissionFieldErrors = { ...previous, type: undefined };
+                if (type !== 'scan_checkpoint') {
+                  suivant.barriereLe = undefined;
+                  suivant.estArrivee = undefined;
+                }
+                return suivant;
+              });
+            }}
             aria-invalid={errorFor('type') !== null || undefined}
             aria-describedby={errorFor('type') !== null ? `${prefix}-type-erreur` : undefined}
           >
@@ -478,6 +521,27 @@ export function MissionForm({
           />
           {champErreur('finLe')}
         </div>
+        {/* Story 5.2 — la barrière horaire n'existe que pour un checkpoint :
+            au-delà d'elle, un coureur retiré non vu déclenche l'alerte PC. */}
+        {values.type === 'scan_checkpoint' ? (
+          <div className="field">
+            <label htmlFor={`${prefix}-barriereLe`}>Barrière horaire (facultative)</label>
+            <input
+              id={`${prefix}-barriereLe`}
+              name="barriereLe"
+              type="datetime-local"
+              value={values.barriereLe}
+              onChange={(event) => update('barriereLe', event.target.value)}
+              aria-invalid={errorFor('barriereLe') !== null || undefined}
+              aria-describedby={errorFor('barriereLe') !== null ? `${prefix}-barriereLe-erreur` : undefined}
+            />
+            <p className="hint">
+              Heure limite de franchissement : un coureur parti non vu à ce
+              checkpoint passé ce délai déclenche une alerte au PC course.
+            </p>
+            {champErreur('barriereLe')}
+          </div>
+        ) : null}
         <div className="field">
           <label htmlFor={`${prefix}-consignes`}>Consignes (facultatif, {MAX_CONSIGNES_LENGTH} caractères max)</label>
           <textarea
@@ -707,6 +771,9 @@ function MissionLigne({
           {mission.couvertureLabel}
         </span>
         {mission.estArrivee ? <span className="chip-meta">— arrivée</span> : null}
+        {mission.barriereLe !== null ? (
+          <span className="chip-meta mission-barriere">— barrière {formatLocalHeure(mission.barriereLe)}</span>
+        ) : null}
         <span className="meta mission-horaires">
           {formatLocalDateTime(mission.debutLe)} → {formatLocalDateTime(mission.finLe)}
         </span>

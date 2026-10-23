@@ -211,6 +211,7 @@ export const MISSION_FIELD_ORDER = [
   'titre',
   'debutLe',
   'finLe',
+  'barriereLe',
   'consignes',
   'estArrivee',
 ] as const;
@@ -228,6 +229,8 @@ export interface MissionInput {
   consignes: string | null;
   /** Story 5.1 — au plus une mission cochée par édition (garde service). */
   estArrivee: boolean;
+  /** Story 5.2 — barrière horaire du checkpoint (RFC3339 UTC) ou null. */
+  barriereLe: string | null;
 }
 
 // RFC3339 STRICT se terminant par Z : un ISO sans Z serait interprété en heure
@@ -277,7 +280,24 @@ export function normalizeMissionInput(raw: unknown): MissionInput {
     // Strict === true : toute autre valeur (absente, string, nombre) = décochée,
     // jamais de coercition truthy qui cocherait l'arrivée par accident.
     estArrivee: record.estArrivee === true,
+    // Story 5.2 — barrière facultative : vide/absent = null ; une valeur
+    // NON-CHAÎNE (nombre, objet via API) n'est JAMAIS avalée en null
+    // silencieux (qui désarmerait l'alerte) : la brute stringifiée reste et
+    // validate la rejette « date et une heure valides ».
+    barriereLe: normaliserBarriereLe(record.barriereLe),
   };
+}
+
+/** Barrière brute : null si absente/vide, chaîne sinon (stringifiée si besoin). */
+function normaliserBarriereLe(valeur: unknown): string | null {
+  if (valeur === undefined || valeur === null) {
+    return null;
+  }
+  if (typeof valeur === 'string') {
+    const trim = valeur.trim();
+    return trim.length > 0 ? trim : null;
+  }
+  return String(valeur);
 }
 
 export function validateMissionInput(input: MissionInput): MissionFieldErrors {
@@ -315,6 +335,21 @@ export function validateMissionInput(input: MissionInput): MissionFieldErrors {
   // coureur ne « franchit » pas une mission accueil. Erreur champ, jamais 500.
   if (input.estArrivee && input.type !== 'scan_checkpoint') {
     errors.estArrivee = 'La marque arrivée est réservée aux missions Scan checkpoint.';
+  }
+  // Story 5.2 — barrière horaire : facultative (null = jamais d'alerte), mais
+  // si présente : RFC3339 strict, réservée aux scan_checkpoint, DANS la
+  // mission (debutLe ≤ barriereLe ≤ finLe — une barrière hors des horaires de
+  // la mission n'a pas de sens opérationnel, bornes incluses).
+  if (input.barriereLe !== null) {
+    if (!estHorodatageValide(input.barriereLe)) {
+      errors.barriereLe = 'La barrière horaire doit être une date et une heure valides (ou rester vide).';
+    } else if (input.type !== 'scan_checkpoint') {
+      errors.barriereLe = 'La barrière horaire est réservée aux missions Scan checkpoint.';
+    } else if (debutValide && new Date(input.barriereLe).getTime() < new Date(input.debutLe).getTime()) {
+      errors.barriereLe = 'La barrière horaire doit être après le début de la mission.';
+    } else if (finValide && new Date(input.barriereLe).getTime() > new Date(input.finLe).getTime()) {
+      errors.barriereLe = 'La barrière horaire doit être avant la fin de la mission.';
+    }
   }
   return errors;
 }

@@ -232,6 +232,8 @@ export interface MissionSummary {
   finLe: string;
   consignes: string | null;
   estArrivee: boolean;
+  /** Story 5.2 — barrière horaire ISO (null = aucune alerte hors-délais). */
+  barriereLe: string | null;
   affectations: { volontaireId: string; volontaireNom: string }[];
   couverture: Couverture;
   couvertureLabel: string;
@@ -290,6 +292,7 @@ function toMissionSummary(
     finLe: mission.finLe.toISOString(),
     consignes: mission.consignes,
     estArrivee: mission.estArrivee,
+    barriereLe: mission.barriereLe !== null ? mission.barriereLe.toISOString() : null,
     affectations,
     couverture: etat,
     couvertureLabel: LIBELLES_COUVERTURE[etat],
@@ -500,6 +503,7 @@ function missionVersStoreInput(input: ReturnType<typeof normalizeMissionInput>) 
     finLe: new Date(input.finLe),
     consignes: input.consignes,
     estArrivee: input.estArrivee,
+    barriereLe: input.barriereLe !== null ? new Date(input.barriereLe) : null,
   };
 }
 

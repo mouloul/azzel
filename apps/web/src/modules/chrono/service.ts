@@ -15,6 +15,7 @@ import {
   resultatEvenement,
   type AppareilAuth,
   type AppareilRecord,
+  type AlerteHorsDelais,
   type CheckpointCourse,
   type EtatCourseRecord,
   type TerrainEvenementRecord,
@@ -233,10 +234,19 @@ export interface CheckpointCourseSerde
   passages: PassageCourseSerde[];
 }
 
-export interface EtatCourse extends Omit<EtatCourseRecord, 'checkpoints' | 'fraicheur'> {
+/** Alerte hors-délais sérialisée (story 5.2) : barrière en ISO, reste à l'identique. */
+export interface AlerteCourseSerde
+  extends Omit<AlerteHorsDelais, 'barriereLe'> {
+  barriereLe: string;
+}
+
+export interface EtatCourse
+  extends Omit<EtatCourseRecord, 'checkpoints' | 'alertes' | 'fraicheur'> {
   /** Réservé story 5.3 (saisie des abandons) — structure stable dès 5.1. */
   abandones: number;
   checkpoints: CheckpointCourseSerde[];
+  /** Recalculées à chaque état : le polling 5 s les émet et les retire. */
+  alertes: AlerteCourseSerde[];
   /** max(horodatage_reception) ISO — null = aucune donnée reçue. */
   fraicheur: string | null;
   /** Instant de génération SERVEUR (ISO), rafraîchi à chaque polling. */
@@ -253,6 +263,10 @@ function versEtatCourse(record: EtatCourseRecord, genereA: Date): EtatCourse {
         dossard: passage.dossard,
         horodatageReception: passage.horodatageReception.toISOString(),
       })),
+    })),
+    alertes: record.alertes.map((alerte) => ({
+      ...alerte,
+      barriereLe: alerte.barriereLe.toISOString(),
     })),
     fraicheur: record.fraicheur !== null ? record.fraicheur.toISOString() : null,
     genereA: genereA.toISOString(),

@@ -20,6 +20,13 @@ export function formatLocalTime(isoUtc: string, locale: string = DEFAULT_LOCALE)
   return new Intl.DateTimeFormat(locale, { timeStyle: 'medium' }).format(toDate(isoUtc));
 }
 
+/** Story 5.2 — heure locale HH:MM (barrières horaires, listes admin). */
+export function formatLocalHeure(isoUtc: string, locale: string = DEFAULT_LOCALE): string {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(
+    toDate(isoUtc),
+  );
+}
+
 export function formatLocalDateTime(isoUtc: string, locale: string = DEFAULT_LOCALE): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeStyle: 'short' }).format(
     toDate(isoUtc),

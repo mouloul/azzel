@@ -72,6 +72,20 @@ export interface PartantsEpreuve {
   total: number;
 }
 
+/**
+ * Story 5.2 — alerte hors-délais : coureur RETIRÉ (résolu) SANS passage
+ * arbitré à un checkpoint dont la barrière horaire est PASSÉE (heure serveur).
+ * Le contact du secteur de la mission remonte avec l'alerte (action
+ * « Appeler le secteur ») — résolution serveur uniquement (AD-3).
+ */
+export interface AlerteHorsDelais {
+  dossard: number;
+  checkpointId: string;
+  checkpointTitre: string;
+  barriereLe: Date;
+  contactSecteur: string | null;
+}
+
 /** Agrégats PC course, org-scopés — tout horodatage est SERVEUR (AD-3). */
 export interface EtatCourseRecord {
   edition: { id: string; nom: string } | null;
@@ -85,6 +99,8 @@ export interface EtatCourseRecord {
   /** Au plus un checkpoint d'arrivée par édition (garde service missions). */
   arriveeDefinie: boolean;
   checkpoints: CheckpointCourse[];
+  /** Attendus non passés après barrière — recalculées à chaque état (5.2). */
+  alertes: AlerteHorsDelais[];
   /** max(horodatage_reception) — null = aucune donnée reçue. */
   fraicheur: Date | null;
 }

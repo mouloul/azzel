@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { formatLocalDate, formatLocalDateTime, formatLocalTime } from './datetime';
+import { formatLocalDate, formatLocalDateTime, formatLocalHeure, formatLocalTime } from './datetime';
 
 const ORIGINAL_TZ = process.env.TZ;
 
@@ -29,6 +29,11 @@ describe.skipIf(process.platform === 'win32')('horodatages ISO 8601 UTC → affi
 
   it('affiche date et heure ensemble', () => {
     expect(formatLocalDateTime(isoUtc)).toBe('26 mars 2026 à 08:42');
+  });
+
+  it('affiche l’heure locale HH:MM (story 5.2 — barrières horaires)', () => {
+    expect(formatLocalHeure(isoUtc)).toBe('08:42');
+    expect(formatLocalHeure('2026-03-26T23:59:00.000Z')).toBe('23:59');
   });
 
   it('rejette un horodatage invalide avec un message explicite', () => {

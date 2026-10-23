@@ -72,6 +72,8 @@ export interface MissionRecord {
   finLe: Date;
   consignes: string | null;
   estArrivee: boolean;
+  /** Story 5.2 — barrière horaire du checkpoint, null = pas d'alerte. */
+  barriereLe: Date | null;
   createdAt: Date;
 }
 
@@ -118,6 +120,7 @@ export interface SauverMissionInput {
   finLe: Date;
   consignes: string | null;
   estArrivee: boolean;
+  barriereLe: Date | null;
 }
 
 /** Mission du volontaire en conflit horaire avec l'affectation en cours. */
@@ -279,6 +282,7 @@ interface MissionRow {
   fin_le: Date;
   consignes: string | null;
   est_arrivee: boolean;
+  barriere_le: Date | null;
   created_at: Date;
 }
 
@@ -292,12 +296,13 @@ interface AffectationRow {
 const SECTEUR_COLUMNS = 'id, edition_id, nom, lieu, contact, created_at';
 
 // Requête mission SANS jointure : colonnes non qualifiées possibles.
-const MISSION_COLUMNS = 'id, secteur_id, type, titre, debut_le, fin_le, consignes, est_arrivee, created_at';
+const MISSION_COLUMNS =
+  'id, secteur_id, type, titre, debut_le, fin_le, consignes, est_arrivee, barriere_le, created_at';
 
 // Requête mission AVEC jointure secteur (listMissionsEtat) : tout qualifier —
 // id/created_at existent dans les deux tables.
 const MISSION_COLUMNS_JOINT =
-  'm.id, m.secteur_id, m.type, m.titre, m.debut_le, m.fin_le, m.consignes, m.est_arrivee, m.created_at';
+  'm.id, m.secteur_id, m.type, m.titre, m.debut_le, m.fin_le, m.consignes, m.est_arrivee, m.barriere_le, m.created_at';
 
 function toSecteurRecord(row: SecteurRow): SecteurRecord {
   return {
@@ -320,6 +325,7 @@ function toMissionRecord(row: MissionRow): MissionRecord {
     finLe: row.fin_le,
     consignes: row.consignes,
     estArrivee: row.est_arrivee,
+    barriereLe: row.barriere_le,
     createdAt: row.created_at,
   };
 }
@@ -689,9 +695,9 @@ export function createMissionsStore(sql: Sql): MissionsStore {
             estArrivee: input.estArrivee,
           });
           const rows = await tx<MissionRow[]>`
-            INSERT INTO mission (organisation_id, secteur_id, type, titre, debut_le, fin_le, consignes, est_arrivee)
+            INSERT INTO mission (organisation_id, secteur_id, type, titre, debut_le, fin_le, consignes, est_arrivee, barriere_le)
             VALUES (${input.organisationId}, ${input.secteurId}, ${input.type}, ${input.titre},
-                    ${input.debutLe}, ${input.finLe}, ${input.consignes}, ${input.estArrivee})
+                    ${input.debutLe}, ${input.finLe}, ${input.consignes}, ${input.estArrivee}, ${input.barriereLe})
             RETURNING ${tx.unsafe(MISSION_COLUMNS)}
           `;
           const row = rows[0];
@@ -732,7 +738,8 @@ export function createMissionsStore(sql: Sql): MissionsStore {
               debut_le = ${input.debutLe},
               fin_le = ${input.finLe},
               consignes = ${input.consignes},
-              est_arrivee = ${input.estArrivee}
+              est_arrivee = ${input.estArrivee},
+              barriere_le = ${input.barriereLe}
             WHERE id = ${missionId} AND organisation_id = ${input.organisationId}
             RETURNING ${tx.unsafe(MISSION_COLUMNS)}
           `;

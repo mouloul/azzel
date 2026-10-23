@@ -76,6 +76,8 @@ export function appliquerResultatPolling(
  * Interprète le corps brut de GET /api/admin/course/etat (pure, testée) :
  * seul un payload { ok: true, etat: non-null objet } est accepté — ok:false,
  * etat absent ou null, payload non objet → échec (le dernier état gagne).
+ * Story 5.2 (revue) : `alertes` absent ou non-tableau (dérive serveur, proxy)
+ * est normalisé en [] — le rendu du bloc n'en meurt JAMAIS.
  * Le résultat se branche DIRECTEMENT sur appliquerResultatPolling.
  */
 export function interpreterReponseEtat(
@@ -91,5 +93,9 @@ export function interpreterReponseEtat(
   if (typeof candidat.etat !== 'object' || candidat.etat === null) {
     return { ok: false };
   }
-  return { ok: true, etat: candidat.etat as EtatCourse };
+  const etat = candidat.etat as EtatCourse & { alertes?: unknown };
+  return {
+    ok: true,
+    etat: { ...etat, alertes: Array.isArray(etat.alertes) ? etat.alertes : [] },
+  };
 }

@@ -16,7 +16,7 @@ import { withOrg } from '@/db/org-scope';
 import type { SessionRecord } from '@/modules/iam/store';
 import { createSecteur, createMission, updateMission } from '@/modules/missions/service';
 import { createMissionsStore, type MissionsStore } from '@/modules/missions/store';
-import { MissionArriveeUniqueError } from '@/modules/missions/errors';
+import { InvalidMissionFieldsError, MissionArriveeUniqueError } from '@/modules/missions/errors';
 
 import { enregistrerAppareil, getEtatCourse, synchroniserLot, verifierJetonAppareil } from './service';
 import { createChronoStore } from './store';
@@ -47,6 +47,14 @@ const JETON_A3 = jetonBase64url('course-a3');
 const JETON_A4 = jetonBase64url('course-a4');
 const JETON_A5 = jetonBase64url('course-a5');
 
+/**
+ * Story 5.2 — barrière du col PASSÉE, RELATIVE à l'horloge réelle (il y a
+ * 1 h) : aucune date fixe qui deviendrait une bombe temporelle. Semée dans
+ * beforeAll pour DÉCOUPLER les tests d'alertes entre eux (chacun trouve le
+ * checkpoint prêt, dans l'état que le test précédent a laissé).
+ */
+const BARRIERE_COL_PASSE = new Date(Date.now() - 3_600_000);
+
 function attendre(ms: number): Promise<void> {
   return new Promise((resoudre) => setTimeout(resoudre, ms));
 }
@@ -71,6 +79,8 @@ describe.skipIf(testUrls === null)(
 
     let checkpointKm12Id = '';
     let checkpointArriveeId = '';
+    /** Story 5.2 — checkpoint à barrière PASSÉE (alertes hors-délais). */
+    let checkpointColPasseId = '';
 
     /** Toutes les receptions serveur des lots syncés (pour la fraîcheur). */
     const receptions: string[] = [];
@@ -239,6 +249,26 @@ describe.skipIf(testUrls === null)(
       checkpointArriveeId = missionArrivee.id;
       expect(missionAutre.estArrivee).toBe(false);
 
+      // Story 5.2 — checkpoint col à barrière PASSÉE (il y a 1 h), SEMÉ ICI
+      // pour découpler les tests d'alertes entre eux. Horaires larges
+      // (2020 → 2100) : la barrière relative y vit toujours, bornes incluses.
+      const secteurCol = await createSecteur(organisateurSession(), {
+        nom: 'Secteur col 1200',
+        lieu: 'Col 1200',
+        contact: null,
+      }, { store: missionsStore });
+      const missionColPasse = await createMission(organisateurSession(), {
+        secteurId: secteurCol.id,
+        type: 'scan_checkpoint',
+        titre: 'Scan col passé',
+        debutLe: '2020-01-01T00:00:00.000Z',
+        finLe: '2100-01-01T00:00:00.000Z',
+        consignes: null,
+        estArrivee: false,
+        barriereLe: BARRIERE_COL_PASSE.toISOString(),
+      }, { store: missionsStore });
+      checkpointColPasseId = missionColPasse.id;
+
       volontaireA = {
         accountId: randomUUID(),
         organisationId: orgAId,
@@ -279,6 +309,7 @@ describe.skipIf(testUrls === null)(
       expect(etat.arriveeDefinie).toBe(false);
       expect(etat.fraicheur).toBeNull();
       expect(etat.checkpoints.map((c) => c.titre)).toEqual([
+        'Scan col passé',
         'Scan km 12',
         'Scan arrivée stade',
         'Scan km 30',
@@ -411,6 +442,126 @@ describe.skipIf(testUrls === null)(
         tx.unsafe('SELECT organisation_id FROM terrain_evenement'),
       )) as unknown as { organisation_id: string }[];
       expect(vus).toEqual([]);
+    });
+
+    // -----------------------------------------------------------------
+    // Story 5.2 — alertes hors-délais (barrières horaires, calcul serveur).
+    // Le col passé est SEMÉ dans beforeAll (barrière = il y a 1 h, relative à
+    // l'horloge réelle) ; le gué futur est créé avec une barrière relative
+    // (dans 1 h). Le fantôme A5 (retrait jamais résolu) et le coureur A3
+    // (jamais retiré) ne doivent JAMAIS alerter ; A1 est ARRIVÉ (passage
+    // arbitré au checkpoint est_arrivee coché plus haut) : sa course est
+    // finie, la sécurité est réglée — jamais alerté, sur aucun checkpoint.
+    // -----------------------------------------------------------------
+
+    it('story 5.2 — barrière passée + retiré non arrivé sans passage → alerte (contact du secteur joint) ; arrivé exclu, barrière future/absente, non retiré, fantôme → rien', async () => {
+      const secteurGue = await createSecteur(
+        organisateurSession(),
+        { nom: 'Secteur gué', lieu: 'Gué PK 30', contact: '+213 555 010 777' },
+        { store: missionsStore },
+      );
+      const gueFutur = await createMission(
+        organisateurSession(),
+        {
+          secteurId: secteurGue.id,
+          type: 'scan_checkpoint',
+          titre: 'Scan gué futur',
+          debutLe: '2020-01-01T00:00:00.000Z',
+          finLe: '2100-01-01T00:00:00.000Z',
+          consignes: null,
+          estArrivee: false,
+          // Futur RELATIF (dans 1 h) : aucune bombe temporelle.
+          barriereLe: new Date(Date.now() + 3_600_000).toISOString(),
+        },
+        { store: missionsStore },
+      );
+
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      // Attendus au col passé : A2 (102) SEUL — retiré résolu sans passage à
+      // CE checkpoint. Le contact du secteur de la mission remonte (null : le
+      // secteur col n'en a pas) pour l'action « Appeler le secteur ».
+      expect(etat.alertes).toEqual([
+        {
+          dossard: 102,
+          checkpointId: checkpointColPasseId,
+          checkpointTitre: 'Scan col passé',
+          barriereLe: BARRIERE_COL_PASSE.toISOString(),
+          contactSecteur: null,
+        },
+      ]);
+      // JAMAIS d'alerte : barrière future (gué), barrière absente (km12,
+      // arrivée), coureur non retiré (A3 — dossard 103), fantôme (A5 —
+      // retrait jamais résolu : pas de dossard), ARRIVÉ (A1 — dossard 101,
+      // vu au point d'arrivée 09:40 : la sécurité est réglée).
+      expect(etat.alertes.every((a) => a.checkpointId !== gueFutur.id)).toBe(true);
+      expect(etat.alertes.some((a) => a.dossard === 103)).toBe(false);
+      expect(etat.alertes.some((a) => a.dossard === 101)).toBe(false);
+    });
+
+    it('story 5.2 — déplacement de la barrière (updateMission) : l’alerte suit la NOUVELLE barrière', async () => {
+      const barriereDeplacee = new Date(Date.now() - 7_200_000);
+      await updateMission(
+        organisateurA,
+        checkpointColPasseId,
+        {
+          secteurId: (await sql<{ secteur_id: string }[]>`
+            SELECT secteur_id FROM mission WHERE id = ${checkpointColPasseId}
+          `)[0]!.secteur_id,
+          type: 'scan_checkpoint',
+          titre: 'Scan col passé',
+          debutLe: '2020-01-01T00:00:00.000Z',
+          finLe: '2100-01-01T00:00:00.000Z',
+          consignes: null,
+          estArrivee: false,
+          barriereLe: barriereDeplacee.toISOString(),
+        },
+        { store: missionsStore },
+      );
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      // A2 reste attendu au col, mais sur la barrière DÉPLACÉE (il y a 2 h).
+      expect(etat.alertes).toEqual([
+        {
+          dossard: 102,
+          checkpointId: checkpointColPasseId,
+          checkpointTitre: 'Scan col passé',
+          barriereLe: barriereDeplacee.toISOString(),
+          contactSecteur: null,
+        },
+      ]);
+    });
+
+    it('story 5.2 — le passage arbitré règle l’alerte : elle disparaît à l’état suivant', async () => {
+      await attendre(10);
+      await sync('course-appareil-col', [
+        passage('course-appareil-col', JETON_A2, checkpointColPasseId, '2027-05-16T11:00:00.000Z'),
+      ]);
+      const etat = await getEtatCourse(organisateurA, { store: chronoStore });
+      // A2 vu au col → son alerte part ; A1 est arrivé (exclu d'office).
+      expect(etat.alertes).toEqual([]);
+    });
+
+    it('story 5.2 — garde domaine en base : barrière avant le début refusée AVANT le SQL (erreur champ)', async () => {
+      const secteur = await createSecteur(
+        organisateurSession(),
+        { nom: 'Secteur garde barrière', lieu: 'PK 42', contact: null },
+        { store: missionsStore },
+      );
+      await expect(
+        createMission(
+          organisateurSession(),
+          {
+            secteurId: secteur.id,
+            type: 'scan_checkpoint',
+            titre: 'Scan incohérent',
+            debutLe: '2027-05-16T08:00:00.000Z',
+            finLe: '2027-05-16T18:00:00.000Z',
+            consignes: null,
+            estArrivee: false,
+            barriereLe: '2027-05-16T07:00:00.000Z',
+          },
+          { store: missionsStore },
+        ),
+      ).rejects.toBeInstanceOf(InvalidMissionFieldsError);
     });
   },
 );

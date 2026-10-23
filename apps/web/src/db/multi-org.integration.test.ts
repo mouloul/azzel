@@ -329,6 +329,7 @@ describe.skipIf(testUrls === null)(
           finLe: new Date('2027-05-16T12:00:00.000Z'),
           consignes: null,
           estArrivee: false,
+          barriereLe: null,
         });
         missionsParOrg.set(orgId, mission.id);
         const affectation = await missionsStore.affecter({
