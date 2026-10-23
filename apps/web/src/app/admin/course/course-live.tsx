@@ -23,12 +23,26 @@ import {
   type ValeursFormulaireAbandon,
 } from '@/lib/course/abandon-form';
 import {
+  ariaLabelAnnulation,
+  aDesErreursAnnulation,
+  corpsAnnulationSoumis,
+  validerFormulaireAnnulation,
+  valeursAnnulationInitiales,
+  type CibleAnnulation,
+  type ValeursFormulaireAnnulation,
+} from '@/lib/course/annulation-form';
+import {
   appliquerResultatPolling,
   interpreterReponseEtat,
   libelleEtatCourse,
   type EtatPolling,
 } from '@/lib/course/fraicheur-course';
-import { MAX_LIEU_ABANDON_LENGTH, type AbandonFieldErrors } from '@/modules/chrono/domain';
+import {
+  MAX_LIEU_ABANDON_LENGTH,
+  MAX_MOTIF_ANNULATION_LENGTH,
+  type AbandonFieldErrors,
+  type AnnulationFieldErrors,
+} from '@/modules/chrono/domain';
 import type { EtatCourse } from '@/modules/chrono/service';
 
 // Story 5.1 — tableau de bord live du PC course (UX-DR-12, NFR-5) : état
@@ -43,6 +57,12 @@ import type { EtatCourse } from '@/modules/chrono/service';
 // lignes d'alerte (formulaire PRÉ-REMPLI du dossard alerté). Router-less :
 // state local, POST /api/admin/course/abandon, re-poll IMMÉDIAT — les
 // compteurs (Abandonnés, En course) et les alertes suivent au passage.
+//
+// Story 5.4 — annulation auditable : chaque ligne de board porte « … »
+// (survol/focus) → dialogue inline de confirmation (motif OBLIGATOIRE) →
+// POST /api/admin/course/annulation, re-poll IMMÉDIAT — la ligne disparaît
+// au polling suivant, compteurs/alertes recalculés. Un SEUL dialogue à la
+// fois (abandon OU annulation, verrou d'envoi partagé).
 
 const POLLING_MS = 5_000;
 const HORLOGE_MS = 1_000;
@@ -50,6 +70,8 @@ const TIMEOUT_FETCH_MS = 10_000;
 const TIMEOUT_ENVOI_MS = 15_000;
 /** Bandeau succès « Abandon enregistré » : expire après ~8 s (timeout nettoyé). */
 const SUCCES_ABANDON_MS = 8_000;
+/** Story 5.4 — alias sémantique : même durée, dit ce qu'il mesure (dialogue). */
+const SUCCES_DIALOGUE_MS = SUCCES_ABANDON_MS;
 /** Heure de board avant le montage client (jamais l'heure du serveur). */
 const HEURE_ATTENTE = '--:--:--';
 
@@ -88,10 +110,10 @@ function Carte({
   );
 }
 
-/** Lit l'enveloppe d'erreur d'une réponse API (champs abandon compris). */
-async function lireErreur(
+/** Lit l'enveloppe d'erreur d'une réponse API (champs du formulaire compris). */
+async function lireErreur<TFields extends object = AbandonFieldErrors>(
   response: Response,
-): Promise<{ message: string; action: string; fields?: AbandonFieldErrors } | null> {
+): Promise<{ message: string; action: string; fields?: TFields } | null> {
   let payload: unknown = null;
   try {
     payload = await response.json();
@@ -105,13 +127,22 @@ async function lireErreur(
   if (typeof error?.message !== 'string' || typeof error?.action !== 'string') {
     return ERREUR_RESEAU;
   }
-  const fields =
+  const brut =
     'fields' in payload &&
     typeof (payload as { fields?: unknown }).fields === 'object' &&
     (payload as { fields?: unknown }).fields !== null
-      ? ((payload as { fields: AbandonFieldErrors }).fields ?? undefined)
+      ? ((payload as { fields: TFields }).fields ?? undefined)
       : undefined;
-  return { message: error.message, action: error.action, fields };
+  return { message: error.message, action: error.action, fields: brut };
+}
+
+/** Lien « Se reconnecter » (401/403) : nouvel onglet, la saisie en cours n'est pas perdue. */
+function LienReconnexion(): React.ReactNode {
+  return (
+    <a className="btn-lien" href="/connexion" target="_blank" rel="noopener">
+      Se reconnecter
+    </a>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -350,9 +381,243 @@ export function FormulaireAbandon({
                 {' '}
                 {/* Nouvel onglet : la saisie en cours n'est pas perdue par
                     la navigation vers /connexion. */}
-                <a className="btn-lien" href="/connexion" target="_blank" rel="noopener">
-                  Se reconnecter
-                </a>
+                <LienReconnexion />
+              </>
+            )}
+          </p>
+        </div>
+      )}
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.4 — dialogue inline d'annulation auditable (gabarit abandon 5.3) :
+// motif OBLIGATOIRE (1–500), confirmation explicite de la cible (dossard à
+// checkpoint + HEURE locale du passage), avertissement définitif assumé.
+// role="dialog" aria-modal : Escape écouté au DOCUMENT (la fermeture ne
+// dépend PAS du focus interne — un fieldset disabled ne coupe jamais la
+// sortie) et le Tab reste PIÉGÉ dans le dialogue. Le passage annulé reste
+// archivé (AD-8) : le dialogue le DIT — le geste du PC est une correction
+// tracée, jamais une suppression. Succès (« annulé » OU « déjà annulé »,
+// idempotent) remonté au parent qui re-polle immédiatement ; les refus
+// serveur (409 retrait, 404 introuvable, 400 champ — même l'erreur
+// evenementId, rendue et focalisée) s'affichent dans la boîte d'erreur.
+// ---------------------------------------------------------------------------
+
+export function DialogueAnnulation({
+  cible,
+  maintenant,
+  onFerme,
+  onEnvoiChange,
+  onAnnule,
+}: {
+  cible: CibleAnnulation;
+  /** Horloge client — null au rendu serveur : l'heure locale n'est calculée qu'après montage (calque boards). */
+  maintenant: Date | null;
+  onFerme: () => void;
+  /** Signale le début/fin d'un envoi au parent (verrou d'ouverture). */
+  onEnvoiChange: (enCours: boolean) => void;
+  /** Succès : dossard confirmé (repli sur la cible) + drapeau idempotent. */
+  onAnnule: (resultat: { dossard: number | null; dejaAnnule: boolean }) => void;
+}) {
+  const prefix = 'annulation';
+  const [values, setValues] = useState<ValeursFormulaireAnnulation>(valeursAnnulationInitiales);
+  const [fieldErrors, setFieldErrors] = useState<AnnulationFieldErrors | null>(null);
+  const [serverError, setServerError] = useState<{ message: string; action: string } | null>(null);
+  const [reconnect, setReconnect] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  // Escape au NIVEAU DOCUMENT : la fermeture ne dépend d'AUCUN focus interne
+  // (les keydown d'un fieldset disabled ne bouillonnent pas — écouter le
+  // formulaire y serait sourd). Le dialogue ouvert = composant monté, le
+  // nettoyage retire l'écoute à la fermeture.
+  useEffect(() => {
+    const surTouche = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onFerme();
+      }
+    };
+    document.addEventListener('keydown', surTouche);
+    return () => document.removeEventListener('keydown', surTouche);
+  }, [onFerme]);
+
+  /** aria-modal : le Tab CYCLE dans le dialogue (premier ⇄ dernier focusable). */
+  function onKeyDown(event: KeyboardEvent<HTMLFormElement>): void {
+    if (event.key !== 'Tab') {
+      return;
+    }
+    const focusables = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]',
+      ),
+    );
+    if (focusables.length === 0) {
+      return;
+    }
+    const premier = focusables[0] as HTMLElement;
+    const dernier = focusables[focusables.length - 1] as HTMLElement;
+    const actif = document.activeElement;
+    if (event.shiftKey && (actif === premier || !event.currentTarget.contains(actif))) {
+      event.preventDefault();
+      dernier.focus();
+    } else if (!event.shiftKey && (actif === dernier || !event.currentTarget.contains(actif))) {
+      event.preventDefault();
+      premier.focus();
+    }
+  }
+
+  /** Focus du premier élément en erreur : champ motif, sinon l'erreur de cible. */
+  function focusErreur(): void {
+    (document.getElementById(`${prefix}-motif`) ?? document.getElementById(`${prefix}-evenement-erreur`))
+      ?.focus();
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    setServerError(null);
+    setReconnect(false);
+    // Validation locale d'abord : motif obligatoire 1–500 (mêmes règles que
+    // le serveur), retour immédiat + focus du champ.
+    const erreurs = validerFormulaireAnnulation(cible, values);
+    if (aDesErreursAnnulation(erreurs)) {
+      setFieldErrors(erreurs);
+      focusErreur();
+      return;
+    }
+    setPending(true);
+    onEnvoiChange(true);
+    try {
+      const response = await fetch('/api/admin/course/annulation', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(corpsAnnulationSoumis(cible, values)),
+        signal: AbortSignal.timeout(TIMEOUT_ENVOI_MS),
+      });
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          setReconnect(true);
+        }
+        const erreur = await lireErreur<AnnulationFieldErrors>(response);
+        if (erreur !== null) {
+          setServerError({ message: erreur.message, action: erreur.action });
+          if (erreur.fields !== undefined) {
+            setFieldErrors(erreur.fields);
+            focusErreur();
+          }
+        } else {
+          setServerError(ERREUR_RESEAU);
+        }
+        return;
+      }
+      // Garde du payload de succès (corps null/non-objet, dossard aberrant) :
+      // repli sur la cible du board — dossard de la ligne cliquée, jamais
+      // « dossard 0/NaN ». Idem pour le drapeau idempotent (défaut : annulé).
+      const payload: unknown = await response.json().catch(() => null);
+      const recu =
+        typeof payload === 'object' && payload !== null
+          ? (payload as { annulation?: { dossard?: unknown; dejaAnnule?: unknown } }).annulation
+          : undefined;
+      const dossard =
+        typeof recu?.dossard === 'number' && Number.isInteger(recu.dossard) && recu.dossard >= 1
+          ? recu.dossard
+          : cible.dossard;
+      onAnnule({ dossard, dejaAnnule: recu?.dejaAnnule === true });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        setServerError(ERREUR_DELAI);
+      } else {
+        setServerError(ERREUR_RESEAU);
+      }
+    } finally {
+      onEnvoiChange(false);
+      setPending(false);
+    }
+  }
+
+  const erreurMotif = typeof fieldErrors?.motif === 'string' ? fieldErrors.motif : null;
+  const erreurEvenement =
+    typeof fieldErrors?.evenementId === 'string' ? fieldErrors.evenementId : null;
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      className="course-annulation"
+      onKeyDown={onKeyDown}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Annuler un passage"
+    >
+      <fieldset className="fieldset" disabled={pending}>
+        <legend>Annuler un passage</legend>
+        <p className="course-annulation-cible">
+          Passage dossard {cible.dossard} à {cible.checkpointTitre} —{' '}
+          {/* Heure CLIENT-ONLY (calque boards) : avant montage, emplacement
+              d'attente — aucun écart de fuseau masqué par l'hydratation. */}
+          {maintenant === null ? HEURE_ATTENTE : formatLocalTime(cible.horodatageReception)}
+        </p>
+        <p className="hint" id={`${prefix}-archive-aide`}>
+          Opération définitive : aucun retour arrière. Le passage reste archivé
+          (audit) : il disparaît des boards et des compteurs, le classement est
+          recalculé. Ce geste est tracé (auteur, heure, motif).
+        </p>
+        {erreurEvenement !== null && (
+          <p id={`${prefix}-evenement-erreur`} className="field-error" tabIndex={-1}>
+            {erreurEvenement}
+          </p>
+        )}
+        <div className="field">
+          <label htmlFor={`${prefix}-motif`}>Motif (obligatoire)</label>
+          <textarea
+            id={`${prefix}-motif`}
+            name="motif"
+            rows={3}
+            value={values.motif}
+            maxLength={MAX_MOTIF_ANNULATION_LENGTH}
+            placeholder="Mauvais scan du dossard voisin, doublon appareil…"
+            autoFocus
+            onChange={(event) => {
+              setValues({ motif: event.target.value });
+              setFieldErrors((previous) =>
+                previous && typeof previous.motif === 'string' ? { ...previous, motif: undefined } : previous,
+              );
+            }}
+            aria-invalid={erreurMotif !== null || undefined}
+            aria-describedby={
+              erreurMotif !== null
+                ? `${prefix}-archive-aide ${prefix}-motif-erreur`
+                : `${prefix}-archive-aide`
+            }
+          />
+          {erreurMotif !== null && (
+            <p id={`${prefix}-motif-erreur`} className="field-error">
+              {erreurMotif}
+            </p>
+          )}
+        </div>
+      </fieldset>
+      <div className="course-abandon-actions">
+        <button type="submit" className="btn-action" disabled={pending}>
+          {pending ? 'Annulation…' : 'Annuler ce passage'}
+        </button>
+        <button type="button" className="btn-contour" onClick={onFerme}>
+          Annuler
+        </button>
+      </div>
+      {serverError !== null && (
+        <div role="alert" aria-live="assertive" className="error-box">
+          <p className="error-message">{serverError.message}</p>
+          <p className="error-action">
+            {serverError.action}
+            {reconnect && (
+              <>
+                {' '}
+                <LienReconnexion />
               </>
             )}
           </p>
@@ -368,6 +633,7 @@ export function VueCourse({
   enEchec,
   maintenant,
   onOuvrirAbandon,
+  onOuvrirAnnulation,
   children,
 }: {
   etat: EtatCourse;
@@ -376,6 +642,8 @@ export function VueCourse({
   maintenant: Date | null;
   /** Story 5.3 — ouvre le formulaire d'abandon (dossard prérempli depuis une alerte). */
   onOuvrirAbandon: (dossard: number | null) => void;
+  /** Story 5.4 — ouvre le dialogue d'annulation de la ligne de board cliquée. */
+  onOuvrirAnnulation: (cible: CibleAnnulation) => void;
   /** Bloc formulaire d'abandon — rendu côté client uniquement (jamais en SSR). */
   children?: React.ReactNode;
 }) {
@@ -511,10 +779,7 @@ export function VueCourse({
               ) : (
                 <ul className="course-board-liste">
                   {checkpoint.passages.map((passage) => (
-                    <li
-                      className="course-board-ligne"
-                      key={`${passage.dossard}-${passage.horodatageReception}`}
-                    >
+                    <li className="course-board-ligne" key={passage.evenementId}>
                       <span className="course-dossard">{passage.dossard}</span>
                       {/* Heure CLIENT-ONLY (calque de l'horloge fraîcheur) :
                           le serveur rend un emplacement, l'heure locale n'est
@@ -525,6 +790,29 @@ export function VueCourse({
                           ? HEURE_ATTENTE
                           : formatLocalTime(passage.horodatageReception)}
                       </span>
+                      {/* Story 5.4 — la ligne devient ACTIONNABLE : « … »
+                          discret (visible au survol ET au focus clavier),
+                          aria-label complet — la cible se porte à elle-même.
+                          evenementId = l'événement ARBITRÉ qui fait foi sur
+                          cette ligne, jamais un doublon archivé. */}
+                      <button
+                        type="button"
+                        className="course-ligne-annuler"
+                        aria-label={ariaLabelAnnulation({
+                          dossard: passage.dossard,
+                          checkpointTitre: checkpoint.titre,
+                        })}
+                        onClick={() =>
+                          onOuvrirAnnulation({
+                            evenementId: passage.evenementId,
+                            dossard: passage.dossard,
+                            checkpointTitre: checkpoint.titre,
+                            horodatageReception: passage.horodatageReception,
+                          })
+                        }
+                      >
+                        …
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -549,8 +837,29 @@ export function CourseLive({ etatInitial }: { etatInitial: EtatCourse }) {
   const [abandon, setAbandon] = useState<{ ouverture: number; dossard: number | null } | null>(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [succesAbandon, setSuccesAbandon] = useState<{ dossard: number | null } | null>(null);
+  // Story 5.4 — dialogue d'annulation : ouvert côté client uniquement depuis
+  // une ligne de board (même contrat de remontée que l'abandon).
+  const [annulation, setAnnulation] = useState<{ ouverture: number; cible: CibleAnnulation } | null>(
+    null,
+  );
+  const [succesAnnulation, setSuccesAnnulation] = useState<{
+    dossard: number | null;
+    dejaAnnule: boolean;
+  } | null>(null);
   const ouvertureSuivante = useRef(0);
   const minuterieSucces = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Miroirs ref des surfaces ouvertes : la réponse d'un envoi peut revenir
+  // APRÈS fermeture/remplacement du dialogue — le numéro d'ouverture est
+  // comparé AU MOMENT DU RETOUR (calque verrou abandon), un succès tardif
+  // n'agit QUE sur le dialogue encore actif.
+  const abandonRef = useRef(abandon);
+  const annulationRef = useRef(annulation);
+  useEffect(() => {
+    abandonRef.current = abandon;
+  }, [abandon]);
+  useEffect(() => {
+    annulationRef.current = annulation;
+  }, [annulation]);
 
   const rafraichir = useCallback(async () => {
     try {
@@ -587,6 +896,8 @@ export function CourseLive({ etatInitial }: { etatInitial: EtatCourse }) {
       }
       effacerMinuterieSucces();
       setSuccesAbandon(null);
+      setSuccesAnnulation(null);
+      setAnnulation(null);
       ouvertureSuivante.current += 1;
       setAbandon({ ouverture: ouvertureSuivante.current, dossard });
     },
@@ -598,18 +909,66 @@ export function CourseLive({ etatInitial }: { etatInitial: EtatCourse }) {
   }, []);
 
   // Succès : bandeau « Abandon enregistré — dossard N » (expiré après ~8 s,
-  // minuterie nettoyée) + re-poll IMMÉDIAT. La fermeture ne vaut QUE pour le
-  // formulaire encore à l'écran (numéro d'ouverture comparé) : un succès
-  // retardé d'un envoi annulé ne referme JAMAIS une ouverture plus récente.
+  // minuterie nettoyée) + re-poll IMMÉDIAT. Le bandeau n'est posé QUE si SON
+  // formulaire est encore la surface active (numéro d'ouverture comparé au
+  // retour) : un succès retardé ne referme JAMAIS une ouverture plus récente
+  // et ne surgit pas pendant un dialogue d'annulation ouvert entre-temps.
   const abandonEnregistre = useCallback(
     (ouverture: number, dossard: number | null) => {
+      // Le re-poll reste universel : l'écriture a eu lieu côté serveur,
+      // l'état doit la refléter au plus vite.
+      void rafraichir();
+      if (abandonRef.current?.ouverture !== ouverture) {
+        return;
+      }
       effacerMinuterieSucces();
-      setAbandon((courant) =>
-        courant !== null && courant.ouverture === ouverture ? null : courant,
-      );
+      setAbandon(null);
       setSuccesAbandon({ dossard });
       minuterieSucces.current = setTimeout(() => setSuccesAbandon(null), SUCCES_ABANDON_MS);
+    },
+    [effacerMinuterieSucces, rafraichir],
+  );
+
+  // Story 5.4 — ouverture du dialogue d'annulation depuis une ligne de
+  // board : même verrou d'envoi, UN seul dialogue à la fois (l'abandon
+  // ouvert est remplacé).
+  const ouvrirAnnulation = useCallback(
+    (cible: CibleAnnulation) => {
+      if (envoiEnCours) {
+        return;
+      }
+      effacerMinuterieSucces();
+      setSuccesAbandon(null);
+      setSuccesAnnulation(null);
+      setAbandon(null);
+      ouvertureSuivante.current += 1;
+      setAnnulation({ ouverture: ouvertureSuivante.current, cible });
+    },
+    [envoiEnCours, effacerMinuterieSucces],
+  );
+
+  const fermerAnnulation = useCallback(() => {
+    setAnnulation(null);
+  }, []);
+
+  // Succès : bandeau « Passage annulé — dossard N » (ou « déjà annulé » —
+  // idempotent, même succès) + re-poll IMMÉDIAT : la ligne disparaît et les
+  // compteurs/alertes se recalculent au passage. Le bandeau n'est posé QUE
+  // si SON dialogue est encore la surface active (numéro d'ouverture comparé
+  // au retour) : une réponse tardive après fermeture/remplacement (abandon
+  // ouvert entre-temps) est ignorée.
+  const passageAnnule = useCallback(
+    (ouverture: number, resultat: { dossard: number | null; dejaAnnule: boolean }) => {
+      // Le re-poll reste universel : l'annulation a eu lieu côté serveur,
+      // le board doit la refléter au plus vite.
       void rafraichir();
+      if (annulationRef.current?.ouverture !== ouverture) {
+        return;
+      }
+      effacerMinuterieSucces();
+      setAnnulation(null);
+      setSuccesAnnulation(resultat);
+      minuterieSucces.current = setTimeout(() => setSuccesAnnulation(null), SUCCES_DIALOGUE_MS);
     },
     [effacerMinuterieSucces, rafraichir],
   );
@@ -654,6 +1013,7 @@ export function CourseLive({ etatInitial }: { etatInitial: EtatCourse }) {
       enEchec={polling.enEchec}
       maintenant={maintenant}
       onOuvrirAbandon={ouvrirAbandon}
+      onOuvrirAnnulation={ouvrirAnnulation}
     >
       {abandon !== null ? (
         <FormulaireAbandon
@@ -663,11 +1023,30 @@ export function CourseLive({ etatInitial }: { etatInitial: EtatCourse }) {
           onEnvoiChange={setEnvoiEnCours}
           onEnregistre={(dossard) => abandonEnregistre(abandon.ouverture, dossard)}
         />
+      ) : annulation !== null ? (
+        <DialogueAnnulation
+          key={annulation.ouverture}
+          cible={annulation.cible}
+          maintenant={maintenant}
+          onFerme={fermerAnnulation}
+          onEnvoiChange={setEnvoiEnCours}
+          onAnnule={(resultat) => passageAnnule(annulation.ouverture, resultat)}
+        />
       ) : succesAbandon !== null ? (
         <p className="course-abandon-succes" role="status">
           {succesAbandon.dossard !== null
             ? `Abandon enregistré — dossard ${succesAbandon.dossard}`
             : 'Abandon enregistré'}
+        </p>
+      ) : succesAnnulation !== null ? (
+        <p className="course-dialogue-succes" role="status">
+          {succesAnnulation.dossard !== null
+            ? succesAnnulation.dejaAnnule
+              ? `Passage déjà annulé — dossard ${succesAnnulation.dossard}`
+              : `Passage annulé — dossard ${succesAnnulation.dossard}`
+            : succesAnnulation.dejaAnnule
+              ? 'Passage déjà annulé'
+              : 'Passage annulé'}
         </p>
       ) : null}
     </VueCourse>

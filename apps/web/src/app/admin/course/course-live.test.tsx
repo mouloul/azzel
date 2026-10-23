@@ -6,8 +6,14 @@ import { describe, expect, it } from 'vitest';
 // VALEUR (identifiant stable) ≠ libellé affiché, ids des quatre champs,
 // préremplissage du dossard depuis une ligne d'alerte, aria-invalid absent
 // sans erreur, autofocus sur le premier champ.
+//
+// Story 5.4 — rendu serveur du dialogue inline d'annulation (gabarit
+// abandon) : role dialog aria-modal, cible explicite (dossard + checkpoint +
+// heure en attente avant montage), avertissement définitif assumé, textarea
+// motif OBLIGATOIRE relié à l'aide d'archivage par aria-describedby,
+// aria-invalid absent sans erreur, autofocus.
 
-import { FormulaireAbandon } from './course-live';
+import { DialogueAnnulation, FormulaireAbandon } from './course-live';
 import { LIBELLES_MOTIF_ABANDON, MOTIFS_ABANDON } from '@/modules/chrono/domain';
 
 async function rendu(): Promise<string> {
@@ -64,5 +70,74 @@ describe('FormulaireAbandon — rendu serveur (story 5.3)', () => {
     // L'input heure porte l'aide en aria-describedby dès l'ouverture (l'éventuel
     // id d'erreur viendra s'y AJOUTER, jamais le remplacer).
     expect(html).toMatch(/<input id="abandon-heure"[^>]*aria-describedby="abandon-heure-aide"/);
+  });
+});
+
+describe('DialogueAnnulation — rendu serveur (story 5.4)', () => {
+  const CIBLE = {
+    evenementId: '22222222-3333-4222-8222-222222222222',
+    dossard: 101,
+    checkpointTitre: 'Scan km 12',
+    horodatageReception: '2027-05-16T07:05:09.000Z',
+  };
+
+  async function renduAnnulation(): Promise<string> {
+    const flux = await renderToReadableStream(
+      <DialogueAnnulation
+        cible={CIBLE}
+        maintenant={null}
+        onFerme={() => undefined}
+        onEnvoiChange={() => undefined}
+        onAnnule={() => undefined}
+      />,
+    );
+    return await new Response(flux).text();
+  }
+
+  it('role dialog aria-modal + cible : passage dossard @ checkpoint, heure en ATTENTE avant montage (calque boards)', async () => {
+    const html = await renduAnnulation();
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('Annuler un passage');
+    // React insère des commentaires entre segments : les MORCEAUX de la
+    // cible sont assertés séparément — heure locale NON calculée au rendu
+    // serveur (emplacement d'attente, jamais l'heure du serveur).
+    expect(html).toContain('course-annulation-cible');
+    expect(html).toContain('Passage dossard');
+    expect(html).toContain('101');
+    expect(html).toContain('Scan km 12');
+    expect(html).toContain('--:--:--');
+  });
+
+  it('avertissement définitif assumé + archivage dit (AD-8)', async () => {
+    const html = await renduAnnulation();
+    expect(html).toContain('Opération définitive : aucun retour arrière');
+    expect(html).toContain('reste archivé');
+    expect(html).toContain('tracé');
+  });
+
+  it('un seul champ : textarea motif avec id/label stables, OBLIGATOIRE, autofocus', async () => {
+    const html = await renduAnnulation();
+    expect(html).toContain('id="annulation-motif"');
+    expect(html).toContain('for="annulation-motif"');
+    expect(html).toContain('Motif (obligatoire)');
+    expect(html).toContain('<textarea');
+    expect(html).toMatch(/id="annulation-motif"[^>]*autofocus/);
+  });
+
+  it('l’aide d’archivage TOUJOURS reliée au textarea par aria-describedby (erreur comprise)', async () => {
+    const html = await renduAnnulation();
+    expect(html).toContain('id="annulation-archive-aide"');
+    expect(html).toMatch(
+      /<textarea id="annulation-motif"[^>]*aria-describedby="annulation-archive-aide"/,
+    );
+  });
+
+  it('sans erreur : aucun aria-invalid ni erreur de cible rendus ; actions confirmer/annuler', async () => {
+    const html = await renduAnnulation();
+    expect(html).not.toContain('aria-invalid');
+    expect(html).not.toContain('annulation-evenement-erreur');
+    expect(html).toContain('Annuler ce passage');
+    expect(html).toContain('>Annuler</button>');
   });
 });

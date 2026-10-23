@@ -51,8 +51,13 @@ export interface TerrainEvenementRecord {
 // Story 5.1 — agrégats du tableau de bord PC course (lecture seule, AD-3).
 // ---------------------------------------------------------------------------
 
-/** Ligne de board UX-DR-12 : un passage ARBITRÉ (premier reçu par coureur×checkpoint). */
+/**
+ * Ligne de board UX-DR-12 : un passage ARBITRÉ (premier reçu non annulé par
+ * coureur×checkpoint). evenementId = cible de l'annulation auditable (5.4) :
+ * l'événement qui FAIT FOI sur cette ligne, jamais un doublon archivé.
+ */
 export interface PassageArbitre {
+  evenementId: string;
   dossard: number;
   horodatageReception: Date;
 }
@@ -170,6 +175,19 @@ export interface AbandonRecord {
 }
 
 /**
+ * Story 5.4 — annulation rendue par le store : l'événement visé (INTACT en
+ * base) + le dossard/checkpoint résolus pour le message du PC, et le
+ * drapeau idempotent (UNIQUE evenement_id : un rejeu est « déjà annulé »).
+ */
+export interface AnnulationResultat {
+  /** true = l'annulation existait DÉJÀ (rejeu) : succès, pas d'erreur. */
+  dejaAnnule: boolean;
+  evenementId: string;
+  dossard: number;
+  checkpointTitre: string;
+}
+
+/**
  * Normalise un corps de saisie brut (API) : dossard entier (nombre ou chaîne
  * de chiffres — toute autre forme reste null et valide en erreur champ),
  * motif hors liste fermée → null (jamais avali en « autre » silencieux),
@@ -232,6 +250,67 @@ export function validerSaisieAbandon(
 }
 
 export function hasAbandonFieldErrors(errors: AbandonFieldErrors): boolean {
+  return Object.values(errors).some((message) => typeof message === 'string');
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.4 — annulation auditable des passages (AD-8). L'événement terrain
+// reste INTACT : l'annulation est un ÉVÉNEMENT SÉPARÉ (table annulation,
+// append-only, UNIQUE evenement_id) portée par les lectures arbitrées via
+// NOT EXISTS — le ré-arbitrage « second fait foi » est en lecture, jamais en
+// réécriture. V1 : seuls les PASSAGES sont annulables (garde store).
+// ---------------------------------------------------------------------------
+
+/** Motif libre borné (CHECK SQL 0029 symétrique) : 1–500 caractères. */
+export const MAX_MOTIF_ANNULATION_LENGTH = 500;
+
+export const ANNULATION_FIELD_ORDER = ['evenementId', 'motif'] as const;
+
+export type AnnulationField = (typeof ANNULATION_FIELD_ORDER)[number];
+
+export type AnnulationFieldErrors = Partial<Record<AnnulationField, string>>;
+
+/** Saisie normalisée : identifiant d'événement brut, motif trimé. */
+export interface SaisieAnnulationInput {
+  evenementId: string | null;
+  motif: string;
+}
+
+/**
+ * Normalise un corps d'annulation brut (API) : evenementId conservé trimé
+ * (la forme UUID est jugée par la validation), motif trimé — la borne
+ * 1–500 vit dans validerSaisieAnnulation.
+ */
+export function normaliserSaisieAnnulation(raw: unknown): SaisieAnnulationInput {
+  const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const evenementId = typeof record.evenementId === 'string' ? record.evenementId.trim() : '';
+  const motif = typeof record.motif === 'string' ? record.motif.trim() : '';
+  return {
+    evenementId: evenementId.length > 0 ? evenementId : null,
+    motif,
+  };
+}
+
+/**
+ * Validation de forme de l'annulation (mêmes règles client et serveur,
+ * vouvoiement PC) : evenementId requis (un candidat non-UUID reste au
+ * service — introuvable par construction, jamais envoyé au SQL), motif
+ * 1–500 (bornes du CHECK SQL 0029).
+ */
+export function validerSaisieAnnulation(input: SaisieAnnulationInput): AnnulationFieldErrors {
+  const errors: AnnulationFieldErrors = {};
+  if (input.evenementId === null) {
+    errors.evenementId = 'Le passage à annuler est indéterminé.';
+  }
+  if (input.motif.length === 0) {
+    errors.motif = 'Le motif est obligatoire.';
+  } else if (input.motif.length > MAX_MOTIF_ANNULATION_LENGTH) {
+    errors.motif = `${MAX_MOTIF_ANNULATION_LENGTH} caractères maximum pour le motif.`;
+  }
+  return errors;
+}
+
+export function hasAnnulationFieldErrors(errors: AnnulationFieldErrors): boolean {
   return Object.values(errors).some((message) => typeof message === 'string');
 }
 

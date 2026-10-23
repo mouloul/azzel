@@ -2,7 +2,7 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import type { AbandonFieldErrors } from './domain';
+import type { AbandonFieldErrors, AnnulationFieldErrors } from './domain';
 
 export { DbUnavailableError };
 
@@ -144,11 +144,57 @@ export class CorpsAbandonTropGrandError extends Error {
   }
 }
 
+// Story 5.4 — erreurs de l'annulation auditable des passages (surface PC
+// course, vouvoiement, enveloppes admin.course.* via toCourseApiError).
+
+/** Champs annulation manquants ou invalides (evenementId, motif) : 400 + fields. */
+export class InvalidAnnulationFieldsError extends Error {
+  constructor(readonly fields: AnnulationFieldErrors) {
+    super('champs annulation manquants ou invalides');
+    this.name = 'InvalidAnnulationFieldsError';
+  }
+}
+
+/**
+ * Événement introuvable dans l'org/édition courante (id inconnu, non-UUID,
+ * autre organisation via RLS) : 404.
+ */
+export class AnnulationEvenementIntrouvableError extends Error {
+  constructor() {
+    super('passage introuvable pour cette organisation');
+    this.name = 'AnnulationEvenementIntrouvableError';
+  }
+}
+
+/** V1 : seuls les PASSAGES sont annulables — un retrait est refusé (409). */
+export class AnnulationRetraitRefuseError extends Error {
+  constructor() {
+    super('seuls les passages peuvent être annulés');
+    this.name = 'AnnulationRetraitRefuseError';
+  }
+}
+
+/** Corps JSON de POST /api/admin/course/annulation illisible : 400. */
+export class CorpsAnnulationInvalideError extends Error {
+  constructor() {
+    super('corps de requête annulation illisible');
+    this.name = 'CorpsAnnulationInvalideError';
+  }
+}
+
+/** Corps annulation au-delà de la garde taille (avant request.json()) : 413. */
+export class CorpsAnnulationTropGrandError extends Error {
+  constructor(readonly maxOctets: number) {
+    super(`corps de requête annulation trop volumineux (${maxOctets} octets maximum)`);
+    this.name = 'CorpsAnnulationTropGrandError';
+  }
+}
+
 export interface ApiError {
   status: number;
   envelope: ErrorEnvelope;
-  /** Erreurs champ abandon (400) — la route les ajoute au corps de réponse. */
-  fields?: AbandonFieldErrors;
+  /** Erreurs champ (400) — la route les ajoute au corps de réponse. */
+  fields?: AbandonFieldErrors & AnnulationFieldErrors;
 }
 
 /**
@@ -311,6 +357,10 @@ export function toChronoAdminApiError(error: unknown): ApiError {
  *
  * Story 5.3 — porte aussi la saisie d'abandon (POST /api/admin/course/abandon) :
  * erreurs champ (400 + fields), refus de course (409), gardes de corps (400/413).
+ *
+ * Story 5.4 — porte aussi l'annulation auditable (POST
+ * /api/admin/course/annulation) : 404 introuvable (RLS comprise), 409 retrait
+ * refusé, erreurs champ (400 + fields), gardes de corps (400/413).
  */
 export function toCourseApiError(error: unknown): ApiError {
   if (error instanceof DbUnavailableError) {
@@ -403,6 +453,58 @@ export function toCourseApiError(error: unknown): ApiError {
         code: 'admin.course.abandon_corps_trop_grand',
         message: `Envoi trop volumineux (${error.maxOctets} octets maximum).`,
         action: 'Raccourcissez le lieu puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof InvalidAnnulationFieldsError) {
+    return {
+      status: 400,
+      fields: error.fields,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.annulation_champs_invalides',
+        message: 'Certains champs de l’annulation sont manquants ou invalides.',
+        action: 'Corrigez les champs signalés puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof AnnulationEvenementIntrouvableError) {
+    return {
+      status: 404,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.annulation_introuvable',
+        message: 'Ce passage n’existe pas ou n’appartient pas à votre organisation.',
+        action: 'Rechargez le tableau de bord — la ligne a peut-être déjà disparu.',
+      }),
+    };
+  }
+  if (error instanceof AnnulationRetraitRefuseError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.annulation_retrait_refuse',
+        message: 'Seuls les passages peuvent être annulés.',
+        action:
+          'La correction d’un retrait de dossard est une opération de guichet — contactez l’équipe si le besoin se confirme.',
+      }),
+    };
+  }
+  if (error instanceof CorpsAnnulationInvalideError) {
+    return {
+      status: 400,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.annulation_corps_invalide',
+        message: 'La requête est illisible.',
+        action: 'Rechargez la page puis réessayez.',
+      }),
+    };
+  }
+  if (error instanceof CorpsAnnulationTropGrandError) {
+    return {
+      status: 413,
+      envelope: createErrorEnvelope({
+        code: 'admin.course.annulation_corps_trop_grand',
+        message: `Envoi trop volumineux (${error.maxOctets} octets maximum).`,
+        action: 'Raccourcissez le motif puis réessayez.',
       }),
     };
   }

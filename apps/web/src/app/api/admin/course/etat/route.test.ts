@@ -60,7 +60,13 @@ const ETAT = {
       id: 'cp-1',
       titre: 'Scan km 12',
       estArrivee: true,
-      passages: [{ dossard: 101, horodatageReception: '2027-05-16T07:05:09.000Z' }],
+      passages: [
+        {
+          evenementId: '22222222-3333-4222-8222-2222222222a1',
+          dossard: 101,
+          horodatageReception: '2027-05-16T07:05:09.000Z',
+        },
+      ],
     },
   ],
   alertes: [

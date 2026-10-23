@@ -16,6 +16,7 @@ import { readDatabaseUrl } from '@/modules/iam/env';
 import type {
   AbandonRecord,
   AlerteHorsDelais,
+  AnnulationResultat,
   AppareilRecord,
   EtatCourseRecord,
   MotifAbandon,
@@ -28,6 +29,8 @@ import {
   AbandonDejaArriveError,
   AbandonDossardInconnuError,
   AbandonPasPartiError,
+  AnnulationEvenementIntrouvableError,
+  AnnulationRetraitRefuseError,
   AppareilRevokedError,
   PlafondAppareilsError,
 } from './errors';
@@ -93,6 +96,19 @@ export interface ChronoStore {
     /** Heure serveur : base de l'arbitrage (horodatage_reception). */
     maintenant: Date;
   }): Promise<AbandonRecord>;
+  /**
+   * Story 5.4 — annulation auditable d'un PASSAGE : l'événement terrain reste
+   * INTACT (AD-8), l'annulation est un événement séparé (UNIQUE evenement_id,
+   * idempotente, horodatage = DEFAULT now() SQL). Résout la cible dans
+   * l'org/édition courante (retrait → 409 dédié, introuvable → 404) et rend
+   * dossard/checkpoint pour le message PC.
+   */
+  annulerPassage(input: {
+    organisationId: string;
+    evenementId: string;
+    motif: string;
+    auteurEmail: string;
+  }): Promise<AnnulationResultat>;
 }
 
 /** Jeton BRUT du canal sync : 256 bits, base64url — hashé avant toute base. */
@@ -445,15 +461,21 @@ export function createChronoStore(sql: Sql): ChronoStore {
     }): Promise<TerrainEvenementRecord | null> {
       return withDb(() =>
         withOrg(sql, input.organisationId, async (tx) => {
+          // Story 5.4 — lecture arbitrée : les événements ANNULÉS sont
+          // exclus (NOT EXISTS) — si le premier reçu est annulé, le SUIVANT
+          // non annulé devient le premier (ré-arbitrage en lecture, AD-8).
           const rows = await tx<TerrainEvenementRow[]>`
             SELECT id, cle_idempotence, type, edition_id, jeton_coureur, checkpoint_id,
                    horodatage_appareil, horodatage_reception, offset_estime_ms, appareil_id
-            FROM terrain_evenement
-            WHERE organisation_id = ${input.organisationId}
-              AND edition_id = ${input.editionId}
-              AND jeton_coureur = ${input.jeton}
-              AND checkpoint_id IS NOT DISTINCT FROM ${input.checkpointId}
-            ORDER BY horodatage_reception ASC, id ASC
+            FROM terrain_evenement te
+            WHERE te.organisation_id = ${input.organisationId}
+              AND te.edition_id = ${input.editionId}
+              AND te.jeton_coureur = ${input.jeton}
+              AND te.checkpoint_id IS NOT DISTINCT FROM ${input.checkpointId}
+              AND NOT EXISTS (
+                SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+              )
+            ORDER BY te.horodatage_reception ASC, te.id ASC
             LIMIT 1
           `;
           const row = rows[0];
@@ -553,21 +575,42 @@ export function createChronoStore(sql: Sql): ChronoStore {
                   AND m.type = 'scan_checkpoint'
                 ORDER BY m.debut_le ASC, m.created_at ASC, m.id ASC
               `,
+              // Story 5.4 — retraits : le NOT EXISTS y est DÉLIBÉRÉ. V1,
+              // un retrait ne peut PAS être annulé (garde 409 dans
+              // annulerPassage) — mais l'invariant de lecture « un événement
+              // annulé est neutre pour TOUTE lecture arbitrée » PRÉCÈDE la
+              // surface : l'annulation de retrait (correction guichet —
+              // rouvrir « présent au départ ») viendra par-dessus cette
+              // lecture, jamais en la réécrivant.
               tx<{ jeton_coureur: string; horodatage_reception: Date }[]>`
                 SELECT DISTINCT ON (jeton_coureur) jeton_coureur, horodatage_reception
-                FROM terrain_evenement
-                WHERE organisation_id = ${organisationId}
-                  AND edition_id = ${edition.id}
-                  AND type = 'retrait'
+                FROM terrain_evenement te
+                WHERE te.organisation_id = ${organisationId}
+                  AND te.edition_id = ${edition.id}
+                  AND te.type = 'retrait'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+                  )
                 ORDER BY jeton_coureur, horodatage_reception ASC, id ASC
               `,
-              tx<{ checkpoint_id: string; jeton_coureur: string; horodatage_reception: Date }[]>`
+              // Story 5.4 — passages arbitrés SANS les annulés (NOT EXISTS) :
+              // le ré-arbitrage « second fait foi » tombe du DISTINCT ON seul.
+              // L'id de l'événement fait foi : cible du bouton « Annuler ».
+              tx<{
+                id: string;
+                checkpoint_id: string;
+                jeton_coureur: string;
+                horodatage_reception: Date;
+              }[]>`
                 SELECT DISTINCT ON (checkpoint_id, jeton_coureur)
-                       checkpoint_id, jeton_coureur, horodatage_reception
-                FROM terrain_evenement
-                WHERE organisation_id = ${organisationId}
-                  AND edition_id = ${edition.id}
-                  AND type = 'passage'
+                       id, checkpoint_id, jeton_coureur, horodatage_reception
+                FROM terrain_evenement te
+                WHERE te.organisation_id = ${organisationId}
+                  AND te.edition_id = ${edition.id}
+                  AND te.type = 'passage'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+                  )
                 ORDER BY checkpoint_id, jeton_coureur, horodatage_reception ASC, id ASC
               `,
               // Story 5.3 — abandons de l'édition (UNIQUE par coureur en
@@ -623,7 +666,10 @@ export function createChronoStore(sql: Sql): ChronoStore {
           // Passages arbitrés par checkpoint : seuls les coureurs RÉSOLUS
           // (dossard connu) montent sur un board — l'ingestion garantit
           // l'existence du coureur, cette garde ne sert qu'à la forme.
-          const passagesParCheckpoint = new Map<string, { dossard: number; horodatageReception: Date }[]>();
+          const passagesParCheckpoint = new Map<
+            string,
+            { evenementId: string; dossard: number; horodatageReception: Date }[]
+          >();
           const jetonsParCheckpoint = new Map<string, Set<string>>();
           for (const row of passageRows) {
             const dossard = dossardParJeton.get(row.jeton_coureur);
@@ -634,7 +680,11 @@ export function createChronoStore(sql: Sql): ChronoStore {
             jetons.add(row.jeton_coureur);
             jetonsParCheckpoint.set(row.checkpoint_id, jetons);
             const liste = passagesParCheckpoint.get(row.checkpoint_id) ?? [];
-            liste.push({ dossard, horodatageReception: row.horodatage_reception });
+            liste.push({
+              evenementId: row.id,
+              dossard,
+              horodatageReception: row.horodatage_reception,
+            });
             passagesParCheckpoint.set(row.checkpoint_id, liste);
           }
 
@@ -804,13 +854,19 @@ export function createChronoStore(sql: Sql): ChronoStore {
           `;
           const arriveeCheckpoint = arrivees[0];
           if (arriveeCheckpoint !== undefined) {
+            // Story 5.4 — lecture arbitrée SYMÉTRIQUE : un passage d'arrivée
+            // ANNULÉ ne clôt plus la course — l'abandon redevient saisissable
+            // (le coureur reparti « en course » au board).
             const passages = await tx<{ id: string }[]>`
-              SELECT id FROM terrain_evenement
-              WHERE organisation_id = ${input.organisationId}
-                AND edition_id = ${edition.id}
-                AND jeton_coureur = ${jeton}
-                AND type = 'passage'
-                AND checkpoint_id = ${arriveeCheckpoint.id}
+              SELECT te.id FROM terrain_evenement te
+              WHERE te.organisation_id = ${input.organisationId}
+                AND te.edition_id = ${edition.id}
+                AND te.jeton_coureur = ${jeton}
+                AND te.type = 'passage'
+                AND te.checkpoint_id = ${arriveeCheckpoint.id}
+                AND NOT EXISTS (
+                  SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+                )
               LIMIT 1
             `;
             if (passages.length > 0) {
@@ -850,6 +906,114 @@ export function createChronoStore(sql: Sql): ChronoStore {
         }),
       );
     },
+
+    // -----------------------------------------------------------------
+    // Story 5.4 — annulation auditable d'un passage (AD-8). TOUT vit dans
+    // UNE transaction withOrg : la cible est résolue DANS l'org/édition
+    // courante (RLS comprise — un id deviné d'une autre org est
+    // introuvable), un retrait est refusé (409 dédié, V1), et l'insertion
+    // est idempotente : UNIQUE (evenement_id) + ON CONFLICT DO NOTHING —
+    // rejouer « Confirmer » rend « déjà annulé » (succès), jamais une
+    // seconde ligne. terrain_evenement reste INTACT : seule la lecture
+    // arbitrée (etatCourse/premierRecu, NOT EXISTS) change.
+    // -----------------------------------------------------------------
+    async annulerPassage(input: {
+      organisationId: string;
+      evenementId: string;
+      motif: string;
+      auteurEmail: string;
+    }): Promise<AnnulationResultat> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          const edition = await editionCourante(tx, input.organisationId);
+
+          // Cible : événement de l'édition courante, org-scopé (RLS en
+          // profondeur). Un candidat non-UUID n'est jamais envoyé au SQL :
+          // introuvable par construction.
+          let cible:
+            | { id: string; type: string; jeton_coureur: string; checkpoint_id: string | null }
+            | undefined;
+          if (edition !== undefined && estUuidValide(input.evenementId)) {
+            const rows = await tx<
+              { id: string; type: string; jeton_coureur: string; checkpoint_id: string | null }[]
+            >`
+              SELECT id, type, jeton_coureur, checkpoint_id
+              FROM terrain_evenement
+              WHERE organisation_id = ${input.organisationId}
+                AND edition_id = ${edition.id}
+                AND id = ${input.evenementId}
+              LIMIT 1
+            `;
+            cible = rows[0];
+          }
+          if (edition === undefined || cible === undefined) {
+            throw new AnnulationEvenementIntrouvableError();
+          }
+          // V1 : seuls les PASSAGES sont annulables — le retrait erroné est
+          // une correction guichet (rouvrir « présent au départ »), besoin
+          // séparé, construit sur demande.
+          if (cible.type !== 'passage') {
+            throw new AnnulationRetraitRefuseError();
+          }
+
+          // Résolution du libellé PC : dossard du coureur VALIDÉ (symétrie
+          // dossardParJeton — un événement de coureur non validé n'est
+          // PILOTABLE nulle part, jamais annulable à l'aveugle) + titre du
+          // checkpoint (la mission scan_checkpoint EST le checkpoint, V1).
+          const [coureurRows, checkpointRows] = await Promise.all([
+            tx<{ dossard: number }[]>`
+              SELECT dossard FROM coureur
+              WHERE organisation_id = ${input.organisationId}
+                AND edition_id = ${edition.id}
+                AND jeton_edossard = ${cible.jeton_coureur}
+                AND status = 'validé'
+                AND dossard IS NOT NULL
+              LIMIT 1
+            `,
+            tx<{ titre: string }[]>`
+              SELECT m.titre
+              FROM mission m
+              JOIN secteur s ON s.id = m.secteur_id
+              WHERE m.organisation_id = ${input.organisationId}
+                AND s.edition_id = ${edition.id}
+                AND m.type = 'scan_checkpoint'
+                AND m.id = ${cible.checkpoint_id}
+              LIMIT 1
+            `,
+          ]);
+          const dossard = coureurRows[0]?.dossard;
+          const checkpointTitre = checkpointRows[0]?.titre;
+          if (dossard === undefined || checkpointTitre === undefined) {
+            // Coureur irrésolu ou checkpoint disparu : l'événement existe en
+            // audit mais n'est PILOTABLE nulle part — la ligne ne peut pas
+            // être affichée, l'annulation n'a pas de sens PC.
+            throw new AnnulationEvenementIntrouvableError();
+          }
+
+          // Insertion append-only idempotente : UNIQUE (evenement_id) — le
+          // rejeu retombe sur DO NOTHING (0 ligne) → « déjà annulé ». L'audit
+          // horodatage vit du DEFAULT now() SQL (heure serveur de la base,
+          // jamais une heure passée par l'applicatif).
+          const inserees = await tx<{ id: string }[]>`
+            INSERT INTO annulation (
+              organisation_id, evenement_id, motif, auteur_email
+            )
+            VALUES (
+              ${input.organisationId}, ${input.evenementId}, ${input.motif},
+              ${input.auteurEmail}
+            )
+            ON CONFLICT (evenement_id) DO NOTHING
+            RETURNING id
+          `;
+          return {
+            dejaAnnule: inserees.length === 0,
+            evenementId: input.evenementId,
+            dossard,
+            checkpointTitre,
+          };
+        }),
+      );
+    },
   };
 }
 
@@ -867,6 +1031,7 @@ function createUnavailableStore(): ChronoStore {
     revoquerAppareil: unavailable,
     etatCourse: unavailable,
     saisirAbandon: unavailable,
+    annulerPassage: unavailable,
   };
 }
 

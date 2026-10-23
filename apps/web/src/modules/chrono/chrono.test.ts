@@ -12,26 +12,32 @@ import {
 import type { SessionRecord } from '@/modules/iam/store';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
-import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON } from './domain';
+import { compterStatuts, decouperEnTranches, calculerOffsetEstimeMs, normaliserSaisieAbandon, validerSaisieAbandon, estMotifAbandon, TOLERANCE_HORLOGE_MS, MOTIFS_ABANDON, MAX_MOTIF_ANNULATION_LENGTH, normaliserSaisieAnnulation, validerSaisieAnnulation } from './domain';
 import {
   AbandonAvantDepartError,
   AbandonDejaAbandonneError,
   AbandonDejaArriveError,
   AbandonDossardInconnuError,
   AbandonPasPartiError,
+  AnnulationEvenementIntrouvableError,
+  AnnulationRetraitRefuseError,
   AppareilClientInvalideError,
   AppareilNotFoundError,
   AppareilRevokedError,
   CorpsAbandonInvalideError,
   CorpsAbandonTropGrandError,
+  CorpsAnnulationInvalideError,
+  CorpsAnnulationTropGrandError,
   CorpsSyncInvalideError,
   InvalidAbandonFieldsError,
+  InvalidAnnulationFieldsError,
   JetonAppareilInvalideError,
   LotTropGrandError,
   toCourseApiError,
 } from './errors';
 import type { ChronoStore, StatutInsertion } from './store';
 import {
+  annulerPassage,
   enregistrerAppareil,
   getEtatCourse,
   listerAppareils,
@@ -104,6 +110,14 @@ const ABANDON_RECORD = {
   horodatageReception: new Date('2027-05-16T10:06:00.000Z'),
 };
 
+/** Résultat d'annulation factice (retour du store en mémoire, story 5.4). */
+const ANNULATION_RESULTAT = {
+  dejaAnnule: false,
+  evenementId: '11111111-1111-4111-8111-111111111111',
+  dossard: 101,
+  checkpointTitre: 'Scan km 12',
+};
+
 function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
   return {
     trouverAppareilParHash: vi.fn(async () => ({
@@ -135,6 +149,7 @@ function creerStoreFactice(overrides: Partial<ChronoStore> = {}): ChronoStore {
       fraicheur: null,
     })),
     saisirAbandon: vi.fn(async () => ABANDON_RECORD),
+    annulerPassage: vi.fn(async () => ANNULATION_RESULTAT),
     ...overrides,
   };
 }
@@ -398,7 +413,13 @@ describe('story 5.1 — getEtatCourse (service PC course)', () => {
         id: 'cp-1',
         titre: 'Scan km 12',
         estArrivee: true,
-        passages: [{ dossard: 101, horodatageReception: new Date('2027-05-16T07:05:09.000Z') }],
+        passages: [
+          {
+            evenementId: '11111111-1111-4111-8111-111111111111',
+            dossard: 101,
+            horodatageReception: new Date('2027-05-16T07:05:09.000Z'),
+          },
+        ],
       },
     ],
     alertes: [
@@ -422,7 +443,13 @@ describe('story 5.1 — getEtatCourse (service PC course)', () => {
           id: 'cp-1',
           titre: 'Scan km 12',
           estArrivee: true,
-          passages: [{ dossard: 101, horodatageReception: '2027-05-16T07:05:09.000Z' }],
+          passages: [
+            {
+              evenementId: '11111111-1111-4111-8111-111111111111',
+              dossard: 101,
+              horodatageReception: '2027-05-16T07:05:09.000Z',
+            },
+          ],
         },
       ],
       alertes: [
@@ -655,5 +682,126 @@ describe('story 5.3 — toCourseApiError (mapper saisie abandon)', () => {
       toCourseApiError(new CorpsAbandonTropGrandError(1024)).envelope.error.code,
     ).toBe('admin.course.abandon_corps_trop_grand');
     expect(toCourseApiError(new CorpsAbandonTropGrandError(1024)).status).toBe(413);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 5.4 — annulation auditable des passages : domaine (normalisation,
+// validation motif 1–500), service (délégation, auteur tracé), mapper
+// (400 champ + fields, 404 introuvable/RLS, 409 retrait refusé, 413).
+// ---------------------------------------------------------------------------
+
+const EVENEMENT_ID = '22222222-3333-4222-8222-222222222222';
+
+describe('story 5.4 — domaine annulation : normalisation, validation motif 1–500', () => {
+  it('normaliserSaisieAnnulation : evenementId et motif trimés, garbage isolé', () => {
+    expect(
+      normaliserSaisieAnnulation({ evenementId: ` ${EVENEMENT_ID} `, motif: '  Mauvais scan  ' }),
+    ).toEqual({ evenementId: EVENEMENT_ID, motif: 'Mauvais scan' });
+    expect(normaliserSaisieAnnulation(null)).toEqual({ evenementId: null, motif: '' });
+    expect(normaliserSaisieAnnulation({ evenementId: 42, motif: null })).toEqual({
+      evenementId: null,
+      motif: '',
+    });
+  });
+
+  it('validerSaisieAnnulation : evenementId requis, motif OBLIGATOIRE 1–500', () => {
+    const vide = validerSaisieAnnulation({ evenementId: null, motif: '' });
+    expect(vide.evenementId).toContain('indéterminé');
+    expect(vide.motif).toBe('Le motif est obligatoire.');
+    const tropLong = validerSaisieAnnulation({
+      evenementId: EVENEMENT_ID,
+      motif: 'x'.repeat(MAX_MOTIF_ANNULATION_LENGTH + 1),
+    });
+    expect(tropLong.motif).toBe(
+      `${MAX_MOTIF_ANNULATION_LENGTH} caractères maximum pour le motif.`,
+    );
+    // Bornes incluses : 1 et exactement 500 caractères passent.
+    for (const motif of ['x', 'x'.repeat(MAX_MOTIF_ANNULATION_LENGTH)]) {
+      const errors = validerSaisieAnnulation({ evenementId: EVENEMENT_ID, motif });
+      expect(Object.values(errors).every((message) => message === undefined)).toBe(true);
+    }
+    expect(MAX_MOTIF_ANNULATION_LENGTH).toBe(500);
+  });
+});
+
+describe('story 5.4 — annulerPassage (service)', () => {
+  it('champs invalides (evenementId absent, motif vide) : InvalidAnnulationFieldsError, store non appelé', async () => {
+    const store = creerStoreFactice();
+    await expect(annulerPassage(SESSION, { motif: '' }, { store })).rejects.toBeInstanceOf(
+      InvalidAnnulationFieldsError,
+    );
+    await expect(annulerPassage(SESSION, { evenementId: EVENEMENT_ID }, { store })).rejects.toBeInstanceOf(
+      InvalidAnnulationFieldsError,
+    );
+    expect(store.annulerPassage).not.toHaveBeenCalled();
+  });
+
+  it('nominal : délégation org + auteur = email de la session, résultat du store rendu tel quel', async () => {
+    const store = creerStoreFactice();
+    const resultat = await annulerPassage(
+      SESSION,
+      { evenementId: EVENEMENT_ID, motif: 'Mauvais scan du dossard voisin' },
+      { store },
+    );
+    expect(resultat).toBe(ANNULATION_RESULTAT);
+    // Pas d'horodatage applicatif : l'audit vit du DEFAULT now() SQL (0029).
+    expect(store.annulerPassage).toHaveBeenCalledWith({
+      organisationId: 'org-1',
+      evenementId: EVENEMENT_ID,
+      motif: 'Mauvais scan du dossard voisin',
+      auteurEmail: 'karim@exemple.dz',
+    });
+  });
+
+  it('refus du store : les erreurs se PROPAGENT (route → 404/409)', async () => {
+    for (const erreur of [
+      new AnnulationEvenementIntrouvableError(),
+      new AnnulationRetraitRefuseError(),
+    ]) {
+      const store = creerStoreFactice({
+        annulerPassage: vi.fn(async () => {
+          throw erreur;
+        }),
+      });
+      await expect(
+        annulerPassage(SESSION, { evenementId: EVENEMENT_ID, motif: 'Doublon appareil' }, { store }),
+      ).rejects.toBe(erreur);
+    }
+  });
+});
+
+describe('story 5.4 — toCourseApiError (mapper annulation)', () => {
+  it('champs invalides : 400 + fields, enveloppe admin.course.annulation_champs_invalides', () => {
+    const apiError = toCourseApiError(
+      new InvalidAnnulationFieldsError({ motif: 'Le motif est obligatoire.' }),
+    );
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields?.motif).toContain('obligatoire');
+    expect(apiError.envelope.error.code).toBe('admin.course.annulation_champs_invalides');
+  });
+
+  it('introuvable (id inconnu, non-UUID, autre org/RLS) : 404 sans fields', () => {
+    const apiError = toCourseApiError(new AnnulationEvenementIntrouvableError());
+    expect(apiError.status).toBe(404);
+    expect(apiError.fields).toBeUndefined();
+    expect(apiError.envelope.error.code).toBe('admin.course.annulation_introuvable');
+    expect(apiError.envelope.error.message).toContain('n’existe pas');
+  });
+
+  it('retrait refusé (V1) : 409 « seuls les passages peuvent être annulés », vouvoyé', () => {
+    const apiError = toCourseApiError(new AnnulationRetraitRefuseError());
+    expect(apiError.status).toBe(409);
+    expect(apiError.envelope.error.code).toBe('admin.course.annulation_retrait_refuse');
+    expect(apiError.envelope.error.message).toBe('Seuls les passages peuvent être annulés.');
+    expect(apiError.envelope.error.action).not.toMatch(/\b[Rr]éessaie\b/);
+  });
+
+  it('gardes de corps : 400 illisible, 413 trop grand', () => {
+    expect(toCourseApiError(new CorpsAnnulationInvalideError()).status).toBe(400);
+    expect(
+      toCourseApiError(new CorpsAnnulationTropGrandError(1024)).envelope.error.code,
+    ).toBe('admin.course.annulation_corps_trop_grand');
+    expect(toCourseApiError(new CorpsAnnulationTropGrandError(1024)).status).toBe(413);
   });
 });

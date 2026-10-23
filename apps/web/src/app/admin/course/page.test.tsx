@@ -17,6 +17,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Story 5.3 — saisie des abandons : bouton d'en-tête, action abandon ACTIVE
 // par ligne d'alerte, carte Abandonnés sans note « à venir », formulaire
 // inline ABSENT du SSR (ouverture client uniquement).
+//
+// Story 5.4 — annulation auditable : bouton « … » par ligne de board (aria-
+// label complet), dialogue ABSENT du SSR, CSS visible au survol ET au focus.
 
 const sessionMock = vi.hoisted(() => ({
   requireRolePage: vi.fn(),
@@ -64,15 +67,29 @@ const ETAT = {
       titre: 'Scan km 12',
       estArrivee: false,
       passages: [
-        { dossard: 102, horodatageReception: '2027-05-16T07:05:09.000Z' },
-        { dossard: 101, horodatageReception: '2027-05-16T07:01:44.000Z' },
+        {
+          evenementId: '22222222-3333-4222-8222-2222222222a1',
+          dossard: 102,
+          horodatageReception: '2027-05-16T07:05:09.000Z',
+        },
+        {
+          evenementId: '22222222-3333-4222-8222-2222222222a2',
+          dossard: 101,
+          horodatageReception: '2027-05-16T07:01:44.000Z',
+        },
       ],
     },
     {
       id: 'cp-arrivee',
       titre: 'Scan arrivée',
       estArrivee: true,
-      passages: [{ dossard: 104, horodatageReception: '2027-05-16T09:40:00.000Z' }],
+      passages: [
+        {
+          evenementId: '22222222-3333-4222-8222-2222222222b1',
+          dossard: 104,
+          horodatageReception: '2027-05-16T09:40:00.000Z',
+        },
+      ],
     },
   ],
   alertes: [
@@ -293,5 +310,59 @@ describe('page /admin/course — saisie des abandons (story 5.3)', () => {
     expect(css).toMatch(/\.course-abandon-succes/);
     const blocAbandon = css.slice(css.indexOf('.course-abandon{'), css.indexOf('@media'));
     expect(blocAbandon).not.toMatch(/animation/);
+  });
+});
+
+describe('page /admin/course — annulation auditable des passages (story 5.4)', () => {
+  it('bouton « … » par ligne de board, aria-label complet (dossard + checkpoint)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    // Un bouton d'annulation par passage affiché (3 passages dans ETAT).
+    const occurrences = html.match(/class="course-ligne-annuler"/g) ?? [];
+    expect(occurrences.length).toBe(3);
+    // aria-label complet : la cible se porte à elle-même.
+    expect(html).toContain('aria-label="Annuler le passage — dossard 102 à Scan km 12"');
+    expect(html).toContain('aria-label="Annuler le passage — dossard 101 à Scan km 12"');
+    expect(html).toContain('aria-label="Annuler le passage — dossard 104 à Scan arrivée"');
+  });
+
+  it('les lignes restent SANS navigation : aucun href vers /admin/course/{dossard}', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).not.toContain('href="/admin/course/101');
+    expect(html).not.toContain('href="/admin/course/102');
+    // Le corps du bouton est « … » (discret), le libellé complet vit dans
+    // l'aria-label.
+    expect(html).toContain('>…</button>');
+  });
+
+  it('dialogue d’annulation : ABSENT du rendu serveur (ouverture client uniquement)', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).not.toContain('course-annulation"');
+    expect(html).not.toContain('Annuler ce passage');
+  });
+
+  it('CSS : bouton visible au survol ET au focus clavier (opacity, jamais display), tactile toujours visible', () => {
+    const css = readFileSync(fileURLToPath(new URL('./course.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\.course-ligne-annuler\{[^}]*opacity:\s*0/);
+    // La déclaration opacity:1 est ÉPINGLÉE sur la règle groupée
+    // :hover,:focus-within (le survol ne peut pas la perdre en refactor).
+    expect(css).toMatch(
+      /\.course-board-ligne:hover\s+\.course-ligne-annuler,\s*\.course-board-ligne:focus-within\s+\.course-ligne-annuler\{opacity:1\}/,
+    );
+    expect(css).toMatch(/@media \(hover:none\)\{\.course-ligne-annuler\{opacity:1\}\}/);
+    // Jamais display:none : le bouton reste focusable et lisible (a11y).
+    expect(css).not.toMatch(/course-ligne-annuler[^}]*display:\s*none/);
+    // Le dialogue existe (calque abandon), sans animation propre.
+    expect(css).toMatch(/\.course-annulation\{/);
+    expect(css).toMatch(/\.course-annulation-cible/);
+  });
+
+  it('CSS : reduced-motion coupe AUSSI la transition du bouton « … » (clignotement alertes compris)', () => {
+    const css = readFileSync(fileURLToPath(new URL('./course.css', import.meta.url)), 'utf8');
+    const blocReduit = css.slice(css.indexOf('@media (prefers-reduced-motion'));
+    expect(blocReduit).toMatch(/\.course-alertes\s*\{\s*animation:\s*none/);
+    expect(blocReduit).toMatch(/\.course-ligne-annuler\s*\{\s*transition:\s*none/);
   });
 });

@@ -14,6 +14,7 @@ import {
   compterStatuts,
   resultatEvenement,
   type AbandonRecord,
+  type AnnulationResultat,
   type AppareilAuth,
   type AppareilRecord,
   type AlerteHorsDelais,
@@ -22,8 +23,11 @@ import {
   type MotifAbandon,
   type TerrainEvenementRecord,
   hasAbandonFieldErrors,
+  hasAnnulationFieldErrors,
   normaliserSaisieAbandon,
+  normaliserSaisieAnnulation,
   validerSaisieAbandon,
+  validerSaisieAnnulation,
 } from './domain';
 import {
   AppareilClientInvalideError,
@@ -31,6 +35,7 @@ import {
   AppareilRevokedError,
   CorpsSyncInvalideError,
   InvalidAbandonFieldsError,
+  InvalidAnnulationFieldsError,
   JetonAppareilInvalideError,
   LotTropGrandError,
 } from './errors';
@@ -230,6 +235,7 @@ export async function revoquerAppareil(
 
 /** Passage board sérialisé : même forme que le record, horodatage en ISO. */
 export interface PassageCourseSerde {
+  evenementId: string;
   dossard: number;
   horodatageReception: string;
 }
@@ -263,6 +269,7 @@ function versEtatCourse(record: EtatCourseRecord, genereA: Date): EtatCourse {
     checkpoints: record.checkpoints.map((checkpoint) => ({
       ...checkpoint,
       passages: checkpoint.passages.map((passage) => ({
+        evenementId: passage.evenementId,
         dossard: passage.dossard,
         horodatageReception: passage.horodatageReception.toISOString(),
       })),
@@ -336,4 +343,36 @@ export async function saisirAbandon(
     motif: record.motif,
     heure: record.horodatage.toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.4 — annulation auditable d'un passage (AD-8). Le service valide la
+// FORME (evenementId requis, motif 1–500), trace l'auteur (email de la
+// session organisateur) et délègue la décision au store : cible résolue dans
+// l'org/édition courante (retrait → 409 dédié), insertion idempotente (UNIQUE
+// evenement_id). L'événement terrain reste INTACT — les lectures arbitrées
+// (etatCourse/premierRecu) l'excluent, le ré-arbitrage « second fait foi »
+// est automatique.
+// ---------------------------------------------------------------------------
+
+/** Annulation rendue à la route : message PC (dossard, checkpoint) + drapeau idempotent. */
+export type AnnulationSerde = AnnulationResultat;
+
+export async function annulerPassage(
+  session: SessionRecord,
+  rawInput: unknown,
+  deps: ChronoServiceDeps = {},
+): Promise<AnnulationSerde> {
+  const store = deps.store ?? getChronoStore();
+  const input = normaliserSaisieAnnulation(rawInput);
+  const errors = validerSaisieAnnulation(input);
+  if (hasAnnulationFieldErrors(errors)) {
+    throw new InvalidAnnulationFieldsError(errors);
+  }
+  return store.annulerPassage({
+    organisationId: session.organisationId,
+    evenementId: input.evenementId as string,
+    motif: input.motif,
+    auteurEmail: session.email,
+  });
 }

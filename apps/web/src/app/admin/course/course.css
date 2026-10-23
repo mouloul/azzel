@@ -1,11 +1,12 @@
 /* Admin PC course (story 5.1, UX-DR-12) — cartes de synthèse (display-sm
    24 px), fraîcheur mono 15 px (meta-lg) en pied, boards par checkpoint :
    badge dossard mono, heure mono 15 px alignée à droite, séparateurs
-   pointillés (jamais de zébrage), lignes non cliquables. Fichier propre à la
-   page /admin/course : hors du chunk CSS partagé (budget accueil). Seule
-   animation : le clignotement borné du bloc alertes 5.2 (1 flash/s), coupé
-   sous prefers-reduced-motion. Story 5.3 : en-tête + formulaire abandon sans
-   animation propre. */
+   pointillés (jamais de zébrage). Story 5.4 : chaque ligne porte « … »
+   (annulation auditable) — visible au survol ET au focus clavier, jamais
+   display:none. Fichier propre à la page /admin/course : hors du chunk CSS
+   partagé (budget accueil). Seule animation : le clignotement borné du bloc
+   alertes 5.2 (1 flash/s), coupé sous prefers-reduced-motion. Story 5.3 :
+   en-tête + formulaire abandon sans animation propre. */
 
 .course-live{display:grid;gap:var(--az-space-4)}
 .course-fraicheur{font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte-2);margin:0}
@@ -51,13 +52,29 @@
 
 /* Story 5.3 — saisie des abandons : en-tête (fraîcheur + bouton dédié),
    formulaire inline (champs globaux .field/.fieldset), bandeau succès
-   role="status" en écho du bloc alertes. Aucune animation propre. */
+   role="status" en écho du bloc alertes. Aucune animation propre.
+   Story 5.4 — annulation auditable : bouton « … » par ligne de board
+   (visible au survol ET au focus clavier, opacity — jamais display : le
+   bouton reste focusable et lisible des lecteurs d'écran), toujours
+   visible sans pointeur de survol (tactile) ; dialogue inline calque
+   abandon. */
 .course-entete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--az-space-2)}
 .course-entete .course-fraicheur{margin:0}
 .course-abandon{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
 .course-abandon-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
-.course-abandon-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-2) var(--az-space-3)}
+/* Bandeaux succès (role="status") — abandon 5.3 et dialogue annulation 5.4
+   partagent la même règle, classes distinctes par surface. */
+.course-abandon-succes,.course-dialogue-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-2) var(--az-space-3)}
+.course-ligne-annuler{opacity:0;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);background:transparent;color:var(--az-texte-2);font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);line-height:1.4;padding:0 calc(var(--az-space-1) * 1.5);cursor:pointer;transition:opacity 120ms ease}
+.course-board-ligne:hover .course-ligne-annuler,
+.course-board-ligne:focus-within .course-ligne-annuler{opacity:1}
+.course-ligne-annuler:hover,
+.course-ligne-annuler:focus-visible{color:var(--az-texte);border-color:var(--az-texte-2)}
+@media (hover:none){.course-ligne-annuler{opacity:1}}
+.course-annulation{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-annulation-cible{margin:0;font-family:var(--az-font-meta);font-weight:var(--az-font-weight-surtitre);font-variant-numeric:tabular-nums;color:var(--az-texte)}
 
 @media (prefers-reduced-motion: reduce){
   .course-alertes{animation:none}
+  .course-ligne-annuler{transition:none}
 }
