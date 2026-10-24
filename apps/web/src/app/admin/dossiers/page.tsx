@@ -166,6 +166,15 @@ export default async function AdminDossiersPage({
           </a>
           .
         </p>
+        {/* Story 7.4 — processus J-10 : la commande part des dossiers validés
+            que cette page sert — passerelle vers /admin/rapports. */}
+        <p className="hint">
+          À J-10 :{' '}
+          <a className="btn-lien" href="/admin/rapports">
+            prépare la commande t-shirts et médailles depuis les rapports
+          </a>
+          .
+        </p>
       </article>
     </section>
   );

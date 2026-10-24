@@ -60,6 +60,15 @@ export default async function AdminCoursePage() {
             vit derrière la garde organisateur de la page (un volontaire ne
             voit jamais /admin/course, la carte non plus). */}
         <HeuresDepart epreuvesInitiales={heures.epreuves} />
+        {/* Story 7.4 — passerelle vers les rapports : le bilan post-course et
+            la commande J-10 se téléchargent depuis /admin/rapports. */}
+        <p className="hint">
+          Après la course :{' '}
+          <a className="btn-lien" href="/admin/rapports">
+            télécharge le rapport post-course et la commande t-shirts/médailles
+          </a>
+          .
+        </p>
       </article>
     </section>
   );

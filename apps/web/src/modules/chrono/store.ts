@@ -319,6 +319,141 @@ async function epreuvesHeuresDepart(
   }));
 }
 
+/**
+ * Story 7.1 — FAITS classements de l'édition courante (partants, arrivées
+ * arbitrées, abandons, heures de départ), lus dans la transaction DE
+ * L'APPELANT. Story 7.4 : le rapport post-course partage ces lectures dans SA
+ * propre transaction unique (calque NFR-4 — un rapport entier décrit UN seul
+ * instant, jamais deux). Rangs et temps restent calculés par le service
+ * (versClassements), au-dessus de ces faits — jamais recalculés ailleurs.
+ */
+export async function lireClassementsRecord(
+  tx: postgres.TransactionSql,
+  organisationId: string,
+): Promise<ClassementsRecord> {
+  const edition = await editionCourante(tx, organisationId);
+  if (!edition) {
+    return { edition: null, epreuves: [], fraicheur: null };
+  }
+
+  const [epreuvesHeures, partantRows, retraitRows, arriveeRows, abandonRows, fraicheurRows] =
+    await Promise.all([
+      epreuvesHeuresDepart(tx, organisationId, edition.id),
+      // Partants POTENTIELS : validés ∧ numérotés ∧ jeton résolu — le
+      // retrait arbitré (ci-dessous) fait le départ effectif (un
+      // validé/numéroté jamais retiré n'est PAS partant : absent).
+      tx<{
+        jeton: string;
+        dossard: number;
+        epreuve_id: string;
+        age_category: string;
+      }[]>`
+        SELECT jeton_edossard AS jeton, dossard, epreuve_id, age_category
+        FROM coureur
+        WHERE organisation_id = ${organisationId}
+          AND edition_id = ${edition.id}
+          AND status = 'validé'
+          AND jeton_edossard IS NOT NULL
+          AND dossard IS NOT NULL
+      `,
+      // Retraits arbitrés (AD-3) — l'existence du PREMIER suffit à
+      // faire partir : son horodatage ne sert JAMAIS au classement.
+      tx<{ jeton_coureur: string }[]>`
+        SELECT DISTINCT ON (jeton_coureur) jeton_coureur
+        FROM terrain_evenement te
+        WHERE te.organisation_id = ${organisationId}
+          AND te.edition_id = ${edition.id}
+          AND te.type = 'retrait'
+          AND NOT EXISTS (
+            SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+          )
+        ORDER BY jeton_coureur, horodatage_reception ASC, id ASC
+      `,
+      // Premiers passages ARRIVÉE arbitrés par coureur : checkpoint
+      // global à l'édition (est_arrivee), croisé avec le coureur pour
+      // l'épreuve côté service. horodatage_reception SERVEUR = base
+      // du temps (AD-3) ; annulés exclus (ré-arbitrage en lecture).
+      tx<{ jeton_coureur: string; horodatage_reception: Date }[]>`
+        SELECT DISTINCT ON (te.jeton_coureur)
+               te.jeton_coureur, te.horodatage_reception
+        FROM terrain_evenement te
+        JOIN mission m ON m.id = te.checkpoint_id
+        JOIN secteur s ON s.id = m.secteur_id
+        WHERE te.organisation_id = ${organisationId}
+          AND te.edition_id = ${edition.id}
+          AND te.type = 'passage'
+          AND m.organisation_id = ${organisationId}
+          AND m.type = 'scan_checkpoint'
+          AND m.est_arrivee
+          AND s.edition_id = ${edition.id}
+          AND NOT EXISTS (
+            SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
+          )
+        ORDER BY te.jeton_coureur, te.horodatage_reception ASC, te.id ASC
+      `,
+      tx<{ jeton_coureur: string }[]>`
+        SELECT jeton_coureur
+        FROM abandon
+        WHERE organisation_id = ${organisationId}
+          AND edition_id = ${edition.id}
+      `,
+      // Fraîcheur du contrat classements : DERNIER PASSAGE reçu —
+      // les retraits ne la font pas bouger (un retrait plus récent
+      // qu'un passage reste invisible côté fraîcheur).
+      tx<{ fraicheur: Date | null }[]>`
+        SELECT max(horodatage_reception) AS fraicheur
+        FROM terrain_evenement
+        WHERE organisation_id = ${organisationId}
+          AND edition_id = ${edition.id}
+          AND type = 'passage'
+      `,
+    ]);
+
+  const partis = new Set(retraitRows.map((row) => row.jeton_coureur));
+  const abandonnes = new Set(abandonRows.map((row) => row.jeton_coureur));
+  const arriveeParJeton = new Map(
+    arriveeRows.map((row) => [row.jeton_coureur, row.horodatage_reception]),
+  );
+  const epreuves: ClassementsRecord['epreuves'] = epreuvesHeures.map((epreuve) => ({
+    ...epreuve,
+    lignes: [],
+  }));
+  const epreuveParId = new Map(epreuves.map((epreuve) => [epreuve.epreuveId, epreuve]));
+  for (const row of partantRows) {
+    // Partant = résolu ∧ RETIRÉ (arbitré). Un coureur dont l'épreuve
+    // n'est pas celle d'une épreuve listée (défense : FK libre) reste
+    // neutre — il n'apparaît dans AUCUN classement.
+    if (!partis.has(row.jeton)) {
+      continue;
+    }
+    const epreuve = epreuveParId.get(row.epreuve_id);
+    if (epreuve === undefined) {
+      continue;
+    }
+    const arriveeRecue = arriveeParJeton.get(row.jeton) ?? null;
+    // L'abandon DOMINE l'arrivée : un scan d'arrivée tardif (réseau
+    // différé) ne fait jamais rebasculer un abandonné (calque 5.3).
+    const statut: 'arrivé' | 'en-course' | 'abandonné' = abandonnes.has(row.jeton)
+      ? 'abandonné'
+      : arriveeRecue !== null
+        ? 'arrivé'
+        : 'en-course';
+    epreuve.lignes.push({
+      dossard: row.dossard,
+      epreuveId: row.epreuve_id,
+      categorieAge: row.age_category,
+      statut,
+      arriveeRecue,
+    });
+  }
+
+  return {
+    edition: { id: edition.id, nom: edition.name },
+    epreuves,
+    fraicheur: fraicheurRows[0]?.fraicheur ?? null,
+  };
+}
+
 export function createChronoStore(sql: Sql): ChronoStore {
   return {
     // Hors withOrg, délibérément (pattern 0011) : le hash du jeton EST le
@@ -1098,129 +1233,7 @@ export function createChronoStore(sql: Sql): ChronoStore {
     // -----------------------------------------------------------------
     async classements(organisationId: string): Promise<ClassementsRecord> {
       return withDb(() =>
-        withOrg(sql, organisationId, async (tx) => {
-          const edition = await editionCourante(tx, organisationId);
-          if (!edition) {
-            return { edition: null, epreuves: [], fraicheur: null };
-          }
-
-          const [epreuvesHeures, partantRows, retraitRows, arriveeRows, abandonRows, fraicheurRows] =
-            await Promise.all([
-              epreuvesHeuresDepart(tx, organisationId, edition.id),
-              // Partants POTENTIELS : validés ∧ numérotés ∧ jeton résolu — le
-              // retrait arbitré (ci-dessous) fait le départ effectif (un
-              // validé/numéroté jamais retiré n'est PAS partant : absent).
-              tx<{
-                jeton: string;
-                dossard: number;
-                epreuve_id: string;
-                age_category: string;
-              }[]>`
-                SELECT jeton_edossard AS jeton, dossard, epreuve_id, age_category
-                FROM coureur
-                WHERE organisation_id = ${organisationId}
-                  AND edition_id = ${edition.id}
-                  AND status = 'validé'
-                  AND jeton_edossard IS NOT NULL
-                  AND dossard IS NOT NULL
-              `,
-              // Retraits arbitrés (AD-3) — l'existence du PREMIER suffit à
-              // faire partir : son horodatage ne sert JAMAIS au classement.
-              tx<{ jeton_coureur: string }[]>`
-                SELECT DISTINCT ON (jeton_coureur) jeton_coureur
-                FROM terrain_evenement te
-                WHERE te.organisation_id = ${organisationId}
-                  AND te.edition_id = ${edition.id}
-                  AND te.type = 'retrait'
-                  AND NOT EXISTS (
-                    SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
-                  )
-                ORDER BY jeton_coureur, horodatage_reception ASC, id ASC
-              `,
-              // Premiers passages ARRIVÉE arbitrés par coureur : checkpoint
-              // global à l'édition (est_arrivee), croisé avec le coureur pour
-              // l'épreuve côté service. horodatage_reception SERVEUR = base
-              // du temps (AD-3) ; annulés exclus (ré-arbitrage en lecture).
-              tx<{ jeton_coureur: string; horodatage_reception: Date }[]>`
-                SELECT DISTINCT ON (te.jeton_coureur)
-                       te.jeton_coureur, te.horodatage_reception
-                FROM terrain_evenement te
-                JOIN mission m ON m.id = te.checkpoint_id
-                JOIN secteur s ON s.id = m.secteur_id
-                WHERE te.organisation_id = ${organisationId}
-                  AND te.edition_id = ${edition.id}
-                  AND te.type = 'passage'
-                  AND m.organisation_id = ${organisationId}
-                  AND m.type = 'scan_checkpoint'
-                  AND m.est_arrivee
-                  AND s.edition_id = ${edition.id}
-                  AND NOT EXISTS (
-                    SELECT 1 FROM annulation a WHERE a.evenement_id = te.id
-                  )
-                ORDER BY te.jeton_coureur, te.horodatage_reception ASC, te.id ASC
-              `,
-              tx<{ jeton_coureur: string }[]>`
-                SELECT jeton_coureur
-                FROM abandon
-                WHERE organisation_id = ${organisationId}
-                  AND edition_id = ${edition.id}
-              `,
-              // Fraîcheur du contrat classements : DERNIER PASSAGE reçu —
-              // les retraits ne la font pas bouger (un retrait plus récent
-              // qu'un passage reste invisible côté fraîcheur).
-              tx<{ fraicheur: Date | null }[]>`
-                SELECT max(horodatage_reception) AS fraicheur
-                FROM terrain_evenement
-                WHERE organisation_id = ${organisationId}
-                  AND edition_id = ${edition.id}
-                  AND type = 'passage'
-              `,
-            ]);
-
-          const partis = new Set(retraitRows.map((row) => row.jeton_coureur));
-          const abandonnes = new Set(abandonRows.map((row) => row.jeton_coureur));
-          const arriveeParJeton = new Map(
-            arriveeRows.map((row) => [row.jeton_coureur, row.horodatage_reception]),
-          );
-          const epreuves: ClassementsRecord['epreuves'] = epreuvesHeures.map((epreuve) => ({
-            ...epreuve,
-            lignes: [],
-          }));
-          const epreuveParId = new Map(epreuves.map((epreuve) => [epreuve.epreuveId, epreuve]));
-          for (const row of partantRows) {
-            // Partant = résolu ∧ RETIRÉ (arbitré). Un coureur dont l'épreuve
-            // n'est pas celle d'une épreuve listée (défense : FK libre) reste
-            // neutre — il n'apparaît dans AUCUN classement.
-            if (!partis.has(row.jeton)) {
-              continue;
-            }
-            const epreuve = epreuveParId.get(row.epreuve_id);
-            if (epreuve === undefined) {
-              continue;
-            }
-            const arriveeRecue = arriveeParJeton.get(row.jeton) ?? null;
-            // L'abandon DOMINE l'arrivée : un scan d'arrivée tardif (réseau
-            // différé) ne fait jamais rebasculer un abandonné (calque 5.3).
-            const statut: 'arrivé' | 'en-course' | 'abandonné' = abandonnes.has(row.jeton)
-              ? 'abandonné'
-              : arriveeRecue !== null
-                ? 'arrivé'
-                : 'en-course';
-            epreuve.lignes.push({
-              dossard: row.dossard,
-              epreuveId: row.epreuve_id,
-              categorieAge: row.age_category,
-              statut,
-              arriveeRecue,
-            });
-          }
-
-          return {
-            edition: { id: edition.id, nom: edition.name },
-            epreuves,
-            fraicheur: fraicheurRows[0]?.fraicheur ?? null,
-          };
-        }),
+        withOrg(sql, organisationId, (tx) => lireClassementsRecord(tx, organisationId)),
       );
     },
 

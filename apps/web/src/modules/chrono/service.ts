@@ -448,7 +448,13 @@ function categorieAgeContrat(valeur: string): CategorieAgeClassement {
     : 'Senior';
 }
 
-function versClassements(record: ClassementsRecord, genereA: Date): ClassementsEdition {
+/**
+ * Assemble le contrat classements AU-DESSUS du record store. Story 7.4 :
+ * EXPORTÉE — le module rapports réutilise ce calcul TEL QUEL (rangs ex æquo,
+ * temps = réception − heure officielle) sur le record lu dans SA transaction
+ * unique ; jamais recalculé ailleurs.
+ */
+export function versClassements(record: ClassementsRecord, genereA: Date): ClassementsEdition {
   return {
     genereA: genereA.toISOString(),
     fraicheur: record.fraicheur !== null ? record.fraicheur.toISOString() : null,

@@ -179,6 +179,13 @@ describe('page /admin/course — rendu serveur PC course (story 5.1)', () => {
     expect(html).toContain('Abandonnés');
   });
 
+  it('passerelle story 7.4 : lien btn-lien vers les rapports post-course et la commande', async () => {
+    chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('href="/admin/rapports"');
+    expect(html).toContain('rapport post-course et la commande t-shirts/médailles');
+  });
+
   it('board UX-DR-12 : dossards par passage arbitré, checkpoint d’arrivée marqué, attente si vide', async () => {
     chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
     const html = await rendu();
