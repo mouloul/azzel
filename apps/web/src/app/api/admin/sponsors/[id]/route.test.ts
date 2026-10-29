@@ -6,6 +6,9 @@ import { DELETE as deleteSponsorRoute, PATCH as patchSponsor } from './route';
 import { DbUnavailableError } from '@/modules/iam/errors';
 import { SponsorNotFoundError } from '@/modules/sponsors/errors';
 
+/** Les routes [id] refusent tout ce qui n'est pas un UUID : la colonne l'est. */
+const SPONSOR_ID = '11111111-1111-4111-8111-111111111111';
+
 const iamServiceMock = vi.hoisted(() => ({
   getSession: vi.fn(),
 }));
@@ -45,7 +48,7 @@ const SESSION_COUREUR = {
 };
 
 const SPONSOR = {
-  id: 'sponsor-1',
+  id: SPONSOR_ID,
   nom: 'Ifri',
   url: null,
   logoUrl: null,
@@ -53,7 +56,7 @@ const SPONSOR = {
   createdAt: '2026-10-21T09:00:00.000Z',
 };
 
-function context(id = 'sponsor-1'): { params: Promise<{ id: string }> } {
+function context(id = SPONSOR_ID): { params: Promise<{ id: string }> } {
   return { params: Promise.resolve({ id }) };
 }
 
@@ -62,7 +65,7 @@ function patchRequest(
   withCookie = true,
   length: number | null = raw.length,
 ): NextRequest {
-  return new NextRequest(`${BASE}/api/admin/sponsors/sponsor-1`, {
+  return new NextRequest(`${BASE}/api/admin/sponsors/${SPONSOR_ID}`, {
     method: 'PATCH',
     headers: {
       'content-type': 'application/json',
@@ -75,7 +78,7 @@ function patchRequest(
 }
 
 function deleteRequest(withCookie = true): NextRequest {
-  return new NextRequest(`${BASE}/api/admin/sponsors/sponsor-1`, {
+  return new NextRequest(`${BASE}/api/admin/sponsors/${SPONSOR_ID}`, {
     method: 'DELETE',
     headers: withCookie ? { cookie: 'azzel_session=jeton-session' } : {},
   });
@@ -129,15 +132,24 @@ describe('PATCH /api/admin/sponsors/[id]', () => {
     expect(body.error.code).toBe('admin.sponsors.not_found');
   });
 
+  it('id non-UUID : 404 propre avant SQL (aucun 22P02/500), service non appelé', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+    const response = await patchSponsor(patchRequest('{"name":"Ifri"}'), context('pas-un-uuid'));
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('admin.sponsors.not_found');
+    expect(sponsorsServiceMock.updateSponsor).not.toHaveBeenCalled();
+  });
+
   it('session organisateur : 200 renvoie le sponsor mis à jour, id transmis', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
     sponsorsServiceMock.updateSponsor.mockResolvedValue(SPONSOR);
-    const response = await patchSponsor(patchRequest('{"name":"Ifri"}'), context('sponsor-1'));
+    const response = await patchSponsor(patchRequest('{"name":"Ifri"}'), context(SPONSOR_ID));
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true, sponsor: SPONSOR });
     expect(sponsorsServiceMock.updateSponsor).toHaveBeenCalledWith(
       SESSION_ORGANISATEUR,
-      'sponsor-1',
+      SPONSOR_ID,
       { name: 'Ifri' },
     );
   });
@@ -166,15 +178,24 @@ describe('DELETE /api/admin/sponsors/[id]', () => {
     expect(response.status).toBe(404);
   });
 
+  it('id non-UUID : 404 propre avant SQL (aucun 22P02/500), service non appelé', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+    const response = await deleteSponsorRoute(deleteRequest(), context('pas-un-uuid'));
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('admin.sponsors.not_found');
+    expect(sponsorsServiceMock.deleteSponsor).not.toHaveBeenCalled();
+  });
+
   it('session organisateur : 200 { ok: true }', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
     sponsorsServiceMock.deleteSponsor.mockResolvedValue({ ok: true });
-    const response = await deleteSponsorRoute(deleteRequest(), context('sponsor-1'));
+    const response = await deleteSponsorRoute(deleteRequest(), context(SPONSOR_ID));
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
     expect(sponsorsServiceMock.deleteSponsor).toHaveBeenCalledWith(
       SESSION_ORGANISATEUR,
-      'sponsor-1',
+      SPONSOR_ID,
     );
   });
 });

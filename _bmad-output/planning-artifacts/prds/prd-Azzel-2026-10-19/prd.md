@@ -37,7 +37,7 @@ L'outil est fourni gratuitement à l'organisateur par son créateur (bénévole,
 ### 2.3 Parcours utilisateurs clés
 
 - **UJ-1. Yacine s'inscrit à la longue et boucle son dossier seul.** Yacine, 28 ans, coureur à Alger, découvre la vitrine partagée sur Instagram. Il s'inscrit avec son email, reçoit un code de vérification, choisit l'épreuve longue (~35 km), remplit ses informations, coche la décharge de bonne santé et le règlement intérieur, téléverse sa preuve de virement CCP. État d'entrée : anonyme sur la vitrine. Chemin : inscription → code par mail → formulaire → télversement. Point culminant : sa checklist passe au vert « Dossier validé — dossard prêt », son e-dossard QR apparaît, disponible hors-ligne. Résolution : il revient régulièrement pour les infos pratiques ; à J-7, il sait où retirer son dossard. *Réalise : FR-1 à FR-7.*
-- **UJ-2. Karim scanne en zone blanche toute la matinée.** Karim, 19 ans, volontaire du village, reçoit son invitation (import Excel), définit son mot de passe, découvre sa mission : ravitaillement 2, secteur Djurdjura-ouest, 3 scanneurs. La veille, sa fiche mission est dans son téléphone, hors-ligne. Le jour J, sans réseau : caméra plein écran, bip vert par coureur, voyant rouge sur doublon ou inconnu. À 14 h, en apercevant du réseau, il synchronise : « 217 passages en attente → envoyés ». *Réalise : FR-8 à FR-14.*
+- **UJ-2. Karim scanne en zone blanche toute la matinée.** Karim, 19 ans, volontaire du village, reçoit son invitation (import Excel), se connecte avec son email et un code de vérification, découvre sa mission : ravitaillement 2, secteur Djurdjura-ouest, 3 scanneurs. La veille, sa fiche mission est dans son téléphone, hors-ligne. Le jour J, sans réseau : caméra plein écran, bip vert par coureur, voyant rouge sur doublon ou inconnu. À 14 h, en apercevant du réseau, il synchronise : « 217 passages en attente → envoyés ». *Réalise : FR-8 à FR-14.*
 - **UJ-3. Nadia pilote la course au PC.** Nadia, organisatrice, sur le portail admin : le matin, le tableau live affiche retraits, partants par épreuve ; à midi, une alerte hors-délais clignote — un coureur attendu au checkpoint 3 ne l'a pas franchi ; elle appelle le secteur ; abandon saisi avec motif. Le soir, les classements sont publiés et partagés ; le lendemain, elle exporte le rapport chiffré pour le directoire. *Réalise : FR-15 à FR-26.*
 - **UJ-4. Malika suit son frère depuis Tizi Ouzou.** Sur la vitrine publique, la carte affiche la dernière position GPS connue des coureurs sur le tracé GPX ; elle voit son frère franchir le checkpoint 2 et le classement live se mettre à jour. *Réalise : FR-18 à FR-23.*
 
@@ -110,10 +110,10 @@ Le volontaire au guichet peut scanner l'e-dossard pour marquer le coureur « pr�
 
 ### 4.3 Portail volontaires et missions
 
-**Description.** 150–200 volontaires, importés par Excel, reçoivent une invitation à définir leur mot de passe ; l'organisateur découpe l'édition en secteurs et y affecte des missions ; chaque volontaire a sa fiche mission offline le jour J. Le scan de checkpoint est l'une des missions. Réalise UJ-2.
+**Description.** 150–200 volontaires, importés par Excel, reçoivent une invitation à se connecter (email + code de vérification, comme tous les rôles) ; l'organisateur découpe l'édition en secteurs et y affecte des missions ; chaque volontaire a sa fiche mission offline le jour J. Le scan de checkpoint est l'une des missions. Réalise UJ-2.
 
 #### FR-9 : Import Excel des volontaires
-L'admin peut importer une liste de volontaires (nom, email, téléphone) et déclencher les invitations ; les volontaires définissent leur mot de passe à la première connexion.
+L'admin peut importer une liste de volontaires (nom, email, téléphone) et déclencher les invitations ; les volontaires se connectent par email + code de vérification, mécanisme d'accès unique pour tous les rôles (coureur, volontaire, organisateur).
 - Les lignes invalides sont rejetées avec rapport ligne par ligne.
 
 #### FR-10 : Secteurs et missions

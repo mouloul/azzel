@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { estErreurDelai, fetchAvecDelai } from '@/lib/fetch-delai';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import {
@@ -26,29 +27,6 @@ const TIMEOUT_ERROR = {
   action: 'Réessaie dans un instant.',
 };
 
-/** Timeout réseau 15 s — AbortController + setTimeout en repli des navigateurs
- *  sans AbortSignal.timeout (Safari < 16) : la requête part toujours bornée. */
-async function fetchAvecDelai(url: string, init: RequestInit): Promise<Response> {
-  if (typeof AbortSignal.timeout === 'function') {
-    return fetch(url, { ...init, signal: AbortSignal.timeout(15_000) });
-  }
-  const controleur = new AbortController();
-  const minuteur = setTimeout(() => controleur.abort(), 15_000);
-  try {
-    return await fetch(url, { ...init, signal: controleur.signal });
-  } finally {
-    clearTimeout(minuteur);
-  }
-}
-
-/** Le fallback AbortController rejette avec AbortError, AbortSignal.timeout
- *  avec TimeoutError : les deux se valent (« serveur trop lent »). */
-function estErreurDelai(error: unknown): boolean {
-  return (
-    error instanceof DOMException &&
-    (error.name === 'TimeoutError' || error.name === 'AbortError')
-  );
-}
 
 /** Champs d'erreur nommés côté API : champs témoignage + URL trailer. */
 type ChampsErreurAdmin = TemoignageFieldErrors & { trailerUrl?: string };
@@ -114,14 +92,27 @@ function TrailerForm({ trailerUrl }: { trailerUrl: string | null }) {
   const [pending, setPending] = useState(false);
   const [enregistre, setEnregistre] = useState<string | null>(null);
   const [avertissement, setAvertissement] = useState<string | null>(null);
+  // Valeur que l'on vient d'enregistrer, en attente du router.refresh().
+  const [enregistreeUrl, setEnregistreeUrl] = useState<string | null>(null);
 
   // Écrasement concurrent : la prop change (router.refresh) — on ne
   // re-synchronise l'affichage QUE si l'organisateur n'a pas touché le champ.
+  // Après un enregistrement, on attend que la prop porte enfin la valeur
+  // sauvegardée : sinon l'effet réécrivait l'ANCIENNE adresse juste après un
+  // succès, et la nouvelle ne revenait qu'au retour du rafraîchissement.
   useEffect(() => {
-    if (!touche) {
-      setUrl(trailerUrl ?? '');
+    const valeurProp = trailerUrl ?? '';
+    if (enregistreeUrl !== null) {
+      if (valeurProp === enregistreeUrl) {
+        setEnregistreeUrl(null);
+        setTouche(false);
+      }
+      return;
     }
-  }, [trailerUrl, touche]);
+    if (!touche) {
+      setUrl(valeurProp);
+    }
+  }, [trailerUrl, touche, enregistreeUrl]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -153,13 +144,15 @@ function TrailerForm({ trailerUrl }: { trailerUrl: string | null }) {
         }
         return;
       }
-      setTouche(false);
+      const sauvegardee = url.trim();
+      setUrl(sauvegardee);
+      setEnregistreeUrl(sauvegardee);
       // Adresse https acceptée mais non affichable (lien YouTube sans identifiant
       // de vidéo, chemin inconnu…) : la vitrine n'affichera rien — avertissement
       // immédiat à l'enregistrement plutôt qu'un silence côté page publique.
       if (url.trim() !== '' && resolveTrailerPlayer(url.trim()) === null) {
         setAvertissement(
-          'Cette adresse ne s’affichera pas sur la vitrine — utilisez un lien YouTube/Vimeo ou un fichier vidéo direct.',
+          'Cette adresse ne s’affichera pas sur la vitrine — utilise un lien YouTube/Vimeo ou un fichier vidéo direct.',
         );
       } else {
         setEnregistre(url.trim() === '' ? 'Vidéo retirée.' : 'Adresse enregistrée.');
@@ -198,7 +191,7 @@ function TrailerForm({ trailerUrl }: { trailerUrl: string | null }) {
           />
           <p className="hint">
             L’adresse doit commencer par https:// (YouTube, Vimeo ou lien direct) —
-            laissez vide si la vidéo n’est pas encore prête : le bloc vidéo reste
+            laisse vide si la vidéo n’est pas encore prête : le bloc vidéo reste
             absent de la page, sans erreur.
           </p>
           {fieldError !== null && (
@@ -428,7 +421,7 @@ function TemoignageForm({
           />
           <p className="hint">
             Nombre entier : les témoignages s’affichent du plus petit au plus grand.
-            Laissez vide pour placer en fin de liste.
+            Laisse vide pour placer en fin de liste.
           </p>
           {errorFor('ordre') !== null && (
             <p id={`${prefix}-ordre-erreur`} className="field-error">

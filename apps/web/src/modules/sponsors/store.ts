@@ -1,5 +1,8 @@
 import postgres, { type Sql } from 'postgres';
 
+import { protegerStore } from '@/db/app-role';
+import { isProductionRuntime } from '@/modules/iam/store';
+
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
 import { readDatabaseUrl } from '@/modules/iam/env';
@@ -158,6 +161,11 @@ export function createSponsorsStore(sql: Sql): SponsorsStore {
     async createSponsor(input: SaveSponsorInput): Promise<SponsorRecord> {
       return withDb(async () =>
         withOrg(sql, input.organisationId, async (tx) => {
+          // Verrou consultatif transactionnel (même pattern que createTemoignage) :
+          // sérialise le couple count + insert par organisation. Sans lui, deux
+          // créations concurrentes à 19 sponsors franchissaient toutes les deux
+          // MAX_SPONSORS_PAR_ORG. Clé préfixée : ne bloque pas les témoignages.
+          await tx`SELECT pg_advisory_xact_lock(hashtext(${`sponsor:${input.organisationId}`}))`;
           const counts = await tx<{ count: number }[]>`
             SELECT count(*)::int AS count FROM sponsor
             WHERE organisation_id = ${input.organisationId}
@@ -358,11 +366,15 @@ export function getSponsorsStore(): SponsorsStore {
     return globals.__azzelSponsorsStore;
   }
   const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createSponsorsStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Garde de rôle applicatif (story 1.9) : la connexion doit être le rôle
+  // soumis au RLS, sur CE store comme sur celui de l'IAM.
+  const sql = databaseUrl
+    ? postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 })
+    : null;
+  const store =
+    sql !== null
+      ? protegerStore(sql, createSponsorsStore(sql), isProductionRuntime())
+      : createUnavailableStore();
   globals.__azzelSponsorsStore = store;
   return store;
 }

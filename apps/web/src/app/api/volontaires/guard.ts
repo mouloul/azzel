@@ -56,6 +56,13 @@ function roleGuardResponse(failure: 'unauthenticated' | 'forbidden'): NextRespon
   return volontaireErrorResponse(toIamApiError(error));
 }
 
+/**
+ * Lecture du jeton : COOKIE uniquement, à dessein. Seule la surface coureur
+ * (app native) présente un `Authorization: Bearer` ; l'administration et
+ * l'espace volontaire sont des surfaces web, où accepter le Bearer
+ * élargirait l'authentification sans besoin. Divergence volontaire avec
+ * `guardCoureur`, qui passe par `sessionTokenFromRequest`.
+ */
 export async function guardVolontaire(
   request: NextRequest,
 ): Promise<{ session: SessionRecord } | { response: NextResponse }> {

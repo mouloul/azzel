@@ -222,6 +222,23 @@ const PAIRES: readonly Paire[] = [
     seuil: SEUIL_NON_TEXTUEL,
     usage: 'outline de focus rendu sur bande forêt + hero (corrigé 1.4.11 : var(--focus) brut ≈ 2,2:1 en clair, interdit sur fond forêt)',
   },
+  /* WCAG 1.4.11 — la bordure d'un champ de saisie est un composant
+   * d'interface : 3:1 exigé. `line` (filet décoratif) tombait à 1,15:1 sur
+   * crème ; `line-strong` lui est réservé pour input/select/textarea/.option. */
+  {
+    nom: 'line-strong / surface',
+    texte: 'line-strong',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'bordure des champs de saisie (non textuel)',
+  },
+  {
+    nom: 'line-strong / surface-raised',
+    texte: 'line-strong',
+    fond: 'surface-raised',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'bordure des champs dans les cartes (non textuel)',
+  },
 ];
 
 describe('ratioContraste — fonction pure WCAG', () => {

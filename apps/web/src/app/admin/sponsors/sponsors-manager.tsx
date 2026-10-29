@@ -11,6 +11,7 @@ import {
   type SponsorFieldErrors,
   type SponsorMode,
 } from '@/modules/sponsors/domain';
+import { estErreurDelai, fetchAvecDelai } from '@/lib/fetch-delai';
 import type { SponsorSummary } from '@/modules/sponsors/service';
 
 const NETWORK_ERROR = {
@@ -60,11 +61,10 @@ async function lireErreur(
   if (typeof error?.message !== 'string' || typeof error?.action !== 'string') {
     return NETWORK_ERROR;
   }
+  const brut = (payload as { fields?: unknown }).fields;
   const fields =
-    'fields' in payload &&
-    typeof (payload as { fields?: unknown }).fields === 'object' &&
-    (payload as { fields?: unknown }).fields !== null
-      ? ((payload as { fields: SponsorFieldErrors }).fields ?? undefined)
+    typeof brut === 'object' && brut !== null && !Array.isArray(brut)
+      ? (brut as SponsorFieldErrors)
       : undefined;
   return { message: error.message, action: error.action, fields };
 }
@@ -188,13 +188,12 @@ function SponsorForm({
       if (mode === 'A') {
         corps.signature = values.signature;
       }
-      const response = await fetch(
+      const response = await fetchAvecDelai(
         sponsor ? `/api/admin/sponsors/${sponsor.id}` : '/api/admin/sponsors',
         {
           method: sponsor ? 'PATCH' : 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(corps),
-          signal: AbortSignal.timeout(15_000),
         },
       );
       if (!response.ok) {
@@ -226,7 +225,7 @@ function SponsorForm({
       }
       onTermine();
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'TimeoutError') {
+      if (estErreurDelai(error)) {
         setServerError(TIMEOUT_ERROR);
       } else {
         setServerError(NETWORK_ERROR);
@@ -247,7 +246,7 @@ function SponsorForm({
           'Adresse du logo (facultatif)',
           'url',
           'https://exemple.dz/logo.png',
-          'Préférez une adresse https:// — les logos http ne s’affichent pas sur un site https.',
+          'Préfère une adresse https:// — les logos http ne s’affichent pas sur un site https.',
         )}
         {mode === 'A' ? (
           <label className="option">
@@ -307,9 +306,8 @@ function LigneSponsor({
     setReconnect(false);
     setPending(true);
     try {
-      const response = await fetch(`/api/admin/sponsors/${sponsor.id}`, {
+      const response = await fetchAvecDelai(`/api/admin/sponsors/${sponsor.id}`, {
         method: 'DELETE',
-        signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -321,7 +319,7 @@ function LigneSponsor({
       }
       router.refresh();
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'TimeoutError') {
+      if (estErreurDelai(error)) {
         setServerError(TIMEOUT_ERROR);
       } else {
         setServerError(NETWORK_ERROR);
@@ -386,11 +384,10 @@ function ModeForm({ mode }: { mode: SponsorMode }) {
     setEnregistre(null);
     setPending(true);
     try {
-      const response = await fetch('/api/admin/sponsors/config', {
+      const response = await fetchAvecDelai('/api/admin/sponsors/config', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ mode: choix }),
-        signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -403,7 +400,7 @@ function ModeForm({ mode }: { mode: SponsorMode }) {
       setEnregistre('Mode enregistré.');
       router.refresh();
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'TimeoutError') {
+      if (estErreurDelai(error)) {
         setServerError(TIMEOUT_ERROR);
       } else {
         setServerError(NETWORK_ERROR);

@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { SESSION_COOKIE_NAME, SESSION_TTL_SEC } from '@/modules/iam/constants';
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_SEC,
+  homePathForRole,
+} from '@/modules/iam/constants';
 import { EmailInvalidError, InvalidCodeError, toApiError } from '@/modules/iam/errors';
 import { verifyLoginCode } from '@/modules/iam/service';
 
@@ -38,9 +42,16 @@ export async function POST(request: NextRequest) {
     // no-store : la réponse transporte le token natif (une seule fois) —
     // aucun intermédiaire ne doit la cacher.
     const response = NextResponse.json(
+      // `redirectTo` est calculé ici, à partir du rôle en base : le client
+      // n'a pas à deviner l'espace de destination (et ne peut pas se tromper).
       natif
-        ? { ok: true, email: session.email, token: session.token }
-        : { ok: true, email: session.email },
+        ? {
+            ok: true,
+            email: session.email,
+            token: session.token,
+            redirectTo: homePathForRole(session.role),
+          }
+        : { ok: true, email: session.email, redirectTo: homePathForRole(session.role) },
       { headers: { 'Cache-Control': 'no-store' } },
     );
     response.cookies.set(SESSION_COOKIE_NAME, session.token, {

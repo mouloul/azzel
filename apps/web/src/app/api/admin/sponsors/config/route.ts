@@ -4,6 +4,7 @@ import { getSponsorsAdminState, setSponsorMode } from '@/modules/sponsors/servic
 import { toSponsorsApiError } from '@/modules/sponsors/errors';
 
 import { errorResponse, readJsonBody } from '../body';
+import { revaliderAccueil } from '../../revalidation';
 import { guardAdmin } from '../../guard';
 
 export async function GET(request: NextRequest) {
@@ -33,6 +34,7 @@ export async function PUT(request: NextRequest) {
   }
   try {
     const config = await setSponsorMode(guarded.session, lu.body);
+    revaliderAccueil();
     return NextResponse.json(config, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return errorResponse(toSponsorsApiError(error));

@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { estErreurDelai, fetchAvecDelai } from '@/lib/fetch-delai';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
   MAX_CORPS_LENGTH,
@@ -32,15 +33,6 @@ const LIBELLES_SLUGS: Record<ContenuSlug, string> = {
   restauration: 'Page La région',
   annexes: 'Page La région',
 };
-
-/**
- * AbortSignal.timeout n'existe pas sur les navigateurs anciens (Safari < 16,
- * etc.) : sans la fonction, la requête part sans timeout — jamais d'échec
- * systématique à la soumission.
- */
-function signalDeRequete(): AbortSignal | undefined {
-  return typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15_000) : undefined;
-}
 
 interface FormValues {
   titre: string;
@@ -110,6 +102,16 @@ function ErreurServeur({
 function BlocForm({ bloc, onTermine }: { bloc: ContenuBlocAdmin; onTermine: () => void }) {
   const prefix = `contenu-${bloc.slug}`;
   const [values, setValues] = useState<FormValues>(() => valeursInitiales(bloc));
+  // Version du verrou optimiste, tenue à jour par la réponse du serveur : la
+  // prop ne bouge qu'au router.refresh(), et renvoyer une version périmée
+  // enfermait l'organisateur dans une boucle de 409.
+  const [version, setVersion] = useState(bloc.updatedAt);
+
+  // Un rafraîchissement (sauvegarde d'un autre bloc, conflit) réaligne la
+  // version sur celle du serveur.
+  useEffect(() => {
+    setVersion(bloc.updatedAt);
+  }, [bloc.updatedAt]);
   const [fieldErrors, setFieldErrors] = useState<ContenuFieldErrors | null>(null);
   const [serverError, setServerError] = useState<{ message: string; action: string } | null>(
     null,
@@ -166,20 +168,24 @@ function BlocForm({ bloc, onTermine }: { bloc: ContenuBlocAdmin; onTermine: () =
         corps: values.corps,
         // Verrou optimiste : la version lue accompagne l'édition — obsolète,
         // le serveur répond 409 (conflit d'édition concurrente).
-        updatedAt: bloc.updatedAt,
+        updatedAt: version,
       };
       if (bloc.epreuve !== null) {
         corps.gpxUrl = values.gpxUrl.trim();
       }
-      const response = await fetch(`/api/admin/contenus/${bloc.slug}`, {
+      const response = await fetchAvecDelai(`/api/admin/contenus/${bloc.slug}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(corps),
-        signal: signalDeRequete(),
       });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           setReconnect(true);
+        }
+        if (response.status === 409) {
+          // Conflit : on recharge l'état serveur pour que la tentative
+          // suivante parte avec la bonne version, au lieu de rejouer la nôtre.
+          onTermine();
         }
         const erreur = await lireErreur(response);
         if (erreur !== null) {
@@ -192,10 +198,16 @@ function BlocForm({ bloc, onTermine }: { bloc: ContenuBlocAdmin; onTermine: () =
         }
         return;
       }
+      const payload = (await response.json()) as {
+        contenu?: { updatedAt?: unknown };
+      };
+      if (typeof payload.contenu?.updatedAt === 'string') {
+        setVersion(payload.contenu.updatedAt);
+      }
       setEnregistre(true);
       onTermine();
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'TimeoutError') {
+      if (estErreurDelai(error)) {
         setServerError(TIMEOUT_ERROR);
       } else {
         setServerError(NETWORK_ERROR);
@@ -234,7 +246,7 @@ function BlocForm({ bloc, onTermine }: { bloc: ContenuBlocAdmin; onTermine: () =
           aria-describedby={decritPar('corps', true)}
         />
         <p className="hint" id={`${prefix}-corps-hint`}>
-          Texte simple : séparez les paragraphes par une ligne vide. Le HTML n’est
+          Texte simple : sépare les paragraphes par une ligne vide. Le HTML n’est
           pas interprété.
         </p>
         {champErreur('corps')}
@@ -257,7 +269,7 @@ function BlocForm({ bloc, onTermine }: { bloc: ContenuBlocAdmin; onTermine: () =
           />
           <p className="hint" id={`${prefix}-gpxUrl-hint`}>
             Adresse https facultative (fichier hébergé ailleurs). Vide : la page
-            affiche « Tracé à venir ». Laissez le champ tel quel pour conserver
+            affiche « Tracé à venir ». Laisse le champ tel quel pour conserver
             l’adresse actuelle après modification du texte.
           </p>
           {champErreur('gpxUrl')}

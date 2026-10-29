@@ -70,6 +70,15 @@ export function isHttpsUrl(value: string): boolean {
   }
 }
 
+/**
+ * Schéma en minuscules : `new URL()` accepte `HTTPS://…`, mais la contrainte SQL
+ * (`~ '^https://'`) est sensible à la casse — l'écriture échouait alors en 23514,
+ * remonté en 500. On stocke la forme canonique, le reste de l'adresse intact.
+ */
+export function minusculerSchema(url: string): string {
+  return url.replace(/^https:\/\//i, 'https://');
+}
+
 export function normalizeContenuInput(raw: unknown): ContenuInput {
   const record =
     typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
@@ -81,7 +90,7 @@ export function normalizeContenuInput(raw: unknown): ContenuInput {
   return {
     titre: texte('titre'),
     corps: texte('corps'),
-    gpxUrl: gpx.length > 0 ? gpx : null,
+    gpxUrl: gpx.length > 0 ? minusculerSchema(gpx) : null,
   };
 }
 

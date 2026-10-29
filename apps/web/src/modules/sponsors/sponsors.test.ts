@@ -297,6 +297,23 @@ describe('sponsors — service', () => {
     );
   });
 
+  it('updateSponsor : signature mal typée refusée champ nommé, jamais lue comme false', async () => {
+    const store = fakeStore({
+      findSponsorById: vi.fn().mockResolvedValue(record({ isSignature: true })),
+      updateSponsor: vi.fn(),
+    });
+    for (const signature of ['true', 1, {}]) {
+      const erreur = await updateSponsor(SESSION, 'sponsor-1', { signature }, { store }).catch(
+        (e: unknown) => e,
+      );
+      expect(erreur).toBeInstanceOf(InvalidSponsorFieldsError);
+      expect((erreur as InvalidSponsorFieldsError).fields).toMatchObject({
+        signature: expect.any(String),
+      });
+    }
+    expect(store.updateSponsor).not.toHaveBeenCalled();
+  });
+
   it('createSponsor : valeurs non-chaîne refusées champ nommé', async () => {
     const store = fakeStore({ createSponsor: vi.fn().mockResolvedValue(record()) });
     await expect(
@@ -337,6 +354,13 @@ describe('sponsors — service', () => {
       readDefaultOrgPartenaires: vi.fn().mockRejectedValue(new DbUnavailableError()),
     });
     await expect(getPartenairesSection({ store })).resolves.toBeNull();
+  });
+
+  it('getPartenairesSection : un bug de code éclate au lieu de masquer la section', async () => {
+    const store = fakeStore({
+      readDefaultOrgPartenaires: vi.fn().mockRejectedValue(new TypeError('bug')),
+    });
+    await expect(getPartenairesSection({ store })).rejects.toBeInstanceOf(TypeError);
   });
 
   it('getPartenairesSection : table vide → null, sinon résolution du mode', async () => {

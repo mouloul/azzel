@@ -15,7 +15,7 @@ Permettre à l'organisation d'armer ses 150–200 volontaires sans saisie manuel
 
 ## Requirements & Constraints
 
-- Import volontaires : fichier Excel (nom, email, téléphone) ; lignes valides → volontaires créés, lignes invalides → rejet avec rapport ligne par ligne — **jamais d'import silencieux**. Chaque volontaire reçoit une invitation (file d'envoi avec rejeu, échec SMTP non bloquant) et définit son mot de passe à la première connexion.
+- Import volontaires : fichier Excel (nom, email, téléphone) ; lignes valides → volontaires créés, lignes invalides → rejet avec rapport ligne par ligne — **jamais d'import silencieux**. Chaque volontaire reçoit une invitation (file d'envoi avec rejeu, échec SMTP non bloquant) et se connecte par **email + code de vérification**, mécanisme unique tous rôles — **aucun mot de passe**. Sa première connexion le marque « activé ».
 - Secteurs et missions : types fermés (scan checkpoint, accueil, sécurité tronçon, sécurité arrivée, distribution dossards, communication) ; chaque mission affiche son état **couverte / vacante** (côté admin et côté volontaire) ; une affectation créant un chevauchement horaire pour un volontaire déclenche un avertissement **non bloquant**.
 - Fiche mission : secteur, rôle, horaires, contacts, consignes — préchargée **à l'affectation**, consultable application fermée et réseau absent. Offline-first radical : aucune fonction critique ne dépend du réseau.
 - Annuaire coureurs : réplique locale de toute l'édition (dossards, identité) avant le départ ; l'état de préchargement (« annuaire prêt — N coureurs ») est visible et annoncé au lecteur d'écran ; un coureur absent de l'annuaire sera signalé « DOSSARD INCONNU » au scan (consommé par l'épopée 4).
@@ -25,7 +25,7 @@ Permettre à l'organisation d'armer ses 150–200 volontaires sans saisie manuel
 
 ## Technical Decisions
 
-- Le portail volontaires vit dans `apps/web` (Next.js 16) en **PWA offline installable** (iOS Safari inclus) ; les écrans d'import et de gestion des secteurs/missions vivent côté admin. Modules backend : `missions` (secteurs, volontaires, affectations), `iam` (invitations, comptes), annuaire côté `chrono`.
+- Le portail volontaires vit dans `apps/web` (Next.js 16) en **PWA offline installable** (iOS Safari inclus) ; les écrans d'import et de gestion des secteurs/missions vivent côté admin. Modules backend : `missions` (secteurs, volontaires, affectations), `iam` (comptes, connexion par code unique tous rôles — `/connexion`, rôle lu sur le compte, `homePathForRole`), annuaire côté `chrono`.
 - Frontières de données : ÉDITION → SECTEUR → MISSION, MISSION affectée à VOLONTAIRE ; `organisation_id` descend dans chaque table métier, isolation par RLS Postgres (contrainte structurelle, jamais de filtrage applicatif seul).
 - Le contrat inter-apps vit **uniquement dans `packages/shared`**, versionné : schéma de la réplique annuaire, format du payload QR e-dossard (jeton unique édition, **jamais le dossard nu**), clé naturelle du Passage `(édition, coureur, checkpoint)` — jamais réinventés localement.
 - Stockage local web : IndexedDB pour l'annuaire répliqué versionné et la fiche mission préchargée ; paradigme « l'appareil propose, le serveur dispose ».

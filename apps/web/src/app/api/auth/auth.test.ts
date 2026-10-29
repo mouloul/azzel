@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { POST as postCode } from './code/route';
 import { POST as postLogout } from './logout/route';
@@ -43,6 +43,7 @@ describe('POST /api/auth/verify', () => {
     serviceMock.verifyLoginCode.mockResolvedValue({
       token: 'jeton-session',
       email: 'coureur@exemple.dz',
+      role: 'coureur',
     });
 
     const response = await postVerify(
@@ -50,8 +51,17 @@ describe('POST /api/auth/verify', () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { ok: boolean; email: string };
-    expect(body).toEqual({ ok: true, email: 'coureur@exemple.dz' });
+    const body = (await response.json()) as {
+      ok: boolean;
+      email: string;
+      redirectTo: string;
+    };
+    // La destination vient du serveur : un coureur va dans son espace.
+    expect(body).toEqual({
+      ok: true,
+      email: 'coureur@exemple.dz',
+      redirectTo: '/espace-coureur',
+    });
     const setCookie = response.headers
       .getSetCookie()
       .find((cookie) => cookie.startsWith('azzel_session='));
@@ -67,6 +77,7 @@ describe('POST /api/auth/verify', () => {
     serviceMock.verifyLoginCode.mockResolvedValue({
       token: 'jeton-natif-clair',
       email: 'coureur@exemple.dz',
+      role: 'coureur',
     });
 
     const response = await postVerify(
@@ -78,8 +89,18 @@ describe('POST /api/auth/verify', () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { ok: boolean; email: string; token?: string };
-    expect(body).toEqual({ ok: true, email: 'coureur@exemple.dz', token: 'jeton-natif-clair' });
+    const body = (await response.json()) as {
+      ok: boolean;
+      email: string;
+      token?: string;
+      redirectTo: string;
+    };
+    expect(body).toEqual({
+      ok: true,
+      email: 'coureur@exemple.dz',
+      token: 'jeton-natif-clair',
+      redirectTo: '/espace-coureur',
+    });
     // Le token voyage dans le corps : aucun intermédiaire ne doit cacher la réponse.
     expect(response.headers.get('cache-control')).toBe('no-store');
     // Le cookie httpOnly reste posé (web inchangé ; sans effet pour l'app).
@@ -124,6 +145,16 @@ describe('POST /api/auth/code', () => {
 });
 
 describe('POST /api/auth/code — IP transmise pour le quota anti-abus', () => {
+  const hopsOrigine = process.env.AZZEL_TRUSTED_PROXY_HOPS;
+
+  afterEach(() => {
+    if (hopsOrigine === undefined) {
+      delete process.env.AZZEL_TRUSTED_PROXY_HOPS;
+    } else {
+      process.env.AZZEL_TRUSTED_PROXY_HOPS = hopsOrigine;
+    }
+  });
+
   function codeRequest(headers: Record<string, string>): NextRequest {
     return new NextRequest(BASE + '/api/auth/code', {
       method: 'POST',
@@ -133,10 +164,13 @@ describe('POST /api/auth/code — IP transmise pour le quota anti-abus', () => {
     });
   }
 
-  it('x-forwarded-for : seule la première adresse (client d’origine) est retenue', async () => {
+  it('un proxy de confiance : l’adresse retenue est celle qu’il a posée (la dernière)', async () => {
+    process.env.AZZEL_TRUSTED_PROXY_HOPS = '1';
     serviceMock.requestLoginCode.mockResolvedValue(undefined);
 
-    await postCode(codeRequest({ 'x-forwarded-for': '203.0.113.7, 198.51.100.4' }));
+    // Le client a préfixé l’en-tête avec une adresse de son choix : seule
+    // l’entrée ajoutée par NOTRE proxy compte.
+    await postCode(codeRequest({ 'x-forwarded-for': '1.2.3.4, 203.0.113.7' }));
 
     expect(serviceMock.requestLoginCode).toHaveBeenCalledWith(
       'coureur@exemple.dz',
@@ -145,19 +179,43 @@ describe('POST /api/auth/code — IP transmise pour le quota anti-abus', () => {
     );
   });
 
-  it('x-real-ip en secours quand x-forwarded-for est absent', async () => {
+  it('adresse normalisée : port retiré, IPv6 regroupée par /64', async () => {
+    process.env.AZZEL_TRUSTED_PROXY_HOPS = '1';
     serviceMock.requestLoginCode.mockResolvedValue(undefined);
 
-    await postCode(codeRequest({ 'x-real-ip': '203.0.113.9' }));
-
-    expect(serviceMock.requestLoginCode).toHaveBeenCalledWith(
+    await postCode(codeRequest({ 'x-forwarded-for': '203.0.113.7:443' }));
+    expect(serviceMock.requestLoginCode).toHaveBeenLastCalledWith(
       'coureur@exemple.dz',
       {},
-      { clientIp: '203.0.113.9' },
+      { clientIp: '203.0.113.7' },
+    );
+
+    await postCode(codeRequest({ 'x-forwarded-for': '[2001:DB8:0:1:abcd::1]:443' }));
+    expect(serviceMock.requestLoginCode).toHaveBeenLastCalledWith(
+      'coureur@exemple.dz',
+      {},
+      { clientIp: '2001:db8:0:1' },
     );
   });
 
-  it('aucun en-tête d’IP : clientIp null, la demande reste traitée', async () => {
+  it('sans proxy de confiance déclaré : x-forwarded-for ignoré, clientIp null', async () => {
+    delete process.env.AZZEL_TRUSTED_PROXY_HOPS;
+    serviceMock.requestLoginCode.mockResolvedValue(undefined);
+
+    const response = await postCode(
+      codeRequest({ 'x-forwarded-for': '203.0.113.7', 'x-real-ip': '203.0.113.9' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceMock.requestLoginCode).toHaveBeenCalledWith(
+      'coureur@exemple.dz',
+      {},
+      { clientIp: null },
+    );
+  });
+
+  it('proxy de confiance mais en-tête absent (appel direct) : clientIp null', async () => {
+    process.env.AZZEL_TRUSTED_PROXY_HOPS = '1';
     serviceMock.requestLoginCode.mockResolvedValue(undefined);
 
     const response = await postCode(codeRequest({}));

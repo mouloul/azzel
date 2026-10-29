@@ -1,0 +1,39 @@
+/* Coquille d'administration — la navigation partage la largeur de page des
+   sections `.admin`, pour que les deux s'alignent sur le même axe. */
+.admin-nav {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--az-space-4) var(--az-space-gutter) 0;
+}
+
+.admin-nav__liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2) var(--az-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-nav__lien {
+  display: inline-block;
+  padding: var(--az-space-2) 0;
+  font-family: var(--az-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--az-texte-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.admin-nav__lien:hover {
+  color: var(--az-texte);
+}
+
+/* Jamais la couleur seule : la section courante porte aussi un filet. */
+.admin-nav__lien[aria-current='page'] {
+  color: var(--heading);
+  border-bottom-color: var(--az-action);
+}

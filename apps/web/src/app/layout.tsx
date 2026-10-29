@@ -50,31 +50,35 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </a>
         <BandeauEgide />
         <header className="site-header">
-          <Link
-            className="brand-logo"
-            href="/"
-            aria-label="Week-end Sportif Aït Aïssi — Accueil"
-          >
-            <span className="header-logo" aria-hidden="true" />
-          </Link>
-          <div className="header-actions">
-            <AdminHeaderLink />
-            <ThemeToggle />
+          <div className="site-header__inner">
+            <Link
+              className="brand-logo"
+              href="/"
+              aria-label="Week-end Sportif Aït Aïssi — Accueil"
+            >
+              <span className="header-logo" aria-hidden="true" />
+            </Link>
+            <div className="header-actions">
+              <AdminHeaderLink />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
         <main id="contenu">{children}</main>
         <footer className="site-footer">
-          <nav className="footer-nav" aria-label="Se préparer">
-            <Link href="/parcours">Parcours</Link>
-            <Link href="/region">La région</Link>
-            {/* Story 2.5 — un simple lien texte : le trailer et la page retour en
-                images restent hors du budget de premier chargement de l'accueil. */}
-            <Link href="/retour-en-images">Retour en images</Link>
-            {/* Story 7.2 — résultats en direct partageables : la course devient
-                lisible de l'extérieur le jour J, lien sobre dans la même nav. */}
-            <Link href="/resultats">Résultats</Link>
-          </nav>
-          <p className="meta">Plateforme Azzel</p>
+          <div className="site-footer__inner">
+            <nav className="footer-nav" aria-label="Le week-end sportif">
+              <Link href="/parcours">Parcours</Link>
+              <Link href="/region">La région</Link>
+              {/* Story 2.5 — un simple lien texte : le trailer et la page retour en
+                  images restent hors du budget de premier chargement de l'accueil. */}
+              <Link href="/retour-en-images">Retour en images</Link>
+              {/* Story 7.2 — résultats en direct partageables : la course devient
+                  lisible de l'extérieur le jour J, lien sobre dans la même nav. */}
+              <Link href="/resultats">Résultats</Link>
+            </nav>
+            <p className="meta">Plateforme Azzel</p>
+          </div>
         </footer>
       </body>
     </html>

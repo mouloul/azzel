@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { deleteSponsor, updateSponsor } from '@/modules/sponsors/service';
-import { toSponsorsApiError } from '@/modules/sponsors/errors';
+import { SponsorNotFoundError, toSponsorsApiError } from '@/modules/sponsors/errors';
 
 import { errorResponse, readJsonBody } from '../body';
+import { revaliderAccueil } from '../../revalidation';
 import { guardAdmin } from '../../guard';
+import { idInvalide } from '../../id';
 
 export async function PATCH(
   request: NextRequest,
@@ -19,8 +21,12 @@ export async function PATCH(
     return lu.response;
   }
   const { id } = await context.params;
+  if (idInvalide(id)) {
+    return errorResponse(toSponsorsApiError(new SponsorNotFoundError()));
+  }
   try {
     const sponsor = await updateSponsor(guarded.session, id, lu.body);
+    revaliderAccueil();
     return NextResponse.json(
       { ok: true, sponsor },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -39,8 +45,12 @@ export async function DELETE(
     return guarded.response;
   }
   const { id } = await context.params;
+  if (idInvalide(id)) {
+    return errorResponse(toSponsorsApiError(new SponsorNotFoundError()));
+  }
   try {
     const result = await deleteSponsor(guarded.session, id);
+    revaliderAccueil();
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return errorResponse(toSponsorsApiError(error));

@@ -180,6 +180,15 @@ export function initiales(prenom: string): string {
 }
 
 /** URL trailer brute du corps admin : trim, vide → null (pas encore de vidéo). */
+/**
+ * Schéma en minuscules : `new URL()` accepte `HTTPS://…`, mais la contrainte SQL
+ * (`~ '^https://'`) est sensible à la casse — l'écriture échouait alors en 23514,
+ * remonté en 500. On stocke la forme canonique, le reste de l'adresse intact.
+ */
+export function minusculerSchema(url: string): string {
+  return url.replace(/^https:\/\//i, 'https://');
+}
+
 export function normalizeTrailerUrlInput(raw: unknown): { trailerUrl: string | null } {
   const record =
     typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
@@ -188,7 +197,7 @@ export function normalizeTrailerUrlInput(raw: unknown): { trailerUrl: string | n
     return { trailerUrl: null };
   }
   const trimmed = value.trim();
-  return { trailerUrl: trimmed.length > 0 ? trimmed : null };
+  return { trailerUrl: trimmed.length > 0 ? minusculerSchema(trimmed) : null };
 }
 
 export function validateTrailerUrl(url: string | null): string | null {

@@ -1,5 +1,8 @@
 import postgres, { type Sql } from 'postgres';
 
+import { protegerStore } from '@/db/app-role';
+import { isProductionRuntime } from '@/modules/iam/store';
+
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
 import { readDatabaseUrl } from '@/modules/iam/env';
@@ -347,11 +350,15 @@ export function getRetourImagesStore(): RetourImagesStore {
     return globals.__azzelRetourImagesStore;
   }
   const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createRetourImagesStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Garde de rôle applicatif (story 1.9) : la connexion doit être le rôle
+  // soumis au RLS, sur CE store comme sur celui de l'IAM.
+  const sql = databaseUrl
+    ? postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 })
+    : null;
+  const store =
+    sql !== null
+      ? protegerStore(sql, createRetourImagesStore(sql), isProductionRuntime())
+      : createUnavailableStore();
   globals.__azzelRetourImagesStore = store;
   return store;
 }

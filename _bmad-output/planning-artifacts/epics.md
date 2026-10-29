@@ -9,6 +9,9 @@ inputDocuments:
   - ../architecture/architecture-Azzel-2026-10-19/ARCHITECTURE-SPINE.md
   - ../ux-designs/ux-Azzel-2026-10-20/DESIGN.md
   - ../ux-designs/ux-Azzel-2026-10-20/EXPERIENCE.md
+  - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/brainstorm-intent.md
+  - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/note-licences-cartographiques.md
+  - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/poc/
 ---
 
 # Azzel - Epic Breakdown
@@ -29,7 +32,7 @@ FR-5: Checklist dossier self-service — statut de chaque pièce ; chaque pièce
 FR-6: Notifications de statut par email (reçu, validé, refusé avec motif).
 FR-7: E-dossard QR hors-ligne haute définition, lisible après 30 jours de cache.
 FR-8: Scan de retrait du dossard au guichet (marque « présent au départ », hors-ligne inclus) ; doublon = voyant.
-FR-9: Import Excel volontaires (nom, email, téléphone) + invitations ; définition du mot de passe à la première connexion ; rapport ligne par ligne des rejets.
+FR-9: Import Excel volontaires (nom, email, téléphone) + invitations ; connexion par email + code de vérification (mécanisme unique tous rôles) ; rapport ligne par ligne des rejets.
 FR-10: Secteurs et missions typées (scan checkpoint, accueil, sécurité tronçon, sécurité arrivée, distribution dossards, communication) ; état couverte/vacante ; avertissement de chevauchement horaire (non bloquant).
 FR-11: Fiche mission hors-ligne (secteur, rôle, horaires, contacts, consignes) préchargée à l'affectation, disponible app fermée/réseau absent.
 FR-12: Préchargement de l'annuaire des coureurs de l'édition dans les appareils scanneurs ; scan d'un coureur inconnu = voyant rouge explicite.
@@ -49,6 +52,22 @@ FR-25: Alertes hors-délais (barrière horaire non franchie) `[ASSUMPTION: + bat
 FR-26: Rapports chiffrés post-course (inscrits, présents, passages, arrivées, abandons, portée partages) en un fichier ; export « commande » à J-10 (décomptes par épreuve et taille de t-shirt).
 FR-27: Isolation des données par organisation (triplet organisation → événement → édition) dès la V1 ; seconde organisation sans changement de schéma.
 
+<!-- Extension épopée 8 — carte 3D du parcours (source : brainstorm 2026-10-23, périmètre MUST + SHOULD) -->
+
+FR-28: Pipeline build-time GPX → `parcours.json` — entrée : export GPX **manuel** de la trace relevée (montre Garmin → Garmin Connect ou Strava), altitude barométrique embarquée dans le fichier. Traitements : rejet des points à vitesse implausible (le relevé d'essai contient un téléport de 366 m en 1 s), lissage du bruit, distances cumulées (`s`), altitude **lue dans le GPX** (aucun échantillonnage du MNT), D+/D− global et par segment inter-checkpoint. Le **seuil d'accumulation du D+ est fixé une fois pour toutes dans le pipeline** et documenté : sur le relevé d'essai, le D+ varie de 641 m (brut) à 604 m (seuil 5 m), soit 6 % d'écart selon une constante arbitraire.
+FR-28b: Porte de qualité du relevé — le pipeline refuse ou signale explicitement une trace hors seuils de recevabilité (pas médian entre points, part de la distance couverte par des segments > 30 s, nombre de points à vitesse implausible) et nomme le défaut. Référence mesurée sur le relevé d'essai `activity_24827718657.gpx` : 598 points sur 20,47 km, **69 % de la distance en segments > 30 s** (jusqu'à 483 s et 479 m entre deux points) — inexploitable en l'état pour un tracé officiel.
+FR-29: Carte 3D du parcours sur la vitrine — moteur MapLibre GL JS, relief terrarium (`setTerrain`), tracé officiel, marqueurs de checkpoints cliquables (nom, km, altitude, D+ du segment, services).
+FR-30: Profil altimétrique du parcours — couples `(s, altitude)` issus de `parcours.json`, checkpoints positionnés, services et bornes de segment (km + D+) lisibles.
+FR-31: Synchronisation profil ↔ carte par l'abscisse curviligne `s` — curseur partagé bidirectionnel (survol/tap sur le profil déplace le repère sur la carte, et réciproquement) ; `s` est l'unique variable d'état partagée.
+FR-32: Attributions cartographiques affichées en permanence et adaptées au fond actif (relief USGS/Mapzen toujours, OpenTopoMap CC-BY-SA, fond satellite retenu, MapLibre) ; texte conforme à la note licences §5.
+FR-33: Arbitrage du fond satellite de production — source retenue compatible avec l'usage réel d'Azzel (inscriptions payantes FR-4 + sponsors visibles FR-22), décision tracée et mise en œuvre ; les endpoints Esri sans clé du POC ne partent pas en production.
+FR-34: Survol animé du parcours (Should) — caméra paramétrée par `s`, démarrage/arrêt explicites, neutralisé sous `prefers-reduced-motion`.
+FR-35: Exagération verticale paramétrable x1,5–2 et bascule 3D on/off (Should) — `setTerrain(null)` rend une carte 2D fonctionnelle.
+FR-36: Bandeau profil repliable (Should) — en-tête cliquable, résumé km / D+ / nombre de points quand replié, carte seule en plein écran, redimensionnement correct au basculement.
+FR-37: Barrières horaires sur le parcours (Should) — heure limite par checkpoint, visible sur le profil et sur la fiche de checkpoint.
+FR-38: Deux épreuves sur géométrie partagée — départ et arrivée communs, le parcours court reprend une partie du tracé long. Modèle : une **géométrie de base** (portions de sentier relevées une fois), chaque **épreuve** étant une composition ordonnée de portions ; **`s` est calculé par épreuve**, jamais globalement. `parcours.json` porte la géométrie une seule fois et les deux vues d'épreuve. Sélecteur d'épreuve sur la page course : carte et profil basculent ensemble.
+FR-39: Checkpoints de l'édition positionnés sur la trace — un checkpoint a une **identité unique sur la géométrie de base** (c'est elle qui est partagée avec l'entité CHECKPOINT de l'épopée 4) et porte un **`km` distinct par épreuve traversée**, ainsi que ses services. Les checkpoints du POC sont sans valeur et ne sont pas repris.
+
 ### NonFunctional Requirements
 
 NFR-1: Performance scan — confirmation < 1 s par coureur, qualifiée sur le fallback iOS Safari (@zxing/browser).
@@ -63,6 +82,14 @@ NFR-9: Sécurité auth — session interactive unique par compte (tous rôles) ;
 NFR-10: Budget d'exploitation proche de zéro — free tier Supabase (Postgres 500 Mo, storage 1 Go, realtime 200 conn./2 M msgs/mois), VPS + Coolify, SMTP custom.
 NFR-11: Accessibilité — contrastes AA+ dans les deux modes, frappe ≥ 15 px sur contenus critiques, cibles ≥ 48 dp/44 pt, zoom 200 %, prefers-reduced-motion, jamais la couleur seule.
 NFR-12: Langue — UI en français, code et identifiants en anglais.
+
+<!-- Extension épopée 8 -->
+
+NFR-13: Budget vitrine préservé — la carte 3D vit sur une **route dédiée** ou derrière une action explicite de l'utilisateur, jamais dans le flux de la page course ; MapLibre, tuiles et `parcours.json` ne sont jamais dans le chemin critique. NFR-2 (< 300 Ko au premier chargement, premier rendu lisible < 5 s en 3G lente) reste vrai sur la page course, **mesuré en CI et non déclaré**.
+NFR-14: Crédibilité du dénivelé — D+/D− issus de la **trace relevée** (altimètre barométrique), méthode de calcul tracée et constante (altitude brute du GPX ou correction d'altitude Strava — à trancher, les deux donnent des chiffres différents), seuil d'accumulation fixe. Chiffre unique publié sur toutes les surfaces : carte, profil et contenu éditorial de la page course lisent la même source `parcours.json`.
+NFR-15: Conformité des sources cartographiques — aucune source dont les conditions d'usage ne couvrent pas la situation réelle d'Azzel ; aucun téléchargement massif de tuiles depuis les serveurs publics tiers (OpenTopoMap notamment) ; attributions obligatoires jamais masquées.
+NFR-16: Dégradation propre — absence de WebGL, GPU indisponible ou tuiles injoignables ne cassent jamais la page course : le contenu parcours (km, D+, checkpoints, services) reste lisible sans la carte.
+NFR-17: Qualité du relevé terrain (prérequis non logiciel) — le relevé officiel se fait en **enregistrement à 1 seconde**, pas en enregistrement intelligent : réglé par défaut sur intelligent, le relevé d'essai rend 69 % du tracé interpolé en ligne droite entre deux points, ce qui coupe les lacets, sous-estime la distance et écrase les oscillations d'altitude. Sous couvert forestier (Akfadou, chêne-liège) le bruit horizontal monte : prévoir **plusieurs relevés de la même portion**, retenir le meilleur ou le médian, documenter l'écart entre relevés. Le relevé officiel doit **fermer la boucle** (départ = arrivée), ce que le relevé d'essai ne fait pas (947 m d'écart).
 
 ### Additional Requirements
 
@@ -79,6 +106,22 @@ NFR-12: Langue — UI en français, code et identifiants en anglais.
 - Fichiers preuves : compression/redimensionnement côté client avant upload, cible ≤ 300 Ko l'unité.
 - Conventions transverses : enveloppe d'erreur unique définie dans `shared` ; horodatages ISO 8601 UTC stockés, affichage local ; journal sync (lots, rejets, offsets horloge).
 - Séquencement : 15/11/2026 → module `inscriptions` + vitrine minimale ; dry-run → cœur offline + PC ; 26/03/2027 → tout le Must.
+
+<!-- Extension épopée 8 — décisions arrêtées en session de brainstorming du 23/10/2026 -->
+
+- **Stack de rendu verrouillée** : MapLibre GL JS 4.7.1 (CDN cdnjs, BSD 3-Clause) ; relief AWS Terrain Tiles encodage `terrarium` (`raster-dem`, tileSize 256, maxzoom 15, domaine public SRTM/GMTED) ; fond topo OpenTopoMap (maxzoom 17, CC-BY-SA) ; glyphes `fonts.openmaptiles.org`. Arbitrage tranché contre l'alternative « ruban mesh extrudé .glb sous three.js » : la 3D visée est du terrain tuilé complet.
+- **`s` (abscisse curviligne) est le bus d'état unique** de toutes les surfaces parcours : profil `(s, altitude)`, checkpoints, future position live (projection des scans épopée 4 et des pings GPS épopée 6), caméra du survol animé, et tout fallback 2D. La 3D est un bonus ; `(s, altitude)` est le socle. **`s` est relatif à une épreuve** (cf. FR-38) : la géométrie de base est partagée, l'abscisse ne l'est pas.
+- **Pipeline build-time, jamais runtime** : entrée GPX réel exporté à la main, sortie `parcours.json` (géométrie de base, vues d'épreuve, `profile[[dist_m,alt]]`, `checkpoints[]`, métadonnées) consommée à l'identique par la carte et le profil.
+- **Source de la trace : export manuel, jamais l'API.** La trace vient d'une montre Garmin (altimètre barométrique) relevée sur le terrain, récupérée via Garmin Connect ou Strava (abonnement pro). Le fichier GPX est **exporté à la main et versionné dans le dépôt** : aucune intégration des API Strava ou Garmin, qui ajouterait une dépendance de jeton et replacerait le projet sous leurs conditions d'usage. L'interdiction Strava porte sur les traces d'autrui et ne concerne pas un relevé dont l'organisation est propriétaire.
+- **Le MNT ne sert plus qu'au rendu.** L'altitude du profil est lue dans le GPX ; le relief terrarium n'intervient que pour le terrain 3D affiché sous la trace. `dem.py` et l'échantillonnage MNT du POC sortent du pipeline de production, conservés au mieux en contrôle croisé hors CI.
+- **Trace gelée à la publication** : une fois le parcours annoncé publiquement, le tracé ne change plus ; toute évolution ultérieure est une nouvelle version explicite de `parcours.json`, jamais une modification silencieuse.
+- **MapLibre ne peut pas servir de mode hors-ligne par préchargement de tuiles** (interdiction de téléchargement massif). Le hors-ligne 3D de l'app coureur passera par le ruban .glb Draco — reporté à l'épopée 6, hors périmètre ici.
+- **Statut du POC : faisabilité technique uniquement, aucune donnée de course réelle.** Le POC a été produit à partir de points pris au hasard autour du village d'Ait-Aissi ; ses chiffres (15 614 m, 337 points, D+ 1 156 m, 6 checkpoints et leurs services) sont **fictifs** et ne tranchent rien sur la vraie course. Seuls les **motifs d'intégration** sont acquis et réutilisables : `poc/index.html` (carte MapLibre, bascules satellite/topo et 3D, profil SVG synchronisé, curseur partagé, bandeau repliable). `poc/route.py` et `poc/dem.py` sont périmés en production (cf. source de la trace ci-dessus).
+- **Relevé d'essai disponible** : `docs/GPX/activity_24827718657.gpx` (Garmin Connect, « Ait aissi Trail petite boucle essai », 2026-10-23) — 598 points, 20,47 km, 4 h 18, altitude 271–673 m, D+ 641 m / D− 687 m brut. Sert de jeu d'essai au pipeline et de référence chiffrée pour les seuils de recevabilité ; **n'est pas le tracé officiel** (non bouclé, enregistrement intelligent, ne correspond ni à la Moyenne 10–15 km ni à la Longue ~35 km du PRD).
+- **Position live sur la carte 3D : hors périmètre** (WON'T de cette itération). Cadrage déjà arrêté pour plus tard — fusion scans checkpoints + ping GPS 10 min, point figé sur le dernier `s` connu avec « vu il y a X min », aucune extrapolation inter-ping.
+- **Questions ouvertes d'architecture** : lieu d'exécution du pipeline (script Python hors CI vs script Node en build web) ; versionnement de `parcours.json` par édition ; altitude brute du GPX vs correction d'altitude Strava, et seuil d'accumulation du D+ ; ordre d'enchaînement des boucles sur l'épreuve longue (le pipeline doit supporter les deux cas) ; valeur par défaut de l'exagération verticale dans la plage x1,5–2 ; modélisation des barrières horaires (rattachement aux checkpoints de l'épopée 4 ou entité propre).
+- **Hors périmètre, à arbitrer plus tard** : la carte publique livrée en story 7.3 affiche les dossards sur **un** tracé ; avec deux épreuves partageant une portion, elle devra filtrer par épreuve ou superposer les deux. L'information existe déjà (le dossard porte son épreuve, FR-2/FR-15), l'affichage n'a pas été conçu pour.
+- **Point de vigilance licences (bloquant)** : la note licences §3 conditionne EOX Sentinel-2 cloudless (CC BY-NC-SA) au caractère strictement non monétisé du projet, et rouvre la question dès qu'apparaissent des inscriptions payantes **ou** des sponsors visibles. Azzel a déjà les deux (FR-4 preuve de paiement CCP, FR-22 bloc sponsors). L'arbitrage du fond satellite se joue donc entre ArcGIS Location Platform avec clé (même imagerie que le POC, palier gratuit 2 M tuiles/mois, cadre contractuel explicite), un fournisseur payant (MapTiler / Mapbox), ou OpenTopoMap seul sans fond satellite.
 
 ### UX Design Requirements
 
@@ -106,6 +149,16 @@ UX-DR-21: Enveloppe d'erreur unique — message homogène + action à faire, jam
 UX-DR-22: Voice & Tone — tutoiement coureur/volontaire, sobre vitrine/admin ; libellés verbatim de la spine (ex. « HORS-LIGNE PRÊT — ton dossard marche sans réseau », « Classement provisoire — synchronisé il y a 3 min »).
 UX-DR-23: Accessibility floor complet — focus visible 2 px action/action-sombre, zoom navigateur 200 % testé / pinch jamais désactivé, gap ≥ 8 px entre cibles, aucune action critique au bord, pause/stop scan ≥ 64 dp, icônes labellisées, décorations aria-hidden, reduced-motion → statique.
 UX-DR-24: Responsive & plateforme — vitrine mobile-first une colonne (display réduit), app/PWA une colonne gros éléments tactiles, Android entrée de gamme (aucune dépendance au survol, motion dosé), iOS Safari PWA, écrans hétérogènes.
+
+<!-- Extension épopée 8 -->
+
+UX-DR-25: Carte 3D du parcours — contrôles discrets et labellisés (bascule 3D on/off, exagération verticale, bascule satellite/topo), `NavigationControl({visualizePitch:true})`, cibles ≥ 44/48 jamais au bord de l'écran ; la carte n'occupe jamais le premier écran de la page course.
+UX-DR-26: Marqueurs de checkpoints — pastille numérotée sur la trace, popup au tap et au clavier (nom, km, altitude, D+ du segment amont, services : chrono / eau / solide / médical / bus / repas / wc), services en icône **et** en texte, jamais la couleur seule.
+UX-DR-27: Profil altimétrique — SVG lisible mobile-first, checkpoints repérés, lecture au survol **et** au tap (pas de dépendance au survol, Android entrée de gamme), curseur partagé avec la carte, valeurs km/alt annoncées en texte accessible.
+UX-DR-28: Bandeau profil repliable — en-tête cliquable, résumé km / D+ / nombre de points quand replié, état mémorisé, carte redimensionnée correctement au basculement.
+UX-DR-29: Bloc d'attributions — permanent, lisible (contraste AA+), jamais superposé à du contenu, texte exact par source active ; déploiement d'un détail possible mais la mention courte reste toujours visible.
+UX-DR-30: Dégradation et motion — sans WebGL ou tuiles injoignables, un bloc parcours textuel complet remplace la carte avec un message clair ; `prefers-reduced-motion` neutralise le survol animé et les transitions de caméra ; aucun mouvement automatique non demandé.
+UX-DR-31: Épreuve active toujours qualifiée — sur la portion commune, un même checkpoint affiche un kilomètre différent selon l'épreuve ; l'épreuve active reste donc visible en permanence au contact du kilométrage, sur la carte comme sur le profil. Basculer d'épreuve ne laisse jamais un chiffre orphelin de son référentiel, et la bascule se lit comme voulue, jamais comme un défaut.
 
 ### FR Coverage Map
 
@@ -148,7 +201,7 @@ Tout visiteur découvre la course (dates, épreuves, parcours GPX, égide fédé
 **FRs covered:** FR-21, FR-22, FR-23
 
 ### Epic 3: Armer les volontaires
-L'organisation importe les volontaires par Excel (rapport ligne par ligne), découpe l'édition en secteurs et missions typées (couverture, chevauchements) ; chaque volontaire définit son mot de passe et retrouve sa fiche mission hors-ligne ; les appareils scanneurs préchargent l'annuaire des coureurs.
+L'organisation importe les volontaires par Excel (rapport ligne par ligne), découpe l'édition en secteurs et missions typées (couverture, chevauchements) ; chaque volontaire se connecte par email + code et retrouve sa fiche mission hors-ligne ; les appareils scanneurs préchargent l'annuaire des coureurs.
 **FRs covered:** FR-9, FR-10, FR-11, FR-12
 
 ### Epic 4: Chronométrage offline & e-dossard
@@ -371,7 +424,7 @@ So que la crédibilité de l'organisation se voie avant même la course.
 
 ## Epic 3: Armer les volontaires
 
-L'organisation importe les volontaires par Excel (rapport ligne par ligne), découpe l'édition en secteurs et missions typées (couverture, chevauchements) ; chaque volontaire définit son mot de passe et retrouve sa fiche mission hors-ligne ; les appareils scanneurs préchargent l'annuaire des coureurs.
+L'organisation importe les volontaires par Excel (rapport ligne par ligne), découpe l'édition en secteurs et missions typées (couverture, chevauchements) ; chaque volontaire se connecte par email + code et retrouve sa fiche mission hors-ligne ; les appareils scanneurs préchargent l'annuaire des coureurs.
 
 ### Story 3.1: Import Excel des volontaires et invitations
 
@@ -384,7 +437,8 @@ So que 150–200 villageois soient opérationnels sans saisie manuelle.
 **Given** un fichier Excel (nom, email, téléphone)
 **When** l'admin lance l'import
 **Then** les lignes valides créent les volontaires ; les lignes invalides sont rejetées avec rapport ligne par ligne — jamais d'import silentieux (FR-9)
-**And** chaque volontaire reçoit une invitation (file d'envoi avec rejeu) et définit son mot de passe à la première connexion
+**And** chaque volontaire reçoit une invitation (file d'envoi avec rejeu) l'orientant vers la connexion par email + code — même mécanisme que coureurs et organisateurs (story 1.2), aucun mot de passe
+**And** sa première connexion réussie le marque « activé » dans la liste admin ; la session ouverte révoque les sessions antérieures (session unique tous rôles)
 **And** un volontaire importé est rattaché à l'organisation (RLS, story 1.9).
 
 ### Story 3.2: Secteurs et missions typées

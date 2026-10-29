@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte 3D du parcours — restitution de brainstorming</title>
+<style>
+:root{
+  --bg:#f4efe4; --paper:#fffdf7; --paper-2:#faf5ea;
+  --ink:#231e16; --ink-2:#4d4436; --muted:#7a6f5c;
+  --line:#ddd2bb; --line-strong:#c6b899;
+  --low:#4f7a46; --mid:#b78a31; --high:#bb6436; --rock:#8a6a55;
+  --user:#0d6a60; --user-bg:#dceeeb;
+  --coach:#9a4f1e; --coach-bg:#f6e4d6;
+  --neutral:#6a6250; --neutral-bg:#e9e2d2;
+  --won:#8c5a52; --won-bg:#f0e1de;
+  --shadow:0 1px 0 var(--line), 0 10px 24px -18px rgba(60,45,20,.5);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#13110d; --paper:#1c1915; --paper-2:#221e18;
+    --ink:#efe8da; --ink-2:#cfc5b2; --muted:#9a8f7b;
+    --line:#363027; --line-strong:#4d4538;
+    --low:#7ba86c; --mid:#d6a84a; --high:#e08a52; --rock:#b08f76;
+    --user:#5ecfc0; --user-bg:#113430;
+    --coach:#e3955c; --coach-bg:#3a2415;
+    --neutral:#a79c87; --neutral-bg:#2a251e;
+    --won:#d79b91; --won-bg:#3a2320;
+    --shadow:0 1px 0 var(--line), 0 10px 24px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13110d; --paper:#1c1915; --paper-2:#221e18;
+  --ink:#efe8da; --ink-2:#cfc5b2; --muted:#9a8f7b;
+  --line:#363027; --line-strong:#4d4538;
+  --low:#7ba86c; --mid:#d6a84a; --high:#e08a52; --rock:#b08f76;
+  --user:#5ecfc0; --user-bg:#113430;
+  --coach:#e3955c; --coach-bg:#3a2415;
+  --neutral:#a79c87; --neutral-bg:#2a251e;
+  --won:#d79b91; --won-bg:#3a2320;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px; line-height:1.6; overflow-x:hidden;
+}
+.wrap{max-width:900px; margin:0 auto; padding:0 16px 72px}
+h1,h2,h3{line-height:1.2; margin:0}
+a{color:var(--user)}
+
+/* ---------- en-tête : coupe topographique ---------- */
+header.hero{position:relative; padding:40px 0 24px; border-bottom:1px solid var(--line); overflow:hidden}
+.hero .contours{position:absolute; inset:0; width:100%; height:100%; opacity:.5; pointer-events:none}
+.hero .contours path{fill:none; stroke:var(--line-strong); stroke-width:1}
+.hero-in{position:relative}
+.kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11px;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+h1{font-size:clamp(28px,6.5vw,46px); letter-spacing:-.02em; margin:10px 0 0; font-weight:700}
+.sub{font-size:clamp(15px,3.4vw,19px); color:var(--ink-2); max-width:62ch; margin:14px 0 0}
+.meta{margin-top:18px; display:flex; flex-wrap:wrap; gap:8px 18px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--muted)}
+.meta b{color:var(--ink-2); font-weight:600}
+
+/* ---------- chiffres ---------- */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:1px;
+  background:var(--line); border:1px solid var(--line); margin:28px 0 0; border-radius:10px; overflow:hidden}
+.stat{background:var(--paper); padding:14px 12px}
+.stat .v{font-size:clamp(20px,5vw,28px); font-weight:700; letter-spacing:-.02em; line-height:1.1}
+.stat .k{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); margin-top:6px}
+.stat:nth-child(1) .v{color:var(--low)}
+.stat:nth-child(2) .v{color:var(--high)}
+.stat:nth-child(3) .v{color:var(--mid)}
+.stat:nth-child(4) .v{color:var(--rock)}
+
+/* ---------- profil SVG ---------- */
+.panel{background:var(--paper); border:1px solid var(--line); border-radius:12px;
+  box-shadow:var(--shadow); margin:28px 0 0; overflow:hidden}
+.panel-head{padding:14px 16px; border-bottom:1px solid var(--line); background:var(--paper-2);
+  display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline}
+.panel-head h2{font-size:15px; letter-spacing:.01em}
+.panel-head .note{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; color:var(--muted)}
+.panel-body{padding:18px 14px 10px}
+.profil{display:block; width:100%; height:auto; overflow:visible}
+.profil .grid{stroke:var(--line); stroke-width:1; stroke-dasharray:2 5}
+.profil .tick{stroke:var(--line-strong); stroke-width:1}
+.profil .galt,.profil .gkm{fill:var(--muted); font-size:15px;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.profil .galt{text-anchor:end}
+.profil .gkm{text-anchor:middle}
+.profil .area{fill:url(#hypso); stroke:none}
+.profil .trace{fill:none; stroke:var(--ink); stroke-width:2.6; stroke-linejoin:round; stroke-linecap:round;
+  vector-effect:non-scaling-stroke}
+.profil .cpline{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:3 3; opacity:.55}
+.profil .cpdot{fill:var(--paper); stroke:var(--ink); stroke-width:2}
+.profil .cpnum{fill:var(--ink); font-size:9px; font-weight:700; text-anchor:middle;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.axis-lab{display:flex; justify-content:space-between; padding:2px 2px 6px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; color:var(--muted)}
+
+/* ---------- points de passage ---------- */
+ul.cps{list-style:none; margin:0; padding:0; display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1px; background:var(--line);
+  border-top:1px solid var(--line)}
+.cp{background:var(--paper); padding:14px 16px}
+.cp-head{display:flex; align-items:center; gap:9px}
+.cp-n{flex:0 0 auto; width:21px; height:21px; border-radius:50%; border:1.5px solid var(--ink);
+  display:grid; place-items:center; font-size:11px; font-weight:700;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.cp-nom{font-weight:650; font-size:14.5px}
+.cp-nums{display:flex; gap:14px; margin-top:7px; font-size:13px; color:var(--ink-2)}
+.cp-nums b{color:var(--ink)}
+.cp-seg{margin-top:4px; font-size:12px; color:var(--muted);
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.cp-serv{margin-top:9px; display:flex; flex-wrap:wrap; gap:5px}
+.serv{font-size:11px; padding:2px 7px; border-radius:999px; background:var(--neutral-bg);
+  color:var(--ink-2); border:1px solid var(--line)}
+
+/* ---------- la trace de la session ---------- */
+.trace-intro{margin:56px 0 8px}
+.trace-intro h2{font-size:clamp(20px,4.6vw,27px); letter-spacing:-.01em}
+.trace-intro p{color:var(--ink-2); max-width:62ch}
+
+.leg{position:relative; display:grid; grid-template-columns:62px 1fr; gap:0}
+.leg::before{content:""; position:absolute; left:19px; top:0; bottom:0; width:2px;
+  background:var(--line-strong)}
+.leg.first::before{top:34px}
+.leg.last::before{bottom:auto; height:34px}
+.gutter{position:relative; padding-top:26px}
+.gutter .node{position:absolute; left:12px; top:26px; width:16px; height:16px; border-radius:50%;
+  background:var(--paper); border:3px solid var(--mark,var(--rock)); z-index:1}
+.gutter .s{position:absolute; left:0; top:48px; width:40px; text-align:center;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px; color:var(--muted)}
+.leg-body{padding:18px 0 30px 6px; min-width:0}
+.leg h3{font-size:clamp(17px,4vw,21px); letter-spacing:-.01em}
+.leg .lede{color:var(--ink-2); margin:9px 0 0; max-width:62ch}
+.leg .alt{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--mark,var(--rock)); font-weight:600}
+
+/* ---------- cartes de décision ---------- */
+ul.dec{list-style:none; margin:14px 0 0; padding:0; display:grid; gap:9px}
+.dec li{background:var(--paper); border:1px solid var(--line); border-left:3px solid var(--edge,var(--neutral));
+  border-radius:8px; padding:11px 13px}
+.dec li .tag{display:inline-block; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px;
+  letter-spacing:.1em; text-transform:uppercase; padding:2px 7px; border-radius:4px;
+  background:var(--tagbg,var(--neutral-bg)); color:var(--edge,var(--neutral)); font-weight:700;
+  margin-right:8px; vertical-align:1px}
+.dec li .txt{font-size:14.5px; color:var(--ink-2)}
+.dec li .txt b{color:var(--ink); font-weight:650}
+li.u{--edge:var(--user); --tagbg:var(--user-bg)}
+li.c{--edge:var(--coach); --tagbg:var(--coach-bg)}
+li.n{--edge:var(--neutral); --tagbg:var(--neutral-bg)}
+.legend{display:flex; flex-wrap:wrap; gap:8px 16px; margin:14px 0 0; font-size:13px; color:var(--muted)}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:11px; height:11px; border-radius:3px; display:inline-block}
+
+/* ---------- MoSCoW ---------- */
+.moscow{display:grid; gap:1px; background:var(--line); border:1px solid var(--line);
+  border-radius:12px; overflow:hidden; margin-top:18px}
+.mrow{background:var(--paper); padding:14px 16px; display:grid; grid-template-columns:86px 1fr; gap:14px}
+.mrow .lab{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase; padding-top:3px}
+.mrow:nth-child(1) .lab{color:var(--high)}
+.mrow:nth-child(2) .lab{color:var(--mid)}
+.mrow:nth-child(3) .lab{color:var(--low)}
+.mrow:nth-child(4) .lab{color:var(--won)}
+.mrow ul{margin:0; padding-left:17px; display:grid; gap:4px}
+.mrow li{font-size:14px; color:var(--ink-2)}
+.mrow:nth-child(4) li{color:var(--muted)}
+.mrow:nth-child(4){background:var(--won-bg)}
+
+/* ---------- licences ---------- */
+table.lic{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:4px}
+table.lic th,table.lic td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line);
+  vertical-align:top}
+table.lic th{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--muted); font-weight:600}
+table.lic td:first-child{font-weight:650; white-space:nowrap}
+.st{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.st.ok{background:var(--user-bg); color:var(--user)}
+.st.ko{background:var(--coach-bg); color:var(--coach)}
+.lic-wrap{overflow-x:auto}
+
+/* ---------- synthèse ---------- */
+.synth{margin-top:56px; border-top:3px solid var(--ink); padding-top:26px}
+.synth h2{font-size:clamp(21px,5vw,30px); letter-spacing:-.02em}
+.sgrid{display:grid; gap:14px; margin-top:20px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.scard{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:18px;
+  box-shadow:var(--shadow)}
+.scard .num{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; letter-spacing:.14em;
+  color:var(--muted)}
+.scard h3{font-size:16.5px; margin-top:9px; letter-spacing:-.01em}
+.scard p{margin:9px 0 0; font-size:14.5px; color:var(--ink-2)}
+.scard.k1{border-top:3px solid var(--low)}
+.scard.k2{border-top:3px solid var(--mid)}
+.scard.k3{border-top:3px solid var(--high)}
+.pull{margin:24px 0 0; padding:18px 20px; background:var(--paper-2); border:1px solid var(--line);
+  border-radius:12px; font-size:clamp(16px,3.6vw,19px); color:var(--ink); line-height:1.5}
+.pull b{color:var(--high)}
+footer{margin-top:48px; padding-top:18px; border-top:1px solid var(--line);
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11.5px; color:var(--muted)}
+
+@media (max-width:640px){
+  .leg{grid-template-columns:34px 1fr}
+  .leg::before{left:11px}
+  .gutter .node{left:4px}
+  .gutter .s{left:-5px; width:34px; font-size:9px}
+  .mrow{grid-template-columns:1fr; gap:6px}
+  .leg-body{padding-left:2px}
+  .profil .galt,.profil .gkm{font-size:19px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <svg class="contours" viewBox="0 0 900 260" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M-20 240 C 120 210, 220 250, 340 225 S 580 180, 720 205 S 880 235, 940 215"/>
+    <path d="M-20 205 C 130 172, 230 215, 350 188 S 590 142, 730 168 S 880 200, 940 178"/>
+    <path d="M-20 170 C 140 134, 240 180, 360 151 S 600 104, 740 131 S 880 165, 940 141"/>
+    <path d="M-20 135 C 150 96, 250 145, 370 114 S 610 66, 750 94 S 880 130, 940 104"/>
+    <path d="M-20 100 C 160 58, 260 110, 380 77 S 620 28, 760 57 S 880 95, 940 67"/>
+    <path d="M-20 65 C 170 20, 270 75, 390 40 S 630 -10, 770 20 S 880 60, 940 30"/>
+  </svg>
+  <div class="hero-in">
+    <div class="kicker">Brainstorming BMad · partner · 23 octobre 2026 · clôturée</div>
+    <h1>La carte 3D du parcours,<br>vue en coupe</h1>
+    <p class="sub">Conception technique d'une carte animée en 3D du trail d'Ath Aïssi, commune de
+      Yakouren, Kabylie — Algérie. Objectif de la session : trancher l'architecture (rendu 3D,
+      données d'élévation, animation, performance, hors-ligne).</p>
+    <div class="meta">
+      <span>Mode <b>Creative Partner</b></span>
+      <span>Techniques <b>Yes&nbsp;And&nbsp;Building · Steal&nbsp;And&nbsp;Upgrade · Disney&nbsp;Method · Empathy&nbsp;Map</b></span>
+      <span>Statut <b>complete</b></span>
+    </div>
+  </div>
+</header>
+
+<section class="stats" aria-label="Chiffres du parcours">
+  <div class="stat"><div class="v">15,6 km</div><div class="k">distance</div></div>
+  <div class="stat"><div class="v">1 156 m</div><div class="k">dénivelé positif</div></div>
+  <div class="stat"><div class="v">219 – 973 m</div><div class="k">altitude</div></div>
+  <div class="stat"><div class="v">6</div><div class="k">points de passage</div></div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Profil altimétrique réel — Trail d'Ath Aïssi</h2>
+    <span class="note">337 points · densification 45 m · lissage 5 pts · MNT terrarium AWS · D− 1&nbsp;177 m</span>
+  </div>
+  <div class="panel-body">
+    <div class="axis-lab"><span>altitude (m)</span><span>abscisse curviligne s</span></div>
+    <svg class="profil" viewBox="-44 -14 1070 356" role="img"
+         aria-label="Profil altimétrique du trail d'Ath Aïssi : 15,6 km, de 219 à 973 mètres d'altitude, six points de passage">
+      <defs>
+        <linearGradient id="hypso" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stop-color="var(--low)" stop-opacity=".40"/>
+          <stop offset=".45" stop-color="var(--mid)" stop-opacity=".42"/>
+          <stop offset="1" stop-color="var(--high)" stop-opacity=".48"/>
+        </linearGradient>
+      </defs>
+      <line class="grid" x1="0" y1="300.0" x2="1000" y2="300.0"/><text class="galt" x="-8" y="304.0">200</text><line class="grid" x1="0" y1="225.0" x2="1000" y2="225.0"/><text class="galt" x="-8" y="229.0">400</text><line class="grid" x1="0" y1="150.0" x2="1000" y2="150.0"/><text class="galt" x="-8" y="154.0">600</text><line class="grid" x1="0" y1="75.0" x2="1000" y2="75.0"/><text class="galt" x="-8" y="79.0">800</text><line class="grid" x1="0" y1="0.0" x2="1000" y2="0.0"/><text class="galt" x="-8" y="4.0">1000</text>
+      <polygon class="area" points="0.0,123.3 3.1,122.5 6.3,122.1 9.4,121.0 12.5,120.3 15.7,119.8 18.8,119.1 21.9,118.2 25.1,116.9 28.2,116.0 31.3,115.8 34.5,116.1 37.5,117.1 40.5,118.7 43.5,120.1 46.6,121.3 49.6,122.5 52.6,123.3 55.6,123.8 58.7,124.6 61.7,125.8 64.7,127.0 67.8,128.3 70.8,129.8 73.8,130.7 76.7,131.1 79.7,131.8 82.6,132.0 85.5,131.5 88.5,130.7 91.4,129.6 94.3,127.8 97.3,126.2 100.2,124.6 103.1,122.7 106.1,120.3 109.0,117.7 111.9,114.7 114.9,111.0 117.8,107.1 120.7,102.4 123.6,96.6 126.5,90.4 129.4,85.2 132.3,80.7 135.2,77.2 138.1,74.4 141.0,71.4 143.9,67.5 146.8,62.7 149.7,57.5 152.6,52.5 155.6,47.7 158.7,42.7 161.7,37.5 164.7,32.4 167.7,27.4 170.7,23.0 173.7,19.4 176.8,17.7 179.8,17.0 182.8,16.5 185.8,16.5 188.7,16.6 191.6,16.3 194.5,15.5 197.4,14.4 200.3,13.2 203.2,12.0 206.1,11.0 209.0,10.2 211.9,10.4 214.8,11.2 217.7,12.9 220.7,15.3 223.6,18.0 226.7,20.3 229.8,22.6 232.9,24.6 236.0,26.5 239.2,29.1 242.3,33.2 245.4,38.1 248.5,42.3 251.7,44.9 254.6,45.2 257.6,43.0 260.5,38.3 263.5,32.2 266.4,26.0 269.4,21.3 272.3,17.3 275.3,14.1 278.2,13.4 281.2,15.1 284.1,18.1 287.1,22.7 290.1,28.5 293.2,34.4 296.2,39.3 299.3,43.1 302.4,45.8 305.4,48.3 308.5,50.2 311.5,52.8 314.6,55.9 317.6,60.4 320.7,65.4 323.8,71.1 326.8,76.7 329.9,82.2 332.9,87.5 335.8,92.6 338.8,97.2 341.8,101.5 344.8,105.9 347.8,110.3 350.7,114.5 353.7,118.7 356.7,122.7 359.7,126.2 362.7,129.0 365.6,131.4 368.6,133.1 371.6,134.8 374.6,136.2 377.6,136.9 380.5,137.5 383.4,137.9 386.3,137.7 389.2,137.6 392.1,137.8 395.1,137.7 398.0,137.5 400.9,137.8 403.8,137.9 406.7,138.0 409.6,138.5 412.5,139.2 415.5,140.6 418.4,142.5 421.3,145.1 424.2,149.3 427.2,154.2 430.2,157.6 433.1,159.8 436.1,159.9 439.1,157.3 442.1,153.6 445.0,150.0 448.0,146.2 451.0,142.1 454.0,137.5 456.9,132.2 459.9,126.6 462.9,120.8 465.9,116.2 468.8,113.0 471.8,110.1 474.8,106.4 477.8,102.5 480.8,97.8 483.8,92.3 486.8,86.4 489.8,80.1 492.8,73.4 495.8,66.8 498.8,62.0 501.9,59.9 504.9,61.2 507.9,65.1 510.9,71.1 513.9,77.9 516.9,83.4 519.9,86.9 522.9,88.8 525.9,89.5 528.9,88.6 532.0,87.7 535.0,87.6 538.0,88.2 541.1,88.4 544.1,89.2 547.1,90.2 550.1,90.8 553.2,91.3 556.2,92.6 559.2,93.7 562.3,95.6 565.3,98.8 568.3,103.2 571.3,107.7 574.4,112.7 577.3,117.9 580.3,123.2 583.3,128.6 586.3,133.8 589.2,139.1 592.2,143.7 595.2,147.5 598.1,150.8 601.1,154.2 604.1,157.4 607.0,160.5 610.0,163.6 613.0,166.6 615.9,169.3 618.9,171.7 621.9,174.1 624.9,176.5 627.8,178.6 630.8,180.8 633.7,183.0 636.7,185.2 639.6,187.2 642.5,189.3 645.5,191.0 648.4,192.3 651.4,193.6 654.3,194.8 657.3,196.1 660.2,197.2 663.1,198.2 666.1,199.1 669.0,199.6 672.0,200.2 674.9,200.8 677.9,201.8 680.8,202.8 683.7,203.9 686.6,205.0 689.5,206.4 692.5,208.3 695.4,210.3 698.3,212.1 701.2,213.2 704.1,214.1 707.0,214.6 709.9,215.8 712.8,218.0 715.8,220.9 718.7,224.7 721.6,229.0 724.5,233.4 727.4,237.4 730.3,241.4 733.2,244.3 736.2,246.2 739.1,247.1 742.0,247.8 744.9,248.0 747.9,248.4 750.8,249.2 753.7,248.8 756.6,247.8 759.6,247.1 762.5,246.4 765.4,245.1 768.4,245.1 771.3,245.5 774.2,245.9 777.1,246.3 780.1,246.7 783.0,247.4 785.9,249.3 788.8,252.1 791.8,255.6 794.7,259.9 797.6,264.2 800.6,267.9 803.5,271.2 806.4,274.4 809.4,277.2 812.3,279.9 815.2,282.0 818.2,284.0 821.1,286.2 824.0,289.0 826.9,291.4 829.9,292.8 832.8,292.9 835.7,291.4 838.7,288.4 841.6,285.3 844.5,283.0 847.5,281.3 850.4,280.8 853.3,280.8 856.3,281.1 859.2,281.9 862.1,282.8 865.1,284.1 868.0,284.7 870.9,285.0 873.8,284.7 876.8,283.6 879.7,282.1 882.6,280.8 885.7,279.7 888.7,278.2 891.7,276.3 894.7,273.7 897.8,270.9 900.8,268.4 903.8,266.4 906.8,264.8 909.9,263.1 912.9,261.4 915.9,259.0 918.9,255.5 922.0,251.7 925.0,247.3 927.9,242.5 930.8,237.5 933.7,232.3 936.7,226.8 939.6,221.6 942.5,216.5 945.4,211.6 948.3,206.5 951.3,200.7 954.2,194.4 957.1,188.2 960.0,182.4 962.9,177.1 966.0,173.3 969.1,170.7 972.2,168.1 975.3,165.3 978.4,162.3 981.5,158.4 984.6,153.3 987.6,148.0 990.7,142.1 993.8,136.5 996.9,133.7 1000.0,131.4 1000.0,300.0 0.0,300.0"/>
+      <polyline class="trace" points="0.0,123.3 3.1,122.5 6.3,122.1 9.4,121.0 12.5,120.3 15.7,119.8 18.8,119.1 21.9,118.2 25.1,116.9 28.2,116.0 31.3,115.8 34.5,116.1 37.5,117.1 40.5,118.7 43.5,120.1 46.6,121.3 49.6,122.5 52.6,123.3 55.6,123.8 58.7,124.6 61.7,125.8 64.7,127.0 67.8,128.3 70.8,129.8 73.8,130.7 76.7,131.1 79.7,131.8 82.6,132.0 85.5,131.5 88.5,130.7 91.4,129.6 94.3,127.8 97.3,126.2 100.2,124.6 103.1,122.7 106.1,120.3 109.0,117.7 111.9,114.7 114.9,111.0 117.8,107.1 120.7,102.4 123.6,96.6 126.5,90.4 129.4,85.2 132.3,80.7 135.2,77.2 138.1,74.4 141.0,71.4 143.9,67.5 146.8,62.7 149.7,57.5 152.6,52.5 155.6,47.7 158.7,42.7 161.7,37.5 164.7,32.4 167.7,27.4 170.7,23.0 173.7,19.4 176.8,17.7 179.8,17.0 182.8,16.5 185.8,16.5 188.7,16.6 191.6,16.3 194.5,15.5 197.4,14.4 200.3,13.2 203.2,12.0 206.1,11.0 209.0,10.2 211.9,10.4 214.8,11.2 217.7,12.9 220.7,15.3 223.6,18.0 226.7,20.3 229.8,22.6 232.9,24.6 236.0,26.5 239.2,29.1 242.3,33.2 245.4,38.1 248.5,42.3 251.7,44.9 254.6,45.2 257.6,43.0 260.5,38.3 263.5,32.2 266.4,26.0 269.4,21.3 272.3,17.3 275.3,14.1 278.2,13.4 281.2,15.1 284.1,18.1 287.1,22.7 290.1,28.5 293.2,34.4 296.2,39.3 299.3,43.1 302.4,45.8 305.4,48.3 308.5,50.2 311.5,52.8 314.6,55.9 317.6,60.4 320.7,65.4 323.8,71.1 326.8,76.7 329.9,82.2 332.9,87.5 335.8,92.6 338.8,97.2 341.8,101.5 344.8,105.9 347.8,110.3 350.7,114.5 353.7,118.7 356.7,122.7 359.7,126.2 362.7,129.0 365.6,131.4 368.6,133.1 371.6,134.8 374.6,136.2 377.6,136.9 380.5,137.5 383.4,137.9 386.3,137.7 389.2,137.6 392.1,137.8 395.1,137.7 398.0,137.5 400.9,137.8 403.8,137.9 406.7,138.0 409.6,138.5 412.5,139.2 415.5,140.6 418.4,142.5 421.3,145.1 424.2,149.3 427.2,154.2 430.2,157.6 433.1,159.8 436.1,159.9 439.1,157.3 442.1,153.6 445.0,150.0 448.0,146.2 451.0,142.1 454.0,137.5 456.9,132.2 459.9,126.6 462.9,120.8 465.9,116.2 468.8,113.0 471.8,110.1 474.8,106.4 477.8,102.5 480.8,97.8 483.8,92.3 486.8,86.4 489.8,80.1 492.8,73.4 495.8,66.8 498.8,62.0 501.9,59.9 504.9,61.2 507.9,65.1 510.9,71.1 513.9,77.9 516.9,83.4 519.9,86.9 522.9,88.8 525.9,89.5 528.9,88.6 532.0,87.7 535.0,87.6 538.0,88.2 541.1,88.4 544.1,89.2 547.1,90.2 550.1,90.8 553.2,91.3 556.2,92.6 559.2,93.7 562.3,95.6 565.3,98.8 568.3,103.2 571.3,107.7 574.4,112.7 577.3,117.9 580.3,123.2 583.3,128.6 586.3,133.8 589.2,139.1 592.2,143.7 595.2,147.5 598.1,150.8 601.1,154.2 604.1,157.4 607.0,160.5 610.0,163.6 613.0,166.6 615.9,169.3 618.9,171.7 621.9,174.1 624.9,176.5 627.8,178.6 630.8,180.8 633.7,183.0 636.7,185.2 639.6,187.2 642.5,189.3 645.5,191.0 648.4,192.3 651.4,193.6 654.3,194.8 657.3,196.1 660.2,197.2 663.1,198.2 666.1,199.1 669.0,199.6 672.0,200.2 674.9,200.8 677.9,201.8 680.8,202.8 683.7,203.9 686.6,205.0 689.5,206.4 692.5,208.3 695.4,210.3 698.3,212.1 701.2,213.2 704.1,214.1 707.0,214.6 709.9,215.8 712.8,218.0 715.8,220.9 718.7,224.7 721.6,229.0 724.5,233.4 727.4,237.4 730.3,241.4 733.2,244.3 736.2,246.2 739.1,247.1 742.0,247.8 744.9,248.0 747.9,248.4 750.8,249.2 753.7,248.8 756.6,247.8 759.6,247.1 762.5,246.4 765.4,245.1 768.4,245.1 771.3,245.5 774.2,245.9 777.1,246.3 780.1,246.7 783.0,247.4 785.9,249.3 788.8,252.1 791.8,255.6 794.7,259.9 797.6,264.2 800.6,267.9 803.5,271.2 806.4,274.4 809.4,277.2 812.3,279.9 815.2,282.0 818.2,284.0 821.1,286.2 824.0,289.0 826.9,291.4 829.9,292.8 832.8,292.9 835.7,291.4 838.7,288.4 841.6,285.3 844.5,283.0 847.5,281.3 850.4,280.8 853.3,280.8 856.3,281.1 859.2,281.9 862.1,282.8 865.1,284.1 868.0,284.7 870.9,285.0 873.8,284.7 876.8,283.6 879.7,282.1 882.6,280.8 885.7,279.7 888.7,278.2 891.7,276.3 894.7,273.7 897.8,270.9 900.8,268.4 903.8,266.4 906.8,264.8 909.9,263.1 912.9,261.4 915.9,259.0 918.9,255.5 922.0,251.7 925.0,247.3 927.9,242.5 930.8,237.5 933.7,232.3 936.7,226.8 939.6,221.6 942.5,216.5 945.4,211.6 948.3,206.5 951.3,200.7 954.2,194.4 957.1,188.2 960.0,182.4 962.9,177.1 966.0,173.3 969.1,170.7 972.2,168.1 975.3,165.3 978.4,162.3 981.5,158.4 984.6,153.3 987.6,148.0 990.7,142.1 993.8,136.5 996.9,133.7 1000.0,131.4"/>
+      <line class="cpline" x1="0.0" y1="123.4" x2="0.0" y2="300"/><circle class="cpdot" cx="0.0" cy="123.4" r="7"/><text class="cpnum" x="0.0" y="123.4" dy="3.5">1</text><line class="cpline" x1="224.2" y1="18.0" x2="224.2" y2="300"/><circle class="cpdot" cx="224.2" cy="18.0" r="7"/><text class="cpnum" x="224.2" y="18.0" dy="3.5">2</text><line class="cpline" x1="384.3" y1="138.0" x2="384.3" y2="300"/><circle class="cpdot" cx="384.3" cy="138.0" r="7"/><text class="cpnum" x="384.3" y="138.0" dy="3.5">3</text><line class="cpline" x1="608.4" y1="160.5" x2="608.4" y2="300"/><circle class="cpdot" cx="608.4" cy="160.5" r="7"/><text class="cpnum" x="608.4" y="160.5" dy="3.5">4</text><line class="cpline" x1="800.6" y1="267.8" x2="800.6" y2="300"/><circle class="cpdot" cx="800.6" cy="267.8" r="7"/><text class="cpnum" x="800.6" y="267.8" dy="3.5">5</text><line class="cpline" x1="999.1" y1="131.2" x2="999.1" y2="300"/><circle class="cpdot" cx="999.1" cy="131.2" r="7"/><text class="cpnum" x="999.1" y="131.2" dy="3.5">6</text>
+      <line class="tick" x1="0.0" y1="300" x2="0.0" y2="308"/><text class="gkm" x="0.0" y="326">0</text><line class="tick" x1="192.1" y1="300" x2="192.1" y2="308"/><text class="gkm" x="192.1" y="326">3</text><line class="tick" x1="384.3" y1="300" x2="384.3" y2="308"/><text class="gkm" x="384.3" y="326">6</text><line class="tick" x1="576.4" y1="300" x2="576.4" y2="308"/><text class="gkm" x="576.4" y="326">9</text><line class="tick" x1="768.6" y1="300" x2="768.6" y2="308"/><text class="gkm" x="768.6" y="326">12</text><line class="tick" x1="960.7" y1="300" x2="960.7" y2="308"/><text class="gkm" x="960.7" y="326">15</text><text class="gkm" x="1000.0" y="326">15,6</text>
+      <text class="gkm" x="500" y="348">kilomètres</text>
+    </svg>
+  </div>
+  <ul class="cps">
+<li class="cp"><div class="cp-head"><span class="cp-n">1</span><span class="cp-nom">Départ Ath Aïssi</span></div><div class="cp-nums"><span><b>0,0</b> km</span><span><b>671</b> m alt.</span></div><div class="cp-serv"><span class="serv">chrono</span><span class="serv">eau</span><span class="serv">WC</span></div></li><li class="cp"><div class="cp-head"><span class="cp-n">2</span><span class="cp-nom">Crête d'Akfadou</span></div><div class="cp-nums"><span><b>3,5</b> km</span><span><b>952</b> m alt.</span></div><div class="cp-seg">segment : 3,5 km · D+ 345 m</div><div class="cp-serv"><span class="serv">eau</span><span class="serv">ravito solide</span><span class="serv">médical</span></div></li><li class="cp"><div class="cp-head"><span class="cp-n">3</span><span class="cp-nom">Col de Taourirt</span></div><div class="cp-nums"><span><b>6,0</b> km</span><span><b>632</b> m alt.</span></div><div class="cp-seg">segment : 2,5 km · D+ 85 m</div><div class="cp-serv"><span class="serv">eau</span></div></li><li class="cp"><div class="cp-head"><span class="cp-n">4</span><span class="cp-nom">Chêne-liège</span></div><div class="cp-nums"><span><b>9,5</b> km</span><span><b>572</b> m alt.</span></div><div class="cp-seg">segment : 3,5 km · D+ 273 m</div><div class="cp-serv"><span class="serv">eau</span><span class="serv">ravito solide</span></div></li><li class="cp"><div class="cp-head"><span class="cp-n">5</span><span class="cp-nom">Ravin d'Ighzer</span></div><div class="cp-nums"><span><b>12,5</b> km</span><span><b>286</b> m alt.</span></div><div class="cp-seg">segment : 3,0 km · D+ 11 m</div><div class="cp-serv"><span class="serv">eau</span><span class="serv">médical</span><span class="serv">bus</span></div></li><li class="cp"><div class="cp-head"><span class="cp-n">6</span><span class="cp-nom">Arrivée Ath Aïssi</span></div><div class="cp-nums"><span><b>15,6</b> km</span><span><b>650</b> m alt.</span></div><div class="cp-seg">segment : 3,1 km · D+ 442 m</div><div class="cp-serv"><span class="serv">chrono</span><span class="serv">repas</span><span class="serv">médical</span><span class="serv">WC</span></div></li>
+  </ul>
+</section>
+
+<section class="trace-intro">
+  <h2>Le profil de la session</h2>
+  <p>La session a elle aussi une trace : un départ bas, un sommet d'enthousiasme technique, une
+    descente brutale quand la réalité du terrain est arrivée, puis une remontée vers une stack
+    tenable. Chaque point de passage ci-dessous est une décision. La bordure de gauche de chaque
+    carte dit d'où elle vient.</p>
+  <div class="legend">
+    <span><i style="background:var(--user)"></i> décision ou piste du Boss (<code>by user</code>)</span>
+    <span><i style="background:var(--coach)"></i> apport du coach (<code>by coach</code>)</span>
+    <span><i style="background:var(--neutral)"></i> arbitrage commun / non attribué</span>
+  </div>
+</section>
+
+<section class="leg first" style="--mark:var(--rock)"><div class="gutter"><span class="node"></span><span class="s">s₀</span></div><div class="leg-body"><div class="alt">km 0 · 671 m</div><h3>Le départ : cadrer la session</h3><p class="lede">Mode Creative Partner, catégorie collaborative, batch de quatre techniques, puis ajout d'une catégorie structurée.</p><ul class="dec"><li class="n"><span class="tag">Arbitrage</span><span class="txt">Batch initial : <b>Yes And Building, Steal And Upgrade, Random Stimulation, Fold The Paper</b>.</span></li><li class="n"><span class="tag">Arbitrage</span><span class="txt">Batch final après ajout de la catégorie <i>structured</i> : <b>Yes And Building, Steal And Upgrade, Disney Method, Empathy Map</b>.</span></li><li class="u"><span class="tag">Boss</span><span class="txt">Deux consignes de conduite : <b>pousser plus fort</b> — plus de charge en génération, moins de questions — et <b>pas de pavés</b>, une question claire et courte par message.</span></li></ul></div></section>
+<section class="leg " style="--mark:var(--high)"><div class="gutter"><span class="node"></span><span class="s">s₁</span></div><div class="leg-body"><div class="alt">montée · 973 m</div><h3>Le ruban 3D pré-cuit : la première architecture</h3><p class="lede">Le coach pose une proposition complète et séduisante : ne pas servir de terrain, mais découper une bande de relief autour de la trace et la pré-cuire au build.</p><ul class="dec"><li class="c"><span class="tag">Coach</span><span class="txt">Pas une carte mais un <b>ruban</b> : mesh extrudé du MNT (SRTM 30 m / Copernicus) découpé sur ~500 m de large autour de la trace GPX. Poids divisé par 50 face à une tuile de terrain complète.</span></li><li class="c"><span class="tag">Coach</span><span class="txt"><b>Pipeline build-time, pas runtime</b> : GPX → script Node → <code>.glb</code> Draco + hillshade / hypsométrie cuits en texture. Quelques Mo, versionnés par course, mis en cache PWA une fois pour toutes.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Mesh pré-cuit ⇒ l'animation devient un <b>suivi de spline</b> : trace GPX en Catmull-Rom, caméra paramétrée par l'abscisse curviligne <em>s</em>. Une seule variable d'état.</span></li><li class="c"><span class="tag">Coach</span><span class="txt"><b>Insight :</b> <em>s</em> devient le bus d'état partagé — profil altimétrique, checkpoints <em>s<sub>i</sub></em>, position live du coureur <em>s(t)</em> depuis le dernier scan, tous sur la même timeline.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">3D facultative : <b>fallback profil 2D en SVG</b> sur la même donnée (<em>s</em>, altitude) si WebGL est absent, la machine faible ou la batterie basse. Progressive enhancement.</span></li><li class="c"><span class="tag">Coach</span><span class="txt"><b>Exagération verticale ×1,5 à ×2</b> du relief (comme Relive ou Strava Flyby), sinon un trail paraît plat.</span></li><li class="n"><span class="tag">Arbitrage</span><span class="txt">Arbitrage pressenti : <b>three.js + <code>.glb</code> pré-cuit</b> plutôt que MapLibre terrain 3D — les tuiles raster-dem semblent trop lourdes à servir hors-ligne.</span></li></ul></div></section>
+<section class="leg " style="--mark:var(--user)"><div class="gutter"><span class="node"></span><span class="s">s₂</span></div><div class="leg-body"><div class="alt">basculement</div><h3>Le virage UTMB : la référence qui tue le ruban</h3><p class="lede">Le Boss apporte une référence visuelle concrète. Le coach l'ouvre et constate que la technique derrière n'est pas celle qui venait d'être choisie.</p><ul class="dec"><li class="u"><span class="tag">Boss</span><span class="txt">Référence visuelle : la <b>page parcours de l'UTMB Mont-Blanc</b>. Cible = deux vues — carte 2D interactive avec points de passage + profil altimétrique — en version allégée, pas toutes les fonctionnalités.</span></li><li class="u"><span class="tag">Boss</span><span class="txt">Cible précisée par captures : (1) <b>profil altimétrique schématique</b> avec checkpoints, services, barrières horaires, segments km / D+ ; (2) <b>vue 3D relief</b> avec imagerie satellite et marqueurs de checkpoints.</span></li><li class="c"><span class="tag">Coach</span><span class="txt"><b>La 3D de l'UTMB n'est pas un ruban pré-cuit</b> : c'est du terrain tuilé complet — Mapzen terrain-RGB + ortho swisstopo/IGN — façon MapLibre/Mapbox terrain. L'arbitrage three.js + glb est remis en cause.</span></li></ul></div></section>
+<section class="leg " style="--mark:var(--user)"><div class="gutter"><span class="node"></span><span class="s">s₃</span></div><div class="leg-body"><div class="alt">trois surfaces</div><h3>Les surfaces et la position live</h3><p class="lede">Avant de choisir une pile, il faut savoir pour qui. Le Boss fixe deux cibles ordonnées ; le coach en fait apparaître une troisième.</p><ul class="dec"><li class="u"><span class="tag">Boss</span><span class="txt">Deux cibles, dans cet ordre : (1) <b>site vitrine en ligne</b> (épopée 2) pour que les coureurs préparent le parcours en amont ; (2) <b>app coureur</b> (épopée 6) avec synchro offline/online, le coureur remonte sa position dès qu'il capte et apparaît sur un écran live.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Troisième surface implicite : un <b>écran live</b> — grand écran PC course ou public — qui affiche les coureurs sur la carte.</span></li><li class="u"><span class="tag">Boss</span><span class="txt">Position live = <b>GPS du téléphone avec un ping toutes les 10 minutes</b>, pas de temps réel, <em>en plus</em> des scans aux checkpoints de l'épopée 4. Deux sources fusionnées.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Un ping toutes les 10 min rend la trace brute trop creuse pour animer : <b>projection sur l'abscisse curviligne <em>s</em></b> de la trace officielle + interpolation entre pings = position plausible en continu.</span></li><li class="n"><span class="tag">Arbitrage</span><span class="txt">Décision : entre deux pings, <b>point figé sur le dernier <em>s</em> connu</b> + horodatage « vu il y a X min ». Le plus simple techniquement : pas d'extrapolation, pas de faux positif, pas de boucle d'animation.</span></li><li class="u"><span class="tag">Boss</span><span class="txt">Piste explorée : exploiter les données <b>Strava</b> ou les données de montre <b>Garmin</b>.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Strava et Garmin fournissent des <b>traces d'activité</b>, pas un fond de carte 3D — ils ne remplacent pas MapLibre/Mapbox. L'API Strava interdit de stocker ou d'afficher les traces d'autrui ; l'API Garmin Connect suppose un partenariat à demander. Garmin LiveTrack couvrirait le live mais dépend de la montre du coureur et du réseau.</span></li></ul></div></section>
+<section class="leg " style="--mark:var(--coach)"><div class="gutter"><span class="node"></span><span class="s">s₄</span></div><div class="leg-body"><div class="alt">descente · 219 m</div><h3>Le terrain algérien : pas de swisstopo en Kabylie</h3><p class="lede">La contrainte majeure de la session. Ce que l'UTMB obtient d'agences nationales n'existe pas ici — il faut redescendre sur des sources mondiales libres, puis vérifier qu'elles couvrent réellement Yakouren.</p><ul class="dec"><li class="c"><span class="tag">Coach</span><span class="txt"><b>swisstopo et IGN-F sont des agences nationales CH/FR</b> ; rien d'équivalent en Algérie. Le MNT viendra de <b>Copernicus GLO-30</b> ou <b>SRTM 30 m</b>, l'ortho de <b>Sentinel-2</b> (10 m, libre), Esri World Imagery ou Mapbox Satellite. Résolution visuelle plus grossière que la démo UTMB.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Vérifié en ligne, sur la zone : les <b>tuiles DEM AWS terrarium au z14 fonctionnent sur Yakouren</b> (gratuites, sans clé) ; l'<b>Esri World Imagery est réelle jusqu'au z18</b> (~0,6 m/px) sur Ath Aïssi, le z19 est absent. Conclusion : pas besoin de Mapbox payant pour la vitrine.</span></li></ul></div></section>
+<section class="leg " style="--mark:var(--mid)"><div class="gutter"><span class="node"></span><span class="s">s₅</span></div><div class="leg-body"><div class="alt">remontée</div><h3>Le POC : MapLibre sur données réelles</h3><p class="lede">La discussion se solde par du code qui tourne sur le parcours réel, et par un pipeline reproductible dont le JSON alimente à la fois la carte et le profil.</p><ul class="dec"><li class="n"><span class="tag">Arbitrage</span><span class="txt">POC livré : <b>MapLibre GL JS 4.7.1</b> + raster-dem terrarium AWS + ortho Esri + profil SVG calculé hors-ligne depuis le même MNT. Parcours réel d'Ath Aïssi : <b>15,6 km, D+ 1 156 m, altitude 219–973 m, 6 checkpoints</b>.</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Pipeline reproductible : <code>dem.py</code> (lecture terrarium) + <code>route.py</code> (densification 45 m, lissage sur 5 points, D+ par segment) → <code>parcours.json</code>. <b>Le même JSON alimente la carte 3D et le profil : source unique.</b></span></li><li class="u"><span class="tag">Boss</span><span class="txt">Le POC est validé. Demande : <b>bandeau profil repliable</b> pour laisser la carte seule en plein écran. Implémenté — en-tête cliquable, résumé km / D+ / nombre de points quand il est replié, <code>map.resize</code> au toggle.</span></li><li class="u"><span class="tag">Boss</span><span class="txt"><b>Stack validée</b> : MapLibre GL JS 4.7.1 + Esri World Imagery (satellite) ou OpenTopoMap (topo) + AWS Terrain Tiles terrarium pour le relief. Répond largement au besoin, <b>pas de Mapbox</b>.</span></li></ul></div></section>
+<section class="leg last" style="--mark:var(--low)"><div class="gutter"><span class="node"></span><span class="s">s₆</span></div><div class="leg-body"><div class="alt">arrivée · 650 m</div><h3>Licences et périmètre</h3><p class="lede">Dernier point de passage : vérifier le droit d'usage des sources, puis figer ce qui entre dans l'épopée 2 et ce qui en sort.</p><ul class="dec"><li class="n"><span class="tag">Arbitrage</span><span class="txt">Question ouverte soulevée : conditions d'usage en production d'<b>Esri World Imagery</b> (licence ArcGIS) et d'<b>OpenTopoMap</b> (trafic lourd interdit sur leurs serveurs publics).</span></li><li class="c"><span class="tag">Coach</span><span class="txt">Licences vérifiées. Relief AWS terrarium : domaine public, commercial OK. OpenTopoMap : CC-BY-SA, commercial OK, attribution obligatoire. <b>Esri World Imagery est le point bloquant</b> — commercial non couvert sans licence ArcGIS, endpoints sans clé en voie de retrait. EOX Sentinel-2 cloudless : CC BY-NC-SA, commercial payant.</span></li><li class="n"><span class="tag">Arbitrage</span><span class="txt">Esri reste dans le POC mais <b>doit être remplacé avant la prod</b>. Le relief et le fond topo, eux, ne posent pas de problème.</span></li><li class="u"><span class="tag">Boss</span><span class="txt"><b>Azzel est un projet associatif non monétisé.</b> Ce statut débloque la situation : EOX Sentinel-2 cloudless devient utilisable en CC BY-NC-SA, OpenTopoMap et AWS terrarium étaient déjà OK. Seul Esri World Imagery reste à clarifier (ToU + retrait des endpoints sans clé).</span></li><li class="u"><span class="tag">Boss</span><span class="txt"><b>MoSCoW validé sans modification</b> — voir ci-dessous.</span></li></ul></div></section>
+
+<section class="panel" style="margin-top:40px">
+  <div class="panel-head">
+    <h2>MoSCoW validé sans modification</h2>
+    <span class="note">by user · périmètre épopée 2 (vitrine)</span>
+  </div>
+  <div class="moscow">
+    <div class="mrow"><div class="lab">Must</div><ul>
+      <li>Carte 3D MapLibre + relief terrarium</li>
+      <li>Profil altimétrique avec checkpoints, services et segments</li>
+      <li>Synchronisation profil ↔ carte</li>
+      <li>Pipeline GPX → <code>parcours.json</code></li>
+      <li>Attributions légales</li>
+      <li>Arbitrage du fond satellite</li>
+    </ul></div>
+    <div class="mrow"><div class="lab">Should</div><ul>
+      <li>Survol animé du parcours</li>
+      <li>Relief exagérable</li>
+      <li>Bandeau profil repliable</li>
+      <li>Barrières horaires</li>
+    </ul></div>
+    <div class="mrow"><div class="lab">Could</div><ul>
+      <li>Bascule satellite / topo</li>
+      <li>Fallback 2D sans WebGL</li>
+      <li>Lien depuis l'e-dossard</li>
+    </ul></div>
+    <div class="mrow"><div class="lab">Won't</div><ul>
+      <li>App hors-ligne 3D (ruban <code>.glb</code>)</li>
+      <li>Écran live</li>
+      <li>Ping GPS 10 min</li>
+      <li>Strava / Garmin</li>
+      <li><em>→ renvoyés à une épopée dédiée</em></li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="panel" style="margin-top:28px">
+  <div class="panel-head">
+    <h2>Licences des sources cartographiques</h2>
+    <span class="note">Azzel est un projet associatif non monétisé — ce statut débloque l'essentiel</span>
+  </div>
+  <div class="lic-wrap">
+  <table class="lic">
+    <thead><tr><th>Source</th><th>Licence</th><th>Statut</th></tr></thead>
+    <tbody>
+      <tr><td>AWS Terrain Tiles<br><span style="font-weight:400;color:var(--muted)">relief, terrarium</span></td>
+        <td>Domaine public (SRTM / GMTED, USGS). Attribution « SRTM data courtesy of the U.S. Geological
+          Survey » + Mapzen. Usage commercial autorisé.</td><td><span class="st ok">OK</span></td></tr>
+      <tr><td>OpenTopoMap<br><span style="font-weight:400;color:var(--muted)">fond topo</span></td>
+        <td>CC-BY-SA. Commercial autorisé, attribution obligatoire, pas de téléchargement massif sur
+          leurs serveurs publics.</td><td><span class="st ok">OK</span></td></tr>
+      <tr><td>EOX Sentinel-2 cloudless<br><span style="font-weight:400;color:var(--muted)">satellite</span></td>
+        <td>CC BY-NC-SA : utilisable ici du fait du statut associatif non monétisé ; payant pour un
+          usage commercial.</td><td><span class="st ok">OK</span></td></tr>
+      <tr><td>Esri World Imagery<br><span style="font-weight:400;color:var(--muted)">satellite du POC</span></td>
+        <td>Usage commercial non couvert sans licence ArcGIS, et les endpoints sans clé sont en voie de
+          retrait. Reste dans le POC mais à remplacer avant la prod : compte ArcGIS Location Platform
+          (2 M tuiles/mois offertes), MapTiler ou Mapbox Satellite payant, ou licence commerciale EOX.</td>
+        <td><span class="st ko">à clarifier</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="synth">
+  <h2>Synthèse — ce que la session a vraiment produit</h2>
+  <p class="lede" style="color:var(--ink-2);max-width:62ch">Les trois apports structurants viennent du
+    Boss : la référence UTMB, qui a tué le ruban <code>.glb</code> ; le ping GPS toutes les 10 minutes,
+    qui a réduit le live à un point figé ; le statut associatif, qui a débloqué les licences. Restent
+    trois liens non évidents.</p>
+  <div class="sgrid">
+    <div class="scard k1"><div class="num">LIEN 01</div>
+      <h3>L'abscisse curviligne <em>s</em> est le vrai livrable d'architecture</h3>
+      <p>Ce n'est pas un détail de rendu : <em>s</em> relie la carte, le profil altimétrique, les
+        checkpoints de l'épopée 4 et les pings GPS sur une seule et même timeline. Une variable
+        d'état, quatre surfaces.</p></div>
+    <div class="scard k2"><div class="num">LIEN 02</div>
+      <h3>Le ruban <code>.glb</code> n'est pas mort, il s'est trompé d'épopée</h3>
+      <p>Écarté pour la vitrine, il reste la bonne réponse pour l'app hors-ligne : là où MapLibre ne
+        peut pas précharger de tuiles, un mesh pré-cuit de quelques Mo, versionné par course et mis en
+        cache PWA, fait exactement le travail.</p></div>
+    <div class="scard k3"><div class="num">LIEN 03</div>
+      <h3>Le profil repliable et le fallback 2D sont la même idée</h3>
+      <p>Les deux disent que le couple (distance, altitude) est le socle et que la 3D est un bonus.
+        Tout ce qui compte tient dans <em>s</em> et l'altitude ; le relief texturé vient par-dessus,
+        quand la machine et la batterie le permettent.</p></div>
+  </div>
+  <p class="pull">Un brainstorming sur la 3D s'est terminé sur une variable scalaire :
+    <b>s</b>, l'abscisse le long de la trace. Le reste — tuiles, mesh, exagération verticale — n'est
+    qu'une façon de la regarder.</p>
+</section>
+
+<footer>
+  Restitution de la session <code>brainstorm-carte-3d-parcours-course-2026-10-23</code> · projet Azzel ·
+  source unique : <code>.memlog.md</code> et <code>poc/parcours.json</code> · profil tracé en SVG depuis
+  les données réelles du parcours.
+</footer>
+
+</div>
+</body>
+</html>

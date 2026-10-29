@@ -7,7 +7,10 @@ import {
   type ApiError,
 } from '@/modules/sponsors/errors';
 
-export const MAX_BODY_BYTES = 4096;
+// `url` et `logoUrl` valent 2048 caractères chacune (MAX_SPONSOR_URL_LENGTH) :
+// à 4096, un sponsor au maximum de ses deux adresses partait en body_too_large,
+// sans erreur de champ exploitable. 8 Kio laissent la place au nom et au JSON.
+export const MAX_BODY_BYTES = 8192;
 
 export function errorResponse(apiError: ApiError): NextResponse {
   const body = apiError.fields

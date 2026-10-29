@@ -392,6 +392,22 @@ describe('retour-images — service', () => {
     expect(store.setTrailerUrl).toHaveBeenCalledTimes(1);
   });
 
+  it('setTrailerUrl : clé absente refusée — jamais un effacement silencieux', async () => {
+    const store = fakeStore({ setTrailerUrl: vi.fn() });
+    for (const corps of [{}, { autre: 'x' }, null]) {
+      await expect(setTrailerUrl(SESSION, corps, { store })).rejects.toBeInstanceOf(
+        InvalidTrailerUrlError,
+      );
+    }
+    expect(store.setTrailerUrl).not.toHaveBeenCalled();
+  });
+
+  it('normalizeTrailerUrlInput : schéma en majuscules ramené en minuscules (CHECK SQL ^https://)', () => {
+    expect(normalizeTrailerUrlInput({ trailerUrl: 'HTTPS://Video.dz/T.mp4' })).toEqual({
+      trailerUrl: 'https://Video.dz/T.mp4',
+    });
+  });
+
   it('createTemoignage : champs invalides → erreur nommée, sinon écrit avec ordre', async () => {
     const store = fakeStore({
       createTemoignage: vi.fn().mockResolvedValue(temoignageRecord()),

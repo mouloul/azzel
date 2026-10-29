@@ -119,6 +119,16 @@ describe('contenus — domaine', () => {
     expect(isHttpsUrl('')).toBe(false);
   });
 
+  it('normalizeContenuInput : schéma en majuscules ramené en minuscules (CHECK SQL ^https://)', () => {
+    // new URL() accepte HTTPS://, la contrainte SQL est sensible à la casse :
+    // sans normalisation, l'écriture finissait en 23514 → 500.
+    expect(normalizeContenuInput({ titre: 'T', corps: 'C', gpxUrl: 'HTTPS://Files.dz/T.gpx' })).toEqual({
+      titre: 'T',
+      corps: 'C',
+      gpxUrl: 'https://Files.dz/T.gpx',
+    });
+  });
+
   it('normalizeContenuInput : trim, vide → null pour gpxUrl, non-chaîne ignorée', () => {
     expect(
       normalizeContenuInput({ titre: '  Titre ', corps: ' Corps ', gpxUrl: '  ' }),

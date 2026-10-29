@@ -33,6 +33,7 @@
   --heading: #183A2B;
   --on-forest: #F4F0E6;
   --line: #E6E1D4;
+  --line-strong: #8A857A;
   --accent: #9E5418;
   --highlight: #C8742B;
   --action: #9E5418;
@@ -71,6 +72,7 @@
   --az-action-hover: var(--action-hover);
   --az-action-texte: var(--on-action);
   --az-filet: var(--line);
+  --az-filet-controle: var(--line-strong);
   --az-focus: var(--focus);
   --az-succes: #187A3C;
   --az-succes-encre: #FFFFFF;
@@ -136,6 +138,7 @@
   --heading: #F4F0E6;
   --on-forest: #F4F0E6;
   --line: #2F4A3C;
+  --line-strong: #93A99C;
   --accent: #E39A5B;
   --highlight: #D98A45;
   --action: #D98A45;

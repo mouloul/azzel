@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // volontaires/page.test.tsx) : session, service inscriptions, assistance.
 
 const sessionMock = vi.hoisted(() => ({
-  requireSession: vi.fn(),
+  requireRolePage: vi.fn(),
 }));
 
 vi.mock(
@@ -78,9 +78,9 @@ async function rendu(): Promise<string> {
 }
 
 beforeEach(() => {
-  sessionMock.requireSession.mockReset();
+  sessionMock.requireRolePage.mockReset();
   inscriptionsServiceMock.getChecklistState.mockReset();
-  sessionMock.requireSession.mockResolvedValue({
+  sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_COUREUR,
   });

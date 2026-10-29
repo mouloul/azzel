@@ -3,7 +3,7 @@ import { formatLocalDateTime } from '@azzel/shared';
 import { AssistanceButton } from '@/components/assistance-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
-import { requireSession } from '@/modules/iam/session';
+import { requireRolePage } from '@/modules/iam/session';
 
 import { canDepositPreuve } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
@@ -19,7 +19,9 @@ export const metadata = {
 
 export default async function PreuvePage() {
   const assistancePhone = readAssistancePhone();
-  const result = await requireSession();
+  // Garde de RÔLE, pas seulement de session : un organisateur ou un
+  // volontaire est renvoyé vers son espace au lieu de rester ici.
+  const result = await requireRolePage('coureur');
   if (result.status === 'db-unavailable') {
     const { envelope } = toApiError(new DbUnavailableError());
     return (

@@ -1,3 +1,4 @@
+import { DbUnavailableError } from '@/modules/iam/errors';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import {
@@ -72,10 +73,26 @@ function assertSponsorInputValide(raw: unknown, input: ReturnType<typeof normali
   const errors: SponsorFieldErrors = {
     ...validateSponsorInput(input),
     ...sponsorTypeErrors(raw),
+    ...signatureTypeError(raw),
   };
   if (hasSponsorFieldErrors(errors)) {
     throw new InvalidSponsorFieldsError(errors);
   }
+}
+
+/**
+ * `signature` mal typé ("true", 1…) : refus nommé, comme les autres champs.
+ * Auparavant `=== true` le lisait comme `false` et l'ÉCRIVAIT, retirant en
+ * silence le statut de signature d'un sponsor en PATCH.
+ */
+function signatureTypeError(raw: unknown): SponsorFieldErrors {
+  if (typeof raw !== 'object' || raw === null || !('signature' in raw)) {
+    return {};
+  }
+  const value = (raw as { signature?: unknown }).signature;
+  return typeof value === 'boolean' || value === null || value === undefined
+    ? {}
+    : { signature: 'Valeur attendue : vrai ou faux.' };
 }
 
 function signatureFlag(raw: unknown): boolean {
@@ -166,10 +183,10 @@ export async function setSponsorMode(
 }
 
 /**
- * Lecture dynamique de la section partenaires pour l'accueil public —
- * le mécanisme du « bascule sans dev » de FR-22 : chaque requête relit la base.
- * Ne lève JAMAIS : config absente, base indisponible ou table vide → null,
- * la vitrine masque la section au lieu de casser.
+ * Lecture de la section partenaires pour l'accueil public — le mécanisme du
+ * « bascule sans dev » de FR-22 (accueil en ISR, invalidé à chaque écriture).
+ * Config absente, table vide ou base indisponible → null : la vitrine masque
+ * la section au lieu de casser. Toute autre erreur est repropagée.
  */
 export async function getPartenairesSection(
   deps: SponsorsServiceDeps = {},
@@ -179,10 +196,13 @@ export async function getPartenairesSection(
     const { mode, sponsors } = await store.readDefaultOrgPartenaires();
     return resolvePartenaires(mode, sponsors);
   } catch (error) {
-    console.warn(
-      '[vitrine] section partenaires masquée :',
-      error instanceof Error ? error.message : error,
-    );
+    // Seule une PANNE DE BASE masque la section (même règle que parcours,
+    // région et retour en images) : un bug de code doit éclater, pas faire
+    // disparaître en silence la section partenaires de l'accueil.
+    if (!(error instanceof DbUnavailableError)) {
+      throw error;
+    }
+    console.warn('[vitrine] section partenaires masquée :', error.message);
     return null;
   }
 }

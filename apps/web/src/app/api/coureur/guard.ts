@@ -46,6 +46,10 @@ function roleGuardResponse(failure: 'unauthenticated' | 'forbidden'): NextRespon
   return coureurErrorResponse(toIamApiError(error));
 }
 
+/**
+ * Lecture du jeton : Bearer PUIS cookie (`sessionTokenFromRequest`). Seule
+ * surface appelée par l'app native, qui ne peut pas porter de cookie httpOnly.
+ */
 export async function guardCoureur(
   request: NextRequest,
 ): Promise<{ session: SessionRecord } | { response: NextResponse }> {

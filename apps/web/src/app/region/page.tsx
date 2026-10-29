@@ -32,6 +32,12 @@ export default async function RegionPage() {
             votre week-end — hébergement, restauration, événements annexes et
             consignes de sécurité.
           </p>
+          {blocs.length === 0 ? (
+            <p className="aa-note">
+              Les informations pratiques de l’édition 2027 seront publiées après
+              confirmation par le comité.
+            </p>
+          ) : null}
           <div className="aa-region-sections">
             {blocs.map((bloc) => (
               <section

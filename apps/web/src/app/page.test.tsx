@@ -18,7 +18,7 @@ vi.mock(
     sponsorsServiceMock as unknown as typeof import('@/modules/sponsors/service'),
 );
 
-import HomePage from './page';
+import HomePage, { revalidate as ACCUEIL_REVALIDATE } from './page';
 
 let HTML_ACCUEIL = '';
 
@@ -137,6 +137,16 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).not.toContain('à confirmer');
     expect(html).not.toContain('objectif');
     expect(html).not.toContain('>600<');
+  });
+});
+
+describe('accueil vitrine — mode de rendu', () => {
+  it('cache court (ISR) : la section partenaires est relue sans rendre la page dynamique', () => {
+    // Supprimer l'export `revalidate` figerait la section partenaires à la
+    // construction : la bascule A/B « sans dev » ne se verrait plus.
+    // Le remplacer par `force-dynamic` remettrait Postgres dans le chemin
+    // critique du premier rendu (budget < 5 s en 3G lent).
+    expect(ACCUEIL_REVALIDATE).toBe(60);
   });
 });
 

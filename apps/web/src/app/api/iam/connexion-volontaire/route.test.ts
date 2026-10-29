@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { POST as postConnexion } from './route';
 
@@ -33,10 +33,24 @@ beforeEach(() => {
 });
 
 describe('POST /api/iam/connexion-volontaire — connexion mot de passe (publique)', () => {
+  const hopsOrigine = process.env.AZZEL_TRUSTED_PROXY_HOPS;
+
+  afterEach(() => {
+    if (hopsOrigine === undefined) {
+      delete process.env.AZZEL_TRUSTED_PROXY_HOPS;
+    } else {
+      process.env.AZZEL_TRUSTED_PROXY_HOPS = hopsOrigine;
+    }
+  });
+
   it('identifiants corrects : 200, cookie de session posé, IP transmise au service', async () => {
+    // Un proxy de confiance : l'adresse retenue est celle qu'IL a posée, la
+    // dernière de la liste — le client ne peut pas se choisir une identité.
+    process.env.AZZEL_TRUSTED_PROXY_HOPS = '1';
     iamServiceMock.connecterVolontaire.mockResolvedValue({
       token: 'jeton-session-brut',
       email: 'kahina@exemple.dz',
+      role: 'volontaire',
     });
     const response = await postConnexion(
       requestWithBody(
@@ -51,7 +65,7 @@ describe('POST /api/iam/connexion-volontaire — connexion mot de passe (publiqu
       'kahina@exemple.dz',
       'motdepasse-2026',
       {},
-      { clientIp: '203.0.113.7' },
+      { clientIp: '10.0.0.1' },
     );
   });
 

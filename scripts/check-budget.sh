@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Story 2.1 — budget de premier chargement de la page d'accueil (< 300 Ko).
+# Story 2.1 — budget de premier chargement de la page d'accueil (< 300 Kio).
+# Unité : KIBIoctet (1 Kio = 1024 octets), soit 307 200 octets. Les marges
+# annoncées dans les rapports de story se lisent avec cette unité.
 #
 # Mesure déterministe sur un build frais (`pnpm build`, ou `pnpm budget`)
 # servi par `next start` :
@@ -12,7 +14,7 @@
 #     et les photos différées loading="lazy" sous la ligne de flottaison —
 #     le budget mesure le chemin mobile (640 ; léger upscale accepté sous
 #     le voile sur DPR ≥ 2).
-# Sortie : détail par ressource, total, verdict. Exit 1 si le seuil de 300 Ko
+# Sortie : détail par ressource, total, verdict. Exit 1 si le seuil de 300 Kio
 # est dépassé, si une ressource est inaccessible ou si le contenu attendu est
 # absent (égide, CTA /connexion, chiffres officiels 2026).
 #
@@ -30,7 +32,7 @@ set -euo pipefail
 
 PORT="${BUDGET_PORT:-3123}"
 BASE_URL="http://127.0.0.1:${PORT}"
-LIMIT_BYTES=$((300 * 1024))
+LIMIT_BYTES=$((300 * 1024)) # 300 Kio = 307 200 octets
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 SERVER_PID=""
@@ -40,7 +42,9 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     pkill -P "$SERVER_PID" 2>/dev/null || true
   fi
-  if command -v lsof >/dev/null 2>&1; then
+  if [ -n "$SERVER_PID" ] && command -v lsof >/dev/null 2>&1; then
+    # Uniquement si NOUS avons démarré un serveur : sinon le port appartient à
+    # quelqu'un d'autre (le garde ci-dessous refuse justement de l'écraser).
     LISTENERS="$(lsof -ti ":${PORT}" 2>/dev/null || true)"
     if [ -n "$LISTENERS" ]; then
       for pid_ecouteur in $LISTENERS; do
@@ -131,7 +135,7 @@ while IFS= read -r chemin; do
 done < "${WORK}/assets.txt"
 
 echo "---------------------------------------------"
-printf 'Total : %s octets (%s Ko) — seuil %s Ko\n' "$TOTAL" "$((TOTAL / 1024))" "300"
+printf 'Total : %s octets (%s Kio) — seuil %s Kio\n' "$TOTAL" "$((TOTAL / 1024))" "300"
 
 DEPASSE=0
 if [ "$TOTAL" -gt "$LIMIT_BYTES" ]; then

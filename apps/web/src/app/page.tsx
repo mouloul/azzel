@@ -38,11 +38,18 @@ const PILIERS = [
   },
 ];
 
-// Section partenaires lue en base à chaque requête (bascule A/B « sans dev »,
-// FR-22) : l’accueil passe du prérendu statique au dynamique — la section est
-// rendue serveur à chaque requête (voir Design Notes 2.3), le reste de la page
-// est inchangé (texte).
-export const dynamic = 'force-dynamic';
+export const metadata = {
+  title: 'Week-end Sportif Aït Aïssi',
+  description:
+    'Deux trails — 35 km et 12 km — au départ du stade Agni Lhoudh, au village d’Aït Aïssi. Dates, épreuves, parcours et informations pratiques de l’édition 2027.',
+};
+
+// Section partenaires lue en base (bascule A/B « sans dev », FR-22). La page
+// est mise en cache 60 s au lieu d'être rendue à chaque requête : le hero, les
+// chiffres 2026 et le CTA ne dépendent plus de Postgres pour s'afficher
+// (budget : premier rendu lisible < 5 s en 3G lent). Les écritures de
+// /admin/sponsors invalident la page immédiatement (revalidatePath).
+export const revalidate = 60;
 
 export default async function HomePage() {
   const [telephone, partenaires] = await Promise.all([

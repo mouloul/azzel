@@ -19,7 +19,9 @@ export const SPONSOR_FIELD_ORDER = ['name', 'url', 'logoUrl'] as const;
 
 export type SponsorField = (typeof SPONSOR_FIELD_ORDER)[number];
 
-export type SponsorFieldErrors = Partial<Record<SponsorField, string>>;
+// `signature` n'est pas un champ de saisie texte (case à cocher) : hors de
+// SPONSOR_FIELD_ORDER, mais il peut porter une erreur de type.
+export type SponsorFieldErrors = Partial<Record<SponsorField | 'signature', string>>;
 
 export interface SponsorInput {
   name: string;

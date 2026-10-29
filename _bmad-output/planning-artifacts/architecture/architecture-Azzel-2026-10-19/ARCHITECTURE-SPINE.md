@@ -83,7 +83,7 @@ graph LR
 
 | Concern | Convention |
 | --- | --- |
-| Auth & emails | Email + code unique généré en interne (UUID), envoyé via SMTP propre ; expiration courte ; limitation de rythme ; **file d'envoi avec rejeu** (notifications de statut FR-6 et rappel J-7 incluses). Invitation volontaires : import Excel → premier login → mot de passe. (PRD addendum §1) |
+| Auth & emails | Email + code unique généré en interne (UUID), envoyé via SMTP propre ; expiration courte ; limitation de rythme ; **file d'envoi avec rejeu** (notifications de statut FR-6 et rappel J-7 incluses). **Mécanisme d'accès unique, tous rôles** (coureur, volontaire, organisateur) : aucun mot de passe stocké. Invitation volontaires : import Excel → email d'invitation (lien vers `/connexion`, sans jeton) → connexion par code → `account.activated_at` posé à la première connexion. Le rôle vient du compte (import → `volontaire`, `AZZEL_ADMIN_EMAILS` → `organisateur`) et détermine l'espace d'atterrissage. Session interactive 30 j ; la PWA scanneuse conserve son jeton d'appareil indépendant. (PRD addendum §1 ; sprint-change-proposal-2026-10-28) |
 | Fichiers preuves | Compression/redimensionnement **côté client avant upload**, cible ≤ 300 Ko l'unité (budget storage 1 Go). |
 | Scan QR | `BarcodeDetector` si dispo, **fallback `@zxing/browser` (toujours actif sur iOS Safari — BarcodeDetector y est désactivé par défaut)** ; retour < 1 s visé, qualifié sur le fallback iOS ; annuaire coureurs préchargé en IndexedDB. |
 | Canaux publics | Vitrine live (résultats, carte) servie par le **backend Next.js** (cache + SSE/polling) ; **jamais de lecture directe Supabase realtime depuis les navigateurs publics** (plafond 200 connexions, 2 M messages/mois) ; realtime réservé au portail admin. |

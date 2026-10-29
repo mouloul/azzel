@@ -81,6 +81,16 @@ export async function setTrailerUrl(
   deps: RetourImagesServiceDeps = {},
 ): Promise<{ trailerUrl: string | null; updatedAt: string }> {
   const store = deps.store ?? getRetourImagesStore();
+  // Clé absente ≠ « effacer » : un PUT {} supprimait le trailer configuré sans
+  // un mot, à rebours de la convention des services frères (clé absente =
+  // valeur conservée). Pour retirer la vidéo, on envoie trailerUrl: null ou "".
+  if (
+    typeof rawInput !== 'object' ||
+    rawInput === null ||
+    !('trailerUrl' in (rawInput as Record<string, unknown>))
+  ) {
+    throw new InvalidTrailerUrlError({ trailerUrl: 'Adresse de la vidéo attendue (ou vide pour la retirer).' });
+  }
   const { trailerUrl } = normalizeTrailerUrlInput(rawInput);
   const erreurType = trailerUrlTypeError(rawInput);
   const erreurUrl = validateTrailerUrl(trailerUrl);

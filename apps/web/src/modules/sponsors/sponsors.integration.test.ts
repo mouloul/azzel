@@ -195,5 +195,26 @@ describe.skipIf(testUrls === null)(
         createSponsor(sessionA, { name: 'Encore possible A' }, { store }),
       ).resolves.toBeTruthy();
     });
+
+    it('plafond sous concurrence : createSponsor attend le verrou consultatif de l’organisation', async () => {
+      // Un test « deux créations en parallèle » ne prouve rien ici : la fenêtre
+      // entre count et INSERT est trop courte pour que les transactions se
+      // chevauchent (il passait aussi sans verrou). On tient donc NOUS-MÊMES le
+      // verrou de l'organisation, sur une autre connexion : la création doit
+      // rester bloquée tant qu'on ne l'a pas relâché.
+      let terminee = false;
+      let creation: Promise<unknown> = Promise.resolve();
+      await sql.begin(async (tx) => {
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${`sponsor:${orgAId}`}))`;
+        creation = createSponsor(sessionA, { name: 'Attend le verrou' }, { store }).finally(() => {
+          terminee = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect(terminee, 'createSponsor n’a pas attendu le verrou').toBe(false);
+      });
+      // Verrou relâché au commit : la création aboutit.
+      await creation;
+      expect(terminee).toBe(true);
+    });
   },
 );

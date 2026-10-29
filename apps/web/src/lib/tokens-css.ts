@@ -64,6 +64,7 @@ const AZ_REMAP: Record<string, string> = {
   'az-action-hover': 'var(--action-hover)',
   'az-action-texte': 'var(--on-action)',
   'az-filet': 'var(--line)',
+  'az-filet-controle': 'var(--line-strong)',
   'az-focus': 'var(--focus)',
 };
 

@@ -57,13 +57,20 @@ main {
 }
 
 .site-header {
+  border-bottom: 1px solid var(--az-filet);
+}
+
+/* Le filet court sur toute la largeur, le contenu s'aligne sur la même
+   primitive de conteneur que les sections de page (cf. .aa-section). */
+.site-header__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--az-space-4);
   min-height: var(--header-height);
+  max-width: var(--container-max);
+  margin-inline: auto;
   padding: var(--az-space-2) var(--az-space-gutter);
-  border-bottom: 1px solid var(--az-filet);
 }
 
 .brand-logo {
@@ -99,8 +106,13 @@ main {
 }
 
 .site-footer {
-  padding: var(--az-space-5) var(--az-space-gutter);
   border-top: 1px solid var(--az-filet);
+}
+
+.site-footer__inner {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--az-space-5) var(--az-space-gutter);
 }
 
 .site-footer .meta {
@@ -116,6 +128,7 @@ main {
 
 .hero {
   max-width: var(--container-max);
+  margin-inline: auto;
   padding: var(--az-space-7) var(--az-space-gutter);
 }
 
@@ -199,6 +212,7 @@ main {
 
 .structure {
   max-width: var(--container-max);
+  margin-inline: auto;
   padding: 0 var(--az-space-gutter) var(--az-space-7);
   display: grid;
   gap: var(--az-space-4);
@@ -224,6 +238,7 @@ main {
 
 .card p {
   margin: 0 0 var(--az-space-2);
+  max-width: var(--text-max);
 }
 
 .card p:last-child {
@@ -239,6 +254,7 @@ main {
 
 .auth {
   max-width: 30rem;
+  margin-inline: auto;
   padding: var(--az-space-7) var(--az-space-gutter);
 }
 
@@ -298,7 +314,7 @@ main {
   color: var(--az-texte);
   font: inherit;
   font-size: 16px;
-  border: 1.5px solid var(--az-filet);
+  border: 1.5px solid var(--az-filet-controle);
   border-radius: var(--az-radius-md);
 }
 
@@ -310,7 +326,7 @@ main {
   color: var(--az-texte);
   font: inherit;
   font-size: 16px;
-  border: 1.5px solid var(--az-filet);
+  border: 1.5px solid var(--az-filet-controle);
   border-radius: var(--az-radius-md);
 }
 
@@ -340,7 +356,7 @@ main {
   min-height: 48px;
   padding: var(--az-space-2) var(--az-space-3);
   background: var(--az-bg);
-  border: 1px solid var(--az-filet);
+  border: 1px solid var(--az-filet-controle);
   border-radius: var(--az-radius-sm);
 }
 
@@ -627,7 +643,8 @@ main {
 }
 
 .admin {
-  max-width: 64rem;
+  max-width: var(--container-max);
+  margin-inline: auto;
   padding: var(--az-space-7) var(--az-space-gutter);
 }
 
@@ -729,7 +746,7 @@ main {
   color: var(--az-texte);
   font: inherit;
   font-size: 16px;
-  border: 1.5px solid var(--az-filet);
+  border: 1.5px solid var(--az-filet-controle);
   border-radius: var(--az-radius-md);
   resize: vertical;
 }
@@ -766,20 +783,15 @@ main {
 .aa-chip--nouveau{background:var(--forest-surface);color:var(--on-forest)}
 .aa-chip--tbc{border:1.5px dashed var(--accent);color:var(--accent)}
 .aa-chip--refuse{border:1.5px dashed var(--az-danger);color:var(--az-danger)}
-.aa-header{display:flex;align-items:center;justify-content:space-between;gap:24px;height:var(--header-height);padding:0 32px;background:var(--surface);border-bottom:1px solid var(--line)}
-.aa-header__logo{height:40px;display:block}
-.aa-nav{display:flex;gap:24px;list-style:none;margin:0;padding:0}
-.aa-nav a{font-family:var(--font-display);font-weight:600;font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--heading);text-decoration:none}
-.aa-nav a:hover,.aa-nav a[aria-current]{color:var(--accent)}
 .aa-hero{position:relative;min-height:440px;display:flex;align-items:flex-end;color:var(--on-forest);background:var(--forest);overflow:hidden}
 .aa-hero__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.aa-hero__veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,36,26,.9) 0%,rgba(15,36,26,.7) 40%,rgba(15,36,26,.1) 75%)}
+.aa-hero__veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,36,26,.85) 0%,rgba(15,36,26,.7) 40%,rgba(15,36,26,.1) 75%)}
 .aa-hero__body{position:relative;padding:48px 32px;max-width:640px}
-.aa-hero__eyebrow{font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:var(--ochre-300);margin:0}
+.aa-hero__eyebrow{font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:var(--on-forest);margin:0}
 .aa-hero__title{font-family:var(--font-display);font-weight:800;font-size:72px;line-height:.92;text-transform:uppercase;margin:12px 0 0}
 .aa-hero__title em{font-style:normal;color:var(--ochre-300)}
 .aa-hero__meta{font-size:16px;margin:16px 0 24px}
-@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-stat__value{font-size:72px}.aa-nav{display:none}.aa-hero__body{padding:32px 16px}}
+@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-stat__value{font-size:72px}.aa-hero__body{padding:32px 16px}}
 
 /* Bandeau égide — toujours visible, toutes pages (layout) */
 .egide {
@@ -1070,7 +1082,7 @@ a.aa-partenaire__nom{color:inherit}
 [data-theme='dark'] .aa-hero__veil {
   background: linear-gradient(
     90deg,
-    rgba(8, 18, 13, 0.94) 0%,
+    rgba(8, 18, 13, 0.85) 0%,
     rgba(8, 18, 13, 0.78) 40%,
     rgba(8, 18, 13, 0.3) 75%
   );

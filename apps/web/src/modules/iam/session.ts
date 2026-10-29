@@ -5,7 +5,7 @@ import {
   CONNEXION_VOLONTAIRE_PATH,
   ROLE_VOLONTAIRE,
   SESSION_COOKIE_NAME,
-  VOLONTAIRES_HOME_PATH,
+  homePathForRole,
   type AccountRole,
 } from './constants';
 import { DbUnavailableError } from './errors';
@@ -105,7 +105,9 @@ export async function requireRolePage(required: AccountRole): Promise<RequireSes
     redirect(required === ROLE_VOLONTAIRE ? CONNEXION_VOLONTAIRE_PATH : '/connexion');
   }
   if (result.status === 'forbidden') {
-    redirect(result.session.role === ROLE_VOLONTAIRE ? VOLONTAIRES_HOME_PATH : '/espace-coureur');
+    // Chacun chez soi : un organisateur égaré est renvoyé vers l'administration,
+    // pas vers l'espace coureur (où aucune garde ne l'aurait repris).
+    redirect(homePathForRole(result.session.role));
   }
   return result;
 }

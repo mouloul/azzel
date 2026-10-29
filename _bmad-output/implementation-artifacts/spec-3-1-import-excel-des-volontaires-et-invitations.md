@@ -93,6 +93,47 @@ deferred: []
 - Given deux organisations, when l'org A importe, then aucune donnée de l'org B n'est lisible/modifiable (RLS vérifié par test).
 - Given SMTP indisponible, when l'import se lance, then l'import réussit et les invitations restent en file (rejeu `emails:send`).
 
+### Review Findings
+
+_Code review 2026-10-28 (passe 2, lot story 3.1 de l'épopée 3 — commit `ae154b1`, blind-hunter 16, edge-case-hunter 14, verification-gap 5, acceptance-auditor 11 ; vérifié contre `ae154b1` ET l'arbre de travail courant)._
+
+- [ ] [Review][Decision] Quota anti-brute-force inefficace sur les endpoints publics à mot de passe — (a) `connecterVolontaire` n'a aucun quota d'échecs par compte/email ; (b) avec `readTrustedClientIp` (arbre de travail), sans `AZZEL_TRUSTED_PROXY_HOPS` il n'y a plus AUCUN quota IP ; (c) le seau est partagé avec la demande de code (`recordCodeRequestIp`, 20/h) et compte aussi les succès → 150–200 volontaires derrière le NAT du village épuisent le quota des coureurs ; (d) `activerVolontaire` exécute scrypt AVANT de chercher le jeton, sans aucun quota → DoS CPU non authentifié sur `/api/iam/invitation`. Choix : compteur d'échecs par email (risque de verrouillage malveillant d'un compte) vs seau IP dédié échecs-seulement vs les deux ; lookup jeton avant hash.
+- [ ] [Review][Decision] Volontaire activé qui oublie son mot de passe : aucun recours — `renvoyerInvitation` lève `VolontaireDejaActifError` (409), bouton désactivé si `active`, alors que `/connexion-volontaire` promet « demande à l'équipe de te le renvoyer ». Choix : réinitialisation par l'admin (ré-invitation d'un compte actif, efface `password_hash`) vs réinitialisation self-service par email vs corriger le texte seulement.
+- [ ] [Review][Decision] `/invitation` ne valide pas le jeton à l'ouverture — jeton inconnu/expiré/consommé découvert seulement après saisie des deux mots de passe. Choix : nouvel endpoint public `GET` de vérification (surface publique supplémentaire, oracle de validité) vs garder le refus au submit.
+- [ ] [Review][Patch] Jeton d'invitation BRUT conservé indéfiniment dans `email_outbox.payload` (contredit « stocké hashé sha256 ») — purger `jeton` du payload au passage `sent`/`cancelled` et à la consommation [apps/web/src/modules/missions/store.ts:205, apps/web/src/modules/notifications/outbox-store.ts:188]
+- [ ] [Review][Patch] API coureur acceptent une session volontaire (rôle unique non appliqué) — `readSession` via `getSession` sans contrôle de rôle ; pages déjà corrigées dans l'arbre de travail, pas les API ; + tests 403 [apps/web/src/app/api/inscriptions/route.ts:25, apps/web/src/app/api/inscriptions/acceptances/route.ts:25, apps/web/src/app/api/inscriptions/preuve/route.ts:23]
+- [ ] [Review][Patch] Bouton « Appeler l'équipe » absent de `/invitation` et `/connexion-volontaire` (parcours qui coincent : lien expiré, mdp oublié) — réutiliser `AssistanceButton` [apps/web/src/app/invitation/page.tsx:9, apps/web/src/app/connexion-volontaire/page.tsx:29]
+- [ ] [Review][Patch] Gabarit xlsx : colonne Téléphone non forcée en texte → Excel supprime le 0 de tête (`0555…` → `555…`, accepté par `TELEPHONE_PATTERN`, stocké faux sans signal) — `numFmt: '@'` sur la colonne [apps/web/src/modules/missions/import-format.ts:212]
+- [ ] [Review][Patch] Révocation n'annule pas une ligne outbox `sending` — `markOutboxFailed` la repasse `failed`, le worker renvoie un lien à jeton mort [apps/web/src/modules/iam/store.ts:708]
+- [ ] [Review][Patch] Bornes encore en dur (« 2 Mo », « 8 et 128 ») malgré BF11 + action « Choisis un mot de passe plus long » fausse quand > 128 [apps/web/src/modules/iam/errors.ts:281, apps/web/src/modules/missions/errors.ts:166, apps/web/src/app/admin/volontaires/volontaires-manager.tsx:157, apps/web/src/app/invitation/invitation-form.tsx:56]
+- [ ] [Review][Patch] Renvoi d'invitation : succès non annoncé (`role="status"` manquant, réponse `{email, expireLe}` ignorée) [apps/web/src/app/admin/volontaires/volontaires-manager.tsx:255]
+- [ ] [Review][Patch] Aide des statuts sans « À renvoyer » (statut `aucune`) [apps/web/src/app/admin/volontaires/volontaires-manager.tsx:331]
+- [ ] [Review][Patch] Test worker : `toContain('/invitation?jeton=')` passe avec un jeton vide — asserter `buildInvitationUrl(jeton)` réel [apps/web/src/modules/missions/missions.integration.test.ts:320]
+- [ ] [Review][Patch] Refus code-login volontaire dans `verifyCodeAndStartSession` testé uniquement par store mocké — ajouter cas intégration (code demandé avant import → refus, rôle inchangé) [apps/web/src/modules/missions/missions.integration.test.ts]
+- [ ] [Review][Patch] Régression EC8 non gardée : réexports `password.ts`→constantes et `import-format.ts`→bornes rendent tentant l'import client de `node:crypto`/`exceljs` — supprimer les réexports [apps/web/src/modules/iam/password.ts:18, apps/web/src/modules/missions/import-format.ts:18]
+- [ ] [Review][Patch] AC2 partiellement testé : l'activation par invitation ne vérifie pas la révocation d'une session antérieure [apps/web/src/modules/missions/missions.integration.test.ts:206]
+- [ ] [Review][Patch] `GET /api/admin/volontaires/modele` sans test de route (garde 401/403, Content-Type/Disposition) [apps/web/src/app/api/admin/volontaires/modele/route.ts]
+- [x] [Review][Defer] Ni correction ni suppression d'un volontaire — email mal saisi = compte fantôme permanent, bloque même un futur coureur sur cette adresse [apps/web/src/modules/missions/store.ts] — deferred: fonctionnalité hors périmètre 3.1 (CRUD volontaire), à cadrer avec l'admin.
+
+**Rejected (passe 2)**
+- false — Connexion volontaire limitée à l'org par défaut : en V1 toute session naît dans l'org par défaut (`requestLoginCode` insère les codes dans `getDefaultOrganisationId()`, `verifyCodeAndStartSession` résout l'org depuis le code) → un admin d'org B est inatteignable, l'import est toujours en org par défaut.
+- false — `statutInvitation` affiche `cancelled` comme « En file » : une ligne `cancelled` n'est produite que par `revokePendingInvitations`, qui SUPPRIME l'invitation dans la même tx → plus de jointure ; `sending` = « En file » est exact.
+- false — Fuite du jeton par Referer : politique par défaut navigateur `strict-origin-when-cross-origin` + aucun lien/ressource externe sur `/invitation`.
+- false — Texte `/volontaires` promettant une notification d'affectation : texte absent du code courant.
+- fixed (arbre de travail) — Organisateur redirigé vers l'espace coureur (`homePathForRole`) ; `x-forwarded-for` forgeable (`readTrustedClientIp`).
+- spec — Énumération via le refus code-login volontaire : orientation exigée par le spec (Always « refuse le rôle volontaire avec orientation »).
+- spec — Tutoiement admin vs « vouvoiement admin » : convention du repo = tutoiement (16 « Réessaie » vs 1 « Réessayez » côté admin) → c'est la Design Note qui diverge.
+- spec — Migration 0019/worker hors Code Map ; frontmatter `done` vs cases décochées/sprint `review` : correction = édition du spec.
+- low — En-tête lu par position / `MOTS_EN_TETE` incomplet : lignes rejetées avec raison (non silencieux), gabarit fourni ; mapping par en-tête = nouvelle logique.
+- low — Email admin (`AZZEL_ADMIN_EMAILS`) importé comme volontaire : rare (co-orga jamais connecté), fix = garde supplémentaire.
+- low — `[id]` non-UUID → 500 : URL forgée par un admin uniquement.
+- low — Commentaire 0017 contradictoire avec son GRANT : migration déjà appliquée, ne pas réécrire.
+- low — Policy `invitation` permissive sans GUC : exception documentée (pattern 0011, lookup par jeton avant org connue).
+- low — Import 500 lignes séquentiel (~3 500 requêtes, une tx) : quelques secondes en local, sous le timeout 30 s ; batch = restructuration.
+- low — Tests intégration dépendants de l'ordre : refactor de fixtures, aucun faux vert démontré.
+- low — Pas de test « worker ignore `cancelled` » : exclu par construction (`listOutstanding` filtre `pending`/`failed`).
+- low — Jeton conservé dans l'historique / pas de `no-store` sur POST : POST non mis en cache, jeton à usage unique.
+
 ## Review Triage Log
 
 ### 2026-10-22 — Review pass 1 (blind-hunter 14, edge-case-hunter 9, verification-gap 3 ; 26 findings)

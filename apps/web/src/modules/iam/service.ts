@@ -8,6 +8,7 @@ import {
   IP_HASH_SALT_ENV_NAME,
   ROLE_VOLONTAIRE,
   SESSION_TTL_SEC,
+  type AccountRole,
 } from './constants';
 import { sendLoginCodeEmail } from './email';
 import { readAdminEmails, readEnv } from './env';
@@ -20,9 +21,15 @@ import {
   InvitationInvalidError,
   PasswordInvalidError,
   VolunteerCodeLoginRefusedError,
+  IpHashSaltMissingError,
 } from './errors';
 import { estMotDePasseValide, hashPassword } from './password';
-import { getIamStore, type IamStore, type SessionRecord } from './store';
+import {
+  getIamStore,
+  isProductionRuntime,
+  type IamStore,
+  type SessionRecord,
+} from './store';
 
 export function normalizeEmail(rawEmail: string): string {
   return rawEmail.trim().toLowerCase();
@@ -54,12 +61,19 @@ export interface IamServiceDeps {
 
 /**
  * Empreinte salée de l'adresse IP : on ne stocke jamais l'IP en clair pour un
- * simple compteur anti-abus. Le sel vient de AZZEL_IP_HASH_SALT ; à défaut un sel
- * fixe est utilisé (dev) — en production, poser la variable, sans quoi l'espace
- * des IPv4 reste énumérable par force brute.
+ * simple compteur anti-abus. En PRODUCTION, l'absence de AZZEL_IP_HASH_SALT est
+ * refusée — même traitement que le rôle Postgres (story 1.9) : sans sel propre,
+ * l'espace des IPv4 est énumérable par force brute, et un sel public ne protège
+ * rien. En développement, un sel fixe suffit.
  */
 export function hashClientIp(clientIp: string): string {
-  const salt = readEnv(IP_HASH_SALT_ENV_NAME) ?? 'azzel-ip';
+  const salt = readEnv(IP_HASH_SALT_ENV_NAME);
+  if (!salt) {
+    if (isProductionRuntime()) {
+      throw new IpHashSaltMissingError();
+    }
+    return sha256Hex(`azzel-ip:${clientIp}`);
+  }
   return sha256Hex(`${salt}:${clientIp}`);
 }
 
@@ -113,6 +127,8 @@ export async function requestLoginCode(
 export interface LoginSession {
   token: string;
   email: string;
+  /** Rôle du compte : décide de l'espace où la connexion aboutit. */
+  role: AccountRole;
 }
 
 export async function verifyLoginCode(
@@ -146,7 +162,7 @@ export async function verifyLoginCode(
     }
     throw new InvalidCodeError();
   }
-  return { token, email: outcome.email };
+  return { token, email: outcome.email, role: outcome.role };
 }
 
 export async function getSession(
@@ -167,6 +183,8 @@ export async function logout(token: string, deps: IamServiceDeps = {}): Promise<
 export interface ActivationVolontaire {
   token: string;
   email: string;
+  /** Toujours « volontaire » — même contrat que LoginSession. */
+  role: AccountRole;
 }
 
 /**
@@ -201,7 +219,7 @@ export async function activerVolontaire(
     }
     throw new InvitationInvalidError();
   }
-  return { token, email: outcome.email };
+  return { token, email: outcome.email, role: outcome.role };
 }
 
 /**
@@ -242,5 +260,5 @@ export async function connecterVolontaire(
   if (!outcome.ok) {
     throw new InvalidCredentialsError();
   }
-  return { token, email: outcome.email };
+  return { token, email: outcome.email, role: outcome.role };
 }

@@ -148,7 +148,9 @@ describe('POST /api/admin/sponsors', () => {
 
   it('corps trop volumineux : 400 admin.sponsors.body_too_large', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
-    const response = await postSponsor(requestWithBody(VALID, 'POST', true, 4097));
+    // Le plafond est à 8 Kio : deux adresses de 2048 caractères (url +
+    // logoUrl) plus le nom tiennent, au-delà on refuse.
+    const response = await postSponsor(requestWithBody(VALID, 'POST', true, 8193));
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe('admin.sponsors.body_too_large');

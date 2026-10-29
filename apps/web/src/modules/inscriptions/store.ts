@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto';
 
+import { protegerStore } from '@/db/app-role';
+import { isProductionRuntime } from '@/modules/iam/store';
+
 import postgres, { type Sql } from 'postgres';
 
 import { DOSSARD_MAX } from '@azzel/shared';
@@ -1228,11 +1231,15 @@ export function getInscriptionsStore(): InscriptionsStore {
     return globals.__azzelInscriptionsStore;
   }
   const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createInscriptionsStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Garde de rôle applicatif (story 1.9) : la connexion doit être le rôle
+  // soumis au RLS, sur CE store comme sur celui de l'IAM.
+  const sql = databaseUrl
+    ? postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 })
+    : null;
+  const store =
+    sql !== null
+      ? protegerStore(sql, createInscriptionsStore(sql), isProductionRuntime())
+      : createUnavailableStore();
   globals.__azzelInscriptionsStore = store;
   return store;
 }

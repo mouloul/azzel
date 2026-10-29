@@ -40,7 +40,7 @@
 <rect x="1450.0" y="496.0" width="600.0" height="64.0" rx="8" fill="#ffffff" stroke="#7048e8" stroke-width="1"/>
 <text x="1750.0" y="518.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="1750.0" dy="12.8">Outbox sync</tspan></text>
 <rect x="40.0" y="932.0" width="700.0" height="460.0" rx="8" fill="#ffe8cc" stroke="#e8590c" stroke-width="2"/>
-<text x="70.0" y="946.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#e8590c" text-anchor="start"><tspan x="70.0" dy="16.0">4 · PWA volontaires (invitation Excel → mot de passe)</tspan></text>
+<text x="70.0" y="946.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="bold" fill="#e8590c" text-anchor="start"><tspan x="70.0" dy="16.0">4 · PWA volontaires (invitation Excel → email + code)</tspan></text>
 <rect x="70.0" y="992.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>
 <text x="389.5" y="1004.0" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#1e1e1e" text-anchor="middle"><tspan x="389.5" dy="12.8">Missions par secteur</tspan><tspan x="389.5" dy="20.0">couverture · vacante</tspan></text>
 <rect x="70.0" y="1068.0" width="640.0" height="64.0" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1"/>

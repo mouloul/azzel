@@ -57,6 +57,14 @@ const ORG_TABLES = [
   'affectation',
   // Story 4.5 — ingestion chrono : isolation stricte (toujours sous GUC).
   'terrain_evenement',
+  // Épopée 2 — vitrine : sponsors et leur mode (2.3), contenus éditables
+  // (2.4), témoignages et trailer (2.5). Sans elles, la preuve globale
+  // ignorait toutes les tables de l'épopée.
+  'sponsor',
+  'vitrine_sponsors_config',
+  'contenu_vitrine',
+  'temoignage',
+  'vitrine_media_config',
   // (appareil : pattern 0011, cherché par secret AVANT l'org — voir le test
   // dédié « story 4.5 : appareil » ci-dessous.)
 ] as const;
@@ -340,6 +348,37 @@ describe.skipIf(testUrls === null)(
         if (!affectation.cree) {
           throw new Error(`affectation initiale non créée pour ${orgId}`);
         }
+      }
+
+      // Épopée 2 — une ligne par table de vitrine dans CHAQUE organisation,
+      // posée en propriétaire (hors RLS) : les preuves d'isolation ci-dessous
+      // exigent des lignes des deux côtés. Les tables de configuration ont
+      // l'organisation pour clé (et la migration peut déjà avoir semé l'org
+      // par défaut) : ON CONFLICT DO NOTHING.
+      for (const orgId of [orgAId, orgBId]) {
+        await sql`
+          INSERT INTO sponsor (organisation_id, name, is_signature)
+          VALUES (${orgId}, ${`Sponsor ${orgId.slice(0, 8)}`}, false)
+        `;
+        await sql`
+          INSERT INTO vitrine_sponsors_config (organisation_id, mode)
+          VALUES (${orgId}, 'B')
+          ON CONFLICT (organisation_id) DO NOTHING
+        `;
+        await sql`
+          INSERT INTO contenu_vitrine (organisation_id, slug, titre, corps)
+          VALUES (${orgId}, 'multi-org-preuve', 'Preuve', 'Ligne de preuve d’isolation.')
+          ON CONFLICT (organisation_id, slug) DO NOTHING
+        `;
+        await sql`
+          INSERT INTO temoignage (organisation_id, citation, prenom, edition_reference)
+          VALUES (${orgId}, 'Une belle course.', 'Yani', '2026')
+        `;
+        await sql`
+          INSERT INTO vitrine_media_config (organisation_id, trailer_url)
+          VALUES (${orgId}, NULL)
+          ON CONFLICT (organisation_id) DO NOTHING
+        `;
       }
 
       // Story 4.5 — appareils + événements terrain dans CHAQUE organisation

@@ -29,7 +29,7 @@ pnpm build          # shared (tsc) + runners (tsc) + web (next build)
 pnpm typecheck      # zéro erreur TypeScript attendue sur les trois packages
 pnpm test           # tests unitaires (vitest) : shared + lib web
 pnpm test:db        # dev-db.sh up + pnpm test (intégration Postgres garantie)
-pnpm budget         # build + mesure du budget de la page d'accueil (< 300 Ko)
+pnpm budget         # build + mesure du budget de la page d'accueil (< 300 Kio)
 bash scripts/dev-db.sh up    # Postgres 17 dédié (port 54329) + .env
 bash scripts/dev-mail.sh up  # faux SMTP Mailpit (SMTP 2525, UI http://localhost:8026) + SMTP_URL
 pnpm dev:web        # serveur de développement Next.js
@@ -39,7 +39,7 @@ pnpm dev:runners    # Metro pour la dev build coureurs (expo start --dev-client)
 ## Budget page d'accueil (story 2.1)
 
 Le premier chargement de la page d'accueil (HTML + CSS + JS + polices préchargées
-+ photo hero en 640) doit rester **< 300 Ko**. La mesure est déterministe :
++ photo hero en 640) doit rester **< 300 Kio** (307 200 octets). La mesure est déterministe :
 
 ```bash
 pnpm budget                          # build + mesure

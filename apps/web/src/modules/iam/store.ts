@@ -198,8 +198,15 @@ export function createIamStore(sql: Sql, options: CreateIamStoreOptions = {}): I
               retryAfterSec(row?.oldest ?? null, CODE_REQUEST_IP_WINDOW_MS),
             );
           }
-          // Purge au fil de l'eau : pas de tâche planifiée en V1.
-          await tx`DELETE FROM login_code_ip_request WHERE created_at <= ${input.cutoff}`;
+          // Purge au fil de l'eau (pas de tâche planifiée en V1), bornée à
+          // CETTE IP : un DELETE global s'exécutait sous un verrou consultatif
+          // par IP, donc deux demandes concurrentes se disputaient les mêmes
+          // lignes (contention, interblocage 40P01 possible) et balayaient
+          // toute la table à chaque demande de code.
+          await tx`
+            DELETE FROM login_code_ip_request
+            WHERE ip_hash = ${input.ipHash} AND created_at <= ${input.cutoff}
+          `;
           await tx`INSERT INTO login_code_ip_request (ip_hash) VALUES (${input.ipHash})`;
         }),
       );

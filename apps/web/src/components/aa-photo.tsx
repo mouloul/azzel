@@ -45,6 +45,9 @@ export function AaPhoto({
     <figure
       className={`aa-photo${variant === 'couverture' ? ' aa-photo--couverture' : ''}`}
       style={variant === 'cadre' ? { aspectRatio: `${width} / ${height}` } : undefined}
+      // Squelette : la zone est réservée (aspect-ratio + fond neutre) et
+      // annoncée comme en cours de chargement tant que l'image n'est pas là.
+      aria-busy={chargee ? undefined : true}
     >
       {srcLarge ? (
         <picture>

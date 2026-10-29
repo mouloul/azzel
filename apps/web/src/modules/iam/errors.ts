@@ -64,6 +64,18 @@ export class AppRoleMisconfiguredError extends Error {
   }
 }
 
+/**
+ * AZZEL_IP_HASH_SALT absent en production. Même principe que
+ * AppRoleMisconfiguredError : un prérequis de configuration manquant fait
+ * refuser le service, il ne se contente pas d'un avertissement.
+ */
+export class IpHashSaltMissingError extends Error {
+  constructor() {
+    super('AZZEL_IP_HASH_SALT absent : le quota par IP serait réversible');
+    this.name = 'IpHashSaltMissingError';
+  }
+}
+
 export class EmailSendError extends Error {
   constructor(cause?: unknown) {
     super("envoi de l'email impossible", { cause });
@@ -198,6 +210,16 @@ export function toApiError(error: unknown): ApiError {
         code: 'iam.db_misconfigured',
         message: 'Service indisponible : configuration de la base incorrecte.',
         action: 'Prévenez l’organisation : la connexion applicative est mal configurée.',
+      }),
+    };
+  }
+  if (error instanceof IpHashSaltMissingError) {
+    return {
+      status: 503,
+      envelope: createErrorEnvelope({
+        code: 'iam.ip_salt_misconfigured',
+        message: 'Service indisponible : configuration du serveur incomplète.',
+        action: 'Prévenez l’organisation : AZZEL_IP_HASH_SALT n’est pas défini.',
       }),
     };
   }

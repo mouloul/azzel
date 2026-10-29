@@ -144,6 +144,9 @@ export const siteThemeLight = {
   heading: '#183A2B',
   'on-forest': '#F4F0E6',
   line: '#E6E1D4',
+  // Bordure des composants d'interface (champs, cases, options) : WCAG 1.4.11
+  // exige 3:1, que `line` (filet décoratif, 1,15:1 sur crème) ne tient pas.
+  'line-strong': '#8A857A',
   accent: '#9E5418',
   highlight: '#C8742B',
   action: '#9E5418',
@@ -161,6 +164,7 @@ export const siteThemeDark = {
   heading: '#F4F0E6',
   'on-forest': '#F4F0E6',
   line: '#2F4A3C',
+  'line-strong': '#93A99C',
   accent: '#E39A5B',
   highlight: '#D98A45',
   action: '#D98A45',

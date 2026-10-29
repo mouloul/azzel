@@ -3,7 +3,19 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { CODE_TTL_MINUTES, RESEND_COOLDOWN_SEC } from '@/modules/iam/constants';
+import {
+  CODE_TTL_MINUTES,
+  COUREUR_HOME_PATH,
+  RESEND_COOLDOWN_SEC,
+} from '@/modules/iam/constants';
+
+/** Destination renvoyée par /api/auth/verify — jamais une URL absolue. */
+function destinationApresConnexion(payload: unknown): string {
+  const brut = (payload as { redirectTo?: unknown } | null)?.redirectTo;
+  return typeof brut === 'string' && brut.startsWith('/') && !brut.startsWith('//')
+    ? brut
+    : COUREUR_HOME_PATH;
+}
 
 interface ErrorPayload {
   message: string;
@@ -128,7 +140,9 @@ export default function ConnexionPage() {
         setError(toErrorPayload(result.payload));
         return;
       }
-      router.replace('/espace-coureur');
+      // Chaque rôle a son espace : l'organisateur allait dans l'espace
+      // coureur, où rien ne le renvoyait vers l'administration.
+      router.replace(destinationApresConnexion(result.payload));
     } catch {
       setError(NETWORK_ERROR);
     } finally {
