@@ -5,17 +5,10 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  InvalidCredentialsError,
-  InvitationExpiredError,
-  InvitationInvalidError,
-  VolunteerCodeLoginRefusedError,
-} from '@/modules/iam/errors';
-import {
-  activerVolontaire,
-  connecterVolontaire,
   getSession,
   requestLoginCode,
-  sha256Hex,
+  verifyLoginCode,
+  type LoginSession,
 } from '@/modules/iam/service';
 import { createIamStore, type IamStore, type SessionRecord } from '@/modules/iam/store';
 import {
@@ -36,8 +29,9 @@ import { processOutbox } from '@/modules/notifications/worker';
 import { createOutboxStore } from '@/modules/notifications/outbox-store';
 
 // Story 3.1 — intégration volontaires (base azzel_test, rôle azzel_app) :
-// import atomique + rapport, invitations (consommation, expiration, renvoi,
-// rejeu outbox), connexion mot de passe + session unique + gating rôle.
+// import atomique + rapport, invitations (email sans jeton vers /connexion,
+// renvoi, rejeu outbox), connexion par code unifiée (activated_at posé une
+// fois, session unique), schéma cible de la migration 0035.
 
 const testUrls = resolveTestDatabaseUrls('missions');
 
@@ -95,19 +89,55 @@ describe.skipIf(testUrls === null)(
       }
     });
 
-    /** Jeton brut de la dernière invitation en file pour un email donné. */
-    async function jetonEnFile(email: string): Promise<string> {
-      const rows = await sql<{ payload: { jeton?: string } }[]>`
-        SELECT payload FROM email_outbox
-        WHERE destinataire = ${email} AND type = 'invitation_volontaire'
-        ORDER BY created_at DESC LIMIT 1
-      `;
-      const jeton = rows[0]?.payload?.jeton;
-      if (!jeton) {
-        throw new Error(`aucune invitation en file pour ${email}`);
-      }
-      return jeton;
+    /** Connexion par code de bout en bout (story 1.2) : demande + saisie. */
+    async function connecterParCode(email: string): Promise<LoginSession> {
+      let code = '';
+      await requestLoginCode(email, {
+        store: iamStore,
+        sendCode: async (_destinataire, envoye) => {
+          code = envoye;
+        },
+      });
+      expect(code).toMatch(/^\d{6}$/);
+      return verifyLoginCode(email, code, { store: iamStore });
     }
+
+    async function activatedAt(email: string): Promise<Date | null> {
+      const rows = await sql<{ activated_at: Date | null }[]>`
+        SELECT activated_at FROM account WHERE organisation_id = ${orgId} AND email = ${email}
+      `;
+      return rows[0]?.activated_at ?? null;
+    }
+
+    async function volontaireIdPar(email: string): Promise<string> {
+      const rows = await sql<{ id: string }[]>`
+        SELECT v.id FROM volontaire v JOIN account a ON a.id = v.account_id
+        WHERE a.email = ${email} AND v.organisation_id = ${orgId}
+      `;
+      const id = rows[0]?.id;
+      if (!id) {
+        throw new Error(`aucun volontaire pour ${email}`);
+      }
+      return id;
+    }
+
+    it('migration 0035 : schéma cible — activated_at + invitation_outbox_id, plus de mot de passe ni de table invitation', async () => {
+      const colonnes = await sql<{ table_name: string; column_name: string }[]>`
+        SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name IN ('account', 'volontaire')
+      `;
+      const noms = colonnes.map((c) => `${c.table_name}.${c.column_name}`);
+      expect(noms).toEqual(
+        expect.arrayContaining(['account.activated_at', 'volontaire.invitation_outbox_id']),
+      );
+      // Plus aucune colonne de mot de passe sur le compte.
+      expect(noms.filter((nom) => nom.startsWith('account.password'))).toEqual([]);
+      const tables = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'invitation'
+      `;
+      expect(tables[0]?.count).toBe(0);
+    });
 
     it('import nominal xlsx : comptes + fiches + invitations + emails en file, tout ou rien', async () => {
       const session = sessionAdmin(orgId);
@@ -125,11 +155,11 @@ describe.skipIf(testUrls === null)(
       );
       expect(rapport.resume).toEqual({ crees: 3, ignores: 0, rejetes: 0, invitationsEnFile: 3 });
 
-      const comptes = await sql<{ role: string; password_set_at: Date | null }[]>`
-        SELECT role, password_set_at FROM account
+      const comptes = await sql<{ role: string; activated_at: Date | null }[]>`
+        SELECT role, activated_at FROM account
         WHERE organisation_id = ${orgId} AND email = 'kahina@exemple.dz'
       `;
-      expect(comptes[0]).toMatchObject({ role: 'volontaire', password_set_at: null });
+      expect(comptes[0]).toMatchObject({ role: 'volontaire', activated_at: null });
 
       const fiches = await sql<{ nom: string; telephone: string | null }[]>`
         SELECT v.nom, v.telephone FROM volontaire v
@@ -143,6 +173,21 @@ describe.skipIf(testUrls === null)(
         WHERE organisation_id = ${orgId} AND type = 'invitation_volontaire' AND statut = 'pending'
       `;
       expect(outbox[0]?.count).toBe(3);
+
+      // Invitation = ligne outbox référencée par la fiche (source unique du
+      // statut admin) ; payload { nom } SANS jeton.
+      const invitation = await sql<{ payload: Record<string, unknown> }[]>`
+        SELECT o.payload FROM volontaire v
+        JOIN account a ON a.id = v.account_id
+        JOIN email_outbox o ON o.id = v.invitation_outbox_id
+        WHERE v.organisation_id = ${orgId} AND a.email = 'kahina@exemple.dz'
+      `;
+      expect(invitation[0]?.payload).toEqual({ nom: 'Kahina' });
+      const avecJeton = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM email_outbox
+        WHERE type = 'invitation_volontaire' AND payload ? 'jeton'
+      `;
+      expect(avecJeton[0]?.count).toBe(0);
     });
 
     it('re-import du même fichier : lignes ignorées « déjà volontaire », aucune nouvelle invitation', async () => {
@@ -203,109 +248,180 @@ describe.skipIf(testUrls === null)(
       );
     });
 
-    it('invitation : définition du mot de passe consomme le jeton et ouvre la session /volontaires', async () => {
+    it('connexion volontaire par code : session /volontaires, activated_at posé une fois, session antérieure révoquée', async () => {
       const session = sessionAdmin(orgId);
       await importVolontaires(
         session,
         { bytes: csvVolontaires(['Activation;activation@exemple.dz;']), filename: 'v.csv' },
         { store: missionsStore },
       );
-      const jeton = await jetonEnFile('activation@exemple.dz');
+      expect(await activatedAt('activation@exemple.dz')).toBeNull();
 
-      const activation = await activerVolontaire(jeton, 'motdepasse-2026', { store: iamStore });
-      expect(activation.email).toBe('activation@exemple.dz');
+      const premiere = await connecterParCode('activation@exemple.dz');
+      expect(premiere.role).toBe('volontaire');
+      expect(await getSession(premiere.token, { store: iamStore })).toMatchObject({
+        role: 'volontaire',
+        email: 'activation@exemple.dz',
+      });
+      const activeLe = await activatedAt('activation@exemple.dz');
+      expect(activeLe).not.toBeNull();
 
-      const record = await getSession(activation.token, { store: iamStore });
-      expect(record).toMatchObject({ role: 'volontaire', email: 'activation@exemple.dz' });
+      // Reconnexion : nouvelle session, l'ancienne révoquée (session unique),
+      // activated_at JAMAIS réécrit (COALESCE).
+      const seconde = await connecterParCode('Activation@Exemple.DZ ');
+      expect(await getSession(premiere.token, { store: iamStore })).toBeNull();
+      expect(await getSession(seconde.token, { store: iamStore })).toMatchObject({
+        role: 'volontaire',
+      });
+      expect((await activatedAt('activation@exemple.dz'))?.getTime()).toBe(activeLe?.getTime());
 
-      // Jeton consommé : réutilisation refusée, aucun second compte ouvert.
-      await expect(
-        activerVolontaire(jeton, 'autre-motdepasse-1', { store: iamStore }),
-      ).rejects.toBeInstanceOf(InvitationInvalidError);
-
-      // Gating rôle (couverture unitaire du routeur dans session.test.ts) :
-      // la session ouverte porte bien le rôle volontaire — refusée pour
-      // l'organisateur, admise pour volontaire.
-      expect(record?.role).toBe('volontaire');
-      expect(record?.role).not.toBe('organisateur');
+      // Le rôle reste volontaire (jamais promu, jamais recréé en coureur).
+      const comptes = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM account
+        WHERE organisation_id = ${orgId} AND email = 'activation@exemple.dz' AND role = 'volontaire'
+      `;
+      expect(comptes[0]?.count).toBe(1);
     });
 
-    it('invitation expirée (> 14 jours) : 410, aucun mot de passe défini', async () => {
+    it('renvoi manuel : non activé → nouvel email, ancien annulé, référence mise à jour ; activé → 409', async () => {
       const session = sessionAdmin(orgId);
       await importVolontaires(
-        session,
-        { bytes: csvVolontaires(['Expirée;expiree@exemple.dz;']), filename: 'v.csv' },
-        { store: missionsStore },
-      );
-      const jeton = await jetonEnFile('expiree@exemple.dz');
-      await sql`UPDATE invitation SET expire_le = now() - interval '1 hour' WHERE jeton_hash = ${sha256Hex(jeton)}`;
-
-      await expect(
-        activerVolontaire(jeton, 'motdepasse-2026', { store: iamStore }),
-      ).rejects.toBeInstanceOf(InvitationExpiredError);
-      const comptes = await sql<{ password_hash: string | null }[]>`
-        SELECT password_hash FROM account WHERE email = 'expiree@exemple.dz'
-      `;
-      expect(comptes[0]?.password_hash).toBeNull();
-    });
-
-    it('renvoi manuel : nouvelle invitation, ancienne révoquée, renvoi à un activé refusé', async () => {
-      const session = sessionAdmin(orgId);
-      const rapport = await importVolontaires(
         session,
         { bytes: csvVolontaires(['Renvoi;renvoi@exemple.dz;']), filename: 'v.csv' },
         { store: missionsStore },
       );
-      const cree = rapport.lignes.find((l) => l.statut === 'créé');
-      expect(cree).toBeTruthy();
-      const rows = await sql<{ id: string }[]>`
-        SELECT v.id FROM volontaire v JOIN account a ON a.id = v.account_id
-        WHERE a.email = 'renvoi@exemple.dz' AND v.organisation_id = ${orgId}
-      `;
-      const volontaireId = rows[0]?.id as string;
+      const volontaireId = await volontaireIdPar('renvoi@exemple.dz');
+      const reference = async (): Promise<string | null> => {
+        const rows = await sql<{ invitation_outbox_id: string | null }[]>`
+          SELECT invitation_outbox_id FROM volontaire WHERE id = ${volontaireId}
+        `;
+        return rows[0]?.invitation_outbox_id ?? null;
+      };
+      const avant = await reference();
+      expect(avant).not.toBeNull();
 
-      const avant = await jetonEnFile('renvoi@exemple.dz');
-      await renvoyerInvitation(session, volontaireId, { store: missionsStore });
-      const apres = await jetonEnFile('renvoi@exemple.dz');
+      await expect(
+        renvoyerInvitation(session, volontaireId, { store: missionsStore }),
+      ).resolves.toEqual({ email: 'renvoi@exemple.dz' });
+      const apres = await reference();
+      expect(apres).not.toBeNull();
       expect(apres).not.toBe(avant);
 
-      // L'email de l'invitation révoquée est ANNULÉ en file (0019) : le worker
-      // ne doit jamais envoyer un lien au jeton mort. Seule la nouvelle ligne
-      // reste pending.
-      const statuts = await sql<{ statut: string; count: number }[]>`
-        SELECT statut, count(*)::int AS count FROM email_outbox
+      // L'email précédent (encore pending) est ANNULÉ : un seul email
+      // d'invitation en attente par volontaire.
+      const statuts = await sql<{ id: string; statut: string }[]>`
+        SELECT id, statut FROM email_outbox
         WHERE destinataire = 'renvoi@exemple.dz' AND type = 'invitation_volontaire'
-        GROUP BY statut
       `;
-      expect(statuts).toEqual(expect.arrayContaining([{ statut: 'cancelled', count: 1 }, { statut: 'pending', count: 1 }]));
+      expect(statuts).toEqual(
+        expect.arrayContaining([
+          { id: avant, statut: 'cancelled' },
+          { id: apres, statut: 'pending' },
+        ]),
+      );
+      expect(statuts).toHaveLength(2);
 
-      // L'ancien jeton est révoqué (invitation supprimée) : refus net.
-      await expect(
-        activerVolontaire(avant, 'motdepasse-2026', { store: iamStore }),
-      ).rejects.toBeInstanceOf(InvitationInvalidError);
-      // Le nouveau fonctionne.
-      const activation = await activerVolontaire(apres, 'motdepasse-2026', { store: iamStore });
-      expect(activation.email).toBe('renvoi@exemple.dz');
-
-      // Compte activé : plus de renvoi.
+      // Première connexion par code → activé → plus de renvoi (409), aucun email.
+      await connecterParCode('renvoi@exemple.dz');
       await expect(
         renvoyerInvitation(session, volontaireId, { store: missionsStore }),
       ).rejects.toBeInstanceOf(VolontaireDejaActifError);
+      const apresRefus = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM email_outbox
+        WHERE destinataire = 'renvoi@exemple.dz' AND type = 'invitation_volontaire'
+      `;
+      expect(apresRefus[0]?.count).toBe(2);
+      expect(await reference()).toBe(apres);
     });
 
-    it('liste admin : statut d’invitation dérivé de l’outbox (en file, envoyée, activé)', async () => {
+    it('volontaire dont l’email est ajouté à AZZEL_ADMIN_EMAILS après l’import : connexion par code, rôle reste volontaire', async () => {
+      await importVolontaires(
+        sessionAdmin(orgId),
+        { bytes: csvVolontaires(['Promu;promu@exemple.dz;']), filename: 'v.csv' },
+        { store: missionsStore },
+      );
+      const precedent = process.env.AZZEL_ADMIN_EMAILS;
+      process.env.AZZEL_ADMIN_EMAILS = 'promu@exemple.dz';
+      try {
+        const connexion = await connecterParCode('promu@exemple.dz');
+        // Rôle renvoyé = rôle d'atterrissage (homePathForRole → /volontaires).
+        expect(connexion.role).toBe('volontaire');
+        expect(await getSession(connexion.token, { store: iamStore })).toMatchObject({
+          role: 'volontaire',
+        });
+        const comptes = await sql<{ role: string }[]>`
+          SELECT role FROM account WHERE organisation_id = ${orgId} AND email = 'promu@exemple.dz'
+        `;
+        expect(comptes.map((c) => c.role)).toEqual(['volontaire']);
+      } finally {
+        if (precedent === undefined) {
+          delete process.env.AZZEL_ADMIN_EMAILS;
+        } else {
+          process.env.AZZEL_ADMIN_EMAILS = precedent;
+        }
+      }
+    });
+
+    it('renvoi d’un email déjà envoyé (sent) : la ligne envoyée reste « sent », la nouvelle part en file', async () => {
+      const session = sessionAdmin(orgId);
+      await importVolontaires(
+        session,
+        { bytes: csvVolontaires(['Envoyé;envoye@exemple.dz;']), filename: 'v.csv' },
+        { store: missionsStore },
+      );
+      const volontaireId = await volontaireIdPar('envoye@exemple.dz');
+      await sql`
+        UPDATE email_outbox SET statut = 'sent', sent_at = now()
+        WHERE destinataire = 'envoye@exemple.dz' AND type = 'invitation_volontaire'
+      `;
+      await renvoyerInvitation(session, volontaireId, { store: missionsStore });
+      const statuts = await sql<{ statut: string }[]>`
+        SELECT statut FROM email_outbox
+        WHERE destinataire = 'envoye@exemple.dz' AND type = 'invitation_volontaire'
+        ORDER BY created_at ASC
+      `;
+      expect(statuts.map((l) => l.statut)).toEqual(['sent', 'pending']);
+    });
+
+    it('import d’un email AZZEL_ADMIN_EMAILS : ligne rejetée, aucun compte créé', async () => {
+      const precedent = process.env.AZZEL_ADMIN_EMAILS;
+      process.env.AZZEL_ADMIN_EMAILS = 'boss-import@exemple.dz';
+      try {
+        const rapport = await importVolontaires(
+          sessionAdmin(orgId),
+          { bytes: csvVolontaires(['Boss;boss-import@exemple.dz;']), filename: 'v.csv' },
+          { store: missionsStore },
+        );
+        expect(rapport.lignes[0]).toMatchObject({
+          statut: 'rejeté',
+          raison: "adresse réservée à l'organisation",
+        });
+        const comptes = await sql<{ count: number }[]>`
+          SELECT count(*)::int AS count FROM account WHERE email = 'boss-import@exemple.dz'
+        `;
+        expect(comptes[0]?.count).toBe(0);
+      } finally {
+        if (precedent === undefined) {
+          delete process.env.AZZEL_ADMIN_EMAILS;
+        } else {
+          process.env.AZZEL_ADMIN_EMAILS = precedent;
+        }
+      }
+    });
+
+    it('liste admin : statut d’invitation dérivé de activated_at + outbox (en file, envoyée, activé)', async () => {
       const session = sessionAdmin(orgId);
       const etat = await getVolontairesAdminState(session, { store: missionsStore });
       const parEmail = new Map(etat.volontaires.map((v) => [v.email, v]));
 
-      // Importés plus haut : activation@ activé, kahina@ en file,
-      // expiree@ a vu son expire_le passé en base → expirée.
+      // Importés plus haut : activation@ activé (connexion par code), kahina@ en file.
       expect(parEmail.get('activation@exemple.dz')?.statutInvitation).toBe('active');
+      expect(parEmail.get('activation@exemple.dz')?.statutInvitationLabel).toBe('Activé');
       expect(parEmail.get('kahina@exemple.dz')?.statutInvitation).toBe('en_file');
-      expect(parEmail.get('expiree@exemple.dz')?.statutInvitation).toBe('expiree');
+      expect(parEmail.get('kahina@exemple.dz')).not.toHaveProperty('expireLe');
 
       // Envoi réel par le worker (store réel, transport stubbé) : kahina passe
-      // « envoyée », et le texte de l'email porte le lien d'invitation.
+      // « envoyée » ; l'email pointe vers /connexion, sans jeton.
       const outboxStore = createOutboxStore(app);
       const envoyes: { to: string; subject: string; text: string }[] = [];
       const resume = await processOutbox(50, {
@@ -317,12 +433,17 @@ describe.skipIf(testUrls === null)(
       expect(resume.sent).toBeGreaterThan(0);
       const invitationEnvoyee = envoyes.find((e) => e.to === 'kahina@exemple.dz');
       expect(invitationEnvoyee?.subject).toBe('Azzel — ton accès volontaire');
-      expect(invitationEnvoyee?.text).toContain('/invitation?jeton=');
-      expect(invitationEnvoyee?.text).toContain('14 jours');
+      expect(invitationEnvoyee?.text).toContain('/connexion');
+      expect(invitationEnvoyee?.text).not.toContain('jeton');
+      expect(invitationEnvoyee?.text).not.toContain('choisis ton mot de passe');
+      expect(invitationEnvoyee?.text).toContain('la veille');
+      // L'email annulé au renvoi n'est jamais parti.
+      expect(envoyes.filter((e) => e.to === 'renvoi@exemple.dz')).toHaveLength(1);
 
       const etatApres = await getVolontairesAdminState(session, { store: missionsStore });
       const apres = new Map(etatApres.volontaires.map((v) => [v.email, v]));
       expect(apres.get('kahina@exemple.dz')?.statutInvitation).toBe('envoyee');
+      expect(apres.get('renvoi@exemple.dz')?.statutInvitation).toBe('active');
     });
 
     it('SMTP indisponible : l’import réussit, les invitations restent en file (rejeu emails:send)', async () => {
@@ -356,47 +477,25 @@ describe.skipIf(testUrls === null)(
       expect(
         etat.volontaires.find((v) => v.email === 'panne@exemple.dz')?.statutInvitation,
       ).toBe('echec');
-    });
 
-    it('connexion volontaire : mot de passe scrypt, session unique, erreurs génériques', async () => {
-      const premiere = await connecterVolontaire('activation@exemple.dz', 'motdepasse-2026', {
-        store: iamStore,
-      });
-      expect(await getSession(premiere.token, { store: iamStore })).not.toBeNull();
-
-      const seconde = await connecterVolontaire('Activation@Exemple.DZ ', 'motdepasse-2026', {
-        store: iamStore,
-      });
-      expect(await getSession(premiere.token, { store: iamStore })).toBeNull();
-      expect(await getSession(seconde.token, { store: iamStore })).toMatchObject({
-        role: 'volontaire',
-      });
-
-      await expect(
-        connecterVolontaire('activation@exemple.dz', 'mauvais-mot-de-passe', { store: iamStore }),
-      ).rejects.toBeInstanceOf(InvalidCredentialsError);
-      // Email sans compte : même refus générique (pas d'énumération).
-      await expect(
-        connecterVolontaire('inconnu@exemple.dz', 'motdepasse-2026', { store: iamStore }),
-      ).rejects.toBeInstanceOf(InvalidCredentialsError);
-    });
-
-    it('connexion par code refusée pour un volontaire : orientation, aucun code créé ni envoyé', async () => {
-      const codesAvant = await sql<{ count: number }[]>`
-        SELECT count(*)::int AS count FROM login_code WHERE email = 'kahina@exemple.dz'
+      // Renvoi après échec : l'ancienne ligne 'failed' passe 'cancelled', la
+      // nouvelle part en file ; le worker n'envoie qu'UN email à ce volontaire.
+      const volontaireId = await volontaireIdPar('panne@exemple.dz');
+      await renvoyerInvitation(session, volontaireId, { store: missionsStore });
+      const apresRenvoi = await sql<{ statut: string }[]>`
+        SELECT statut FROM email_outbox
+        WHERE destinataire = 'panne@exemple.dz' AND type = 'invitation_volontaire'
+        ORDER BY created_at ASC
       `;
-      await expect(
-        requestLoginCode('kahina@exemple.dz', {
-          store: iamStore,
-          sendCode: async () => {
-            throw new Error('aucun email ne doit partir');
-          },
-        }),
-      ).rejects.toBeInstanceOf(VolunteerCodeLoginRefusedError);
-      const codesApres = await sql<{ count: number }[]>`
-        SELECT count(*)::int AS count FROM login_code WHERE email = 'kahina@exemple.dz'
-      `;
-      expect(codesApres[0]?.count).toBe(codesAvant[0]?.count);
+      expect(apresRenvoi.map((l) => l.statut)).toEqual(['cancelled', 'pending']);
+      const envoyes: string[] = [];
+      await processOutbox(50, {
+        store: createOutboxStore(app),
+        send: async (to) => {
+          envoyes.push(to);
+        },
+      });
+      expect(envoyes.filter((to) => to === 'panne@exemple.dz')).toHaveLength(1);
     });
   },
 );

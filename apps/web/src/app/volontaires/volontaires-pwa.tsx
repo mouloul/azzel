@@ -17,6 +17,7 @@ import {
 } from '@/lib/idb-volontaires';
 import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-scan';
 import { readStoredTheme, writeStoredTheme } from '@/lib/theme';
+import { CONNEXION_PATH } from '@/modules/iam/constants';
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
 import { BandeauSync } from './bandeau-sync';
@@ -51,13 +52,13 @@ export function EcranSessionExpiree({ assistancePhone }: { assistancePhone: stri
         <div role="alert" aria-live="assertive" className="error-box">
           <p className="error-message">{ERREUR_SESSION_EXPIREE.message}</p>
           <p className="error-action">
-            <a className="btn-lien" href="/connexion-volontaire">
+            <a className="btn-lien" href={CONNEXION_PATH}>
               Se reconnecter
             </a>
           </p>
         </div>
         <div className="auth-alt">
-          <a className="btn-contour" href="/connexion-volontaire">
+          <a className="btn-contour" href={CONNEXION_PATH}>
             Se reconnecter
           </a>
           <AssistanceButton phone={assistancePhone} />

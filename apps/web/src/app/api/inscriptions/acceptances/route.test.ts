@@ -37,6 +37,7 @@ const SESSION = {
   accountId: 'account-1',
   organisationId: 'org-1',
   email: 'coureur@exemple.dz',
+  role: 'coureur',
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
 };
 
@@ -95,6 +96,31 @@ beforeEach(() => {
   iamServiceMock.getSession.mockReset();
   inscriptionsServiceMock.acceptDocuments.mockReset();
   inscriptionsServiceMock.getAcceptancesState.mockReset();
+});
+
+// Story 3.1 (connexion code unifiée) — surface coureur : toute session d'un
+// autre rôle est refusée en 403 iam.forbidden, service jamais appelé.
+describe('/api/inscriptions/acceptances — rôle unique (story 3.1)', () => {
+  for (const role of ['volontaire', 'organisateur'] as const) {
+    it(`session ${role} : POST 403 iam.forbidden, service non appelé`, async () => {
+      iamServiceMock.getSession.mockResolvedValue({ ...SESSION, role });
+      const response = await postAcceptances(postRequest('{}'));
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { version: number; error: { code: string } };
+      expect(body.version).toBe(1);
+      expect(body.error.code).toBe('iam.forbidden');
+      expect(inscriptionsServiceMock.acceptDocuments).not.toHaveBeenCalled();
+    });
+
+    it(`session ${role} : GET 403 iam.forbidden, service non appelé`, async () => {
+      iamServiceMock.getSession.mockResolvedValue({ ...SESSION, role });
+      const response = await getAcceptances(getRequest());
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('iam.forbidden');
+      expect(inscriptionsServiceMock.getAcceptancesState).not.toHaveBeenCalled();
+    });
+  }
 });
 
 describe('POST /api/inscriptions/acceptances', () => {

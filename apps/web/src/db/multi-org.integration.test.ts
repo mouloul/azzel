@@ -41,7 +41,6 @@ import {
 const testUrls = resolveTestDatabaseUrls('multi-org');
 
 // Tables métier portant organisation_id : l'isolation doit y être totale.
-// (invitation : voir le test dédié — pattern 0011, cherchée par secret pré-org.)
 const ORG_TABLES = [
   'evenement',
   'edition',
@@ -290,8 +289,8 @@ describe.skipIf(testUrls === null)(
       coureurBId = await coureurIdFor(accountBId);
 
       // Story 3.1 — volontaires importés dans CHAQUE organisation via le
-      // service réel (xlsx exceljs) : peuple account/volontaire/invitation/
-      // email_outbox pour les preuves d'isolation ci-dessous.
+      // service réel (xlsx exceljs) : peuple account/volontaire/email_outbox
+      // (invitation_outbox_id) pour les preuves d'isolation ci-dessous.
       missionsStore = createMissionsStore(app);
       const sessionAdminA: SessionRecord = {
         accountId: accountAId,
@@ -551,25 +550,46 @@ describe.skipIf(testUrls === null)(
       expect(listeB.map((v) => v.email)).toEqual([`${orgBId}@test.azzel`]);
     });
 
-    it('story 3.1 : invitation — pattern 0011 (secret d’abord) : sous GUC A, les invitations de B sont invisibles', async () => {
-      // Le compte des invitations doit être IDENTIQUE vu sous GUC A et GUC B :
-      // chaque organisation ne voit que la sienne (le contrôle d'accès hors GUC
-      // reste le secret — le hash du jeton).
-      for (const [orgId, autreOrgId] of [
-        [orgAId, orgBId],
-        [orgBId, orgAId],
+    /** Fiche volontaire vue SOUS GUC de l'organisation, avec son invitation. */
+    async function invitationsVuesSous(orgId: string) {
+      return withOrg(app, orgId, (tx) =>
+        tx<{ volontaire_id: string; outbox_id: string | null; outbox_org: string | null }[]>`
+          SELECT v.id AS volontaire_id, v.invitation_outbox_id AS outbox_id,
+                 o.organisation_id AS outbox_org
+          FROM volontaire v
+          LEFT JOIN email_outbox o ON o.id = v.invitation_outbox_id
+        `,
+      );
+    }
+
+    it('story 3.1 : invitation_outbox_id — chaque fiche pointe vers une ligne outbox de SON organisation, celle de l’autre est invisible', async () => {
+      const vuesA = await invitationsVuesSous(orgAId);
+      const vuesB = await invitationsVuesSous(orgBId);
+      expect(vuesA).toEqual([
+        { volontaire_id: volontaireAId, outbox_id: expect.any(String), outbox_org: orgAId },
+      ]);
+      expect(vuesB).toEqual([
+        { volontaire_id: volontaireBId, outbox_id: expect.any(String), outbox_org: orgBId },
+      ]);
+      // La ligne outbox d'invitation de B est introuvable sous GUC A (et
+      // inversement), même cherchée par son identifiant exact.
+      for (const [orgId, outboxAutre] of [
+        [orgAId, vuesB[0]?.outbox_id],
+        [orgBId, vuesA[0]?.outbox_id],
       ] as const) {
-        const compte = await withOrg(app, orgId, async (tx) => {
-          const rows = await tx<{ count: number; autres: number }[]>`
-            SELECT count(*)::int AS count,
-              count(*) FILTER (WHERE organisation_id = ${autreOrgId})::int AS autres
-            FROM invitation
-          `;
-          return rows[0];
-        });
-        expect(compte?.count).toBe(1);
-        expect(compte?.autres).toBe(0);
+        const visibles = await withOrg(app, orgId, (tx) =>
+          tx<{ count: number }[]>`
+            SELECT count(*)::int AS count FROM email_outbox WHERE id = ${outboxAutre ?? ''}::uuid
+          `,
+        );
+        expect(visibles[0]?.count).toBe(0);
       }
+      // Payload sans jeton, dans les deux organisations.
+      const avecJeton = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM email_outbox
+        WHERE type = 'invitation_volontaire' AND payload ? 'jeton'
+      `;
+      expect(avecJeton[0]?.count).toBe(0);
     });
 
     it('story 3.1 : renvoi d’invitation croisé refusé — B ne peut pas réinviter le volontaire de A', async () => {
@@ -591,9 +611,14 @@ describe.skipIf(testUrls === null)(
         role: 'organisateur',
         createdAt: new Date(),
       };
+      const avantA = await invitationsVuesSous(orgAId);
+      const avantB = await invitationsVuesSous(orgBId);
       await expect(
         renvoyerInvitation(sessionAdminA, volontaireBId, { store: missionsStore }),
       ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+      // Refus net : aucune référence d'invitation déplacée d'un côté ni de l'autre.
+      expect(await invitationsVuesSous(orgAId)).toEqual(avantA);
+      expect(await invitationsVuesSous(orgBId)).toEqual(avantB);
     });
 
     // --- Story 3.2 — secteurs, missions, affectations ---------------------------

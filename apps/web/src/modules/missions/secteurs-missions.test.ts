@@ -652,7 +652,6 @@ describe('états admin et volontaire — assemblage couverture dérivée', () =>
             email: 'kahina@exemple.dz',
             telephone: null,
             statutInvitation: 'active',
-            expireLe: null,
             createdAt: new Date(),
           },
         ],

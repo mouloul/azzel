@@ -3,6 +3,7 @@ title: 'Story 3.1 — Import Excel des volontaires et invitations'
 type: 'feature'
 created: '2026-10-22'
 status: 'done'
+renegotiated: '2026-10-28 — sprint-change-proposal-2026-10-28'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_revision: '6d541e7'
@@ -19,7 +20,7 @@ deferred: []
 
 **Problem:** L'organisation doit armer 150–200 villageois sans saisie manuelle ; aujourd'hui il n'existe ni volontaires, ni invitations, ni accès volontaire ( connexion = code email coureur uniquement) — FR-9, épopée 3.
 
-**Approach:** Écran admin `/admin/volontaires` : import d'un fichier Excel/CSV (nom, email, téléphone), validation ligne par ligne, création en une transaction des comptes (rôle `volontaire`), fiches volontaires, invitations et emails en file (outbox existante, rejeu worker/CLI). Rapport obligatoire ligne par ligne — jamais d'import silencieux. Le volontaire reçoit un lien d'invitation, définit son mot de passe (scrypt) à la première connexion et atterrit sur `/volontaires` (placeholder tutoiement).
+**Approach:** Écran admin `/admin/volontaires` : import d'un fichier Excel/CSV (nom, email, téléphone), validation ligne par ligne, création en une transaction des comptes (rôle `volontaire`), fiches volontaires, invitations et emails en file (outbox existante, rejeu worker/CLI). Rapport obligatoire ligne par ligne — jamais d'import silencieux. Le volontaire reçoit un email d'invitation (lien vers `/connexion`, sans jeton), se connecte par email + code comme tous les rôles et atterrit sur `/volontaires` ; sa première connexion pose `account.activated_at`.
 
 ## Boundaries & Constraints
 
@@ -27,15 +28,15 @@ deferred: []
 - Rapport affiché pour chaque ligne : `créé` / `ignoré` / `rejeté` + raison ; résumé (créés, ignorés, rejetés, invitations en file).
 - Tout est org-scopé : `withOrg` + colonne `organisation_id` + policy RLS `<table>_org_isolation` + grants `azzel_app` + cas ajouté à `multi-org.integration.test.ts` (story 1.9).
 - Invitations via `email_outbox` (type `invitation_volontaire`, CHECK élargi par migration) — l'envoi reste best effort, échec SMTP ne bloque jamais l'import.
-- Mot de passe : scrypt (`node:crypto`, zéro dépendance), min 8 max 128, hash uniquement ; invitation = jeton brut 32 octets (base64url) en URL, stocké **hashé sha256** (pattern `login_code`), TTL 14 jours, consommée à l'usage ; nouvelle invitation révoque les précédentes non consommées.
-- Session unique tous rôles réutilisée : définir son mot de passe ouvre la session et révoque les anciennes.
-- Rôle unique par compte (note Winston 1.6/1.9) : email déjà coureur/organisateur → ligne rejetée avec raison explicite ; la connexion par code refuse le rôle `volontaire` avec orientation vers `/connexion-volontaire`.
+- Accès : connexion par code unique tous rôles (`/connexion`) ; rôle lu sur le compte → `homePathForRole` ; première connexion réussie → `activated_at` ; session unique révoque les anciennes.
+- Rôle unique par compte (note Winston 1.6/1.9) : email déjà coureur/organisateur → ligne rejetée avec raison explicite.
 - Décisions de remplissage : téléphone **facultatif** (vide accepté, sinon format vérifié) ; en-tête détecté et ignoré (insensible casse) ; `.xlsx` ET `.csv` acceptés (séparateur `;` ou `,`) ; gabarit `.xlsx` téléchargeable ; limites 2 Mo / 500 lignes.
 - Admin : `requireRolePage('organisateur')` / `guardAdmin` ; enveloppes d'erreur `shared` ; erreurs `role="alert"`, succès `role="status"` (pattern sponsors).
 
 **Never:**
 - Pas de secteurs/missions/affectations (story 3.2), pas de PWA/offline/fiche mission (3.3), pas d'annuaire (3.4), pas de renvoi automatique d'invitation au re-import (bouton manuel uniquement).
-- Aucun changement à la logique de connexion coureur/organisateur (code email) — un lien discret vers `/connexion-volontaire` seulement.
+- Aucun changement à la logique de connexion par code (story 1.2) — elle devient l'accès unique, tous rôles.
+- Aucun mot de passe stocké, aucun jeton d'invitation, aucune page de connexion propre aux volontaires.
 - Pas d'envoi SMTP dans la requête d'import ; pas de HTML dans les emails (texte brut) ; pas de multi-rôle.
 
 ## I/O & Edge-Case Matrix
@@ -48,10 +49,8 @@ deferred: []
 | Déjà volontaire | re-import / email existant rôle volontaire | `ignoré` « déjà volontaire — invitation non renvoyée » | idem |
 | Email déjà coureur/orga | compte autre rôle | `rejeté` « un compte coureur existe déjà » | idem |
 | Fichier illisible | corrompu, mauvais type, > 2 Mo, 0 ligne | 400 enveloppe + action « vérifie le fichier » | enveloppe shared |
-| Invitation expirée/invalide | jeton inconnu, > 14 j, consommé | Message clair + contact, aucun mot de passe défini | 400/410 enveloppe |
-| Définition mot de passe | jeton valide, mdp ≥ 8 | Hash scrypt, invitation consommée, session ouverte → `/volontaires` | session unique révoque anciennes |
-| Connexion volontaire | email + mdp corrects | Session → `/volontaires` | mdp erroné → message générique |
-| Code demandé par volontaire | `/connexion` avec email volontaire | Refus + orientation `/connexion-volontaire`, aucun code envoyé | enveloppe |
+| Connexion volontaire | email importé + code valide | Session → `/volontaires`, `activated_at` posé si nul | code erroné → message clair (story 1.2) |
+| Renvoi d'invitation | volontaire non activé / activé | Non activé → nouvel email en file ; activé → 409 | enveloppe |
 | Accès non autorisé | non-organisateur sur admin | 403 / redirection rôle | enveloppe |
 
 </frozen-after-approval>
@@ -87,9 +86,17 @@ deferred: []
 - [x] `requireRolePage` -- gérer le rôle `volontaire` (redirection `/volontaires`).
 - [ ] Tests intégration -- import nominal/doublons/illisible, isolation RLS multi-org, invitation (consommation, expiration, rejeu outbox, renvoi), connexion mdp + session unique + gating rôle.
 
+**Renégociation 2026-10-28 (SCP §4.6) — tâches détaillées et suivies dans [`spec-3-1-connexion-code-unifiee.md`](spec-3-1-connexion-code-unifiee.md) :**
+- [x] (a) migration `0035_connexion_code_unifiee.sql` -- DROP `password_hash`/`password_set_at`/`invitation`, ADD `account.activated_at`, `volontaire.invitation_outbox_id`, purge des jetons des payloads.
+- [x] (b) suppressions -- `password.ts`, `/invitation`, `/connexion-volontaire`, `api/iam/{invitation,connexion-volontaire}`, refus code-login.
+- [x] (c) email d'invitation → `/connexion` + « connecte-toi la veille ».
+- [x] (d) liens PWA / service worker 3.3 → `/connexion`.
+- [x] (e) tests mis à jour.
+- [x] (f) patches de revue valides : API coureur refusant `volontaire`, « Appeler l'équipe » sur `/connexion`, gabarit téléphone en texte, bornes non codées en dur, `role="status"` au renvoi, aide « À renvoyer », test de route `modele` (révocation outbox `sending` : sans objet, plus de jeton mort).
+
 **Acceptance Criteria:**
 - Given un fichier de 200 lignes dont 7 invalides, when l'admin importe, then 193 volontaires sont créés avec invitations en file et le rapport affiche les 7 rejets ligne par ligne.
-- Given un volontaire ayant reçu l'invitation, when il ouvre le lien et définit son mot de passe, then sa session s'ouvre sur `/volontaires` et toute session antérieure est révoquée.
+- Given un volontaire importé, when il se connecte par email + code, then sa session s'ouvre sur `/volontaires`, il passe « activé » et toute session antérieure est révoquée.
 - Given deux organisations, when l'org A importe, then aucune donnée de l'org B n'est lisible/modifiable (RLS vérifié par test).
 - Given SMTP indisponible, when l'import se lance, then l'import réussit et les invitations restent en file (rejeu `emails:send`).
 
@@ -97,22 +104,22 @@ deferred: []
 
 _Code review 2026-10-28 (passe 2, lot story 3.1 de l'épopée 3 — commit `ae154b1`, blind-hunter 16, edge-case-hunter 14, verification-gap 5, acceptance-auditor 11 ; vérifié contre `ae154b1` ET l'arbre de travail courant)._
 
-- [ ] [Review][Decision] Quota anti-brute-force inefficace sur les endpoints publics à mot de passe — (a) `connecterVolontaire` n'a aucun quota d'échecs par compte/email ; (b) avec `readTrustedClientIp` (arbre de travail), sans `AZZEL_TRUSTED_PROXY_HOPS` il n'y a plus AUCUN quota IP ; (c) le seau est partagé avec la demande de code (`recordCodeRequestIp`, 20/h) et compte aussi les succès → 150–200 volontaires derrière le NAT du village épuisent le quota des coureurs ; (d) `activerVolontaire` exécute scrypt AVANT de chercher le jeton, sans aucun quota → DoS CPU non authentifié sur `/api/iam/invitation`. Choix : compteur d'échecs par email (risque de verrouillage malveillant d'un compte) vs seau IP dédié échecs-seulement vs les deux ; lookup jeton avant hash.
-- [ ] [Review][Decision] Volontaire activé qui oublie son mot de passe : aucun recours — `renvoyerInvitation` lève `VolontaireDejaActifError` (409), bouton désactivé si `active`, alors que `/connexion-volontaire` promet « demande à l'équipe de te le renvoyer ». Choix : réinitialisation par l'admin (ré-invitation d'un compte actif, efface `password_hash`) vs réinitialisation self-service par email vs corriger le texte seulement.
-- [ ] [Review][Decision] `/invitation` ne valide pas le jeton à l'ouverture — jeton inconnu/expiré/consommé découvert seulement après saisie des deux mots de passe. Choix : nouvel endpoint public `GET` de vérification (surface publique supplémentaire, oracle de validité) vs garder le refus au submit.
-- [ ] [Review][Patch] Jeton d'invitation BRUT conservé indéfiniment dans `email_outbox.payload` (contredit « stocké hashé sha256 ») — purger `jeton` du payload au passage `sent`/`cancelled` et à la consommation [apps/web/src/modules/missions/store.ts:205, apps/web/src/modules/notifications/outbox-store.ts:188]
-- [ ] [Review][Patch] API coureur acceptent une session volontaire (rôle unique non appliqué) — `readSession` via `getSession` sans contrôle de rôle ; pages déjà corrigées dans l'arbre de travail, pas les API ; + tests 403 [apps/web/src/app/api/inscriptions/route.ts:25, apps/web/src/app/api/inscriptions/acceptances/route.ts:25, apps/web/src/app/api/inscriptions/preuve/route.ts:23]
-- [ ] [Review][Patch] Bouton « Appeler l'équipe » absent de `/invitation` et `/connexion-volontaire` (parcours qui coincent : lien expiré, mdp oublié) — réutiliser `AssistanceButton` [apps/web/src/app/invitation/page.tsx:9, apps/web/src/app/connexion-volontaire/page.tsx:29]
-- [ ] [Review][Patch] Gabarit xlsx : colonne Téléphone non forcée en texte → Excel supprime le 0 de tête (`0555…` → `555…`, accepté par `TELEPHONE_PATTERN`, stocké faux sans signal) — `numFmt: '@'` sur la colonne [apps/web/src/modules/missions/import-format.ts:212]
-- [ ] [Review][Patch] Révocation n'annule pas une ligne outbox `sending` — `markOutboxFailed` la repasse `failed`, le worker renvoie un lien à jeton mort [apps/web/src/modules/iam/store.ts:708]
-- [ ] [Review][Patch] Bornes encore en dur (« 2 Mo », « 8 et 128 ») malgré BF11 + action « Choisis un mot de passe plus long » fausse quand > 128 [apps/web/src/modules/iam/errors.ts:281, apps/web/src/modules/missions/errors.ts:166, apps/web/src/app/admin/volontaires/volontaires-manager.tsx:157, apps/web/src/app/invitation/invitation-form.tsx:56]
-- [ ] [Review][Patch] Renvoi d'invitation : succès non annoncé (`role="status"` manquant, réponse `{email, expireLe}` ignorée) [apps/web/src/app/admin/volontaires/volontaires-manager.tsx:255]
-- [ ] [Review][Patch] Aide des statuts sans « À renvoyer » (statut `aucune`) [apps/web/src/app/admin/volontaires/volontaires-manager.tsx:331]
-- [ ] [Review][Patch] Test worker : `toContain('/invitation?jeton=')` passe avec un jeton vide — asserter `buildInvitationUrl(jeton)` réel [apps/web/src/modules/missions/missions.integration.test.ts:320]
-- [ ] [Review][Patch] Refus code-login volontaire dans `verifyCodeAndStartSession` testé uniquement par store mocké — ajouter cas intégration (code demandé avant import → refus, rôle inchangé) [apps/web/src/modules/missions/missions.integration.test.ts]
-- [ ] [Review][Patch] Régression EC8 non gardée : réexports `password.ts`→constantes et `import-format.ts`→bornes rendent tentant l'import client de `node:crypto`/`exceljs` — supprimer les réexports [apps/web/src/modules/iam/password.ts:18, apps/web/src/modules/missions/import-format.ts:18]
-- [ ] [Review][Patch] AC2 partiellement testé : l'activation par invitation ne vérifie pas la révocation d'une session antérieure [apps/web/src/modules/missions/missions.integration.test.ts:206]
-- [ ] [Review][Patch] `GET /api/admin/volontaires/modele` sans test de route (garde 401/403, Content-Type/Disposition) [apps/web/src/app/api/admin/volontaires/modele/route.ts]
+- [x] [Review][Decision] — **résolu par changement de cap (SCP 2026-10-28 : plus de mot de passe).** Quota anti-brute-force inefficace sur les endpoints publics à mot de passe — (a) `connecterVolontaire` n'a aucun quota d'échecs par compte/email ; (b) avec `readTrustedClientIp` (arbre de travail), sans `AZZEL_TRUSTED_PROXY_HOPS` il n'y a plus AUCUN quota IP ; (c) le seau est partagé avec la demande de code (`recordCodeRequestIp`, 20/h) et compte aussi les succès → 150–200 volontaires derrière le NAT du village épuisent le quota des coureurs ; (d) `activerVolontaire` exécute scrypt AVANT de chercher le jeton, sans aucun quota → DoS CPU non authentifié sur `/api/iam/invitation`. Choix : compteur d'échecs par email (risque de verrouillage malveillant d'un compte) vs seau IP dédié échecs-seulement vs les deux ; lookup jeton avant hash.
+- [x] [Review][Decision] — **résolu par changement de cap (SCP 2026-10-28 : plus de mot de passe, reconnexion par code).** Volontaire activé qui oublie son mot de passe : aucun recours — `renvoyerInvitation` lève `VolontaireDejaActifError` (409), bouton désactivé si `active`, alors que `/connexion-volontaire` promet « demande à l'équipe de te le renvoyer ». Choix : réinitialisation par l'admin (ré-invitation d'un compte actif, efface `password_hash`) vs réinitialisation self-service par email vs corriger le texte seulement.
+- [x] [Review][Decision] — **résolu par changement de cap (SCP 2026-10-28 : `/invitation` supprimée, plus de jeton).** `/invitation` ne valide pas le jeton à l'ouverture — jeton inconnu/expiré/consommé découvert seulement après saisie des deux mots de passe. Choix : nouvel endpoint public `GET` de vérification (surface publique supplémentaire, oracle de validité) vs garder le refus au submit.
+- [x] ~~[Review][Patch] Jeton d'invitation BRUT conservé indéfiniment dans `email_outbox.payload` (contredit « stocké hashé sha256 ») — purger `jeton` du payload au passage `sent`/`cancelled` et à la consommation [apps/web/src/modules/missions/store.ts:205, apps/web/src/modules/notifications/outbox-store.ts:188]~~ — sans objet (plus de jeton ; 0035 purge les payloads existants).
+- [x] [Review][Patch] — fait (spec-3-1-connexion-code-unifiee : `requireRole(ROLE_COUREUR)` + tests 403). API coureur acceptent une session volontaire (rôle unique non appliqué) — `readSession` via `getSession` sans contrôle de rôle ; pages déjà corrigées dans l'arbre de travail, pas les API ; + tests 403 [apps/web/src/app/api/inscriptions/route.ts:25, apps/web/src/app/api/inscriptions/acceptances/route.ts:25, apps/web/src/app/api/inscriptions/preuve/route.ts:23]
+- [x] [Review][Patch] — fait sur `/connexion` (pages volontaires supprimées). Bouton « Appeler l'équipe » absent de `/invitation` et `/connexion-volontaire` (parcours qui coincent : lien expiré, mdp oublié) — réutiliser `AssistanceButton` [apps/web/src/app/invitation/page.tsx:9, apps/web/src/app/connexion-volontaire/page.tsx:29]
+- [x] [Review][Patch] — fait (`numFmt '@'` + tests). Gabarit xlsx : colonne Téléphone non forcée en texte → Excel supprime le 0 de tête (`0555…` → `555…`, accepté par `TELEPHONE_PATTERN`, stocké faux sans signal) — `numFmt: '@'` sur la colonne [apps/web/src/modules/missions/import-format.ts:212]
+- [x] ~~[Review][Patch] Révocation n'annule pas une ligne outbox `sending` — `markOutboxFailed` la repasse `failed`, le worker renvoie un lien à jeton mort [apps/web/src/modules/iam/store.ts:708]~~ — sans objet (plus de jeton mort : un email d'invitation en vol reste valide).
+- [x] [Review][Patch] — fait pour « 2 Mo » (`MAX_IMPORT_LIBELLE` dérivé de `MAX_IMPORT_BYTES`) ; ~~bornes mot de passe « 8 et 128 »~~ sans objet. Bornes encore en dur (« 2 Mo », « 8 et 128 ») malgré BF11 + action « Choisis un mot de passe plus long » fausse quand > 128 [apps/web/src/modules/iam/errors.ts:281, apps/web/src/modules/missions/errors.ts:166, apps/web/src/app/admin/volontaires/volontaires-manager.tsx:157, apps/web/src/app/invitation/invitation-form.tsx:56]
+- [x] [Review][Patch] — fait. Renvoi d'invitation : succès non annoncé (`role="status"` manquant, réponse `{email, expireLe}` ignorée) [apps/web/src/app/admin/volontaires/volontaires-manager.tsx:255]
+- [x] [Review][Patch] — fait (+ « Activé (première connexion faite) »). Aide des statuts sans « À renvoyer » (statut `aucune`) [apps/web/src/app/admin/volontaires/volontaires-manager.tsx:331]
+- [x] ~~[Review][Patch] Test worker : `toContain('/invitation?jeton=')` passe avec un jeton vide — asserter `buildInvitationUrl(jeton)` réel [apps/web/src/modules/missions/missions.integration.test.ts:320]~~ — sans objet (plus de jeton ; le test asserte désormais le lien `/connexion` sans jeton).
+- [x] ~~[Review][Patch] Refus code-login volontaire dans `verifyCodeAndStartSession` testé uniquement par store mocké — ajouter cas intégration (code demandé avant import → refus, rôle inchangé) [apps/web/src/modules/missions/missions.integration.test.ts]~~ — sans objet (plus aucun refus de code-login par rôle).
+- [x] ~~[Review][Patch] Régression EC8 non gardée : réexports `password.ts`→constantes et `import-format.ts`→bornes rendent tentant l'import client de `node:crypto`/`exceljs` — supprimer les réexports [apps/web/src/modules/iam/password.ts:18, apps/web/src/modules/missions/import-format.ts:18]~~ — sans objet (`password.ts` supprimé ; le réexport `import-format.ts` reste serveur uniquement).
+- [x] ~~[Review][Patch] AC2 partiellement testé : l'activation par invitation ne vérifie pas la révocation d'une session antérieure [apps/web/src/modules/missions/missions.integration.test.ts:206]~~ — sans objet (AC2 renégocié ; la révocation de session antérieure est testée sur la connexion par code).
+- [x] [Review][Patch] — fait (`modele/route.test.ts`). `GET /api/admin/volontaires/modele` sans test de route (garde 401/403, Content-Type/Disposition) [apps/web/src/app/api/admin/volontaires/modele/route.ts]
 - [x] [Review][Defer] Ni correction ni suppression d'un volontaire — email mal saisi = compte fantôme permanent, bloque même un futur coureur sur cette adresse [apps/web/src/modules/missions/store.ts] — deferred: fonctionnalité hors périmètre 3.1 (CRUD volontaire), à cadrer avec l'admin.
 
 **Rejected (passe 2)**
@@ -125,7 +132,7 @@ _Code review 2026-10-28 (passe 2, lot story 3.1 de l'épopée 3 — commit `ae15
 - spec — Tutoiement admin vs « vouvoiement admin » : convention du repo = tutoiement (16 « Réessaie » vs 1 « Réessayez » côté admin) → c'est la Design Note qui diverge.
 - spec — Migration 0019/worker hors Code Map ; frontmatter `done` vs cases décochées/sprint `review` : correction = édition du spec.
 - low — En-tête lu par position / `MOTS_EN_TETE` incomplet : lignes rejetées avec raison (non silencieux), gabarit fourni ; mapping par en-tête = nouvelle logique.
-- low — Email admin (`AZZEL_ADMIN_EMAILS`) importé comme volontaire : rare (co-orga jamais connecté), fix = garde supplémentaire.
+- low — Email admin (`AZZEL_ADMIN_EMAILS`) importé comme volontaire : rare (co-orga jamais connecté), fix = garde supplémentaire. **Repris le 2026-10-28** : la promotion admin devenant atteignable au code-login, l'import rejette désormais ces adresses (« adresse réservée à l'organisation »).
 - low — `[id]` non-UUID → 500 : URL forgée par un admin uniquement.
 - low — Commentaire 0017 contradictoire avec son GRANT : migration déjà appliquée, ne pas réécrire.
 - low — Policy `invitation` permissive sans GUC : exception documentée (pattern 0011, lookup par jeton avant org connue).
@@ -161,8 +168,8 @@ _Code review 2026-10-28 (passe 2, lot story 3.1 de l'épopée 3 — commit `ae15
 
 - **exceljs** plutôt que `xlsx` (SheetJS npm : gelé, CVE connues) ; lit `.xlsx` et `.csv` ; côté serveur uniquement — budget accueil et bundle client inchangés (`pnpm budget`).
 - Import atomique pour les lignes valides (une transaction `withOrg`) : un crash DB n'importe rien ; les rejets sont des décisions de validation, pas des erreurs.
-- L'invitation stocke `email_outbox_id` : le statut affiché dans la liste admin (en file / envoyée / échec) vient directement de l'outbox — pas de double source de vérité.
-- Énumération de comptes : messages génériques sur `/connexion-volontaire` ; la page `/invitation` ne révèle rien au-delà de la validité du jeton.
+- La fiche volontaire stocke `invitation_outbox_id` (0035) : le statut affiché dans la liste admin (en file / envoyée / échec) vient directement de l'outbox, « Activé » de `account.activated_at` — pas de double source de vérité.
+- ~~Énumération de comptes : messages génériques sur `/connexion-volontaire` ; la page `/invitation` ne révèle rien au-delà de la validité du jeton.~~ Sans objet depuis la renégociation : connexion par code unique, aucun refus par rôle.
 - Référence UX : EXPERIENCE.md « Import Excel volontaires — rapport ligne par ligne, jamais d'import silencieux » ; tutoiement côté volontaire, vouvoiement admin.
 
 ## Verification
@@ -173,4 +180,4 @@ _Code review 2026-10-28 (passe 2, lot story 3.1 de l'épopée 3 — commit `ae15
 - `pnpm build && pnpm budget` -- expected: verts, budget accueil inchangé.
 
 **Manual checks (if no CLI):**
-- Mailpit (`scripts/dev-mail.sh`) : import d'un xlsx réel → rapport → email reçu → lien → mot de passe → `/volontaires` ; re-import → lignes « ignoré » ; renvoi d'invitation → nouvel email.
+- Mailpit (`scripts/dev-mail.sh`) : import d'un xlsx réel → rapport → email reçu → lien `/connexion` → code → `/volontaires` → admin « Activé » ; re-import → lignes « ignoré » ; renvoi d'invitation (non activé) → nouvel email.

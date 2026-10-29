@@ -1,6 +1,6 @@
 # Scénarios de recette — Épopée 3 : Armer les volontaires
 
-**Produit :** Azzel · **Périmètre :** stories 3-1 → 3-4 · **Date :** 2026-10-23
+**Produit :** Azzel · **Périmètre :** stories 3-1 → 3-4 · **Date :** 2026-10-23 · **Révision :** 2026-10-28 (S1 : connexion par code unifiée, SCP 2026-10-28)
 **Durée estimée :** 60–80 min (module par module, arrêt/reprise possible)
 
 Chaque module se teste indépendamment : cochez au fur et à mesure et notez les écarts dans la colonne Observations du tableau final. Aucune connaissance du code n'est requise.
@@ -12,7 +12,7 @@ Chaque module se teste indépendamment : cochez au fur et à mesure et notez les
 ```bash
 bash scripts/dev-db.sh up        # Postgres 54329 — crée/migre .env si besoin
 bash scripts/dev-mail.sh up      # faux SMTP — UI http://localhost:8026
-pnpm -F @azzel/web db:migrate    # 0001–0022
+pnpm -F @azzel/web db:migrate    # 0001–0035 (0035 : connexion par code unifiée)
 AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 ```
 
@@ -22,7 +22,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 
 **Comptes de test :**
 - Organisateur : `orga@example.dz` (connexion par code email, promu via `AZZEL_ADMIN_EMAILS`)
-- Volontaires : créés par l'import du module S1 (aucun compte à préparer)
+- Volontaires : créés par l'import du module S1 (aucun compte à préparer) — ils se connectent comme tout le monde sur `/connexion` (email + code reçu par email, aucun mot de passe)
 
 **Prérequis données :** au moins 1 coureur avec dossier **validé** (voir recette épopée 1, module S6) pour le module S4 — sinon suivre S4 après avoir validé un dossier.
 
@@ -35,16 +35,18 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | 1.1 | Se connecter en organisateur, ouvrir **Administration → Volontaires** (ou `/admin/volontaires`) | Page « Volontaires », lien « Télécharger le gabarit .xlsx » visible |
 | 1.2 | Télécharger le gabarit | Fichier `volontaires-modele.xlsx` avec en-tête Nom / Email / Téléphone |
 | 1.3 | Préparer un CSV (bloc-notes) : `Nom;Email;Téléphone` puis 4 lignes — une complète (`Karim;karim@exemple.dz;+213 555 010 210`), une sans téléphone, une avec email cassé (`mokrane;pas-un-email;`), une doublon de Karim — enregistrer en **CSV UTF-8**, importer | Rapport ligne par ligne : 2 « Créé », 1 « Rejeté — email invalide », 1 « Rejeté — doublon dans le fichier » ; résumé « 2 créés · 0 ignorés · 2 rejetés · 2 invitations en file d'envoi » |
-| 1.4 | Mailpit (`localhost:8026`) | 2 emails « Azzel — ton accès volontaire », tutoiement, lien `http://localhost:3000/invitation?jeton=…`, mention « valable 14 jours » |
+| 1.4 | Mailpit (`localhost:8026`) | 2 emails « Azzel — ton accès volontaire », tutoiement, lien `http://localhost:3000/connexion` (**sans jeton**), conseil « connecte-toi la veille » |
 | 1.5 | Ré-importer le même fichier | Lignes Karim « Ignoré — déjà volontaire, invitation non renvoyée » ; aucun nouvel email dans Mailpit |
 | 1.6 | (Base, optionnel) `bash scripts/dev-db.sh psql -c "select email, role from account where role='volontaire'"` | Les 2 comptes créés, rôle `volontaire` |
-| 1.7 | Ouvrir le lien d'invitation de Karim (Mailpit), définir un mot de passe (8 caractères min) puis confirmation différente | Message d'erreur clair « ne correspondent pas » |
-| 1.8 | Définir le même mot de passe deux fois, valider | Session ouverte, redirection vers `/volontaires` (« Ton accès mission ») |
-| 1.9 | Se déconnecter, rouvrir `/connexion`, saisir l'email de Karim et demander un code | Refus : « Ce compte est un compte volontaire : la connexion par code est réservée aux coureurs et organisateurs » + orientation vers la page volontaire ; aucun code reçu |
-| 1.10 | `/connexion-volontaire` : mauvais mot de passe puis bon mot de passe | Message générique « Email ou mot de passe incorrect » (jamais « compte inconnu ») puis connexion OK |
-| 1.11 | Lien discret « Volontaire ? Connecte-toi ici » sur `/connexion` | Présent, mène à `/connexion-volontaire` |
-| 1.12 | Sur `/admin/volontaires`, bouton « Renvoyer l'invitation » d'un volontaire non activé | Nouvel email dans Mailpit ; l'ancien lien ne marche plus (« inconnu ou déjà utilisé ») |
-| 1.13 | Lien d'invitation expiré (attendre 14 j ou modifier `expire_le` en base) puis l'ouvrir | « Ce lien d'invitation a expiré (14 jours) » + action « demande à l'organisation de te le renvoyer » |
+| 1.7 | Ouvrir le lien de Karim, saisir son email, demander un code | Code reçu dans Mailpit (même écran et même email que les coureurs) |
+| 1.8 | Saisir un code erroné | Message clair + action (comportement story 1.2), aucune session |
+| 1.9 | Saisir le bon code | Session ouverte, redirection vers `/volontaires` (« Ton accès mission ») |
+| 1.10 | `/admin/volontaires` | Karim « Activé » ; l'autre volontaire « Envoyée » |
+| 1.11 | Connecter Karim sur un 2ᵉ navigateur, recharger le 1ᵉʳ | 1ᵉʳ navigateur déconnecté (session unique) |
+| 1.12 | « Renvoyer l'invitation » sur le volontaire **non** activé | Nouvel email dans Mailpit ; bouton grisé pour Karim (activé) |
+| 1.13 | Ouvrir `/invitation` et `/connexion-volontaire` | 404 (supprimées) |
+| 1.14 | Session Karim : `POST /api/inscriptions` (ou ouvrir `/inscription`) | 403 / redirection `/volontaires` (rôle unique) |
+| 1.15 | (Optionnel) Importer un CSV contenant la ligne `Orga;orga@example.dz;` (adresse de `AZZEL_ADMIN_EMAILS`) | Ligne « Rejeté — adresse réservée à l'organisation » ; aucun email d'invitation |
 
 ---
 
@@ -84,6 +86,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | 3.10 | Repasser **Online**, recharger | Retour à « synchronisé à HH:MM » |
 | 3.11 | (Android Chrome ou iOS Safari si disponible) Partage → « Ajouter à l'écran d'accueil », ouvrir depuis l'icône, mode avion | Ouverture standalone avec icône dédiée ; fiche consultable sans réseau |
 | 3.12 | Se déconnecter depuis `/volontaires` | Retour connexion ; DevTools → IndexedDB : la base `azzel-volontaires` a disparu (appareil partagé : rien ne survit au compte) |
+| 3.13 | Session expirée : DevTools → Application → Cookies, supprimer `azzel_session`, recharger `/volontaires` | Écran « Tu es déconnecté » (bandeau sync toujours visible) ; « Se reconnecter » mène à `/connexion` (page unique, code par email) |
 
 ---
 
@@ -108,9 +111,9 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 
 | Module | Story | Statut | Observations |
 |--------|-------|--------|--------------|
-| S1 — Import volontaires + invitations | 3-1 | ☐ ☐ ☐ | |
+| S1 — Import volontaires + invitations + connexion par code (1.1–1.15) | 3-1 | ☐ ☐ ☐ | |
 | S2 — Secteurs et missions typées | 3-2 | ☐ ☐ ☐ | |
-| S3 — Fiche mission hors-ligne PWA | 3-3 | ☐ ☐ ☐ | |
+| S3 — Fiche mission hors-ligne PWA (dont 3.13 : session expirée → `/connexion`) | 3-3 | ☐ ☐ ☐ | |
 | S4 — Annuaire des coureurs | 3-4 | ☐ ☐ ☐ | |
 
 **Légende :** ☐ à cocher — tests passés / anomalies mineures / bloquantes. Toute anomalie bloquante : la noter avec le numéro d'étape (ex. « 1.3 : doublon non rejeté ») et préserver l'environnement.

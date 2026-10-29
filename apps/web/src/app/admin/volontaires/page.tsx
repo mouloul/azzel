@@ -46,8 +46,9 @@ export default async function AdminVolontairesPage() {
         <h1>Volontaires</h1>
         <p className="lead">
           Arme ton édition sans saisie manuelle : importe un fichier Excel ou CSV
-          (nom, email, téléphone). Chaque volontaire reçoit un lien pour définir
-          son mot de passe. Le rapport t’indique ligne par ligne ce qui a été
+          (nom, email, téléphone). Chaque volontaire reçoit une invitation par
+          email et se connecte sur <code>/connexion</code> avec son adresse et un
+          code de vérification, comme les coureurs. Le rapport t’indique ligne par ligne ce qui a été
           créé, ignoré ou rejeté — jamais d’import silencieux.
         </p>
         <VolontairesManager volontaires={state.volontaires} />

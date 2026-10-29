@@ -16,7 +16,7 @@ export async function POST(
   try {
     const resultat = await renvoyerInvitation(guarded.session, id);
     return NextResponse.json(
-      { ok: true, email: resultat.email, expireLe: resultat.expireLe },
+      { ok: true, email: resultat.email },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {

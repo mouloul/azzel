@@ -26,9 +26,9 @@ import {
   INSCRIPTION_RECUE_SUBJECT,
   INVITATION_VOLONTAIRE_SUBJECT,
   RAPPEL_J7_SUBJECT,
-  buildInvitationUrl,
   buildNotificationEmail,
   normalizeNotificationPayload,
+  readConnexionUrl,
   readEspaceCoureurUrl,
   readRunnersAppUrl,
   type NotificationPayload,
@@ -41,7 +41,7 @@ const ASSISTANCE_PHONE = '+213 555 010 200';
 const OPTIONS = {
   assistancePhone: ASSISTANCE_PHONE,
   espaceCoureurUrl: `${DEFAULT_APP_URL}/espace-coureur`,
-  invitationUrl: `${DEFAULT_APP_URL}/invitation?jeton=jeton-test`,
+  connexionUrl: `${DEFAULT_APP_URL}/connexion`,
   runnersAppUrl: 'https://runners.azzel.dz',
 };
 
@@ -117,32 +117,36 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
     expect(email.text).toContain('Appeler l’équipe');
   });
 
-  it('story 3.1 — invitation volontaire : objet exact, lien jeton, TTL 14 jours, assistance', () => {
+  it('story 3.1 — invitation volontaire : objet exact, lien /connexion sans jeton, code, « la veille », assistance', () => {
     const email = buildNotificationEmail(
       'invitation_volontaire',
-      { nom: 'Kahina', jeton: 'abc123' },
-      { ...OPTIONS, invitationUrl: 'https://azzel.dz/invitation?jeton=abc123' },
+      { nom: 'Kahina' },
+      { ...OPTIONS, connexionUrl: 'https://azzel.dz/connexion' },
     );
     expect(email.subject).toBe(INVITATION_VOLONTAIRE_SUBJECT);
     expect(email.text).toContain('Salut Kahina');
-    expect(email.text).toContain('https://azzel.dz/invitation?jeton=abc123');
-    expect(email.text).toContain('14 jours');
-    expect(email.text).toContain('mot de passe');
+    expect(email.text).toContain('https://azzel.dz/connexion');
+    expect(email.text).not.toContain('jeton');
+    expect(email.text).not.toContain('/invitation');
+    expect(email.text).not.toMatch(/choisis ton mot de passe|valable \d+ jours/);
+    expect(email.text).toContain('connecte-toi');
+    expect(email.text).toContain('un code');
+    expect(email.text).toContain('la veille du jour J');
+    expect(email.text).toContain('sur le téléphone que tu utiliseras le jour J');
+    expect(email.text).toContain('Appelle l’équipe');
     expect(email.text).toContain(ASSISTANCE_PHONE);
   });
 
-  it('story 3.1 — buildInvitationUrl : APP_URL lue, jeton encodé, repli défaut', () => {
+  it('story 3.1 — readConnexionUrl : APP_URL lue, repli défaut', () => {
     vi.stubEnv('APP_URL', 'https://azzel.dz/');
     try {
-      expect(buildInvitationUrl('jet/on+1')).toBe(
-        'https://azzel.dz/invitation?jeton=jet%2Fon%2B1',
-      );
+      expect(readConnexionUrl()).toBe('https://azzel.dz/connexion');
     } finally {
       vi.unstubAllEnvs();
     }
     vi.stubEnv('APP_URL', 'pas-une-url');
     try {
-      expect(buildInvitationUrl('abc')).toBe(`${DEFAULT_APP_URL}/invitation?jeton=abc`);
+      expect(readConnexionUrl()).toBe(`${DEFAULT_APP_URL}/connexion`);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -220,13 +224,11 @@ describe('normalizeNotificationPayload — payload jsonb relu de base', () => {
     expect(payload).toEqual({ prenom: 'Yani', epreuve: '' });
   });
 
-  it('story 3.1 — invitation_volontaire : nom et jeton extraits, valeurs non-chaînes vidées', () => {
-    expect(normalizeNotificationPayload('invitation_volontaire', { nom: 'Kahina', jeton: 'j1' })).toEqual(
-      { nom: 'Kahina', jeton: 'j1' },
+  it('story 3.1 — invitation_volontaire : nom seul extrait (un ancien jeton est ignoré), non-chaînes vidées', () => {
+    expect(normalizeNotificationPayload('invitation_volontaire', { nom: ' Kahina ', jeton: 'j1' })).toEqual(
+      { nom: 'Kahina' },
     );
-    expect(normalizeNotificationPayload('invitation_volontaire', { nom: 42, jeton: null })).toEqual(
-      { nom: '', jeton: '' },
-    );
+    expect(normalizeNotificationPayload('invitation_volontaire', { nom: 42 })).toEqual({ nom: '' });
   });
 
   it('story 6.4 — rappel_j7 : prenom et dateCourse extraits, valeurs non-chaînes vidées', () => {
@@ -393,7 +395,7 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
         {
           assistancePhone: ASSISTANCE_PHONE,
           espaceCoureurUrl: 'https://azzel.dz/espace-coureur',
-          invitationUrl: 'https://azzel.dz/invitation?jeton=',
+          connexionUrl: 'https://azzel.dz/connexion',
           runnersAppUrl: 'https://azzel.dz',
         },
       );
@@ -406,6 +408,34 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
       });
     } finally {
       sendMailMock.mockClear();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('story 3.1 — worker : invitation volontaire envoyée avec le lien /connexion, jamais de jeton', async () => {
+    vi.stubEnv('APP_URL', 'https://azzel.dz');
+    try {
+      const envoyes: { to: string; subject: string; text: string }[] = [];
+      const store = buildStore([
+        outboxRow({
+          type: 'invitation_volontaire',
+          destinataire: 'kahina@exemple.dz',
+          // Payload hérité (avant 0035) : le jeton éventuel n'est jamais relu.
+          payload: { nom: 'Kahina', jeton: 'ancien-jeton' },
+        }),
+      ]);
+      const summary = await processOutbox(10, {
+        store,
+        send: async (to, subject, text) => {
+          envoyes.push({ to, subject, text });
+        },
+      });
+      expect(summary.sent).toBe(1);
+      expect(envoyes[0]?.subject).toBe(INVITATION_VOLONTAIRE_SUBJECT);
+      expect(envoyes[0]?.text).toContain('https://azzel.dz/connexion');
+      expect(envoyes[0]?.text).not.toContain('ancien-jeton');
+      expect(envoyes[0]?.text).not.toContain('jeton');
+    } finally {
       vi.unstubAllEnvs();
     }
   });

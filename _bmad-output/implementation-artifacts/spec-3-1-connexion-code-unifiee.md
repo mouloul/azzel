@@ -2,9 +2,11 @@
 title: 'Story 3.1 (rouverte) — Connexion par code unifiée pour les volontaires'
 type: 'refactor'
 created: '2026-10-28'
-status: 'ready-for-dev'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
+baseline_commit: '44403eebeb80ba6a9622ae1d020d17d568c84fd1'
+baseline_snapshot: '93d999dc8de8a6203a9aa189298d5425ab18f2ce' # arbre de travail non commité au départ (git commit-tree, hors branche) — diff de revue = snapshot → état final
 context:
   - {project-root}/_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-28.md
   - {project-root}/_bmad-output/implementation-artifacts/epic-3-context.md
@@ -69,19 +71,19 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `apps/web/src/modules/iam/migrations/0035_connexion_code_unifiee.sql` -- ADD `account.activated_at timestamptz` (backfill depuis `password_set_at`/`invitation.consomme_le`) ; ADD `volontaire.invitation_outbox_id uuid REFERENCES email_outbox(id)` (backfill dernière invitation) ; `UPDATE email_outbox SET payload = payload - 'jeton' WHERE type='invitation_volontaire'` ; DROP TABLE `invitation` ; DROP `account.password_hash`, `password_set_at` -- schéma cible SCP, purge des jetons bruts.
-- [ ] `apps/web/src/modules/iam/{store,service,errors,constants,session}.ts` -- supprimer le flux mot de passe/invitation et les refus par rôle ; poser `activated_at` dans l'upsert ; `requireRolePage` → `/connexion`.
-- [ ] Supprimer `modules/iam/password.ts`, `app/invitation/`, `app/connexion-volontaire/`, `app/api/iam/invitation/`, `app/api/iam/connexion-volontaire/` (+ tests).
-- [ ] `apps/web/src/modules/missions/{store,service,domain,errors}.ts` -- invitation = mise en file `{nom}` + `invitation_outbox_id` ; statuts sans `expiree` ; renvoi selon `activated_at` ; rejet import des `AZZEL_ADMIN_EMAILS`.
-- [ ] `apps/web/src/modules/notifications/{email-contents,worker}.ts` -- email d'invitation vers `/connexion` (tutoiement, code, « connecte-toi la veille », assistance).
-- [ ] `apps/web/src/app/connexion/page.tsx` + `app/volontaires/volontaires-pwa.tsx` -- retirer lien volontaire, `AssistanceButton` sur `/connexion` [patch], liens session expirée → `/connexion`.
-- [ ] `apps/web/src/app/api/inscriptions/{route,acceptances/route,preuve/route}.ts` -- refuser tout rôle ≠ coureur (403) + tests [patch].
-- [ ] `apps/web/src/app/admin/volontaires/volontaires-manager.tsx` -- succès du renvoi annoncé `role="status"` [patch] ; aide statuts complète (« À renvoyer », « Activé (première connexion faite) ») [patch] ; « 2 Mo » dérivé de `MAX_IMPORT_BYTES` [patch].
-- [ ] `apps/web/src/modules/missions/{import-format,errors}.ts` -- colonne Téléphone du gabarit en texte (`numFmt '@'`) [patch] ; « 2 Mo » → constante [patch].
-- [ ] `apps/web/src/app/api/admin/volontaires/modele/route.test.ts` -- nouveau : 401/403, `Content-Type` xlsx, `Content-Disposition` [patch].
-- [ ] Tests listés au Code Map -- mettre à jour ; intégration : connexion volontaire par code (`activated_at` posé une fois, session antérieure révoquée), renvoi activé/non activé, multi-org sur `invitation_outbox_id`, payload sans `jeton`.
-- [ ] `_bmad-output/implementation-artifacts/spec-3-1-import-excel-des-volontaires-et-invitations.md` -- appliquer SCP §4.6 (Intent renégocié, Always/Never, matrice, AC2, Review Findings D1–D3 résolues, patches sans objet barrés) avec renvoi vers cette spec pour les tâches.
-- [ ] `_bmad-output/implementation-artifacts/scenarios-recette-epic-3.md` -- appliquer SCP §4.7 (S1 1.4, 1.7–1.14, synthèse, S3 → `/connexion`).
+- [x] `apps/web/src/modules/iam/migrations/0035_connexion_code_unifiee.sql` -- ADD `account.activated_at timestamptz` (backfill depuis `password_set_at`/`invitation.consomme_le`) ; ADD `volontaire.invitation_outbox_id uuid REFERENCES email_outbox(id)` (backfill dernière invitation) ; `UPDATE email_outbox SET payload = payload - 'jeton' WHERE type='invitation_volontaire'` ; DROP TABLE `invitation` ; DROP `account.password_hash`, `password_set_at` -- schéma cible SCP, purge des jetons bruts.
+- [x] `apps/web/src/modules/iam/{store,service,errors,constants,session}.ts` -- supprimer le flux mot de passe/invitation et les refus par rôle ; poser `activated_at` dans l'upsert ; `requireRolePage` → `/connexion`.
+- [x] Supprimer `modules/iam/password.ts`, `app/invitation/`, `app/connexion-volontaire/`, `app/api/iam/invitation/`, `app/api/iam/connexion-volontaire/` (+ tests).
+- [x] `apps/web/src/modules/missions/{store,service,domain,errors}.ts` -- invitation = mise en file `{nom}` + `invitation_outbox_id` ; statuts sans `expiree` ; renvoi selon `activated_at` ; rejet import des `AZZEL_ADMIN_EMAILS`.
+- [x] `apps/web/src/modules/notifications/{email-contents,worker}.ts` -- email d'invitation vers `/connexion` (tutoiement, code, « connecte-toi la veille », assistance).
+- [x] `apps/web/src/app/connexion/page.tsx` + `app/volontaires/volontaires-pwa.tsx` -- retirer lien volontaire, `AssistanceButton` sur `/connexion` [patch], liens session expirée → `/connexion`.
+- [x] `apps/web/src/app/api/inscriptions/{route,acceptances/route,preuve/route}.ts` -- refuser tout rôle ≠ coureur (403) + tests [patch].
+- [x] `apps/web/src/app/admin/volontaires/volontaires-manager.tsx` -- succès du renvoi annoncé `role="status"` [patch] ; aide statuts complète (« À renvoyer », « Activé (première connexion faite) ») [patch] ; « 2 Mo » dérivé de `MAX_IMPORT_BYTES` [patch].
+- [x] `apps/web/src/modules/missions/{import-format,errors}.ts` -- colonne Téléphone du gabarit en texte (`numFmt '@'`) [patch] ; « 2 Mo » → constante [patch].
+- [x] `apps/web/src/app/api/admin/volontaires/modele/route.test.ts` -- nouveau : 401/403, `Content-Type` xlsx, `Content-Disposition` [patch].
+- [x] Tests listés au Code Map -- mettre à jour ; intégration : connexion volontaire par code (`activated_at` posé une fois, session antérieure révoquée), renvoi activé/non activé, multi-org sur `invitation_outbox_id`, payload sans `jeton`.
+- [x] `_bmad-output/implementation-artifacts/spec-3-1-import-excel-des-volontaires-et-invitations.md` -- appliquer SCP §4.6 (Intent renégocié, Always/Never, matrice, AC2, Review Findings D1–D3 résolues, patches sans objet barrés) avec renvoi vers cette spec pour les tâches.
+- [x] `_bmad-output/implementation-artifacts/scenarios-recette-epic-3.md` -- appliquer SCP §4.7 (S1 1.4, 1.7–1.14, synthèse, S3 → `/connexion`).
 
 **Acceptance Criteria:**
 - Given le code de `apps/web/src`, when on cherche `password_hash`, `scrypt`, `connexion-volontaire`, `/invitation?jeton`, then aucune occurrence hors migration 0035.
@@ -90,9 +92,43 @@ context:
 
 ## Implementation Notes
 
+- `/connexion` scindée en `page.tsx` (serveur, `force-dynamic`, lit `ASSISTANCE_PHONE`) + `connexion-form.tsx` (client, ex-contenu de la page) : `AssistanceButton` exige le numéro côté serveur.
+- Garde des API inscriptions : `requireRole(ROLE_COUREUR)` ; 401/503 gardent les enveloppes `inscriptions.*` / `acceptances.*` / `preuve.*`, 403 = `iam.forbidden` (mappeur iam) — GET et POST.
+- Rejet `AZZEL_ADMIN_EMAILS` fait dans le service (avant la transaction), raison `adresse réservée à l'organisation`.
+- Renvoi : `mettreEnFileInvitation` annule l'ancienne ligne de `invitation_outbox_id` si `pending`/`failed` puis repointe la fiche ; une ligne `sent`/`sending` reste intacte. Statut outbox `cancelled` ou absent → « À renvoyer ».
+- `MAX_IMPORT_LIBELLE` (domaine, client-safe) dérivé de `MAX_IMPORT_BYTES` : erreur serveur + manager admin.
+- FK `volontaire.invitation_outbox_id` en `ON DELETE SET NULL` (aucune suppression outbox aujourd'hui, garde-fou).
+- AC1 (`rg`) : `0017_comptes_volontaires.sql` contient encore `password_hash`/`scrypt`/`/invitation?jeton` (migration historique, jamais éditée — Always) ; hors 0017/0035, aucune occurrence dans `apps/web/src` (le test d'intégration de schéma filtre `account.password*` sans littéral).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+### 2026-10-29 — passe 1 (blind-hunter 15, edge-case-hunter 8, verification-gap 3 + 2 autres ; 28 constats) — 8 patch, 1 defer, 19 rejetés, aucun loopback
+
+| # | Source | Constat | Verdict | Route | Preuve |
+|---|--------|---------|---------|-------|--------|
+| 1 | BH5+ECH1+ECH6 | Promotion `AZZEL_ADMIN_EMAILS` d'un compte `volontaire` au code-login (rôle changé en silence) | medium | patch ✅ | `store.ts:323` promouvait tout rôle ≠ organisateur ; garde `role !== 'volontaire'` + test intégration. |
+| 2 | BH1 | Aide admin « sur/connexion » (espace JSX perdu) | low | patch ✅ | `volontaires-manager.tsx:347` texte + saut de ligne + `<code>` ; `{' '}` ajouté. |
+| 3 | BH2 | `/connexion` titrée « Espace coureur » pour tous les rôles | low | patch ✅ | surtitre :159/:195 → « Connexion ». Vouvoiement conservé (ton préexistant de la page coureur). |
+| 4 | BH6 | « Connecte-toi la veille » trompeur avec la session unique | low | patch ✅ | une connexion sur un autre appareil révoque la 1ʳᵉ ; conseil précisé « sur le téléphone que tu utiliseras le jour J ». |
+| 5 | BH10 | `routes-supprimees.test.ts` ne vérifie que `page.tsx`/`route.ts` | low | patch ✅ | vérifie désormais l'absence des répertoires de route. |
+| 6 | BH13 | `logout-button.tsx` code `/connexion` en dur | low | patch ✅ | `CONNEXION_PATH` (constants client-safe). |
+| 7 | VG2 | Renvoi annulant une invitation `failed` non testé | low | patch ✅ | scénario SMTP prolongé : `['cancelled','pending']` puis un seul email envoyé. |
+| 8 | VG3 | `/connexion` (AssistanceButton) jamais rendue en test | low | patch ✅ | `app/connexion/page.test.tsx` : lien `tel:`, surtitre, aucun lien `/connexion-` ni `/invitation`. |
+| 9 | ECH4 | Migrateur sans garde BYPASSRLS : backfill à 0 ligne puis DROP | maybe-false (medium si prod) | defer | 0008 avale `insufficient_privilege` ; owner dev superuser, aucune donnée hors dev (Q2) — défaut antérieur, `deferred-work.md`. |
+| 10 | BH15 | Migration 0035 sans transaction (échec partiel) | false | rejeté | `migrate.ts:81` : chaque fichier dans `sql.begin`. |
+| 11 | ECH3+ECH8 | Volontaire d'une org non par défaut → compte coureur | false | rejeté | V1 mono-org : tous les codes naissent dans `getDefaultOrganisationId()`, l'import l'est aussi (triage revue 3.1 du 2026-10-28). |
+| 12 | BH3+ECH5+VG-o1 | Anciens liens `/invitation`, `/connexion-volontaire` → 404 sec ; pas de redirection | low | rejeté | matrice gelée : anciennes routes = 404 ; aucune donnée/invitation réelle hors dev (Q2). |
+| 13 | BH4 | Volontaires non activés à email `sent` obsolète sans rattrapage | low | rejeté | dev uniquement (Q2) ; le bouton « Renvoyer » reste disponible. |
+| 14 | BH7 | Lien d'invitation sans `?email=` pré-rempli | low | rejeté | ajoute un paramètre public ; comportement find-or-create préexistant de `/connexion`. |
+| 15 | BH8 | Pas d'index sur `volontaire.invitation_outbox_id` | low | rejeté | aucune suppression d'`email_outbox` en V1, ~200 volontaires. |
+| 16 | BH9+ECH2 | Renvoi pendant `sending` → doublon d'email | low | rejeté | les deux emails pointent vers `/connexion` sans jeton : doublon inoffensif, cas rare. |
+| 17 | BH11 | `readSession` copié 3× (routes inscriptions) | low | rejeté | duplication préexistante (même structure avant la story). |
+| 18 | BH12 | Test multi-org dépendant de l'état | low | rejeté | refactor de fixtures, aucun faux vert démontré. |
+| 19 | BH14 | Message de succès du renvoi jamais effacé ; `colSpan` en dur | low | rejeté | ajout d'effet/timer, cosmétique. |
+| 20 | ECH7 | Critère d'acceptation 1 (rg) non tenu à la lettre | low | rejeté | occurrences restantes : 0017 (non éditable) et tests de garde ; correction = édition du spec. |
+| 21 | VG1 | Backfill 0035 jamais testé sur données héritées | low | rejeté | aucune donnée volontaire hors dev (Q2) ; vérifié à la main sur la base dev (0 `jeton`, schéma cible) ; harnais « migrer jusqu'à N » = complexité. |
 
 ## Design Notes
 

@@ -1,4 +1,3 @@
-import { INVITATION_TTL_DAYS } from './constants';
 import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 export class EmailInvalidError extends Error {
@@ -80,48 +79,6 @@ export class EmailSendError extends Error {
   constructor(cause?: unknown) {
     super("envoi de l'email impossible", { cause });
     this.name = 'EmailSendError';
-  }
-}
-
-// --- Story 3.1 — parcours volontaire -----------------------------------------
-
-/** Connexion par code demandée par un compte volontaire : refus + orientation. */
-export class VolunteerCodeLoginRefusedError extends Error {
-  constructor() {
-    super('connexion par code refusée pour un compte volontaire');
-    this.name = 'VolunteerCodeLoginRefusedError';
-  }
-}
-
-/** Email ou mot de passe volontaire erroné : message générique (pas d'énumération). */
-export class InvalidCredentialsError extends Error {
-  constructor() {
-    super('email ou mot de passe incorrect');
-    this.name = 'InvalidCredentialsError';
-  }
-}
-
-/** Jeton d'invitation inconnu ou déjà consommé. */
-export class InvitationInvalidError extends Error {
-  constructor() {
-    super('invitation inconnue ou déjà utilisée');
-    this.name = 'InvitationInvalidError';
-  }
-}
-
-/** Jeton d'invitation valide mais expiré (TTL 14 jours). */
-export class InvitationExpiredError extends Error {
-  constructor() {
-    super('invitation expirée');
-    this.name = 'InvitationExpiredError';
-  }
-}
-
-/** Mot de passe hors bornes 8–128 à l'activation. */
-export class PasswordInvalidError extends Error {
-  constructor() {
-    super('mot de passe hors bornes');
-    this.name = 'PasswordInvalidError';
   }
 }
 
@@ -230,56 +187,6 @@ export function toApiError(error: unknown): ApiError {
         code: 'iam.email_send_failed',
         message: 'L’envoi du code a échoué.',
         action: 'Réessayez dans un instant.',
-      }),
-    };
-  }
-  if (error instanceof VolunteerCodeLoginRefusedError) {
-    return {
-      status: 400,
-      envelope: createErrorEnvelope({
-        code: 'iam.volontaire_code_refused',
-        message: 'Ce compte est un compte volontaire : la connexion par code est réservée aux coureurs et organisateurs.',
-        action: 'Connecte-toi avec ton mot de passe depuis la page /connexion-volontaire.',
-      }),
-    };
-  }
-  if (error instanceof InvalidCredentialsError) {
-    return {
-      status: 400,
-      envelope: createErrorEnvelope({
-        code: 'iam.invalid_credentials',
-        message: 'Email ou mot de passe incorrect.',
-        action: 'Vérifie ta saisie puis réessaie.',
-      }),
-    };
-  }
-  if (error instanceof InvitationInvalidError) {
-    return {
-      status: 400,
-      envelope: createErrorEnvelope({
-        code: 'iam.invitation_invalid',
-        message: 'Ce lien d’invitation est inconnu ou a déjà été utilisé.',
-        action: 'Demande à l’organisation de te renvoyer une invitation, ou appelle l’équipe.',
-      }),
-    };
-  }
-  if (error instanceof InvitationExpiredError) {
-    return {
-      status: 410,
-      envelope: createErrorEnvelope({
-        code: 'iam.invitation_expired',
-        message: `Ce lien d’invitation a expiré (${INVITATION_TTL_DAYS} jours).`,
-        action: 'Demande à l’organisation de te renvoyer une invitation, ou appelle l’équipe.',
-      }),
-    };
-  }
-  if (error instanceof PasswordInvalidError) {
-    return {
-      status: 400,
-      envelope: createErrorEnvelope({
-        code: 'iam.password_invalid',
-        message: 'Le mot de passe doit contenir entre 8 et 128 caractères.',
-        action: 'Choisis un mot de passe plus long puis réessaie.',
       }),
     };
   }

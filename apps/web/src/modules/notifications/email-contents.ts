@@ -1,4 +1,4 @@
-import { INVITATION_TTL_DAYS } from '@/modules/iam/constants';
+import { CONNEXION_PATH } from '@/modules/iam/constants';
 import { readEnv } from '@/modules/iam/env';
 
 export const NOTIFICATION_TYPES = [
@@ -27,11 +27,10 @@ export interface DossierRefusePayload {
   motif: string;
 }
 
-/** Story 3.1 — le jeton BRUT vit dans le payload (l'email porte le lien) ;
- * l'invitation en base ne stocke que son hash sha256. */
+/** Story 3.1 — invitation volontaire : AUCUN jeton (le lien pointe vers
+ * /connexion, connexion par code commune à tous les rôles). */
 export interface InvitationVolontairePayload {
   nom: string;
-  jeton: string;
 }
 
 /** Story 6.4 — rappel batterie J-7 : date de course au format SQL `YYYY-MM-DD`
@@ -52,14 +51,13 @@ export const DEFAULT_APP_URL = 'http://localhost:3000';
 
 export const ESPACE_COUREUR_PATH = '/espace-coureur';
 
-export const INVITATION_PATH = '/invitation';
-
 export function readEspaceCoureurUrl(): string {
   return readAppUrl(ESPACE_COUREUR_PATH);
 }
 
-export function buildInvitationUrl(jeton: string): string {
-  return `${readAppUrl(INVITATION_PATH)}?jeton=${encodeURIComponent(jeton)}`;
+/** Story 3.1 — lien de l'invitation volontaire : la page de connexion unique. */
+export function readConnexionUrl(): string {
+  return readAppUrl(CONNEXION_PATH);
 }
 
 /**
@@ -101,8 +99,8 @@ function readAppUrl(path: string): string {
 export interface NotificationEmailOptions {
   assistancePhone: string;
   espaceCoureurUrl: string;
-  /** Story 3.1 — lien d'invitation complet (jeton inclus), construit par ligne. */
-  invitationUrl: string;
+  /** Story 3.1 — lien de l'invitation volontaire : page /connexion (sans jeton). */
+  connexionUrl: string;
   /** Story 6.4 — lien vers l'app coureurs (RUNNERS_APP_URL, repli APP_URL). */
   runnersAppUrl: string;
 }
@@ -184,12 +182,14 @@ export function buildNotificationEmail(
         `Salut ${invitation.nom},`,
         '',
         'Bienvenue dans l’équipe des volontaires !',
-        `Pour activer ton accès, choisis ton mot de passe via ce lien (valable ${INVITATION_TTL_DAYS} jours) :`,
-        options.invitationUrl,
+        'Pour accéder à tes missions, ouvre ce lien :',
+        options.connexionUrl,
         '',
-        'Après ça, tu te connecteras avec ton email et ton mot de passe.',
+        'Connecte-toi avec cette adresse email : tu recevras un code à saisir, pas de mot de passe à retenir.',
         '',
-        `Le lien ne fonctionne plus ? Appelle l’équipe : ${options.assistancePhone}`,
+        'Conseil : connecte-toi la veille du jour J, sur le téléphone que tu utiliseras le jour J — ta session y reste ouverte, tu n’auras pas de code à attendre le matin de la course (une connexion sur un autre appareil fermerait la première).',
+        '',
+        `Un souci pour te connecter ? Appelle l’équipe : ${options.assistancePhone}`,
         '',
         'À bientôt,',
         'L’équipe Azzel',
@@ -267,10 +267,7 @@ export function normalizeNotificationPayload(
 ): NotificationPayload {
   const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   if (type === 'invitation_volontaire') {
-    return {
-      nom: payloadString(record, 'nom').trim(),
-      jeton: payloadString(record, 'jeton').trim(),
-    };
+    return { nom: payloadString(record, 'nom').trim() };
   }
   if (type === 'rappel_j7') {
     return {

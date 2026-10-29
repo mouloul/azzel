@@ -198,7 +198,7 @@ describe('sw-volontaires — install', () => {
     const ctx = chargerServiceWorker(async () =>
       reponseFactice('page de connexion', {
         redirected: true,
-        url: ORIGINE + '/connexion-volontaire',
+        url: ORIGINE + '/connexion',
       }),
     );
     await expect(declencherInstall(ctx)).rejects.toThrow(/précacheable/);
@@ -244,7 +244,7 @@ describe('sw-volontaires — GET /api/volontaires/etat', () => {
     const ctx = chargerServiceWorker(async () =>
       reponseFactice('page de connexion', {
         redirected: true,
-        url: ORIGINE + '/connexion-volontaire',
+        url: ORIGINE + '/connexion',
       }),
     );
     const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
@@ -302,7 +302,7 @@ describe('sw-volontaires — navigations /volontaires', () => {
     const ctx = chargerServiceWorker(async () =>
       reponseFactice('page de connexion', {
         redirected: true,
-        url: ORIGINE + '/connexion-volontaire',
+        url: ORIGINE + '/connexion',
       }),
     );
     const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
@@ -375,7 +375,7 @@ describe('sw-volontaires — navigation /volontaires/scan (story 4.2)', () => {
     const ctx = chargerServiceWorker(async () =>
       reponseFactice('page de connexion', {
         redirected: true,
-        url: ORIGINE + '/connexion-volontaire',
+        url: ORIGINE + '/connexion',
       }),
     );
     const { reponse } = await declencherFetch(

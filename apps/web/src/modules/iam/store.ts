@@ -23,19 +23,10 @@ import {
   DbUnavailableError,
   RateLimitedError,
 } from './errors';
-import { verifyPassword, hashPassword } from './password';
 
 export type VerifyOutcome =
   | { ok: true; accountId: string; organisationId: string; email: string; role: AccountRole }
-  | { ok: false; reason: 'code_invalid' | 'code_exhausted' | 'volontaire' };
-
-export type ActivationOutcome =
-  | { ok: true; accountId: string; organisationId: string; email: string; role: 'volontaire' }
-  | { ok: false; reason: 'invalid' | 'expired' };
-
-export type PasswordLoginOutcome =
-  | { ok: true; accountId: string; organisationId: string; email: string; role: 'volontaire' }
-  | { ok: false; reason: 'invalid_credentials' };
+  | { ok: false; reason: 'code_invalid' | 'code_exhausted' };
 
 export interface SessionRecord {
   accountId: string;
@@ -67,23 +58,6 @@ export interface IamStore {
     sessionExpiresAt: Date;
     adminEmails: string[];
   }): Promise<VerifyOutcome>;
-  /** Rôle du compte (org AVEC GUC) — refus connexion par code des volontaires. */
-  findAccountRoleByEmail(organisationId: string, email: string): Promise<AccountRole | null>;
-  /** Story 3.1 : consomme l'invitation, pose le hash scrypt, ouvre la session. */
-  consumeInvitationAndStartSession(input: {
-    jetonHash: string;
-    passwordHash: string;
-    tokenHash: string;
-    sessionExpiresAt: Date;
-  }): Promise<ActivationOutcome>;
-  /** Story 3.1 : vérifie le mot de passe scrypt et ouvre la session unique. */
-  verifyPasswordAndStartSession(input: {
-    organisationId: string;
-    email: string;
-    motDePasse: string;
-    tokenHash: string;
-    sessionExpiresAt: Date;
-  }): Promise<PasswordLoginOutcome>;
   findSessionByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
   revokeSessionByTokenHash(tokenHash: string): Promise<void>;
 }
@@ -94,15 +68,6 @@ interface LoginCodeRow {
   code_hash: string;
   attempts: number;
   expires_at: Date;
-}
-
-// Oracle de timing : sur les chemins négatifs (compte absent, hash absent), on
-// dérive scrypt contre ce hash factice — la durée de réponse ne distingue plus
-// les comptes existants des inconnus. Calculé une fois, réutilisé.
-let hashLeurrePromise: Promise<string> | null = null;
-function hashLeurre(): Promise<string> {
-  hashLeurrePromise ??= hashPassword('azzel-leurre-timing-volontaire');
-  return hashLeurrePromise;
 }
 
 const CONNECTION_ERROR_CODES = new Set([
@@ -339,24 +304,25 @@ export function createIamStore(sql: Sql, options: CreateIamStoreOptions = {}): I
           }
           await tx`UPDATE login_code SET consumed_at = now() WHERE id = ${code.id}`;
           const accountRows = await tx<{ id: string; role: AccountRole }[]>`
-            INSERT INTO account (organisation_id, email, last_login_at)
-            VALUES (${code.organisation_id}, ${input.email}, now())
+            INSERT INTO account (organisation_id, email, last_login_at, activated_at)
+            VALUES (${code.organisation_id}, ${input.email}, now(), now())
             ON CONFLICT (organisation_id, email)
-            DO UPDATE SET last_login_at = now()
+            DO UPDATE SET last_login_at = now(),
+                          activated_at = COALESCE(account.activated_at, now())
             RETURNING id, role
           `;
+          // Story 3.1 (connexion code unifiée) : connexion par code pour TOUS les
+          // rôles — le rôle est lu sur le compte. activated_at = première
+          // connexion réussie, jamais réécrit (COALESCE) : la liste admin des
+          // volontaires en dérive le statut « Activé ».
           const account = accountRows[0];
           if (!account) {
             throw new Error('find-or-create du compte sans résultat');
           }
-          // Rôle unique par compte : un volontaire ne se connecte JAMAIS par
-          // code — orientation vers /connexion-volontaire (défense en profondeur :
-          // la demande de code est déjà refusée en amont pour ce rôle).
-          if (account.role === 'volontaire') {
-            return { ok: false, reason: 'volontaire' as const };
-          }
           let role: AccountRole = account.role;
-          if (input.adminEmails.includes(input.email)) {
+          // Rôle unique : un compte volontaire n'est JAMAIS promu organisateur,
+          // même si son email est ajouté à AZZEL_ADMIN_EMAILS après l'import.
+          if (account.role !== 'volontaire' && input.adminEmails.includes(input.email)) {
             const promotedRows = await tx<{ role: AccountRole }[]>`
               UPDATE account SET role = 'organisateur'
               WHERE id = ${account.id} AND role <> 'organisateur'
@@ -387,152 +353,6 @@ export function createIamStore(sql: Sql, options: CreateIamStoreOptions = {}): I
           };
         });
       });
-    },
-
-    async findAccountRoleByEmail(
-      organisationId: string,
-      email: string,
-    ): Promise<AccountRole | null> {
-      return withDb(async () =>
-        withOrg(sql, organisationId, async (tx) => {
-          const rows = await tx<{ role: AccountRole }[]>`
-            SELECT role FROM account
-            WHERE organisation_id = ${organisationId} AND email = ${email}
-            LIMIT 1
-          `;
-          return rows[0]?.role ?? null;
-        }),
-      );
-    },
-
-    async consumeInvitationAndStartSession(input: {
-      jetonHash: string;
-      passwordHash: string;
-      tokenHash: string;
-      sessionExpiresAt: Date;
-    }): Promise<ActivationOutcome> {
-      return withDb(async () => {
-        // Pré-sélection par secret, hors GUC (exception documentée, pattern
-        // session/login_code 0011) : la page /invitation?jeton=… n'a ni session
-        // ni organisation. Le hash du jeton est le contrôle d'accès.
-        const cibleRows = await sql<{ id: string; organisation_id: string }[]>`
-          SELECT id, organisation_id FROM invitation
-          WHERE jeton_hash = ${input.jetonHash}
-          LIMIT 1
-        `;
-        const cible = cibleRows[0];
-        if (!cible) {
-          return { ok: false, reason: 'invalid' as const };
-        }
-        return withOrg(sql, cible.organisation_id, async (tx) => {
-          const invRows = await tx<
-            { id: string; account_id: string; expire_le: Date; consomme_le: Date | null }[]
-          >`
-            SELECT id, account_id, expire_le, consomme_le
-            FROM invitation
-            WHERE id = ${cible.id} AND organisation_id = ${cible.organisation_id}
-            LIMIT 1
-            FOR UPDATE
-          `;
-          const invitation = invRows[0];
-          if (!invitation || invitation.consomme_le !== null) {
-            return { ok: false, reason: 'invalid' as const };
-          }
-          if (invitation.expire_le.getTime() <= Date.now()) {
-            return { ok: false, reason: 'expired' as const };
-          }
-          await tx`UPDATE invitation SET consomme_le = now() WHERE id = ${invitation.id}`;
-          const accounts = await tx<{ id: string; email: string; role: AccountRole }[]>`
-            UPDATE account
-            SET password_hash = ${input.passwordHash},
-                password_set_at = now(),
-                last_login_at = now()
-            WHERE id = ${invitation.account_id}
-              AND organisation_id = ${cible.organisation_id}
-              AND role = 'volontaire'
-            RETURNING id, email, role
-          `;
-          const account = accounts[0];
-          if (!account) {
-            return { ok: false, reason: 'invalid' as const };
-          }
-          // Session unique tous rôles : définir son mot de passe révoque les
-          // sessions antérieures du compte.
-          await tx`
-            UPDATE session SET revoked_at = now()
-            WHERE organisation_id = ${cible.organisation_id}
-              AND account_id = ${account.id}
-              AND revoked_at IS NULL
-          `;
-          await tx`
-            INSERT INTO session (organisation_id, account_id, token_hash, expires_at)
-            VALUES (${cible.organisation_id}, ${account.id}, ${input.tokenHash}, ${input.sessionExpiresAt})
-          `;
-          return {
-            ok: true as const,
-            accountId: account.id,
-            organisationId: cible.organisation_id,
-            email: account.email,
-            role: 'volontaire' as const,
-          };
-        });
-      });
-    },
-
-    async verifyPasswordAndStartSession(input: {
-      organisationId: string;
-      email: string;
-      motDePasse: string;
-      tokenHash: string;
-      sessionExpiresAt: Date;
-    }): Promise<PasswordLoginOutcome> {
-      return withDb(async () =>
-        withOrg(sql, input.organisationId, async (tx) => {
-          // Volontaires uniquement : un compte coureur/organisateur sans mot de
-          // passe ne peut pas se connecter ici (message générique, pas
-          // d'énumération des comptes).
-          const rows = await tx<
-            { id: string; email: string; role: AccountRole; password_hash: string | null }[]
-          >`
-            SELECT id, email, role, password_hash
-            FROM account
-            WHERE organisation_id = ${input.organisationId}
-              AND email = ${input.email}
-              AND role = 'volontaire'
-            LIMIT 1
-            FOR UPDATE
-          `;
-          const account = rows[0];
-          if (!account || account.password_hash === null) {
-            // Dériver scrypt quand même (hash factice) : durée identique au
-            // chemin « mot de passe erroné », pas d'oracle d'existence.
-            await verifyPassword(input.motDePasse, await hashLeurre());
-            return { ok: false, reason: 'invalid_credentials' as const };
-          }
-          const motDePasseOk = await verifyPassword(input.motDePasse, account.password_hash);
-          if (!motDePasseOk) {
-            return { ok: false, reason: 'invalid_credentials' as const };
-          }
-          await tx`UPDATE account SET last_login_at = now() WHERE id = ${account.id}`;
-          await tx`
-            UPDATE session SET revoked_at = now()
-            WHERE organisation_id = ${input.organisationId}
-              AND account_id = ${account.id}
-              AND revoked_at IS NULL
-          `;
-          await tx`
-            INSERT INTO session (organisation_id, account_id, token_hash, expires_at)
-            VALUES (${input.organisationId}, ${account.id}, ${input.tokenHash}, ${input.sessionExpiresAt})
-          `;
-          return {
-            ok: true as const,
-            accountId: account.id,
-            organisationId: input.organisationId,
-            email: account.email,
-            role: 'volontaire' as const,
-          };
-        }),
-      );
     },
 
     async findSessionByTokenHash(tokenHash: string): Promise<SessionRecord | null> {
@@ -612,9 +432,6 @@ function createUnavailableStore(): IamStore {
     recordCodeRequestIp: unavailable,
     insertLoginCode: unavailable,
     verifyCodeAndStartSession: unavailable,
-    findAccountRoleByEmail: unavailable,
-    consumeInvitationAndStartSession: unavailable,
-    verifyPasswordAndStartSession: unavailable,
     findSessionByTokenHash: unavailable,
     revokeSessionByTokenHash: unavailable,
   };
@@ -683,57 +500,4 @@ export function getIamStore(): IamStore {
   }
   globals.__azzelIamStore = store;
   return store;
-}
-
-// --- Story 3.1 — helpers d'invitation DANS la transaction de l'import ----------
-// Même style que insertOutboxEmail (notifications) : l'import des volontaires
-// exécute comptes + fiches + outbox + invitations dans UNE transaction withOrg ;
-// ces helpers y écrivent via le tx fourni (GUC déjà posé par l'appelant).
-
-type IamTxQueryable = Sql | postgres.TransactionSql;
-
-/**
- * Révoque les invitations non consommées d'un compte (nouvelle invitation) ET
- * annule leurs emails encore en file : les lignes outbox pending/failed passent
- * 'cancelled' (0019) — le worker ne les listera plus, aucun lien mort ne part.
- */
-export async function revokePendingInvitations(
-  tx: IamTxQueryable,
-  input: { organisationId: string; accountId: string },
-): Promise<void> {
-  await tx`
-    UPDATE email_outbox o
-    SET statut = 'cancelled'
-    WHERE o.organisation_id = ${input.organisationId}
-      AND o.statut IN ('pending', 'failed')
-      AND o.id IN (
-        SELECT i.email_outbox_id FROM invitation i
-        WHERE i.organisation_id = ${input.organisationId}
-          AND i.account_id = ${input.accountId}
-          AND i.consomme_le IS NULL
-      )
-  `;
-  await tx`
-    DELETE FROM invitation
-    WHERE organisation_id = ${input.organisationId}
-      AND account_id = ${input.accountId}
-      AND consomme_le IS NULL
-  `;
-}
-
-/** Insère l'invitation : jeton stocké HASHÉ sha256 (pattern login_code). */
-export async function insertInvitation(
-  tx: IamTxQueryable,
-  input: {
-    organisationId: string;
-    accountId: string;
-    jetonHash: string;
-    emailOutboxId: string;
-    expireLe: Date;
-  },
-): Promise<void> {
-  await tx`
-    INSERT INTO invitation (organisation_id, account_id, jeton_hash, email_outbox_id, expire_le)
-    VALUES (${input.organisationId}, ${input.accountId}, ${input.jetonHash}, ${input.emailOutboxId}, ${input.expireLe})
-  `;
 }

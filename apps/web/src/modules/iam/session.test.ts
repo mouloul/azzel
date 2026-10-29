@@ -132,10 +132,10 @@ describe('requireRolePage — gardes des pages (redirections)', () => {
     expect(navigationMock.redirect).toHaveBeenCalledWith('/volontaires');
   });
 
-  it('story 3.1 — page volontaire sans cookie : redirection vers /connexion-volontaire', async () => {
+  it('story 3.1 — page volontaire sans cookie : redirection vers /connexion (page unique tous rôles)', async () => {
     withCookie(undefined);
     await requireRolePage('volontaire').catch((error: unknown) => error);
-    expect(navigationMock.redirect).toHaveBeenCalledWith('/connexion-volontaire');
+    expect(navigationMock.redirect).toHaveBeenCalledWith('/connexion');
   });
 
   it('story 3.1 — page volontaire en session coureur : redirection vers /espace-coureur', async () => {

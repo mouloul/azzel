@@ -2,8 +2,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import {
-  CONNEXION_VOLONTAIRE_PATH,
-  ROLE_VOLONTAIRE,
+  CONNEXION_PATH,
   SESSION_COOKIE_NAME,
   homePathForRole,
   type AccountRole,
@@ -60,7 +59,7 @@ export async function requireSession(): Promise<RequireSessionResult> {
     }
   }
   if (!session) {
-    redirect('/connexion');
+    redirect(CONNEXION_PATH);
   }
   return { status: 'authenticated', session };
 }
@@ -102,7 +101,7 @@ export async function requireRolePage(required: AccountRole): Promise<RequireSes
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const result = await requireRole(required, token);
   if (result.status === 'unauthenticated') {
-    redirect(required === ROLE_VOLONTAIRE ? CONNEXION_VOLONTAIRE_PATH : '/connexion');
+    redirect(CONNEXION_PATH);
   }
   if (result.status === 'forbidden') {
     // Chacun chez soi : un organisateur égaré est renvoyé vers l'administration,

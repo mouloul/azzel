@@ -1,8 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { SESSION_COOKIE_NAME } from '@/modules/iam/constants';
-import { UnauthenticatedError } from '@/modules/iam/errors';
-import { getSession } from '@/modules/iam/service';
+import { ROLE_COUREUR, SESSION_COOKIE_NAME } from '@/modules/iam/constants';
+import {
+  DbUnavailableError,
+  ForbiddenError,
+  UnauthenticatedError,
+  toApiError as toIamApiError,
+} from '@/modules/iam/errors';
+import { requireRole } from '@/modules/iam/session';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import {
@@ -20,21 +25,28 @@ function errorResponse(apiError: ApiError): NextResponse {
   return NextResponse.json(apiError.envelope, { status: apiError.status });
 }
 
+// Surface coureur : toute session d'un autre rôle (volontaire, organisateur)
+// est refusée en 403 (enveloppe iam.forbidden) — rôle unique par compte, la
+// connexion par code étant désormais commune à tous les rôles.
 async function readSession(
   request: NextRequest,
 ): Promise<{ session: SessionRecord } | { response: NextResponse }> {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!token) {
-    return { response: errorResponse(toPreuveApiError(new UnauthenticatedError())) };
-  }
+  let result: Awaited<ReturnType<typeof requireRole>>;
   try {
-    const session = await getSession(token);
-    if (!session) {
-      return { response: errorResponse(toPreuveApiError(new UnauthenticatedError())) };
-    }
-    return { session };
+    result = await requireRole(ROLE_COUREUR, token);
   } catch (error) {
     return { response: errorResponse(toPreuveApiError(error)) };
+  }
+  switch (result.status) {
+    case 'authenticated':
+      return { session: result.session };
+    case 'unauthenticated':
+      return { response: errorResponse(toPreuveApiError(new UnauthenticatedError())) };
+    case 'db-unavailable':
+      return { response: errorResponse(toPreuveApiError(new DbUnavailableError())) };
+    case 'forbidden':
+      return { response: errorResponse(toIamApiError(new ForbiddenError())) };
   }
 }
 

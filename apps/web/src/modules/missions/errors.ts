@@ -2,7 +2,7 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 import { DbUnavailableError, UnauthenticatedError } from '@/modules/iam/errors';
 
-import type { MissionFieldErrors, SecteurFieldErrors } from './domain';
+import { MAX_IMPORT_LIBELLE, type MissionFieldErrors, type SecteurFieldErrors } from './domain';
 
 export { DbUnavailableError, UnauthenticatedError };
 
@@ -45,10 +45,10 @@ export class VolontaireNotFoundError extends Error {
   }
 }
 
-/** Renvoi d'invitation à un compte ayant déjà défini son mot de passe. */
+/** Renvoi d'invitation à un volontaire déjà activé (première connexion faite). */
 export class VolontaireDejaActifError extends Error {
   constructor() {
-    super('volontaire déjà activé (mot de passe défini)');
+    super('volontaire déjà activé (première connexion faite)');
     this.name = 'VolontaireDejaActifError';
   }
 }
@@ -163,7 +163,7 @@ export function toMissionsApiError(error: unknown): ApiError {
       status: 400,
       envelope: createErrorEnvelope({
         code: 'admin.volontaires.import_trop_lourd',
-        message: 'Le fichier dépasse la taille maximale (2 Mo).',
+        message: `Le fichier dépasse la taille maximale (${MAX_IMPORT_LIBELLE}).`,
         action: 'Allège le fichier (retire des lignes ou des colonnes inutiles) puis réessaie.',
       }),
     };
@@ -193,7 +193,7 @@ export function toMissionsApiError(error: unknown): ApiError {
       status: 409,
       envelope: createErrorEnvelope({
         code: 'admin.volontaires.deja_actif',
-        message: 'Ce volontaire a déjà défini son mot de passe : l’invitation est inutile.',
+        message: 'Ce volontaire s’est déjà connecté : l’invitation est inutile.',
         action: 'Aucune action nécessaire — le compte est déjà activé.',
       }),
     };

@@ -139,6 +139,9 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
     const html = await new Response(flux).text();
     expect(html).toContain('Tu es déconnecté');
     expect(html).toContain('Se reconnecter');
+    // Story 3.1 — reconnexion sur la page UNIQUE /connexion (code par email).
+    expect(html).toContain('href="/connexion"');
+    expect(html).not.toMatch(/href="\/connexion-/);
     expect(html).toContain('Sync de la file…');
     expect(html).toMatch(/Journal sync \((?:<!-- -->)?0/);
     expect(html).toContain('Envoyer maintenant');

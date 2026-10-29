@@ -3,10 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
 
-import { INVITATION_TTL_DAYS } from '@/modules/iam/constants';
 import {
   IMPORT_ACCEPT_ATTRIBUTE,
   MAX_IMPORT_BYTES,
+  MAX_IMPORT_LIBELLE,
   MAX_IMPORT_LINES,
 } from '@/modules/missions/domain';
 import type { RapportImport, ImportStatut } from '@/modules/missions/domain';
@@ -154,7 +154,7 @@ function ImportForm() {
     }
     if (fichier.size > MAX_IMPORT_BYTES) {
       setErreur({
-        message: 'Le fichier dépasse la taille maximale (2 Mo).',
+        message: `Le fichier dépasse la taille maximale (${MAX_IMPORT_LIBELLE}).`,
         action: 'Allège le fichier puis réessaie.',
       });
       return;
@@ -198,7 +198,7 @@ function ImportForm() {
         <legend>Importer des volontaires</legend>
         <div className="field">
           <label htmlFor="volontaires-fichier">
-            Fichier .xlsx ou .csv ({MAX_IMPORT_BYTES / (1024 * 1024)} Mo, {MAX_IMPORT_LINES}{' '}
+            Fichier .xlsx ou .csv ({MAX_IMPORT_LIBELLE}, {MAX_IMPORT_LINES}{' '}
             lignes max)
           </label>
           <input
@@ -231,6 +231,7 @@ function LigneVolontaire({ volontaire }: { volontaire: VolontaireSummary }) {
   const [pending, setPending] = useState(false);
   const [erreur, setErreur] = useState<{ message: string; action: string } | null>(null);
   const [reconnect, setReconnect] = useState(false);
+  const [succes, setSucces] = useState<string | null>(null);
   const actif = volontaire.statutInvitation === 'active';
 
   async function renvoie(): Promise<void> {
@@ -238,6 +239,7 @@ function LigneVolontaire({ volontaire }: { volontaire: VolontaireSummary }) {
       return;
     }
     setErreur(null);
+    setSucces(null);
     setReconnect(false);
     setPending(true);
     try {
@@ -252,6 +254,7 @@ function LigneVolontaire({ volontaire }: { volontaire: VolontaireSummary }) {
         setErreur((await lireErreur(response)) ?? NETWORK_ERROR);
         return;
       }
+      setSucces(`Invitation remise en file pour ${volontaire.email}.`);
       router.refresh();
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -288,6 +291,15 @@ function LigneVolontaire({ volontaire }: { volontaire: VolontaireSummary }) {
         <tr>
           <td colSpan={5}>
             <ErreurServeur erreur={erreur} reconnect={reconnect} />
+          </td>
+        </tr>
+      )}
+      {succes !== null && (
+        <tr>
+          <td colSpan={5}>
+            <p role="status" aria-live="polite" className="hint">
+              {succes}
+            </p>
           </td>
         </tr>
       )}
@@ -330,8 +342,10 @@ export function VolontairesManager({ volontaires }: { volontaires: VolontaireSum
         )}
         <p className="hint">
           Statuts : En file (email prêt à partir), Envoyée, Échec (SMTP — le
-          rejeu <code>emails:send</code> repartira), Expirée ({INVITATION_TTL_DAYS}{' '}
-          jours), Activé (mot de passe défini).
+          rejeu <code>emails:send</code> repartira), À renvoyer (aucun email
+          d’invitation en cours — utilise « Renvoyer l’invitation »), Activé
+          (première connexion faite). Les volontaires se connectent sur{' '}
+          <code>/connexion</code> avec leur email et un code reçu par email.
         </p>
       </div>
     </>

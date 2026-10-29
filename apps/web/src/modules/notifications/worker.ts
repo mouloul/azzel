@@ -2,9 +2,9 @@ import { readAssistancePhone } from '@/lib/assistance-phone';
 import { sendPlainTextEmail } from '@/modules/iam/email';
 
 import {
-  buildInvitationUrl,
   buildNotificationEmail,
   normalizeNotificationPayload,
+  readConnexionUrl,
   readEspaceCoureurUrl,
   readRunnersAppUrl,
   type NotificationType,
@@ -45,13 +45,11 @@ function errorMessage(error: unknown): string {
 
 function contentFor(row: OutboxRow): { subject: string; text: string } {
   const payload = normalizeNotificationPayload(row.type as NotificationType, row.payload);
-  // Story 3.1 : le lien d'invitation porte le jeton brut du payload (la base
-  // ne stocke que le hash) — construit par ligne, comme l'URL espace coureur.
-  const jeton = row.type === 'invitation_volontaire' ? (payload as { jeton: string }).jeton : '';
   return buildNotificationEmail(row.type as NotificationType, payload, {
     assistancePhone: readAssistancePhone(),
     espaceCoureurUrl: readEspaceCoureurUrl(),
-    invitationUrl: buildInvitationUrl(jeton),
+    // Story 3.1 : l'invitation volontaire pointe vers /connexion (sans jeton).
+    connexionUrl: readConnexionUrl(),
     // Story 6.4 — lien app coureurs du rappel J-7 (RUNNERS_APP_URL, repli APP_URL).
     runnersAppUrl: readRunnersAppUrl(),
   });

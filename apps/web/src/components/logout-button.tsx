@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { effacerEtatVolontaires } from '@/lib/idb-volontaires';
 import { purgerCachesCoureur } from '@/lib/pwa-coureur';
+import { CONNEXION_PATH } from '@/modules/iam/constants';
 
 export function LogoutButton() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export function LogoutButton() {
     } catch {} finally {
       setPending(false);
     }
-    router.replace('/connexion');
+    router.replace(CONNEXION_PATH);
   }
 
   return (

@@ -9,13 +9,14 @@ import type { LigneFichier } from './domain';
 import {
   IMPORT_ACCEPT_ATTRIBUTE,
   MAX_IMPORT_BYTES,
+  MAX_IMPORT_LIBELLE,
   MAX_IMPORT_LINES,
 } from './domain';
 import { ImportFileInvalidError } from './errors';
 
 // Constantes d'import définies dans le domaine (client-safe) : réexportées ici
 // pour les appelants serveur. Ce fichier importe exceljs — SERVEUR UNIQUEMENT.
-export { IMPORT_ACCEPT_ATTRIBUTE, MAX_IMPORT_BYTES, MAX_IMPORT_LINES };
+export { IMPORT_ACCEPT_ATTRIBUTE, MAX_IMPORT_BYTES, MAX_IMPORT_LIBELLE, MAX_IMPORT_LINES };
 
 export const IMPORT_EXTENSIONS = ['xlsx', 'csv'] as const;
 
@@ -202,14 +203,18 @@ export async function parseImportFile(bytes: Uint8Array, filename: string): Prom
   throw new ImportFileInvalidError();
 }
 
-/** Gabarit .xlsx téléchargeable : une en-tête Nom / Email / Téléphone. */
+/**
+ * Gabarit .xlsx téléchargeable : une en-tête Nom / Email / Téléphone. La
+ * colonne Téléphone est au format TEXTE (numFmt '@') : Excel ne mange plus le
+ * 0 de tête (0555… → 555…) ni ne bascule un +213… en notation scientifique.
+ */
 export async function buildModeleXlsx(): Promise<Uint8Array> {
   const classeur = new Workbook();
   const feuille = classeur.addWorksheet('Volontaires');
   feuille.columns = [
     { header: 'Nom', width: 32 },
     { header: 'Email', width: 40 },
-    { header: 'Téléphone', width: 20 },
+    { header: 'Téléphone', width: 20, style: { numFmt: '@' } },
   ];
   const tampon = await classeur.xlsx.writeBuffer();
   return new Uint8Array(tampon as ArrayBuffer);

@@ -17,6 +17,8 @@ import {
   toMissionsApiError,
 } from './errors';
 import {
+  MAX_IMPORT_BYTES,
+  MAX_IMPORT_LIBELLE,
   MAX_IMPORT_LINES,
   buildModeleXlsx,
   detecterSeparateur,
@@ -82,21 +84,28 @@ describe('validerLigne — validation des colonnes (nom, email, téléphone facu
   });
 });
 
-describe('statutInvitation — dérivation depuis l’outbox + expiration', () => {
-  const base = { passwordSetAt: null, invitation: { consommeLe: null, expireLe: new Date('2030-01-01T00:00:00.000Z'), outboxStatut: 'pending' } };
-
-  it('mot de passe posé ou invitation consommée → activé', () => {
-    expect(statutInvitation({ ...base, passwordSetAt: new Date() })).toBe('active');
-    expect(statutInvitation({ ...base, invitation: { ...base.invitation, consommeLe: new Date() } })).toBe('active');
+describe('statutInvitation — dérivation depuis activated_at + outbox (plus d’expiration)', () => {
+  it('première connexion faite (activated_at) → activé, quel que soit le statut outbox', () => {
+    for (const outboxStatut of [null, 'pending', 'sent', 'failed', 'cancelled']) {
+      expect(statutInvitation({ activatedAt: new Date(), outboxStatut })).toBe('active');
+    }
   });
 
-  it('expiration puis échec d’envoi puis envoyée puis en file', () => {
-    const maintenant = new Date('2026-10-22T10:00:00.000Z');
-    expect(statutInvitation({ ...base, invitation: { ...base.invitation, expireLe: maintenant }, maintenant })).toBe('expiree');
-    expect(statutInvitation({ ...base, invitation: { ...base.invitation, outboxStatut: 'failed' } })).toBe('echec');
-    expect(statutInvitation({ ...base, invitation: { ...base.invitation, outboxStatut: 'sent' } })).toBe('envoyee');
-    expect(statutInvitation(base)).toBe('en_file');
-    expect(statutInvitation({ ...base, invitation: null })).toBe('aucune');
+  it('priorité active › aucune › echec › envoyee › en_file', () => {
+    expect(statutInvitation({ activatedAt: null, outboxStatut: null })).toBe('aucune');
+    expect(statutInvitation({ activatedAt: null, outboxStatut: 'cancelled' })).toBe('aucune');
+    expect(statutInvitation({ activatedAt: null, outboxStatut: 'failed' })).toBe('echec');
+    expect(statutInvitation({ activatedAt: null, outboxStatut: 'sent' })).toBe('envoyee');
+    expect(statutInvitation({ activatedAt: null, outboxStatut: 'pending' })).toBe('en_file');
+    expect(statutInvitation({ activatedAt: null, outboxStatut: 'sending' })).toBe('en_file');
+  });
+
+  it('libellés : plus de statut « Expirée », « À renvoyer » et « Activé » présents', () => {
+    expect(Object.keys(LIBELLES_STATUT_INVITATION).sort()).toEqual(
+      ['active', 'aucune', 'echec', 'en_file', 'envoyee'],
+    );
+    expect(LIBELLES_STATUT_INVITATION.aucune).toBe('À renvoyer');
+    expect(LIBELLES_STATUT_INVITATION.active).toBe('Activé');
   });
 
   it('chaque statut a un libellé affichable', () => {
@@ -200,6 +209,14 @@ describe('parseImportFile — csv (séparateurs ; et ,) et xlsx', () => {
     const modele = await buildModeleXlsx();
     expect(modele.length).toBeGreaterThan(100);
     await expect(parseImportFile(modele, 'volontaires-modele.xlsx')).resolves.toEqual([]);
+  });
+
+  it('gabarit .xlsx : colonne Téléphone au format texte (numFmt « @ ») — le 0 de tête survit', async () => {
+    const classeur = new Workbook();
+    await classeur.xlsx.load((await buildModeleXlsx()).buffer as ArrayBuffer);
+    const feuille = classeur.worksheets[0];
+    expect(feuille?.getColumn(3).numFmt).toBe('@');
+    expect(feuille?.getColumn(1).numFmt).toBeUndefined();
   });
 });
 
@@ -308,6 +325,38 @@ describe('importVolontaires — service (store factice)', () => {
     expect(rapport.lignes[2]?.raison).toContain('coureur');
   });
 
+  it('email AZZEL_ADMIN_EMAILS : ligne rejetée « adresse réservée à l’organisation », jamais transmise au store', async () => {
+    const precedent = process.env.AZZEL_ADMIN_EMAILS;
+    process.env.AZZEL_ADMIN_EMAILS = 'Boss@Exemple.dz, autre@exemple.dz';
+    try {
+      const recues: string[] = [];
+      const store = storeFactice([{ ligne: 2, email: 'a@exemple.dz', statut: 'créé' }]);
+      store.importVolontaires = async (input) => {
+        recues.push(...input.lignes.map((ligne) => ligne.email));
+        return [{ ligne: 2, email: 'a@exemple.dz', statut: 'créé' }];
+      };
+      const csv = 'Nom;Email\nA;a@exemple.dz\nBoss;boss@exemple.dz\n';
+      const rapport = await importVolontaires(SESSION as SessionRecord, {
+        bytes: new TextEncoder().encode(csv),
+        filename: 'v.csv',
+      }, { store });
+      expect(recues).toEqual(['a@exemple.dz']);
+      expect(rapport.lignes[1]).toMatchObject({
+        ligne: 3,
+        email: 'boss@exemple.dz',
+        statut: 'rejeté',
+        raison: "adresse réservée à l'organisation",
+      });
+      expect(rapport.resume).toEqual({ crees: 1, ignores: 0, rejetes: 1, invitationsEnFile: 1 });
+    } finally {
+      if (precedent === undefined) {
+        delete process.env.AZZEL_ADMIN_EMAILS;
+      } else {
+        process.env.AZZEL_ADMIN_EMAILS = precedent;
+      }
+    }
+  });
+
   it('au-delà de 500 lignes : rejet ligne par ligne, les 500 premières traitées', async () => {
     const rows = [enTete.join(';')];
     const outcomes: ImportLigneOutcome[] = [];
@@ -336,6 +385,9 @@ describe('importVolontaires — service (store factice)', () => {
     const apiError = toMissionsApiError(new ImportFileTooLargeError(2 * 1024 * 1024));
     expect(apiError.status).toBe(400);
     expect(apiError.envelope.error.code).toBe('admin.volontaires.import_trop_lourd');
+    // Borne dérivée de MAX_IMPORT_BYTES, jamais codée en dur.
+    expect(MAX_IMPORT_LIBELLE).toBe(`${MAX_IMPORT_BYTES / (1024 * 1024)} Mo`);
+    expect(apiError.envelope.error.message).toContain(`(${MAX_IMPORT_LIBELLE})`);
   });
 
   it('enveloppes : introuvable 404, déjà actif 409, interne 500 sans détail', () => {

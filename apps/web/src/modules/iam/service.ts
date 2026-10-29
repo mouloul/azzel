@@ -6,7 +6,6 @@ import {
   CODE_REQUEST_WINDOW_MS,
   CODE_TTL_MS,
   IP_HASH_SALT_ENV_NAME,
-  ROLE_VOLONTAIRE,
   SESSION_TTL_SEC,
   type AccountRole,
 } from './constants';
@@ -16,14 +15,8 @@ import {
   CodeExhaustedError,
   EmailInvalidError,
   InvalidCodeError,
-  InvalidCredentialsError,
-  InvitationExpiredError,
-  InvitationInvalidError,
-  PasswordInvalidError,
-  VolunteerCodeLoginRefusedError,
   IpHashSaltMissingError,
 } from './errors';
-import { estMotDePasseValide, hashPassword } from './password';
 import {
   getIamStore,
   isProductionRuntime,
@@ -104,13 +97,6 @@ export async function requestLoginCode(
     });
   }
   const organisationId = await store.getDefaultOrganisationId();
-  // Rôle unique par compte : un volontaire ne reçoit JAMAIS de code — la
-  // connexion par code est réservée aux coureurs/organisateurs, le volontaire
-  // est orienté vers /connexion-volontaire (aucun code envoyé).
-  const roleExistant = await store.findAccountRoleByEmail(organisationId, email);
-  if (roleExistant === ROLE_VOLONTAIRE) {
-    throw new VolunteerCodeLoginRefusedError();
-  }
   const code = generateLoginCode();
   const now = Date.now();
   await store.insertLoginCode({
@@ -157,9 +143,6 @@ export async function verifyLoginCode(
     if (outcome.reason === 'code_exhausted') {
       throw new CodeExhaustedError();
     }
-    if (outcome.reason === 'volontaire') {
-      throw new VolunteerCodeLoginRefusedError();
-    }
     throw new InvalidCodeError();
   }
   return { token, email: outcome.email, role: outcome.role };
@@ -176,89 +159,4 @@ export async function getSession(
 export async function logout(token: string, deps: IamServiceDeps = {}): Promise<void> {
   const store = deps.store ?? getIamStore();
   await store.revokeSessionByTokenHash(sha256Hex(token));
-}
-
-// --- Story 3.1 — parcours volontaire ------------------------------------------
-
-export interface ActivationVolontaire {
-  token: string;
-  email: string;
-  /** Toujours « volontaire » — même contrat que LoginSession. */
-  role: AccountRole;
-}
-
-/**
- * Consomme l'invitation (jeton brut de l'URL), pose le hash scrypt du mot de
- * passe et ouvre la session unique → redirection /volontaires. Jeton inconnu ou
- * déjà utilisé → InvitationInvalidError ; expiré (14 jours) →
- * InvitationExpiredError. La page appelante n'affiche rien d'autre que la
- * validité du jeton (pas d'énumération).
- */
-export async function activerVolontaire(
-  jeton: string,
-  motDePasse: string,
-  deps: IamServiceDeps = {},
-): Promise<ActivationVolontaire> {
-  const store = deps.store ?? getIamStore();
-  if (typeof jeton !== 'string' || jeton.length < 32 || jeton.length > 512) {
-    throw new InvitationInvalidError();
-  }
-  if (!estMotDePasseValide(motDePasse)) {
-    throw new PasswordInvalidError();
-  }
-  const token = randomBytes(32).toString('base64url');
-  const outcome = await store.consumeInvitationAndStartSession({
-    jetonHash: sha256Hex(jeton),
-    passwordHash: await hashPassword(motDePasse),
-    tokenHash: sha256Hex(token),
-    sessionExpiresAt: new Date(Date.now() + SESSION_TTL_SEC * 1000),
-  });
-  if (!outcome.ok) {
-    if (outcome.reason === 'expired') {
-      throw new InvitationExpiredError();
-    }
-    throw new InvitationInvalidError();
-  }
-  return { token, email: outcome.email, role: outcome.role };
-}
-
-/**
- * Connexion volontaire (email + mot de passe scrypt). Échec générique — jamais
- * de distinction « compte inconnu » / « mot de passe erroné » (énumération).
- * V1 : organisation par défaut (même résolution que la demande de code).
- * Correctif sécurité (pattern 1.2) : quota par IP sur les tentatives — la
- * force brute en ligne est bornée comme la demande de code ; le mot de passe
- * est borné en longueur AVANT scrypt (coût CPU par tentative).
- */
-export async function connecterVolontaire(
-  rawEmail: string,
-  motDePasse: string,
-  deps: IamServiceDeps = {},
-  context: RequestContext = {},
-): Promise<LoginSession> {
-  const store = deps.store ?? getIamStore();
-  const email = normalizeEmail(rawEmail);
-  if (!isValidEmail(email) || !estMotDePasseValide(motDePasse)) {
-    throw new InvalidCredentialsError();
-  }
-  const clientIp = context.clientIp?.trim();
-  if (clientIp) {
-    await store.recordCodeRequestIp({
-      ipHash: hashClientIp(clientIp),
-      cutoff: new Date(Date.now() - CODE_REQUEST_IP_WINDOW_MS),
-    });
-  }
-  const organisationId = await store.getDefaultOrganisationId();
-  const token = randomBytes(32).toString('base64url');
-  const outcome = await store.verifyPasswordAndStartSession({
-    organisationId,
-    email,
-    motDePasse,
-    tokenHash: sha256Hex(token),
-    sessionExpiresAt: new Date(Date.now() + SESSION_TTL_SEC * 1000),
-  });
-  if (!outcome.ok) {
-    throw new InvalidCredentialsError();
-  }
-  return { token, email: outcome.email, role: outcome.role };
 }

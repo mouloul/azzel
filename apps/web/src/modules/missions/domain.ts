@@ -28,6 +28,9 @@ export const MAX_TELEPHONE_LENGTH = 32;
 // client, import-format ne l'est pas — exceljs reste serveur uniquement).
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
+/** Taille maximale lisible (« 2 Mo »), dérivée de MAX_IMPORT_BYTES — jamais codée en dur. */
+export const MAX_IMPORT_LIBELLE = `${MAX_IMPORT_BYTES / (1024 * 1024)} Mo`;
+
 export const MAX_IMPORT_LINES = 500;
 
 export const IMPORT_ACCEPT_ATTRIBUTE = '.xlsx,.csv';
@@ -73,14 +76,17 @@ export interface RapportImport {
   resume: RapportResume;
 }
 
-/** Statut d'invitation affiché côté admin — source : l'outbox (join invitation). */
-export type StatutInvitation = 'en_file' | 'envoyee' | 'echec' | 'expiree' | 'active' | 'aucune';
+/**
+ * Statut d'invitation affiché côté admin — sources : account.activated_at
+ * (première connexion par code) puis le statut outbox de
+ * volontaire.invitation_outbox_id (source unique du transport).
+ */
+export type StatutInvitation = 'en_file' | 'envoyee' | 'echec' | 'active' | 'aucune';
 
 export const LIBELLES_STATUT_INVITATION: Record<StatutInvitation, string> = {
   en_file: 'En file',
   envoyee: 'Envoyée',
   echec: 'Échec',
-  expiree: 'Expirée',
   active: 'Activé',
   aucune: 'À renvoyer',
 };
@@ -368,29 +374,25 @@ export function validerLigne(ligne: LigneFichier): { ok: true; valeur: LigneVali
 }
 
 /**
- * Statut d'invitation dérivé : mot de passe posé → activé ; puis expiration,
- * échec d'envoi, envoyée, en file. L'outbox reste l'unique source de vérité du
- * transport ; expire_le celle de la durée de vie du jeton.
+ * Statut d'invitation dérivé, par priorité : première connexion faite →
+ * activé ; aucune ligne outbox (ou ligne annulée) → à renvoyer ; puis échec
+ * d'envoi, envoyée, en file. Plus d'expiration : l'invitation ne porte aucun
+ * jeton, elle oriente simplement vers /connexion.
  */
 export function statutInvitation(input: {
-  passwordSetAt: Date | null;
-  invitation: { consommeLe: Date | null; expireLe: Date; outboxStatut: string } | null;
-  maintenant?: Date;
+  activatedAt: Date | null;
+  outboxStatut: string | null;
 }): StatutInvitation {
-  if (input.passwordSetAt !== null || input.invitation?.consommeLe != null) {
+  if (input.activatedAt !== null) {
     return 'active';
   }
-  if (input.invitation === null) {
+  if (input.outboxStatut === null || input.outboxStatut === 'cancelled') {
     return 'aucune';
   }
-  const maintenant = input.maintenant ?? new Date();
-  if (input.invitation.expireLe.getTime() <= maintenant.getTime()) {
-    return 'expiree';
-  }
-  if (input.invitation.outboxStatut === 'failed') {
+  if (input.outboxStatut === 'failed') {
     return 'echec';
   }
-  if (input.invitation.outboxStatut === 'sent') {
+  if (input.outboxStatut === 'sent') {
     return 'envoyee';
   }
   return 'en_file';

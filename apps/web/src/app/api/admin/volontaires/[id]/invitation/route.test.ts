@@ -80,11 +80,10 @@ describe('POST /api/admin/volontaires/[id]/invitation — renvoi manuel', () => 
     expect(response.status).toBe(503);
   });
 
-  it('session organisateur : 200 avec email + expiration, no-store', async () => {
+  it('session organisateur : 200 avec email (aucune expiration — plus de jeton), no-store', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
     missionsServiceMock.renvoyerInvitation.mockResolvedValue({
       email: 'kahina@exemple.dz',
-      expireLe: '2026-11-05T10:00:00.000Z',
     });
     const response = await postInvitation(request('v-1'), {
       params: Promise.resolve({ id: 'v-1' }),
@@ -94,7 +93,6 @@ describe('POST /api/admin/volontaires/[id]/invitation — renvoi manuel', () => 
     await expect(response.json()).resolves.toEqual({
       ok: true,
       email: 'kahina@exemple.dz',
-      expireLe: '2026-11-05T10:00:00.000Z',
     });
     expect(missionsServiceMock.renvoyerInvitation).toHaveBeenCalledWith(
       SESSION_ORGANISATEUR,

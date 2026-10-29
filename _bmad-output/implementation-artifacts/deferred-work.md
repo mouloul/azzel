@@ -52,3 +52,7 @@
 ## Deferred from: code review of spec-3-1-import-excel-des-volontaires-et-invitations.md (2026-10-28)
 
 - Ni correction ni suppression d'un volontaire côté admin : un email mal saisi à l'import crée un compte fantôme permanent (invitation en file, liste admin) et bloque même un futur coureur sur cette adresse (« compte volontaire »). Fonctionnalité hors périmètre 3.1 (CRUD volontaire) — `apps/web/src/modules/missions/store.ts`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-connexion-code-unifiee.md`
+  summary: Le migrateur n'exige pas BYPASSRLS — si le rôle propriétaire ne l'a pas (0008 avale `insufficient_privilege` en NOTICE), les UPDATE de backfill d'une migration s'exécutent sous FORCE RLS sans GUC et peuvent toucher 0 ligne avant un DROP destructif (cas de 0035 : backfill `activated_at` / `invitation_outbox_id` puis DROP TABLE invitation).
+  evidence: `modules/inscriptions/migrations/0008*.sql:47-62` (exception avalée) ; `modules/inscriptions/migrate.ts:75-83` (aucun contrôle de rôle avant `tx.unsafe`). Sans effet aujourd'hui (owner dev = superuser, aucune donnée volontaire hors dev — choix Q2 du SCP 2026-10-28), mais toute future migration avec backfill en production est exposée. Correctif : garde `rolbypassrls` dans `migrate.ts` (refus explicite) — défaut antérieur à cette story.

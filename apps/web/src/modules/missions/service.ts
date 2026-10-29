@@ -1,3 +1,4 @@
+import { readAdminEmails } from '@/modules/iam/env';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import { ANNUAIRE_SCHEMA_VERSION, nowIsoUtc, type AnnuaireEdition } from '@azzel/shared';
@@ -58,7 +59,6 @@ export interface VolontaireSummary {
   telephone: string | null;
   statutInvitation: StatutInvitation;
   statutInvitationLabel: string;
-  expireLe: string | null;
   createdAt: string;
 }
 
@@ -89,7 +89,6 @@ export async function getVolontairesAdminState(
       telephone: record.telephone,
       statutInvitation: record.statutInvitation,
       statutInvitationLabel: LIBELLES_STATUT_INVITATION[record.statutInvitation],
-      expireLe: record.expireLe !== null ? record.expireLe.toISOString() : null,
       createdAt: record.createdAt.toISOString(),
     })),
   };
@@ -129,6 +128,7 @@ export async function importVolontaires(
   const rejets: RapportLigne[] = [];
   const valides: LigneValide[] = [];
   const emailsDejaVus = new Set<string>();
+  const adminEmails = new Set(readAdminEmails());
 
   for (const ligne of lignesFichier) {
     // Limite de volumétrie : au-delà de 500 lignes de données, rejet ligne par
@@ -146,6 +146,13 @@ export async function importVolontaires(
       rejets.push(rejette(ligne, 'doublon dans le fichier'));
       continue;
     }
+    // Rôle unique : une adresse AZZEL_ADMIN_EMAILS serait promue organisateur
+    // à sa première connexion par code — l'importer comme volontaire changerait
+    // silencieusement son rôle. Rejet explicite, jamais silencieux.
+    if (adminEmails.has(verdict.valeur.email)) {
+      rejets.push(rejette(ligne, "adresse réservée à l'organisation"));
+      continue;
+    }
     emailsDejaVus.add(verdict.valeur.email);
     valides.push(verdict.valeur);
   }
@@ -157,7 +164,6 @@ export async function importVolontaires(
     const outcomes = await store.importVolontaires({
       organisationId: session.organisationId,
       lignes: valides,
-      maintenant: new Date(),
     });
     const parLigne = new Map(outcomes.map((outcome) => [outcome.ligne, outcome]));
     for (const valide of valides) {
@@ -187,19 +193,22 @@ export async function importVolontaires(
   };
 }
 
-/** Renvoi manuel d'une invitation (jamais automatique au re-import). */
+/**
+ * Renvoi manuel d'une invitation (jamais automatique au re-import) : volontaire
+ * non activé → nouvel email en file (l'ancien pending/failed est annulé) ;
+ * déjà activé (première connexion faite) → VolontaireDejaActifError (409).
+ */
 export async function renvoyerInvitation(
   session: SessionRecord,
   volontaireId: string,
   deps: MissionsServiceDeps = {},
-): Promise<{ email: string; expireLe: string }> {
+): Promise<{ email: string }> {
   const store = deps.store ?? getMissionsStore();
   const resultat = await store.renvoyerInvitation({
     organisationId: session.organisationId,
     volontaireId,
-    maintenant: new Date(),
   });
-  return { email: resultat.email, expireLe: resultat.expireLe.toISOString() };
+  return { email: resultat.email };
 }
 
 /** Gabarit .xlsx téléchargeable (en-tête Nom / Email / Téléphone). */
