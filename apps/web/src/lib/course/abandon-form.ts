@@ -19,7 +19,7 @@ import {
 // ISO UTC (helpers transverses de @azzel/shared, piègeux fuseaux) et
 // l'assemblage du corps POST.
 
-/** Valeurs du formulaire inline : heure en datetime-local (heure du poste PC). */
+/** Valeurs du formulaire inline : heure en datetime-local (heure d’Alger, fuseau produit). */
 export interface ValeursFormulaireAbandon {
   dossard: string;
   lieu: string;

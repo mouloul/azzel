@@ -30,11 +30,10 @@ const EPREUVES: EpreuveHeureDepartForm[] = [
 ];
 
 describe('valeursHeuresDepartInitiales', () => {
-  it('heure serveur ISO → datetime-local locale ; null → champ vide', () => {
+  it('heure serveur ISO → datetime-local à l’heure d’Alger (fuseau produit, UTC+1) ; null → champ vide', () => {
     const valeurs = valeursHeuresDepartInitiales(EPREUVES);
-    expect(valeurs['ep-longue']).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
-    // La valeur locale représente le MÊME instant que l'ISO serveur.
-    expect(new Date(valeurs['ep-longue'] as string).toISOString()).toBe('2027-05-16T08:00:00.000Z');
+    // Valeur ABSOLUE : 08:00 Z = 09:00 à Alger, quel que soit le fuseau du poste.
+    expect(valeurs['ep-longue']).toBe('2027-05-16T09:00');
     expect(valeurs['ep-moyenne']).toBe('');
   });
 });
@@ -46,10 +45,10 @@ describe('corpsHeuresDepartSoumis', () => {
       EPREUVES,
     );
     expect(corps.heures.map((ligne) => ligne.epreuveId)).toEqual(['ep-longue', 'ep-moyenne']);
-    // datetime-local est interprété en heure LOCALE (celle du poste) : l'ISO
-    // produite représente le MÊME instant que la valeur locale saisie.
-    expect(corps.heures[0]?.heureDepart).toBe(new Date('2027-05-16T10:00').toISOString());
-    expect(corps.heures[1]?.heureDepart).toBe(new Date('2027-05-16T10:30').toISOString());
+    // datetime-local est interprété à l'heure d'ALGER (fuseau produit, jamais
+    // celui du poste) : valeurs ISO absolues.
+    expect(corps.heures[0]?.heureDepart).toBe('2027-05-16T09:00:00.000Z');
+    expect(corps.heures[1]?.heureDepart).toBe('2027-05-16T09:30:00.000Z');
   });
 
   it('champ VIDE → null (effacer l’heure de départ)', () => {
@@ -84,18 +83,10 @@ describe('heuresDepartModifiees', () => {
       { epreuveId: 'ep-1', epreuveNom: 'A', distanceKm: 10, heureDepart: '2027-05-16T08:00:30.500Z' },
     ];
     const valeurs = { 'ep-1': valeursHeuresDepartInitiales(epreuves)['ep-1'] as string };
-    expect(valeurs['ep-1']).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(valeurs['ep-1']).toBe('2027-05-16T09:00');
     expect(heuresDepartModifiees(valeurs, epreuves)).toBe(false);
-    // Une minute d'écart, c'est une vraie modification.
-    const minuteSuivante = new Date(Date.parse('2027-05-16T08:00:30.500Z') + 60_000);
-    expect(
-      heuresDepartModifiees(
-        {
-          'ep-1': `${minuteSuivante.getFullYear()}-${String(minuteSuivante.getMonth() + 1).padStart(2, '0')}-${String(minuteSuivante.getDate()).padStart(2, '0')}T${String(minuteSuivante.getHours()).padStart(2, '0')}:${String(minuteSuivante.getMinutes()).padStart(2, '0')}`,
-        },
-        epreuves,
-      ),
-    ).toBe(true);
+    // Une minute d'écart (heure d'Alger), c'est une vraie modification.
+    expect(heuresDepartModifiees({ 'ep-1': '2027-05-16T09:01' }, epreuves)).toBe(true);
   });
 });
 

@@ -31,9 +31,10 @@ afterAll(() => {
 });
 
 describe('libelleDepuisBarriere — heure locale HH:MM', () => {
-  it('« depuis HH:MM » à partir de l’ISO serveur (heure locale du poste)', () => {
-    expect(libelleDepuisBarriere('2027-05-16T10:00:00.000Z')).toBe('depuis 10:00');
-    expect(libelleDepuisBarriere('2027-05-16T23:59:00.000Z')).toBe('depuis 23:59');
+  it('« depuis HH:MM » à partir de l’ISO serveur (heure d’Alger, fuseau produit — jamais celle du poste)', () => {
+    // Processus épinglé à UTC : 10:00 Z s'affiche 11:00 (Alger, UTC+1).
+    expect(libelleDepuisBarriere('2027-05-16T10:00:00.000Z')).toBe('depuis 11:00');
+    expect(libelleDepuisBarriere('2027-05-16T23:59:00.000Z')).toBe('depuis 00:59');
   });
 
   it('ISO illisible : emplacement d’attente, jamais d’exception au rendu', () => {
