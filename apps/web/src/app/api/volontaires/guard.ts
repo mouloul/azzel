@@ -11,7 +11,7 @@ import {
 import { requireRole } from '@/modules/iam/session';
 import type { SessionRecord } from '@/modules/iam/store';
 
-import { toMissionsApiError, AucuneEditionError, type ApiError } from '@/modules/missions/errors';
+import { AucuneEditionError, type ApiError } from '@/modules/missions/errors';
 
 // Story 3.3 — garde d'API de la surface volontaires : déclinaison du pattern
 // guardAdmin pour le rôle volontaire (route publique d'état, enveloppes
@@ -48,7 +48,20 @@ export function toVolontairesApiError(error: unknown): ApiError {
       }),
     };
   }
-  return toMissionsApiError(error);
+  // Revue 3.3 — session morte en cours de service : enveloppes iam.* (même
+  // mapper que la garde) ; toute autre erreur reste une enveloppe terrain,
+  // jamais le repli admin.* du mapper missions.
+  if (error instanceof UnauthenticatedError || error instanceof ForbiddenError) {
+    return toIamApiError(error);
+  }
+  return {
+    status: 500,
+    envelope: createErrorEnvelope({
+      code: 'volontaires.internal_error',
+      message: 'Une erreur inattendue est survenue.',
+      action: 'Réessaie dans un instant — ou appelle l’équipe si ça dure.',
+    }),
+  };
 }
 
 function roleGuardResponse(failure: 'unauthenticated' | 'forbidden'): NextResponse {

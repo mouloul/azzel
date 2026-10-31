@@ -171,11 +171,25 @@ describe('POST /api/admin/missions/affectation', () => {
     await expect(response.json()).resolves.toMatchObject({ cree: false });
   });
 
-  it('corps illisible : 400 (InvalidAffectationError enveloppé par le service)', async () => {
+  it('corps illisible (pas du JSON) : 400 invalid_body par la garde de corps, service JAMAIS appelé', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+    const response = await postAffectation(request('POST', true, '{pas du json'));
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('admin.missions.invalid_body');
+    expect(missionsServiceMock.affecterVolontaire).not.toHaveBeenCalled();
+  });
+
+  it('corps JSON lisible mais ids invalides : le service lève InvalidAffectationError → 400 affectation_invalid', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
     missionsServiceMock.affecterVolontaire.mockRejectedValue(new InvalidAffectationError());
-    const response = await postAffectation(request('POST', true, ''));
+    const corps = { missionId: 'pas-un-uuid', volontaireId: 42 };
+    const response = await postAffectation(request('POST', true, corps));
     expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('admin.missions.affectation_invalid');
+    // Le service a bien reçu le corps : c'est LUI qui refuse, pas la garde.
+    expect(missionsServiceMock.affecterVolontaire).toHaveBeenCalledWith(SESSION_ORGANISATEUR, corps);
   });
 });
 

@@ -88,6 +88,38 @@ deferred: []
 - Given la première ouverture, when aucun choix de thème n'est mémorisé, then l'invitation au mode sombre s'affiche, se mémorise, et la bascule reste en en-tête.
 - Given l'ajout à l'écran d'accueil (iOS Safari et Android Chrome), when il ouvre l'icône, then la PWA démarre standalone avec son icône dédiée.
 
+### Review Findings
+
+_Code review 2026-10-29 (passe 2, lot 3/4 épopée 3 — commit `6214d86` ; blind-hunter 15, edge-case-hunter 20, verification-gap 5+3, acceptance-auditor 10 ; vérifiés sur le code COURANT, postérieur aux épopées 4–7 et à la refonte 3.1)._
+
+- [x] [Review][Patch] Fiche et caches non liés au compte — décision D1 (2026-10-29) : `accountId` stocké avec l'état IndexedDB (et vérifié pour les caches SW shell/état) ; compte de la session ≠ compte stocké → purge IndexedDB fiche + caches `az-volontaires-*` avant tout affichage ; 401/403 en ligne pour le MÊME compte → fiche conservée (IndexedDB/état initial) + bandeau « reconnecte-toi » (`role="alert"`, lien `/connexion`) au lieu de l'écran plein « Tu es déconnecté » ; outbox et appareilId (épopée 4) jamais purgés [apps/web/src/lib/idb-volontaires.ts, apps/web/src/app/volontaires/volontaires-pwa.tsx, apps/web/public/sw-volontaires.js]
+- [x] [Review][Patch] Badge « HORS-LIGNE PRÊT » jamais affiché dès la 2ᵉ visite (AC1) : hors-ligne, le SW renvoie l'état EN CACHE en 200 sans marqueur → le client prend le chemin succès (`setStatut('synchrone')`, « Ta fiche est à jour. ») et écrase IndexedDB avec cet état ancien. Marquer la réponse de repli (en-tête `X-Azzel-Source: cache`), la traiter comme hors-ligne côté client (comparaison `generéA`, pas de réécriture), décision réponse→statut extraite en fonction pure testée [apps/web/public/sw-volontaires.js:173, apps/web/src/app/volontaires/volontaires-pwa.tsx:196]
+- [x] [Review][Patch] Revalidation en échec avec `navigator.onLine === true` (portail captif, zone grise, 5xx) → « synchronisé » + « Ta fiche est à jour. » sur des données anciennes ; matrice : « API injoignable → "données du …" affiché ». Afficher la fraîcheur réelle (« non rafraîchi — données du JJ/MM HH:MM ») dès que la revalidation échoue [apps/web/src/app/volontaires/volontaires-pwa.tsx:233]
+- [x] [Review][Patch] Pages d'erreur de `/volontaires` (garde `db-unavailable`, service en échec) rendues en 200 → mises en cache comme shell : hors-ligne, carte « Connexion indisponible » au lieu de la fiche. Ne cacher le shell que s'il porte un marqueur de fiche saine (ex. `data-az-shell="fiche"`) [apps/web/public/sw-volontaires.js:153, apps/web/src/app/volontaires/page.tsx:50]
+- [x] [Review][Patch] Réponse `/api/volontaires/etat` castée sans contrôle de forme avant `setEtat`/IndexedDB ; `estEtatVolontaires` ne valide pas les missions (`debutLe` invalide → `RangeError` au formatage → page blanche hors-ligne). Valider le payload réseau et les champs de mission [apps/web/src/app/volontaires/volontaires-pwa.tsx:206, apps/web/src/lib/idb-volontaires.ts]
+- [x] [Review][Patch] `cache.addAll` tout-ou-rien à l'install : une sous-ressource en 404/5xx (déploiement en cours) ou le quota → SW jamais activé, aucun hors-ligne. Mise en cache individuelle tolérante (`Promise.allSettled`) ; décoder `&amp;` dans `extraireSousResources` [apps/web/public/sw-volontaires.js:111]
+- [x] [Review][Patch] Aucune demande de stockage persistant : appeler `navigator.storage?.persist?.()` à l'ouverture (limite l'éviction ; iOS non installé reste soumis aux 7 jours — à garder en tête pour la consigne d'installation) [apps/web/src/app/volontaires/volontaires-pwa.tsx]
+- [x] [Review][Patch] Bascule de thème d'en-tête désynchronisée après « Oui, mode sombre » (état lu au montage) ; « Plus tard » mémorise `light` pour toujours alors qu'il promet un rappel [apps/web/src/components/theme-toggle.tsx, apps/web/src/app/volontaires/volontaires-pwa.tsx]
+- [x] [Review][Patch] Surface volontaires encore en enveloppes `admin.*` : la branche d'erreur de la page utilise `toMissionsApiError`, et `toVolontairesApiError` se rabat sur le mapper admin pour toute erreur inconnue [apps/web/src/app/volontaires/page.tsx:7, apps/web/src/app/api/volontaires/guard.ts]
+- [x] [Review][Patch] `pageHorsLigne` insère le numéro d'assistance lu en cache dans du HTML sans validation — n'accepter que `^\+?[0-9]+$` [apps/web/public/sw-volontaires.js:226,264]
+- [x] [Review][Patch] Barre « Appeler l'équipe » collante sans `env(safe-area-inset-bottom)` : passe sous l'indicateur d'accueil en standalone iOS [apps/web/src/app/volontaires/volontaires.css]
+- [x] [Review][Patch] `avecStore` (readwrite) résout au succès du `put`, pas au `complete` de la transaction : un abort (quota) fait renvoyer `true` sans rien de persisté [apps/web/src/lib/idb-volontaires.ts]
+- [x] [Review][Patch] Tests SW : mise en cache des réponses SAINES jamais vérifiée (navigation `/volontaires` et état) — deux cas « en ligne sain → en cache » puis « hors-ligne → servi depuis l'entrée » [apps/web/src/app/volontaires/sw-volontaires.test.ts]
+- [x] [Review][Patch] Liens `manifest` / `apple-touch-icon` du layout jamais testés ; `pwa-assets.test.ts:151` prétend lire le layout mais ne vérifie que le PNG — rendu du layout (modèle `app/layout.test.tsx`) et hrefs vers des fichiers existants [apps/web/src/app/volontaires/layout.tsx]
+- [x] [Review][Patch] Enregistrement du SW (chemin + scope) non vérifié, erreur avalée — extraire `enregistrerSwVolontaires` + constantes, croiser avec `manifest.scope` et `Service-Worker-Allowed` [apps/web/src/components/pwa-register.tsx:17]
+
+**Rejected (passe 2)**
+- false — Lien « Se reconnecter » vers `/connexion-volontaire` : déjà `/connexion` depuis la refonte 3.1 (`CONNEXION_PATH`).
+- false — Purge à la déconnexion conditionnée à `response.ok` / déconnexion hors-ligne sans purge : purge désormais systématique et parallèle à l'appel (`logout-button.tsx`, stories 4.x).
+- false — Fuseau serveur au rendu SSR (`suppressHydrationWarning`) : traité par le correctif D1 de la revue 3.2 (fuseau produit `Africa/Algiers` dans `shared`).
+- spec — Frontmatter `done`/`deferred: []`/tâche Tests décochée ; identifiants français (`generéA` imposé par la spec) ; « premier lancement hors-ligne » non couvrable sans SW installé : correction = édition du spec/recette.
+- low — Cache statique sans élagage (`VERSION = 'v1'`) : quelques déploiements d'ici la course, quota non menacé ; élagage = logique nouvelle.
+- low — Navigation 4xx traitée comme 5xx → page « scanner non enregistré » au lieu du 404 : chemins inconnus sous `/volontaires`, rare.
+- low — Page hors-ligne sans assistance quand aucun état n'est en cache : n'arrive qu'après éviction ; injection du numéro au build = complexité.
+- low — Ouverture IndexedDB `blocked` puis succès tardif (connexion orpheline) ; déconnexion pendant une revalidation qui recrée la base : courses rares.
+- low — Deux liens « Appeler l'équipe » en bas de page ; manifeste sans `id` ; liens écrits à la main au lieu de `metadata` ; assertion `not.toContain("'*'")` ; `LogoutButton` important le module IDB volontaires côté coureur : cosmétique / sans tort utilisateur.
+- low — Test « la déconnexion déclenche la purge » côté appelant : purge désormais inconditionnelle dans le composant, harnais DOM absent.
+
 ## Review Triage Log
 
 ### 2026-10-22 — Review pass 1 (blind-hunter 15, edge-case-hunter 11, verification-gap 5 ; 31 findings)

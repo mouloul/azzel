@@ -54,6 +54,11 @@ export const PREFIXE_CACHES_VOLONTAIRES = 'az-volontaires-';
 
 /** Réponse de GET /api/volontaires/etat — exactement ce qui est persisté. */
 export interface EtatVolontaires {
+  /**
+   * Revue 3.3 (D1) — compte propriétaire de la fiche : la poche est liée au
+   * COMPTE (appareil partagé), jamais servie à un autre volontaire.
+   */
+  accountId: string;
   editionNom: string | null;
   assistancePhone: string;
   mesMissions: MissionVolontaireView[];
@@ -69,10 +74,45 @@ interface EnregistrementAnnuaire extends AnnuaireEdition {
   id: typeof IDB_CLE_COURANT;
 }
 
+function estDateIso(valeur: unknown): valeur is string {
+  return typeof valeur === 'string' && Number.isFinite(new Date(valeur).getTime());
+}
+
+function estChaineOuNull(valeur: unknown): valeur is string | null {
+  return valeur === null || typeof valeur === 'string';
+}
+
 /**
- * Garde de schéma : la base peut contenir un enregistrement d'une autre
- * époque (épopée 4, écriture concurrente) — seul un état de la bonne forme
- * alimente le rendu, sinon null (jamais de fiche cassée à l'écran).
+ * Revue 3.3 — garde d'une mission : chaque champ lu par le rendu est vérifié
+ * (un `debutLe` invalide ferait jeter le formatage Intl → page blanche
+ * hors-ligne). Les champs non rendus (estArrivee, couvertureLabel) restent
+ * libres : une fiche d'une époque antérieure reste lisible.
+ */
+function estMissionVolontaire(valeur: unknown): valeur is MissionVolontaireView {
+  if (typeof valeur !== 'object' || valeur === null) {
+    return false;
+  }
+  const mission = valeur as Record<string, unknown>;
+  return (
+    typeof mission.id === 'string' &&
+    typeof mission.titre === 'string' &&
+    typeof mission.type === 'string' &&
+    typeof mission.typeLabel === 'string' &&
+    typeof mission.secteurNom === 'string' &&
+    estChaineOuNull(mission.secteurLieu) &&
+    estChaineOuNull(mission.secteurContact) &&
+    estChaineOuNull(mission.consignes) &&
+    typeof mission.couverture === 'string' &&
+    estDateIso(mission.debutLe) &&
+    estDateIso(mission.finLe)
+  );
+}
+
+/**
+ * Garde de schéma : la base (ou le réseau, ou le cache SW) peut porter un
+ * état d'une autre époque ou hors contrat — seul un état de la bonne forme,
+ * missions comprises, alimente le rendu, sinon rejet (jamais de fiche cassée
+ * à l'écran).
  */
 export function estEtatVolontaires(valeur: unknown): valeur is EtatVolontaires {
   if (typeof valeur !== 'object' || valeur === null) {
@@ -80,11 +120,15 @@ export function estEtatVolontaires(valeur: unknown): valeur is EtatVolontaires {
   }
   const candidat = valeur as Record<string, unknown>;
   return (
-    (candidat.editionNom === null || typeof candidat.editionNom === 'string') &&
+    typeof candidat.accountId === 'string' &&
+    candidat.accountId.length > 0 &&
+    estChaineOuNull(candidat.editionNom) &&
     typeof candidat.assistancePhone === 'string' &&
     Array.isArray(candidat.mesMissions) &&
+    candidat.mesMissions.every(estMissionVolontaire) &&
     Array.isArray(candidat.missions) &&
-    typeof candidat.generéA === 'string'
+    candidat.missions.every(estMissionVolontaire) &&
+    estDateIso(candidat.generéA)
   );
 }
 
@@ -136,6 +180,19 @@ function promettreRequete<T>(requete: IDBRequest<T>): Promise<T> {
   });
 }
 
+/**
+ * Revue 3.3 — une écriture n'est acquise qu'au `complete` de la transaction :
+ * le succès du `put` ne suffit pas (un abort ultérieur — quota — annule tout).
+ */
+function promettreTransaction(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB indisponible'));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('transaction IndexedDB annulée'));
+  });
+}
+
 async function avecStore<T>(
   store: string,
   mode: IDBTransactionMode,
@@ -144,7 +201,12 @@ async function avecStore<T>(
   const base = await ouvrirBase();
   try {
     const transaction = base.transaction(store, mode);
-    return await promettreRequete(operation(transaction.objectStore(store)));
+    const terminee = mode === 'readwrite' ? promettreTransaction(transaction) : null;
+    const resultat = promettreRequete(operation(transaction.objectStore(store)));
+    if (terminee !== null) {
+      await Promise.all([resultat, terminee]);
+    }
+    return await resultat;
   } finally {
     base.close();
   }
@@ -260,6 +322,40 @@ export async function effacerEtatVolontaires(): Promise<void> {
       // caches indisponibles (contexte non sécurisé) : rien à purger.
     }
   }
+}
+
+/**
+ * Revue 3.3 (D1) — liaison de la poche au compte de la session : si la fiche
+ * stockée appartient à un AUTRE compte (ou à aucun : enregistrement antérieur
+ * à la liaison), fiche + annuaire + caches az-volontaires-* sont purgés AVANT
+ * tout affichage (même purge que la déconnexion : outbox, appareilId, envoyés
+ * et journal appartiennent à l'APPAREIL et restent). Renvoie true si une purge
+ * a eu lieu. Sans stockage lisible : rien à lier, false.
+ */
+export async function lierPocheAuCompte(accountId: string): Promise<boolean> {
+  if (!indexedDbDisponible()) {
+    return false;
+  }
+  let enregistrement: unknown;
+  try {
+    enregistrement = await avecStore<unknown>(IDB_STORE_ETAT, 'readonly', (store) =>
+      store.get(IDB_CLE_COURANT),
+    );
+  } catch {
+    return false;
+  }
+  if (enregistrement === undefined) {
+    return false;
+  }
+  const proprietaire =
+    typeof enregistrement === 'object' && enregistrement !== null
+      ? (enregistrement as { accountId?: unknown }).accountId
+      : undefined;
+  if (proprietaire === accountId) {
+    return false;
+  }
+  await effacerEtatVolontaires();
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,7 +733,8 @@ async function avecStoreGroupe(
   const base = await ouvrirBase();
   try {
     const transaction = base.transaction(store, mode);
-    await operation(transaction.objectStore(store));
+    const terminee = mode === 'readwrite' ? promettreTransaction(transaction) : null;
+    await Promise.all([operation(transaction.objectStore(store)), terminee]);
   } finally {
     base.close();
   }

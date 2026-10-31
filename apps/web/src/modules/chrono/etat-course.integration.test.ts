@@ -420,7 +420,7 @@ describe.skipIf(testUrls === null)(
         },
         { store: missionsStore },
       );
-      expect(modifiee.estArrivee).toBe(true);
+      expect(modifiee.mission.estArrivee).toBe(true);
 
       const etat = await getEtatCourse(organisateurA, { store: chronoStore });
       expect(etat.arriveeDefinie).toBe(true);

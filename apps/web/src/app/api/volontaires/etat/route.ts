@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
     const state = await getMissionsVolontaireState(guarded.session);
     return NextResponse.json(
       {
+        // D1 (revue 3.3) — le compte voyage avec l'état (poche IndexedDB et
+        // cache SW) : le client rejette la fiche d'un autre compte.
+        accountId: guarded.session.accountId,
         editionNom: state.editionNom,
         assistancePhone: readAssistancePhone(),
         mesMissions: state.mesMissions,

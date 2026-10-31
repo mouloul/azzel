@@ -16,8 +16,16 @@
 //
 // Anti-empoisonnement : une réponse n'est mise en cache QUE si elle est ok,
 // NON redirigée (session expirée → page de connexion) et que son URL finale
-// est bien la route attendue (portail captif). Chaque écriture cache est
-// protégée (quota) pour ne jamais jeter une réponse réseau valide.
+// est bien la route attendue (portail captif). Le shell /volontaires doit en
+// plus porter le marqueur de fiche saine (data-az-shell="fiche") : les pages
+// d'erreur rendues en 200 (base indisponible) ne deviennent jamais le shell.
+// Chaque écriture cache est protégée (quota) pour ne jamais jeter une
+// réponse réseau valide.
+//
+// Revue 3.3 — les réponses de repli de l'état (cache, enveloppe hors-ligne)
+// portent X-Azzel-Source : le client ne les prend jamais pour une
+// synchronisation. Le compte (accountId) voyage dans l'état mis en cache : le
+// client rejette celui d'un autre compte, et purge les caches au changement.
 //
 // L'épopée 4 (caméra/scan/outbox) greffera ses stratégies ici : ce fichier
 // reste volontairement plat et versionné par renommage de cache.
@@ -30,6 +38,13 @@ const PREFIXES_CACHE = [CACHE_SHELL, CACHE_STATIQUES, CACHE_ETAT];
 
 const URL_SHELL = '/volontaires';
 const URL_ETAT = '/api/volontaires/etat';
+
+// Marqueur posé par la fiche saine (app/volontaires/volontaires-pwa.tsx).
+const MARQUEUR_SHELL_FICHE = 'data-az-shell="fiche"';
+// En-tête des réponses fabriquées par le SW (lib/revalidation-etat.ts).
+const ENTETE_SOURCE = 'X-Azzel-Source';
+// Message du client après une purge de changement de compte (lib/pwa-volontaires.ts).
+const MESSAGE_RECHAUFFER_SHELL = 'az-volontaires-rechauffer-shell';
 
 // Cache-first : assets de build hashés et charte immuable.
 const PREFIXES_STATIQUES = ['/_next/static/', '/charte/'];
@@ -67,6 +82,18 @@ function estReponseSaine(reponse, cheminAttendu) {
   return true;
 }
 
+/** Shell /volontaires cacheable : réponse saine ET fiche rendue (marqueur lu sur un clone). */
+async function estShellFiche(reponse) {
+  if (!estReponseSaine(reponse, URL_SHELL)) {
+    return false;
+  }
+  try {
+    return (await reponse.clone().text()).includes(MARQUEUR_SHELL_FICHE);
+  } catch (erreur) {
+    return false;
+  }
+}
+
 /** Écriture cache protégée : un échec de quota n'invalide jamais la réponse. */
 async function mettreEnCache(cacheName, cle, reponse) {
   try {
@@ -84,7 +111,8 @@ function extraireSousResources(html) {
   for (const motif of motifs) {
     let correspondance;
     while ((correspondance = motif.exec(html)) !== null) {
-      const valeur = correspondance[1];
+      // Attributs HTML échappés (?v=1&amp;x=2) : l'URL réelle est décodée.
+      const valeur = correspondance[1].replace(/&amp;/g, '&');
       if (valeur.startsWith('/_next/') || valeur.startsWith('/charte/')) {
         urls.add(valeur);
       }
@@ -93,26 +121,49 @@ function extraireSousResources(html) {
   return [...urls];
 }
 
+/**
+ * Précache du shell /volontaires et de ses sous-resources. Rejette si le
+ * shell n'est pas la fiche saine (redirection, portail captif, page
+ * d'erreur) ; les sous-resources sont cachées une à une, tolérantes (une
+ * 404/5xx de déploiement ou le quota n'empêchent jamais l'activation).
+ */
+async function precacherShell() {
+  const reponse = await fetch(URL_SHELL);
+  if (!(await estShellFiche(reponse))) {
+    throw new Error('shell volontaires non précacheable (redirection ou erreur)');
+  }
+  await mettreEnCache(CACHE_SHELL, URL_SHELL, reponse);
+  // La PREMIÈRE visite doit suffire à être stylée hors-ligne : les assets du
+  // HTML shell (JS chunk + CSS) sont précachés avec lui.
+  const sousResources = extraireSousResources(await reponse.text());
+  await Promise.allSettled(
+    sousResources.map(async (url) => {
+      const sousReponse = await fetch(url);
+      if (estReponseSaine(sousReponse)) {
+        await mettreEnCache(CACHE_STATIQUES, url, sousReponse);
+      }
+    }),
+  );
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const reponse = await fetch(URL_SHELL);
-      if (!estReponseSaine(reponse, URL_SHELL)) {
-        // Redirection (connexion) ou portail captif : rien de poisonnable à
-        // precacher — l'installation échoue et sera retentée en ligne.
-        throw new Error('shell volontaires non précacheable (redirection ou erreur)');
-      }
-      await mettreEnCache(CACHE_SHELL, URL_SHELL, reponse);
-      // La PREMIÈRE visite doit suffire à être stylée hors-ligne : les
-      // assets du HTML shell (JS chunk + CSS) sont précachés avec lui.
-      const sousResources = extraireSousResources(await reponse.text());
-      if (sousResources.length > 0) {
-        const cache = await caches.open(CACHE_STATIQUES);
-        await cache.addAll(sousResources);
-      }
+      // Redirection (connexion), portail captif ou page d'erreur : rien de
+      // poisonnable à précacher — l'installation échoue, retentée en ligne.
+      await precacherShell();
       await self.skipWaiting();
     })(),
   );
+});
+
+// Revue 3.3 (D1) — après la purge d'un changement de compte, le client
+// demande de re-précacher le shell de SA session (le cache venait d'être
+// vidé). Échec silencieux : la prochaine navigation en ligne le refera.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === MESSAGE_RECHAUFFER_SHELL) {
+    event.waitUntil(precacherShell().catch(() => undefined));
+  }
 });
 
 self.addEventListener('activate', (event) => {
@@ -150,7 +201,13 @@ async function navigationVolontaires(request) {
   try {
     const reponse = await fetch(request);
     if (reponse && reponse.ok) {
-      if (!reponse.redirected && new URL(reponse.url).pathname === chemin) {
+      // Le shell fiche n'est caché que sain (marqueur) : une page d'erreur
+      // rendue en 200 est montrée en ligne, jamais rejouée hors-ligne.
+      const cacheable =
+        !reponse.redirected &&
+        new URL(reponse.url).pathname === chemin &&
+        (chemin !== URL_SHELL || (await estShellFiche(reponse)));
+      if (cacheable) {
         await mettreEnCache(CACHE_SHELL, cle, reponse);
       }
       // Redirection suivie (connexion) : rendue telle quelle, jamais cachée.
@@ -169,7 +226,19 @@ async function navigationVolontaires(request) {
   }
 }
 
-/** Réseau d'abord avec repli cache — ne met en cache que le certain. */
+/** Réponse rejouée du cache, marquée comme telle (jamais prise pour un sync). */
+async function marquerSourceCache(enCache) {
+  return new Response(await enCache.text(), {
+    status: enCache.status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      [ENTETE_SOURCE]: 'cache',
+    },
+  });
+}
+
+/** Réseau d'abord avec repli cache (marqué X-Azzel-Source) — ne met en cache que le certain. */
 async function reseauDabord(request, cacheName, cleDeRepli) {
   const cle = cleDeRepli ?? request;
   const cheminAttendu = typeof cle === 'string' ? cle : new URL(request.url).pathname;
@@ -182,7 +251,7 @@ async function reseauDabord(request, cacheName, cleDeRepli) {
   } catch (erreur) {
     const enCache = await caches.match(cle, { cacheName });
     if (enCache) {
-      return enCache;
+      return marquerSourceCache(enCache);
     }
     throw erreur;
   }
@@ -205,25 +274,35 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-// Repli final hors-ligne (premier lancement directement sans réseau, cache
-// vide) : une page d'explication au lieu de l'erreur du navigateur. Le
-// numéro d'assistance est relu dans l'état mis en cache, s'il existe.
-async function pageHorsLigne() {
-  let assistance = null;
+/**
+ * Numéro d'assistance relu dans l'état en cache, normalisé pour tel: —
+ * n'accepte QUE `^\+?[0-9]+$` (il est inséré dans du HTML : jamais de
+ * contenu arbitraire venu du cache). Null sinon.
+ */
+async function assistanceEnCache() {
   try {
     const etat = await caches.match(URL_ETAT, { cacheName: CACHE_ETAT });
     if (etat) {
       const payload = await etat.json();
       if (typeof payload.assistancePhone === 'string') {
-        assistance = payload.assistancePhone;
+        const numero = payload.assistancePhone.replace(/[\s().-]/g, '');
+        return /^\+?[0-9]+$/.test(numero) ? numero : null;
       }
     }
   } catch (erreur) {
-    assistance = null;
+    return null;
   }
+  return null;
+}
+
+// Repli final hors-ligne (premier lancement directement sans réseau, cache
+// vide) : une page d'explication au lieu de l'erreur du navigateur. Le
+// numéro d'assistance est relu dans l'état mis en cache, s'il existe.
+async function pageHorsLigne() {
+  const assistance = await assistanceEnCache();
   const lien =
     assistance !== null
-      ? `<a href="tel:${assistance.replace(/[\s().-]/g, '')}">Appeler l’équipe</a>`
+      ? `<a href="tel:${assistance}">Appeler l’équipe</a>`
       : '<p>Réouvre l’application dès que le réseau revient.</p>';
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -247,21 +326,10 @@ ta fiche mission soit enregistrée sur cet appareil.</p>${lien}</main></body></h
 // absent). Une explication honnête plutôt que le shell fiche sous une fausse
 // URL (boucle CTA). Numéro d'assistance relu dans l'état en cache, s'il existe.
 async function pageScannerNonEnregistre() {
-  let assistance = null;
-  try {
-    const etat = await caches.match(URL_ETAT, { cacheName: CACHE_ETAT });
-    if (etat) {
-      const payload = await etat.json();
-      if (typeof payload.assistancePhone === 'string') {
-        assistance = payload.assistancePhone;
-      }
-    }
-  } catch (erreur) {
-    assistance = null;
-  }
+  const assistance = await assistanceEnCache();
   const lien =
     assistance !== null
-      ? `<a href="tel:${assistance.replace(/[\s().-]/g, '')}">Appeler l’équipe</a>`
+      ? `<a href="tel:${assistance}">Appeler l’équipe</a>`
       : '<p>Réouvre le scanner dès que le réseau revient.</p>';
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -289,7 +357,14 @@ function reponseEtatHorsLigne() {
         action: 'Ta fiche reste disponible depuis le dernier enregistrement.',
       },
     }),
-    { status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } },
+    {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+        [ENTETE_SOURCE]: 'hors-ligne',
+      },
+    },
   );
 }
 

@@ -6,6 +6,7 @@ import {
   nextTheme,
   readStoredTheme,
   resolveInitialTheme,
+  THEME_CHANGE_EVENT,
   writeStoredTheme,
   type Theme,
 } from '@/lib/theme';
@@ -19,6 +20,16 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setTheme(resolveInitialTheme(readStoredTheme()));
+    // Thème choisi ailleurs (invitation mode sombre volontaires) : la bascule
+    // suit, son libellé et son prochain clic restent justes.
+    const suivre = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (detail === 'light' || detail === 'dark') {
+        setTheme(detail);
+      }
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, suivre);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, suivre);
   }, []);
 
   const toggle = useCallback(() => {

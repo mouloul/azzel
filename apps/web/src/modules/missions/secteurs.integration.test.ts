@@ -3,12 +3,15 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { withOrg } from '@/db/org-scope';
 import { type SessionRecord } from '@/modules/iam/store';
 import {
   closeAzzelTestDb,
+  databaseUrl,
   recreateAzzelTestDb,
   resolveTestDatabaseUrls,
   type AzzelTestConnections,
+  TEST_DATABASE,
 } from '@/test/integration-db';
 
 import { importVolontaires } from './service';
@@ -164,6 +167,27 @@ describe.skipIf(testUrls === null)(
         SELECT edition_id FROM secteur WHERE organisation_id = ${orgId}
       `;
       expect(editions.every((row) => row.edition_id === editionId)).toBe(true);
+    });
+
+    it('renommage de secteur vers un nom déjà pris : 23505 mappé en SecteurNomDupliqueError, rien modifié', async () => {
+      await expect(
+        updateSecteur(sessionAdmin(orgId), secteurTronconId, {
+          nom: 'Village départ',
+          lieu: 'Carrefour PK 10',
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(SecteurNomDupliqueError);
+      const rows = await sql<{ nom: string; lieu: string }[]>`
+        SELECT nom, lieu FROM secteur WHERE id = ${secteurTronconId}
+      `;
+      expect(rows[0]).toEqual({ nom: 'Tronçon forêt', lieu: 'Carrefour PK 10' });
+
+      // Secteur inconnu de l'organisation : 404, jamais un 500.
+      await expect(
+        updateSecteur(sessionAdmin(orgId), '00000000-0000-0000-0000-0000000000fe', {
+          nom: 'Fantôme',
+          lieu: 'Nulle part',
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(SecteurNotFoundError);
     });
 
     it('mission typée : types fermés refusés côté domaine, CHECK SQL en défense (fin > début)', async () => {
@@ -480,7 +504,7 @@ describe.skipIf(testUrls === null)(
           INSERT INTO secteur (organisation_id, edition_id, nom, lieu)
           VALUES (${orgId}, ${editionId}, 'Village départ', 'Doublon')
         `,
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({ code: '23505', constraint_name: 'secteur_edition_id_nom_key' });
 
       // Le CHECK 0021 borne le contact secteur même en insertion directe.
       await expect(
@@ -603,7 +627,7 @@ describe.skipIf(testUrls === null)(
         finLe: FIN_C.toISOString(),
         estArrivee: true,
       }, { store: missionsStore });
-      expect(recochee.estArrivee).toBe(true);
+      expect(recochee.mission.estArrivee).toBe(true);
 
       // Décocher puis cocher une AUTRE mission : la bascule passe.
       await updateMission(sessionAdmin(orgId), missionScan.id, {
@@ -644,6 +668,275 @@ describe.skipIf(testUrls === null)(
         WHERE s.edition_id = ${editionId} AND m.est_arrivee
       `;
       expect(cochees[0]?.count).toBe(1);
+    });
+
+    it('suppression secteur pendant une insertion de mission NON commitée : le verrou FOR UPDATE force le 409, la mission survit', async () => {
+      // Entrelacement DÉTERMINISTE : une transaction applicative (connexion
+      // dédiée) insère une mission dans un secteur VIDE et reste ouverte ;
+      // deleteSecteur démarre, on attend qu'il soit BLOQUÉ sur un verrou, puis
+      // on commit. Sans le FOR UPDATE, le comptage (0, insertion invisible)
+      // passerait et le DELETE emporterait la mission en cascade silencieuse.
+      const vide = await createSecteur(sessionAdmin(orgId), {
+        nom: 'Secteur course suppression',
+        lieu: 'Col',
+      }, { store: missionsStore });
+      const concurrente = postgres(databaseUrl(appUrl, TEST_DATABASE), { max: 1 });
+      try {
+        let signalerInsertion: () => void = () => undefined;
+        const inseree = new Promise<void>((resolve) => {
+          signalerInsertion = resolve;
+        });
+        let relacher: () => void = () => undefined;
+        const commit = new Promise<void>((resolve) => {
+          relacher = resolve;
+        });
+        const transaction = withOrg(concurrente, orgId, async (tx) => {
+          const rows = await tx<{ id: string }[]>`
+            INSERT INTO mission (organisation_id, secteur_id, type, titre, debut_le, fin_le)
+            VALUES (${orgId}, ${vide.id}, 'accueil', 'Insérée pendant la suppression',
+                    ${DEBUT_A}, ${FIN_A})
+            RETURNING id
+          `;
+          signalerInsertion();
+          await commit;
+          return rows[0]?.id ?? '';
+        });
+        await inseree;
+
+        const suppression = deleteSecteur(sessionAdmin(orgId), vide.id, {
+          store: missionsStore,
+        }).then(
+          () => 'supprimé' as const,
+          (error: unknown) => error,
+        );
+        // Attente active bornée : la suppression doit être EN ATTENTE de verrou
+        // (pg_stat_activity, vue propriétaire) avant le commit concurrent.
+        let bloquee = false;
+        for (let essai = 0; essai < 100 && !bloquee; essai += 1) {
+          const attentes = await sql<{ count: number }[]>`
+            SELECT count(*)::int AS count FROM pg_stat_activity
+            WHERE datname = ${TEST_DATABASE}
+              AND wait_event_type = 'Lock'
+              AND query ILIKE '%secteur%'
+          `;
+          bloquee = (attentes[0]?.count ?? 0) > 0;
+          if (!bloquee) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+        }
+        expect(bloquee).toBe(true);
+
+        relacher();
+        const missionId = await transaction;
+        const issue = await suppression;
+        expect(issue).toBeInstanceOf(SecteurOccupeError);
+
+        const restantes = await sql<{ id: string; secteur_id: string }[]>`
+          SELECT id, secteur_id FROM mission WHERE id = ${missionId}
+        `;
+        expect(restantes).toEqual([{ id: missionId, secteur_id: vide.id }]);
+        const secteurs = await sql<{ count: number }[]>`
+          SELECT count(*)::int AS count FROM secteur WHERE id = ${vide.id}
+        `;
+        expect(secteurs[0]?.count).toBe(1);
+      } finally {
+        await concurrente.end({ timeout: 5 });
+      }
+    });
+
+    it('updateMission : champs, changement de secteur, secteur d’une autre organisation → 404, mission inconnue → 404', async () => {
+      const nord = await createSecteur(sessionAdmin(orgId), { nom: 'Secteur MAJ nord', lieu: 'Crête' }, {
+        store: missionsStore,
+      });
+      const sud = await createSecteur(sessionAdmin(orgId), { nom: 'Secteur MAJ sud', lieu: 'Gué' }, {
+        store: missionsStore,
+      });
+      const mission = await createMission(sessionAdmin(orgId), {
+        secteurId: nord.id,
+        type: 'accueil',
+        titre: 'Accueil crête',
+        debutLe: DEBUT_A.toISOString(),
+        finLe: FIN_A.toISOString(),
+      }, { store: missionsStore });
+
+      // Tous les champs remplacés + secteur changé : relus en base.
+      const modifiee = await updateMission(sessionAdmin(orgId), mission.id, {
+        secteurId: sud.id,
+        type: 'communication',
+        titre: 'Radio gué',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+        consignes: 'Canal 3.',
+      }, { store: missionsStore });
+      expect(modifiee.mission).toMatchObject({
+        id: mission.id,
+        secteurId: sud.id,
+        type: 'communication',
+        titre: 'Radio gué',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+        consignes: 'Canal 3.',
+      });
+      // Mission sans volontaire : aucun avertissement possible.
+      expect(modifiee.avertissement).toBeNull();
+      const relue = await sql<
+        { secteur_id: string; type: string; titre: string; debut_le: Date; fin_le: Date; consignes: string | null }[]
+      >`
+        SELECT secteur_id, type, titre, debut_le, fin_le, consignes FROM mission WHERE id = ${mission.id}
+      `;
+      expect(relue[0]).toEqual({
+        secteur_id: sud.id,
+        type: 'communication',
+        titre: 'Radio gué',
+        debut_le: DEBUT_C,
+        fin_le: FIN_C,
+        consignes: 'Canal 3.',
+      });
+      const etat = await getMissionsAdminState(sessionAdmin(orgId), { store: missionsStore });
+      const parSecteur = new Map(etat.secteurs.map((s) => [s.id, s.missions.map((m) => m.id)]));
+      expect(parSecteur.get(nord.id)).toEqual([]);
+      expect(parSecteur.get(sud.id)).toEqual([mission.id]);
+
+      // Secteur d'une AUTRE organisation (existant, fixture propriétaire) :
+      // invisible sous GUC → 404, la mission n'a pas bougé.
+      const orgAutreId = randomUUID();
+      const evenementAutreId = randomUUID();
+      const editionAutreId = randomUUID();
+      const secteurAutreId = randomUUID();
+      await sql`
+        INSERT INTO organisation (id, slug, name)
+        VALUES (${orgAutreId}, ${`org-maj-${orgAutreId.slice(0, 8)}`}, 'Autre trail')
+      `;
+      await sql`
+        INSERT INTO evenement (id, organisation_id, slug, name)
+        VALUES (${evenementAutreId}, ${orgAutreId}, ${`autre-trail-${orgAutreId.slice(0, 8)}`}, 'Autre trail')
+      `;
+      await sql`
+        INSERT INTO edition (id, organisation_id, evenement_id, slug, name, race_date, registration_closes_at)
+        VALUES (${editionAutreId}, ${orgAutreId}, ${evenementAutreId}, '2027', 'Autre édition',
+                DATE '2027-05-01', TIMESTAMPTZ '2027-04-20T22:59:59Z')
+      `;
+      await sql`
+        INSERT INTO secteur (id, organisation_id, edition_id, nom, lieu)
+        VALUES (${secteurAutreId}, ${orgAutreId}, ${editionAutreId}, 'Secteur étranger', 'Ailleurs')
+      `;
+      await expect(
+        updateMission(sessionAdmin(orgId), mission.id, {
+          secteurId: secteurAutreId,
+          type: 'communication',
+          titre: 'Radio gué',
+          debutLe: DEBUT_C.toISOString(),
+          finLe: FIN_C.toISOString(),
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(SecteurNotFoundError);
+      const inchangee = await sql<{ secteur_id: string }[]>`
+        SELECT secteur_id FROM mission WHERE id = ${mission.id}
+      `;
+      expect(inchangee[0]?.secteur_id).toBe(sud.id);
+
+      // Mission inconnue (UUID valide) : 404.
+      await expect(
+        updateMission(sessionAdmin(orgId), '00000000-0000-0000-0000-0000000000f5', {
+          secteurId: sud.id,
+          type: 'accueil',
+          titre: 'Fantôme',
+          debutLe: DEBUT_A.toISOString(),
+          finLe: FIN_A.toISOString(),
+        }, { store: missionsStore }),
+      ).rejects.toBeInstanceOf(MissionNotFoundError);
+    });
+
+    it('D2 — modification d’une mission affectée créant un chevauchement : modification FAITE + avertissement par volontaire', async () => {
+      const est = await createSecteur(sessionAdmin(orgId), { nom: 'Secteur D2 est', lieu: 'Source' }, {
+        store: missionsStore,
+      });
+      const ouest = await createSecteur(sessionAdmin(orgId), { nom: 'Secteur D2 ouest', lieu: 'Moulin' }, {
+        store: missionsStore,
+      });
+      const matin = await createMission(sessionAdmin(orgId), {
+        secteurId: est.id,
+        type: 'accueil',
+        titre: 'Accueil source',
+        debutLe: DEBUT_A.toISOString(),
+        finLe: FIN_A.toISOString(),
+      }, { store: missionsStore });
+      const apresMidi = await createMission(sessionAdmin(orgId), {
+        secteurId: ouest.id,
+        type: 'securite_troncon',
+        titre: 'Barrière moulin',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+      }, { store: missionsStore });
+      const yanisId = await importerVolontaire('Yanis', 'yanis@exemple.dz');
+      for (const missionId of [matin.id, apresMidi.id]) {
+        const affectation = await affecterVolontaire(sessionAdmin(orgId), {
+          missionId,
+          volontaireId: yanisId,
+        }, { store: missionsStore });
+        expect(affectation.avertissement).toBeNull();
+      }
+
+      // L'après-midi avancée à 10 h–14 h : chevauche le matin (06 h–12 h) de
+      // Yanis — même requête que l'affectation, autre secteur inclus.
+      const deplacee = await updateMission(sessionAdmin(orgId), apresMidi.id, {
+        secteurId: ouest.id,
+        type: 'securite_troncon',
+        titre: 'Barrière moulin',
+        debutLe: DEBUT_B.toISOString(),
+        finLe: FIN_B.toISOString(),
+      }, { store: missionsStore });
+      expect(deplacee.avertissement?.missions).toEqual([
+        {
+          missionId: matin.id,
+          secteurNom: 'Secteur D2 est',
+          typeLabel: 'Accueil',
+          titre: 'Accueil source',
+          debutLe: DEBUT_A.toISOString(),
+          finLe: FIN_A.toISOString(),
+          volontaireId: yanisId,
+          volontaireNom: 'Yanis',
+        },
+      ]);
+      // Jamais refusé : les nouveaux horaires sont en base, l'affectation reste.
+      const relue = await sql<{ debut_le: Date; fin_le: Date }[]>`
+        SELECT debut_le, fin_le FROM mission WHERE id = ${apresMidi.id}
+      `;
+      expect(relue[0]).toEqual({ debut_le: DEBUT_B, fin_le: FIN_B });
+      const affectations = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM affectation WHERE mission_id = ${apresMidi.id}
+      `;
+      expect(affectations[0]?.count).toBe(1);
+
+      // Simple renommage (horaires et secteur inchangés) : aucun avertissement
+      // réveillé, même si le chevauchement existe toujours.
+      const renommee = await updateMission(sessionAdmin(orgId), apresMidi.id, {
+        secteurId: ouest.id,
+        type: 'securite_troncon',
+        titre: 'Barrière moulin (renommée)',
+        debutLe: DEBUT_B.toISOString(),
+        finLe: FIN_B.toISOString(),
+      }, { store: missionsStore });
+      expect(renommee.avertissement).toBeNull();
+
+      // Changement de SECTEUR seul : recalcul → le conflit est de nouveau signalé.
+      const changeeDeSecteur = await updateMission(sessionAdmin(orgId), apresMidi.id, {
+        secteurId: est.id,
+        type: 'securite_troncon',
+        titre: 'Barrière moulin (renommée)',
+        debutLe: DEBUT_B.toISOString(),
+        finLe: FIN_B.toISOString(),
+      }, { store: missionsStore });
+      expect(changeeDeSecteur.avertissement?.missions.map((m) => m.missionId)).toEqual([matin.id]);
+
+      // Retour à 13 h–15 h : plus aucun chevauchement → avertissement null.
+      const recalee = await updateMission(sessionAdmin(orgId), apresMidi.id, {
+        secteurId: est.id,
+        type: 'securite_troncon',
+        titre: 'Barrière moulin (renommée)',
+        debutLe: DEBUT_C.toISOString(),
+        finLe: FIN_C.toISOString(),
+      }, { store: missionsStore });
+      expect(recalee.avertissement).toBeNull();
     });
   },
 );

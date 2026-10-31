@@ -2,21 +2,41 @@
 
 import { estAnnuaireValide, formatLocalDateTime, type AnnuaireEdition } from '@azzel/shared';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AssistanceButton, assistancePhoneHref } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
 import { resoudreAnnuaireHorsLigne, type StatutAnnuaire } from '@/lib/annuaire-replique';
-import { libelleHorsLigne, libelleHorsLigneAnnuaire, libelleSynchronise } from '@/lib/fraicheur';
+import {
+  libelleHorsLigne,
+  libelleHorsLigneAnnuaire,
+  libelleNonRafraichi,
+  libelleSynchronise,
+} from '@/lib/fraicheur';
 import {
   ecrireAnnuaire,
   ecrireEtatVolontaires,
+  lierPocheAuCompte,
   lireAnnuaire,
   lireEtatVolontaires,
   type EtatVolontaires,
 } from '@/lib/idb-volontaires';
+import { demanderStockagePersistant, rechaufferShellVolontaires } from '@/lib/pwa-volontaires';
+import {
+  deciderRevalidationEtat,
+  ENTETE_SOURCE_SW,
+  etatLePlusFrais,
+  type ReponseEtatLue,
+  type StatutSync,
+} from '@/lib/revalidation-etat';
 import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-scan';
-import { readStoredTheme, writeStoredTheme } from '@/lib/theme';
+import {
+  deferThemeInvitation,
+  isThemeInvitationDeferred,
+  notifyThemeChange,
+  readStoredTheme,
+  writeStoredTheme,
+} from '@/lib/theme';
 import { CONNEXION_PATH } from '@/modules/iam/constants';
 import type { MissionVolontaireView } from '@/modules/missions/service';
 
@@ -30,43 +50,56 @@ import { BandeauSync } from './bandeau-sync';
 // — réplique préchargée à chaque ouverture en ligne (badge DÉDIÉ, annonce
 // séparée au lecteur d'écran), consommée par le scan de l'épopée 4. Pas de
 // liste affichée : seul l'état de préchargement est requis.
+//
+// Revue 3.3 (D1) — la poche est liée au COMPTE : au montage, une fiche
+// stockée d'un autre compte est purgée (IndexedDB fiche/annuaire + caches
+// az-volontaires-*, jamais l'outbox ni l'appareilId) AVANT toute lecture.
+// Une session expirée ne remplace plus la fiche : bandeau « reconnecte-toi »
+// au-dessus de la fiche conservée.
 
-type StatutSync = 'synchrone' | 'hors-ligne';
-
-const ERREUR_SESSION_EXPIREE = {
-  message: 'Ta session a expiré ou a été fermée.',
-  action: 'Reconnecte-toi pour rafraîchir ta fiche mission.',
-};
+/** Marqueur de fiche saine : seul ce rendu devient le shell hors-ligne du SW. */
+export const MARQUEUR_SHELL_FICHE = 'fiche';
 
 /**
- * Écran « session expirée » (composant pur, testé) : la reconnexion reste le
- * chemin pour la FICHE, mais le bandeau sync RESTE MONTÉ (AD-5) — la boîte
- * d'envoi appartient à l'appareil, le Bearer sync survit à la session morte.
+ * Bandeau « session expirée » (composant pur, testé) : la fiche reste
+ * affichée en dessous (poche ou état initial), la reconnexion rafraîchira.
+ * Le bandeau sync reste monté à côté (AD-5).
  */
-export function EcranSessionExpiree({ assistancePhone }: { assistancePhone: string }) {
+export function BandeauReconnexion() {
   return (
-    <section className="auth">
-      <article className="card">
-        <p className="surtitre">Espace volontaire</p>
-        <h1>Tu es déconnecté</h1>
-        <div role="alert" aria-live="assertive" className="error-box">
-          <p className="error-message">{ERREUR_SESSION_EXPIREE.message}</p>
-          <p className="error-action">
-            <a className="btn-lien" href={CONNEXION_PATH}>
-              Se reconnecter
-            </a>
-          </p>
-        </div>
-        <div className="auth-alt">
-          <a className="btn-contour" href={CONNEXION_PATH}>
-            Se reconnecter
-          </a>
-          <AssistanceButton phone={assistancePhone} />
-        </div>
-      </article>
-      <BandeauSync assistancePhone={assistancePhone} />
-    </section>
+    <div role="alert" className="error-box">
+      <p className="error-message">Ta session a expiré ou a été fermée.</p>
+      <p className="error-action">
+        Ta fiche ci-dessous est celle enregistrée sur cet appareil.{' '}
+        <a className="btn-lien" href={CONNEXION_PATH}>
+          Reconnecte-toi
+        </a>{' '}
+        pour la rafraîchir.
+      </p>
+    </div>
   );
+}
+
+function libelleBadge(statut: StatutSync, generéA: string): string {
+  switch (statut) {
+    case 'hors-ligne':
+      return 'HORS-LIGNE PRÊT';
+    case 'non-rafraichi':
+      return 'NON RAFRAÎCHI';
+    default:
+      return libelleSynchronise(generéA);
+  }
+}
+
+function libelleFraicheur(statut: StatutSync, generéA: string): string {
+  switch (statut) {
+    case 'hors-ligne':
+      return libelleHorsLigne(generéA);
+    case 'non-rafraichi':
+      return libelleNonRafraichi(generéA);
+    default:
+      return 'Ta fiche est à jour.';
+  }
 }
 
 function Consignes({ texte }: { texte: string | null }) {
@@ -184,55 +217,68 @@ export function VolontairesPwa({
   // réveiller un bandeau déjà monté après un rapatriement d'état.
   const [declenchementSync, setDeclenchementSync] = useState(0);
 
-  // Revalidation : à chaque ouverture, on rappelle l'API en ligne. Succès →
-  // IndexedDB (la poche). Échec → IndexedDB d'abord (le plus frais gagne,
-  // comparaison ISO lexicographique), sinon l'état serveur amorce la poche.
-  // Le badge « HORS-LIGNE PRÊT » ne s'affiche que réseau réellement coupé :
-  // un 5xx en ligne n'est pas « hors-ligne », l'état le plus frais reste
-  // affiché comme synchronisé.
+  // D1 — liaison de la poche au compte de la session, partagée par les deux
+  // revalidations (état ET annuaire) : aucune ne lit la poche avant elle. Une
+  // purge a vidé le shell que le SW venait de cacher : il est réchauffé.
+  const liaison = useRef<Promise<void> | null>(null);
+  const assurerLiaison = (): Promise<void> => {
+    liaison.current ??= lierPocheAuCompte(etatInitial.accountId).then((purgee) => {
+      if (purgee) {
+        rechaufferShellVolontaires();
+      }
+    });
+    return liaison.current;
+  };
+
+  // Revalidation : à chaque ouverture, on rappelle l'API en ligne. La
+  // décision réponse → statut est pure (lib/revalidation-etat) : succès →
+  // IndexedDB (la poche) ; repli du SW (X-Azzel-Source) → « HORS-LIGNE
+  // PRÊT », jamais réécrit comme frais ; tout autre échec → fraîcheur réelle
+  // (« non rafraîchi — données du … »). Dans les deux cas le plus frais de
+  // l'état serveur, de la poche et de la réplique SW gagne (Date.getTime()) ;
+  // la poche vide est amorcée. 401/403 : fiche conservée + bandeau.
   useEffect(() => {
     let annule = false;
     (async () => {
+      await assurerLiaison();
+      let lue: ReponseEtatLue | null = null;
       try {
         const response = await fetch('/api/volontaires/etat', { cache: 'no-store' });
-        if (response.status === 401 || response.status === 403) {
-          if (!annule) {
-            setSessionExpiree(true);
-          }
-          return;
-        }
-        if (!response.ok) {
-          throw new Error('etat injoignable');
-        }
-        const payload = (await response.json()) as EtatVolontaires;
-        if (annule) {
-          return;
-        }
-        setEtat(payload);
+        const payload: unknown = await response.json().catch(() => null);
+        lue = { status: response.status, source: response.headers.get(ENTETE_SOURCE_SW), payload };
+      } catch {
+        lue = null;
+      }
+      if (annule) {
+        return;
+      }
+      const enLigne = typeof navigator === 'undefined' || navigator.onLine !== false;
+      const decision = deciderRevalidationEtat(lue, etatInitial.accountId, enLigne);
+      if (decision.issue === 'frais') {
+        setEtat(decision.etat);
         setStatut('synchrone');
         // Fetch etat OK : l'ouverture en ligne est établie — on réveille le
         // bandeau sync (qui, de toute façon, tente aussi à son montage, AD-5).
         setDeclenchementSync((precedent) => precedent + 1);
-        await ecrireEtatVolontaires(payload);
-      } catch {
-        const enCache = await lireEtatVolontaires();
-        if (annule) {
-          return;
-        }
-        if (enCache !== null) {
-          // Fraîcheur par valeur (Date.getTime()), jamais par les chaînes —
-          // même racine que le repli annuaire 3.4.
-          if (
-            new Date(enCache.generéA).getTime() > new Date(etatInitial.generéA).getTime()
-          ) {
-            setEtat(enCache);
-          }
-        } else {
-          await ecrireEtatVolontaires(etatInitial);
-        }
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-          setStatut('hors-ligne');
-        }
+        await ecrireEtatVolontaires(decision.etat);
+        return;
+      }
+      if (decision.issue === 'session-expiree') {
+        setSessionExpiree(true);
+      }
+      const enCache = await lireEtatVolontaires();
+      if (annule) {
+        return;
+      }
+      const choisi =
+        etatLePlusFrais(
+          [etatInitial, enCache, decision.issue === 'repli' ? decision.replique : null],
+          etatInitial.accountId,
+        ) ?? etatInitial;
+      setEtat(choisi);
+      setStatut(decision.issue === 'repli' ? decision.statut : 'non-rafraichi');
+      if (enCache === null) {
+        await ecrireEtatVolontaires(choisi);
       }
     })();
     return () => {
@@ -240,10 +286,16 @@ export function VolontairesPwa({
     };
   }, []);
 
-  // Invitation au mode sombre : uniquement à la première ouverture (aucun
-  // choix mémorisé). La bascule de l'en-tête du site reste disponible ensuite.
+  // Stockage persistant demandé à l'ouverture : limite l'éviction de la poche.
   useEffect(() => {
-    setInvitationSombre(readStoredTheme() === null);
+    void demanderStockagePersistant();
+  }, []);
+
+  // Invitation au mode sombre : tant qu'aucun choix n'est mémorisé, sauf si
+  // « Plus tard » l'a reportée pour cette session (elle revient ensuite). La
+  // bascule de l'en-tête du site reste disponible.
+  useEffect(() => {
+    setInvitationSombre(readStoredTheme() === null && !isThemeInvitationDeferred());
   }, []);
 
   // Story 3.4 — revalidation de l'annuaire, même paradigme que l'état : à
@@ -257,6 +309,7 @@ export function VolontairesPwa({
   useEffect(() => {
     let annule = false;
     (async () => {
+      await assurerLiaison();
       try {
         const response = await fetch('/api/volontaires/annuaire', {
           cache: 'no-store',
@@ -309,9 +362,18 @@ export function VolontairesPwa({
     };
   }, []);
 
-  const choisirTheme = (theme: 'dark' | 'light') => {
-    document.documentElement.setAttribute('data-theme', theme);
-    writeStoredTheme(theme);
+  const choisirSombre = () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    writeStoredTheme('dark');
+    // La bascule d'en-tête suit (sinon son libellé reste sur le thème lu au montage).
+    notifyThemeChange('dark');
+    setInvitationSombre(false);
+  };
+
+  // « Plus tard » : rien n'est mémorisé comme choix, l'invitation revient à
+  // la prochaine ouverture.
+  const reporterInvitation = () => {
+    deferThemeInvitation();
     setInvitationSombre(false);
   };
 
@@ -345,12 +407,8 @@ export function VolontairesPwa({
     }
   }, [noticeScan, router]);
 
-  if (sessionExpiree) {
-    return <EcranSessionExpiree assistancePhone={etat.assistancePhone} />;
-  }
-
   return (
-    <section className="volontaires-pwa">
+    <section className="volontaires-pwa" data-az-shell={MARQUEUR_SHELL_FICHE}>
       <header className="volontaires-entete">
         <p className="surtitre">Espace volontaire</p>
         <h1>Ton espace mission</h1>
@@ -362,18 +420,19 @@ export function VolontairesPwa({
         <p
           role="status"
           className={
-            statut === 'hors-ligne'
-              ? 'volontaires-badge volontaires-badge--hors-ligne'
-              : 'volontaires-badge volontaires-badge--synchro'
+            statut === 'synchrone'
+              ? 'volontaires-badge volontaires-badge--synchro'
+              : 'volontaires-badge volontaires-badge--hors-ligne'
           }
           suppressHydrationWarning
         >
           <span aria-hidden="true" className="volontaires-badge-point" />
-          {statut === 'hors-ligne' ? 'HORS-LIGNE PRÊT' : libelleSynchronise(etat.generéA)}
+          {libelleBadge(statut, etat.generéA)}
         </p>
         <p className="volontaires-fraicheur" suppressHydrationWarning>
-          {statut === 'hors-ligne' ? libelleHorsLigne(etat.generéA) : 'Ta fiche est à jour.'}
+          {libelleFraicheur(statut, etat.generéA)}
         </p>
+        {sessionExpiree && <BandeauReconnexion />}
         {invitationSombre && (
           <div className="volontaires-bandeau-sombre">
             <p className="volontaires-bandeau-texte">
@@ -384,14 +443,14 @@ export function VolontairesPwa({
               <button
                 type="button"
                 className="btn-action"
-                onClick={() => choisirTheme('dark')}
+                onClick={choisirSombre}
               >
                 Oui, mode sombre
               </button>
               <button
                 type="button"
                 className="btn-contour"
-                onClick={() => choisirTheme('light')}
+                onClick={reporterInvitation}
               >
                 Plus tard
               </button>

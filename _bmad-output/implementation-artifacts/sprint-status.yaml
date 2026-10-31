@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-20-2026 22:35
-last_updated: 10-29-2026 01:30
+last_updated: 10-29-2026 14:00
 project: Azzel
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ development_status:
   1-9-socle-multi-organisation-schéma-rls: review
   epic-1-retrospective: optional
 
-  epic-2: review
+  epic-2: in-progress
   2-1-page-d-annonce-publique-minimale: review
   2-2-identité-village-piliers-frises-sombre: review
   2-3-bloc-sponsors-option-a-option-b: review
@@ -57,9 +57,9 @@ development_status:
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-import-excel-des-volontaires-et-invitations: review
-  3-2-secteurs-et-missions-typées: review
-  3-3-fiche-mission-hors-ligne-pwa-volontaires: review
+  3-1-import-excel-des-volontaires-et-invitations: done
+  3-2-secteurs-et-missions-typées: done
+  3-3-fiche-mission-hors-ligne-pwa-volontaires: done
   3-4-préchargement-de-l-annuaire-des-coureurs: review
   epic-3-retrospective: optional
 
