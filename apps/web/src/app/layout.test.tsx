@@ -5,6 +5,12 @@ import { EGIDE_TEXTE } from '@/components/bandeau-egide';
 
 import RootLayout from './layout';
 
+/** Navigation du pied de page seule (l'en-tête porte aussi une navigation ≥ 960 px). */
+function navigationDuPied(html: string): string {
+  const debut = html.indexOf('footer-nav');
+  return html.slice(debut, html.indexOf('</nav>', debut));
+}
+
 describe('layout racine — rendu statique', () => {
   it('affiche le bandeau égide (présent sur toutes les pages)', () => {
     const html = renderToStaticMarkup(
@@ -56,7 +62,7 @@ describe('layout racine — rendu statique', () => {
     expect(html).toContain('href="/retour-en-images"');
     expect(html).toContain('Retour en images');
     // Même registre sobre que /parcours et /region : dans la même navigation.
-    const nav = html.slice(html.indexOf('footer-nav'), html.indexOf('</nav>'));
+    const nav = navigationDuPied(html);
     expect(nav).toContain('href="/parcours"');
     expect(nav).toContain('href="/retour-en-images"');
   });
@@ -68,7 +74,29 @@ describe('layout racine — rendu statique', () => {
     expect(html).toContain('href="/resultats"');
     expect(html).toContain('>Résultats</a>');
     // Même navigation sobre que /parcours et /region.
-    const nav = html.slice(html.indexOf('footer-nav'), html.indexOf('</nav>'));
+    const nav = navigationDuPied(html);
     expect(nav).toContain('href="/resultats"');
+  });
+
+  it('en-tête : navigation vitrine (Parcours, La région, Retour en images, Résultats)', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    const debut = html.indexOf('class="header-nav"');
+    expect(debut).toBeGreaterThan(html.indexOf('class="site-header"'));
+    const nav = html.slice(debut, html.indexOf('</nav>', debut));
+    expect(nav).toContain('aria-label="La course"');
+    for (const href of ['/parcours', '/region', '/retour-en-images', '/resultats']) {
+      expect(nav).toContain(`href="${href}"`);
+    }
+  });
+
+  it('onglet « Mon trail » monté, encart fermé, aucune lecture de session au rendu', () => {
+    const html = renderToStaticMarkup(
+      RootLayout({ children: <p>Contenu de page</p> }),
+    );
+    expect(html).toContain('class="mon-trail__onglet"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toMatch(/<section[^>]*id="mon-trail-encart"[^>]*hidden=""/);
   });
 });

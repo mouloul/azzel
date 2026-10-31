@@ -10,6 +10,8 @@ import {
   RESEND_COOLDOWN_SEC,
 } from '@/modules/iam/constants';
 
+import type { Parcours } from './parcours';
+
 /** Destination renvoyée par /api/auth/verify — jamais une URL absolue. */
 function destinationApresConnexion(payload: unknown): string {
   const brut = (payload as { redirectTo?: unknown } | null)?.redirectTo;
@@ -72,7 +74,38 @@ function toErrorPayload(payload: unknown): ErrorPayload {
   return NETWORK_ERROR;
 }
 
-export function ConnexionForm({ assistancePhone }: { assistancePhone: string }) {
+/**
+ * Habillage du flux selon le parcours : « M'inscrire » et « Me connecter »
+ * partagent le même flux email + code (le compte coureur est créé à la
+ * première vérification) — seuls surtitre, titre et chapeau changent.
+ */
+export function libellesParcours(parcours: Parcours): {
+  surtitre: string;
+  titre: string;
+  lead: string;
+} {
+  if (parcours === 'inscription') {
+    return {
+      surtitre: 'Créer mon compte',
+      titre: 'Créer mon compte',
+      lead: `Saisissez votre adresse email : vous recevrez un code à 6 chiffres, valable ${TTL_LABEL}. Vous remplirez ensuite votre inscription.`,
+    };
+  }
+  return {
+    surtitre: 'Connexion',
+    titre: 'Connexion',
+    lead: `Saisissez votre adresse email : vous recevrez un code à 6 chiffres, valable ${TTL_LABEL}.`,
+  };
+}
+
+export function ConnexionForm({
+  assistancePhone,
+  parcours = 'connexion',
+}: {
+  assistancePhone: string;
+  parcours?: Parcours;
+}) {
+  const libelles = libellesParcours(parcours);
   const router = useRouter();
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -156,12 +189,9 @@ export function ConnexionForm({ assistancePhone }: { assistancePhone: string }) 
       <article className="card">
         {step === 'email' ? (
           <>
-            <p className="surtitre">Connexion</p>
-            <h1>Connexion</h1>
-            <p className="lead">
-              Saisissez votre adresse email : vous recevrez un code à 6 chiffres,
-              valable {TTL_LABEL}.
-            </p>
+            <p className="surtitre">{libelles.surtitre}</p>
+            <h1>{libelles.titre}</h1>
+            <p className="lead">{libelles.lead}</p>
             <form onSubmit={onSubmitEmail} noValidate>
               <div className="field">
                 <label htmlFor="email">Adresse email</label>
@@ -192,7 +222,7 @@ export function ConnexionForm({ assistancePhone }: { assistancePhone: string }) 
           </>
         ) : (
           <>
-            <p className="surtitre">Connexion</p>
+            <p className="surtitre">{libelles.surtitre}</p>
             <h1>Saisissez votre code</h1>
             <p className="lead">
               Un code à 6 chiffres a été envoyé à <strong>{email}</strong> — valable{' '}

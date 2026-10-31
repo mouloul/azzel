@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { renderToReadableStream } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -45,14 +48,14 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('class="egide"');
   });
 
-  it('hero : eyebrow édition, titre, lieu, CTA S’inscrire vers /connexion', () => {
+  it('hero : bandeau date, titre, lieu, CTA S’inscrire vers /connexion?parcours=inscription', () => {
     const html = HTML_ACCUEIL;
     expect(html).toContain('2ᵉ édition — 26 mars 2027');
     expect(html).toContain('Week-end Sportif');
     expect(html).toContain('Aït Aïssi');
     expect(html).toContain('stade Agni Lhoudh');
     expect(html).toContain('Yakouren');
-    expect(html).toContain('href="/connexion"');
+    expect(html).toContain('href="/connexion?parcours=inscription"');
     expect(html).toContain('S’inscrire');
   });
 
@@ -65,7 +68,7 @@ describe('accueil vitrine — rendu statique', () => {
     expect(hero).toContain('width="640"');
     expect(hero).toContain('height="360"');
     expect(hero).toContain(
-      'src="/charte/photos-2026/aitaissi-2026-celebration-montagne-640.webp"',
+      'src="/charte/photos-2026/aitaissi-2026-ligne-depart-640.webp"',
     );
   });
 
@@ -73,10 +76,10 @@ describe('accueil vitrine — rendu statique', () => {
     const html = HTML_ACCUEIL;
     expect(html).toContain('media="(min-width: 700px)"');
     expect(html).toMatch(
-      /srcset="\/charte\/photos-2026\/aitaissi-2026-celebration-montagne-1280\.webp"/i,
+      /srcset="\/charte\/photos-2026\/aitaissi-2026-ligne-depart-1280\.webp"/i,
     );
-    expect(html).not.toContain('montagne-640.webp 640w');
-    expect(html).not.toContain('montagne-1280.webp 1280w');
+    expect(html).not.toContain('ligne-depart-640.webp 640w');
+    expect(html).not.toContain('ligne-depart-1280.webp 1280w');
   });
 
   it('chiffres officiels 2026 exacts, jamais additionnés ni inventés', () => {
@@ -113,19 +116,21 @@ describe('accueil vitrine — rendu statique', () => {
 
   it('photos de section : lazy + fetchpriority low, alts descriptifs, 1280 via <picture>', () => {
     const html = HTML_ACCUEIL;
+    // La photo hero (ligne de départ) n'est pas reprise dans la galerie.
     const gallery = html.match(
-      /<img[^>]*(ligne-depart|arrivee-groupe-medailles)[^>]*>/g,
+      /<img[^>]*(celebration-montagne|arrivee-groupe-medailles)[^>]*>/g,
     );
+    expect((html.match(/<img[^>]*ligne-depart[^>]*>/g) ?? []).length).toBe(1);
     expect(gallery?.length).toBe(2);
     for (const img of gallery ?? []) {
       expect(img).toContain('loading="lazy"');
       expect(img).toMatch(/fetchpriority="low"/i);
       expect(img).not.toMatch(/srcset/i);
     }
-    expect(html).toMatch(/alt="[^"]*ligne de départ[^"]*2026"/i);
+    expect(html).toMatch(/alt="[^"]*célébration[^"]*2026"/i);
     expect(html).toMatch(/alt="[^"]*arrivée[^"]*2026"/i);
     expect(html).toMatch(
-      /srcset="\/charte\/photos-2026\/aitaissi-2026-ligne-depart-1280\.webp"/i,
+      /srcset="\/charte\/photos-2026\/aitaissi-2026-celebration-montagne-1280\.webp"/i,
     );
     expect(html).toMatch(
       /srcset="\/charte\/photos-2026\/aitaissi-2026-arrivee-groupe-medailles-1280\.webp"/i,
@@ -137,6 +142,74 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).not.toContain('à confirmer');
     expect(html).not.toContain('objectif');
     expect(html).not.toContain('>600<');
+  });
+});
+
+describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
+  const CSS = readFileSync(fileURLToPath(new URL('./globals.css', import.meta.url)), 'utf8');
+
+  function regle(selecteur: string): string {
+    const echappe = selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const bloc = CSS.match(new RegExp(`^${echappe}\\s*\\{([^}]*)\\}`, 'm'))?.[1];
+    if (bloc === undefined) {
+      throw new Error(`règle ${selecteur} absente de globals.css`);
+    }
+    return bloc;
+  }
+
+  it('structure : section plein écran, titre centré, crête, bandeau date, actions, badge épreuves', () => {
+    const html = HTML_ACCUEIL;
+    const debut = html.indexOf('class="aa-hero aa-hero--plein"');
+    expect(debut).toBeGreaterThan(-1);
+    const titre = html.indexOf('aa-hero__title');
+    const crete = html.indexOf('data-crete');
+    const date = html.indexOf('class="aa-hero__date"');
+    const actions = html.indexOf('class="aa-hero__actions"');
+    const badge = html.indexOf('class="aa-hero__badge"');
+    expect(debut).toBeLessThan(titre);
+    expect(titre).toBeLessThan(crete);
+    expect(crete).toBeLessThan(date);
+    expect(date).toBeLessThan(actions);
+    expect(actions).toBeLessThan(badge);
+    expect(badge).toBeLessThan(html.indexOf('titre-bilan-2026'));
+    // Une seule photo prioritaire, avant le titre (LCP).
+    expect((html.match(/data-hero-photo/g) ?? []).length).toBe(1);
+    expect(html.indexOf('data-hero-photo')).toBeLessThan(titre);
+    expect(html).toMatch(/<h1 class="aa-hero__title" id="titre-accueil">/);
+    expect(html).toContain('aria-labelledby="titre-accueil"');
+    expect(html).toContain('35 km · 12 km');
+  });
+
+  it('CSS : hero à hauteur d’écran moins l’égide, contenu centré', () => {
+    const plein = regle('.aa-hero--plein');
+    expect(plein).toMatch(/min-height:\s*calc\(100svh - var\(--egide-hauteur\)/);
+    const corps = regle('.aa-hero--plein .aa-hero__body');
+    expect(corps).toContain('text-align: center');
+    expect(corps).toContain('align-items: center');
+  });
+
+  it('CSS : en-tête superposé à la photo sans JS (logo négatif, texte clair)', () => {
+    const entete = regle('body:has(.aa-hero--plein) .site-header');
+    expect(entete).toContain('position: absolute');
+    expect(entete).toContain('background: transparent');
+    expect(entete).toContain('color: var(--on-forest)');
+    expect(regle('body:has(.aa-hero--plein) .header-logo')).toContain(
+      'aitaissi-logo-negatif.svg',
+    );
+  });
+
+  it.each([
+    ['clair', '.aa-hero--plein .aa-hero__veil'],
+    ['sombre', "[data-theme='dark'] .aa-hero--plein .aa-hero__veil"],
+  ])('voile charte (thème %s) : opacité entre 60 et 85 % sur toute la hauteur', (_theme, selecteur) => {
+    const alphas = [...regle(selecteur).matchAll(/rgba\([^)]*,\s*([0-9.]+)\s*\)/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(alphas.length).toBeGreaterThanOrEqual(2);
+    for (const alpha of alphas) {
+      expect(alpha).toBeGreaterThanOrEqual(0.6);
+      expect(alpha).toBeLessThanOrEqual(0.85);
+    }
   });
 });
 

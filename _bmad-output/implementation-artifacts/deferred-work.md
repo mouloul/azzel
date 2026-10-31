@@ -56,3 +56,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-connexion-code-unifiee.md`
   summary: Le migrateur n'exige pas BYPASSRLS — si le rôle propriétaire ne l'a pas (0008 avale `insufficient_privilege` en NOTICE), les UPDATE de backfill d'une migration s'exécutent sous FORCE RLS sans GUC et peuvent toucher 0 ligne avant un DROP destructif (cas de 0035 : backfill `activated_at` / `invitation_outbox_id` puis DROP TABLE invitation).
   evidence: `modules/inscriptions/migrations/0008*.sql:47-62` (exception avalée) ; `modules/inscriptions/migrate.ts:75-83` (aucun contrôle de rôle avant `tx.unsafe`). Sans effet aujourd'hui (owner dev = superuser, aucune donnée volontaire hors dev — choix Q2 du SCP 2026-10-28), mais toute future migration avec backfill en production est exposée. Correctif : garde `rolbypassrls` dans `migrate.ts` (refus explicite) — défaut antérieur à cette story.
+
+## Deferred from: build de spec-accueil-hero-mon-trail.md (2026-10-31)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-accueil-hero-mon-trail.md`
+  summary: Le hero plein écran de l'accueil n'a pas de variante photo au-delà de 1280 px ; l'image LCP est agrandie (floue) sur écran ≥ 1920 px ou haute densité.
+  evidence: `public/charte/photos-2026/` ne contient que des variantes 640 et 1280 ; nécessite un nouvel export depuis les originaux et un arbitrage avec le budget de premier chargement.
+- source_spec: `_bmad-output/implementation-artifacts/spec-accueil-hero-mon-trail.md`
+  summary: Le câblage des effets de l'onglet « Mon trail » (lecture de session à l'ouverture seulement, focus/Échap/clic extérieur via `activerEncart`) n'est couvert par aucun test qui monte le composant.
+  evidence: vitest tourne sans environnement DOM ; les tests appellent les fonctions isolées. Il faudrait un environnement jsdom/happy-dom ou un test e2e Playwright de l'onglet.

@@ -7,7 +7,14 @@ import { effacerEtatVolontaires } from '@/lib/idb-volontaires';
 import { purgerCachesCoureur } from '@/lib/pwa-coureur';
 import { CONNEXION_PATH } from '@/modules/iam/constants';
 
-export function LogoutButton() {
+export function LogoutButton({
+  libelle = 'Se déconnecter',
+  className = 'btn-contour',
+}: {
+  /** Libellé du bouton (l'onglet Mon trail dit « Me déconnecter »). */
+  libelle?: string;
+  className?: string;
+} = {}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -35,8 +42,8 @@ export function LogoutButton() {
   }
 
   return (
-    <button type="button" className="btn-contour" onClick={onLogout} disabled={pending}>
-      {pending ? 'Déconnexion…' : 'Se déconnecter'}
+    <button type="button" className={className} onClick={onLogout} disabled={pending}>
+      {pending ? 'Déconnexion…' : libelle}
     </button>
   );
 }

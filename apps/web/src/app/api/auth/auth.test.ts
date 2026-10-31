@@ -20,6 +20,16 @@ vi.mock(
   () => serviceMock as unknown as typeof import('@/modules/iam/service'),
 );
 
+const prochaineEtapeMock = vi.hoisted(() => ({
+  prochaineEtapeCoureurPourJeton: vi.fn(),
+}));
+
+vi.mock(
+  '@/modules/inscriptions/prochaine-etape',
+  () =>
+    prochaineEtapeMock as unknown as typeof import('@/modules/inscriptions/prochaine-etape'),
+);
+
 const BASE = 'http://localhost:3000';
 
 function jsonRequest(path: string, body: unknown): NextRequest {
@@ -36,6 +46,8 @@ beforeEach(() => {
   serviceMock.verifyLoginCode.mockReset();
   serviceMock.getSession.mockReset();
   serviceMock.logout.mockReset();
+  prochaineEtapeMock.prochaineEtapeCoureurPourJeton.mockReset();
+  prochaineEtapeMock.prochaineEtapeCoureurPourJeton.mockResolvedValue('/espace-coureur');
 });
 
 describe('POST /api/auth/verify', () => {
@@ -73,6 +85,46 @@ describe('POST /api/auth/verify', () => {
     expect(serviceMock.verifyLoginCode).toHaveBeenCalledWith('coureur@exemple.dz', '123456');
   });
 
+  it('coureur web : redirigé vers la première étape non faite de son dossier', async () => {
+    serviceMock.verifyLoginCode.mockResolvedValue({
+      token: 'jeton-session',
+      email: 'coureur@exemple.dz',
+      role: 'coureur',
+    });
+    prochaineEtapeMock.prochaineEtapeCoureurPourJeton.mockResolvedValue('/acceptations');
+
+    const response = await postVerify(
+      jsonRequest('/api/auth/verify', { email: 'coureur@exemple.dz', code: '123456' }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { redirectTo: string };
+    expect(body.redirectTo).toBe('/acceptations');
+    // L'étape est calculée à partir du jeton tout juste émis (checklist serveur).
+    expect(prochaineEtapeMock.prochaineEtapeCoureurPourJeton).toHaveBeenCalledWith(
+      'jeton-session',
+    );
+  });
+
+  it.each([
+    ['organisateur', '/admin/dossiers'],
+    ['volontaire', '/volontaires'],
+  ])('%s web : espace du rôle, sans calcul d’étape coureur', async (role, attendu) => {
+    serviceMock.verifyLoginCode.mockResolvedValue({
+      token: 'jeton-session',
+      email: `${role}@exemple.dz`,
+      role,
+    });
+
+    const response = await postVerify(
+      jsonRequest('/api/auth/verify', { email: `${role}@exemple.dz`, code: '123456' }),
+    );
+
+    const body = (await response.json()) as { redirectTo: string };
+    expect(body.redirectTo).toBe(attendu);
+    expect(prochaineEtapeMock.prochaineEtapeCoureurPourJeton).not.toHaveBeenCalled();
+  });
+
   it('story 6.1 — client natif : le jeton de session est renvoyé UNE fois dans le corps', async () => {
     serviceMock.verifyLoginCode.mockResolvedValue({
       token: 'jeton-natif-clair',
@@ -101,6 +153,8 @@ describe('POST /api/auth/verify', () => {
       token: 'jeton-natif-clair',
       redirectTo: '/espace-coureur',
     });
+    // Contrat natif inchangé : espace du rôle, pas d'étape de dossier.
+    expect(prochaineEtapeMock.prochaineEtapeCoureurPourJeton).not.toHaveBeenCalled();
     // Le token voyage dans le corps : aucun intermédiaire ne doit cacher la réponse.
     expect(response.headers.get('cache-control')).toBe('no-store');
     // Le cookie httpOnly reste posé (web inchangé ; sans effet pour l'app).

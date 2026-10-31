@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import {
+  ROLE_COUREUR,
   SESSION_COOKIE_NAME,
   SESSION_TTL_SEC,
   homePathForRole,
 } from '@/modules/iam/constants';
 import { EmailInvalidError, InvalidCodeError, toApiError } from '@/modules/iam/errors';
 import { verifyLoginCode } from '@/modules/iam/service';
+import { prochaineEtapeCoureurPourJeton } from '@/modules/inscriptions/prochaine-etape';
 
 // Story 6.1 — client natif : le jeton de session (clair) est renvoyé UNE
 // SEULE fois dans le corps de la réponse quand `client === "native"`. Il
@@ -39,6 +41,15 @@ export async function POST(request: NextRequest) {
   try {
     const session = await verifyLoginCode(email, code);
     const natif = client === 'native';
+    // Web : un coureur atterrit sur la première étape non faite de son dossier
+    // (/inscription → /acceptations → /preuve), calculée ici à partir de la
+    // checklist — jamais côté client. Dossier complet ou illisible →
+    // /espace-coureur. Les autres rôles vont dans leur espace. Le contrat natif
+    // reste inchangé (espace du rôle).
+    const redirectTo =
+      !natif && session.role === ROLE_COUREUR
+        ? await prochaineEtapeCoureurPourJeton(session.token)
+        : homePathForRole(session.role);
     // no-store : la réponse transporte le token natif (une seule fois) —
     // aucun intermédiaire ne doit la cacher.
     const response = NextResponse.json(
@@ -51,7 +62,7 @@ export async function POST(request: NextRequest) {
             token: session.token,
             redirectTo: homePathForRole(session.role),
           }
-        : { ok: true, email: session.email, redirectTo: homePathForRole(session.role) },
+        : { ok: true, email: session.email, redirectTo },
       { headers: { 'Cache-Control': 'no-store' } },
     );
     response.cookies.set(SESSION_COOKIE_NAME, session.token, {

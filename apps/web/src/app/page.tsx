@@ -60,28 +60,31 @@ export default async function HomePage() {
   return (
     <>
       <Frise />
-      <section className="aa-hero">
+      {/* Hero plein écran (modèle page course UTMB) : photo sous voile,
+          en-tête du site posé dessus (body:has(.aa-hero--plein), sans JS),
+          titre centré, bandeau date, badge des épreuves en bas à gauche. */}
+      <section className="aa-hero aa-hero--plein" aria-labelledby="titre-accueil">
         <AaPhoto
           variant="couverture"
           priority
-          src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
-          srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
-          alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
+          src={`${PHOTOS}/aitaissi-2026-ligne-depart-640.webp`}
+          srcLarge={`${PHOTOS}/aitaissi-2026-ligne-depart-1280.webp`}
+          alt="Coureurs rassemblés au départ du trail, au stade Agni Lhoudh, édition 2026"
           width={640}
           height={360}
         />
         <div className="aa-hero__veil" aria-hidden="true" />
         <div className="aa-hero__body">
-          <p className="aa-hero__eyebrow">2ᵉ édition — 26 mars 2027</p>
-          <h1 className="aa-hero__title">
+          <h1 className="aa-hero__title" id="titre-accueil">
             Week-end Sportif <em>Aït Aïssi</em>
           </h1>
           <Crete />
+          <p className="aa-hero__date">2ᵉ édition — 26 mars 2027</p>
           <p className="aa-hero__meta">
             Trail en forêt au départ du stade Agni Lhoudh — Aït Aïssi, commune de Yakouren.
           </p>
           <div className="aa-hero__actions">
-            <Link className="aa-btn aa-btn--primary" href="/connexion">
+            <Link className="aa-btn aa-btn--primary" href="/connexion?parcours=inscription">
               S’inscrire
             </Link>
             <a className="aa-btn aa-btn--on-forest" href={assistancePhoneHref(telephone)}>
@@ -89,6 +92,9 @@ export default async function HomePage() {
             </a>
           </div>
         </div>
+        <p className="aa-hero__badge">
+          <span className="visually-hidden">Épreuves : </span>35 km · 12 km
+        </p>
       </section>
 
       <section className="vitrine-bande" aria-labelledby="titre-bilan-2026">
@@ -159,9 +165,9 @@ export default async function HomePage() {
           </p>
           <div className="aa-galerie">
             <AaPhoto
-              src={`${PHOTOS}/aitaissi-2026-ligne-depart-640.webp`}
-              srcLarge={`${PHOTOS}/aitaissi-2026-ligne-depart-1280.webp`}
-              alt="Coureurs rassemblés sur la ligne de départ du trail, édition 2026"
+              src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
+              srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
+              alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
               width={640}
               height={360}
             />

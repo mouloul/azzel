@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AdminHeaderLink } from '@/components/admin-header-link';
 import { BandeauEgide } from '@/components/bandeau-egide';
+import { MonTrail } from '@/components/mon-trail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildThemeInitScript } from '@/lib/theme';
 import './globals.css';
@@ -58,12 +59,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             >
               <span className="header-logo" aria-hidden="true" />
             </Link>
+            {/* Navigation vitrine dans l'en-tête à partir de 960 px (sous ce
+                seuil, le pied de page porte les mêmes liens). */}
+            <nav className="header-nav" aria-label="La course">
+              <Link href="/parcours">Parcours</Link>
+              <Link href="/region">La région</Link>
+              <Link href="/retour-en-images">Retour en images</Link>
+              <Link href="/resultats">Résultats</Link>
+            </nav>
             <div className="header-actions">
               <AdminHeaderLink />
               <ThemeToggle />
             </div>
           </div>
         </header>
+        {/* Onglet « Mon trail » (bord droit) : session lue côté client, à
+            l'ouverture de l'encart seulement — le layout reste statique. */}
+        <MonTrail />
         <main id="contenu">{children}</main>
         <footer className="site-footer">
           <div className="site-footer__inner">
