@@ -26,6 +26,7 @@ import {
   IDB_VERSION,
   JOURNAL_SYNC_MAX_ENTREES,
   effacerEtatVolontaires,
+  lierPocheAuCompte,
   ajouterEntreeJournal,
   ajouterPassage,
   ajouterRetrait,
@@ -75,6 +76,9 @@ function creerIndexedDbMemoire() {
   // Version de la base « sur disque » : 0 = neuve, 1 = époque 3.3, 2 = 3.4,
   // 3 = époque 4.3 (outbox + appareil).
   let versionBase = 0;
+  // Revue 3.3 — la PROCHAINE transaction ouverte sera abandonnée (quota) après
+  // le succès de ses requêtes : l'écriture ne doit pas être réputée acquise.
+  let abandonProgramme = false;
 
   // Sérialisation des transactions readwrite PAR store (contrat réel : une
   // seule écriture à la fois sur un store, même entre connexions — c'est ce
@@ -105,10 +109,47 @@ function creerIndexedDbMemoire() {
           acquis.then(() => new Promise<void>((resolve) => setTimeout(resolve, 0))),
         );
       }
-      const apres = (travail: () => void): void => {
-        void acquis.then(() => queueMicrotask(travail));
+      // Revue 3.3 — cycle de vie de la transaction (contrat réel) : complete
+      // une fois TOUTES ses requêtes servies (y compris celles chaînées dans un
+      // onsuccess), ou abort si un abandon est programmé (quota simulé).
+      let enCours = 0;
+      let terminee = false;
+      const abandon = abandonProgramme;
+      abandonProgramme = false;
+      const transaction: {
+        oncomplete: (() => void) | null;
+        onerror: (() => void) | null;
+        onabort: (() => void) | null;
+        error: unknown;
+        objectStore?: unknown;
+      } = { oncomplete: null, onerror: null, onabort: null, error: null };
+      const verifierFin = (): void => {
+        setTimeout(() => {
+          if (enCours > 0 || terminee) {
+            return;
+          }
+          terminee = true;
+          if (abandon) {
+            transaction.error = Object.assign(new Error('quota dépassé'), {
+              name: 'QuotaExceededError',
+            });
+            transaction.onabort?.();
+            return;
+          }
+          transaction.oncomplete?.();
+        }, 0);
       };
-      return {
+      const apres = (travail: () => void): void => {
+        enCours += 1;
+        void acquis.then(() =>
+          queueMicrotask(() => {
+            travail();
+            enCours -= 1;
+            verifierFin();
+          }),
+        );
+      };
+      return Object.assign(transaction, {
         objectStore: (nomStore: string) => ({
           get: (cle: string) => {
             const r = requete<unknown>();
@@ -172,7 +213,7 @@ function creerIndexedDbMemoire() {
             return r;
           },
         }),
-      };
+      });
     },
     close: () => {
       fermetures += 1;
@@ -262,6 +303,9 @@ function creerIndexedDbMemoire() {
   return {
     fabrique,
     stores,
+    programmerAbandon: () => {
+      abandonProgramme = true;
+    },
     fermetures: () => fermetures,
     suppressions,
     semerBaseV1,
@@ -286,8 +330,9 @@ const MISSION: MissionVolontaireView = {
   couvertureLabel: 'Couverte',
 };
 
-function etatExemple(generéA: string): EtatVolontaires {
+function etatExemple(generéA: string, accountId = 'account-karim'): EtatVolontaires {
   return {
+    accountId,
     editionNom: 'Édition 2027',
     assistancePhone: '+213 555 010 200',
     mesMissions: [MISSION],
@@ -440,6 +485,38 @@ describe('lireEtatVolontaires / ecrireEtatVolontaires — IndexedDB', () => {
       generéA: 42,
     });
     await expect(lireEtatVolontaires()).resolves.toBeNull();
+  });
+
+  it('revue 3.3 — mission hors contrat (debutLe invalide, titre absent) : lecture → null, jamais de RangeError au rendu', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    const store = new Map<string, unknown>();
+    stores.set(IDB_STORE_ETAT, store);
+    store.set(IDB_CLE_COURANT, {
+      ...etatExemple('2026-10-22T08:00:00.000Z'),
+      mesMissions: [{ ...MISSION, debutLe: 'pas-une-date' }],
+      id: IDB_CLE_COURANT,
+    });
+    await expect(lireEtatVolontaires()).resolves.toBeNull();
+    store.set(IDB_CLE_COURANT, {
+      ...etatExemple('2026-10-22T08:00:00.000Z'),
+      missions: [{ ...MISSION, titre: undefined }],
+      id: IDB_CLE_COURANT,
+    });
+    await expect(lireEtatVolontaires()).resolves.toBeNull();
+    // Fiche antérieure à la liaison au compte (D1) : sans accountId, rejetée.
+    const { accountId: _accountId, ...sansCompte } = etatExemple('2026-10-22T08:00:00.000Z');
+    store.set(IDB_CLE_COURANT, { ...sansCompte, id: IDB_CLE_COURANT });
+    await expect(lireEtatVolontaires()).resolves.toBeNull();
+  });
+
+  it('revue 3.3 — transaction abandonnée après le put (quota) : écriture → false, pas de faux succès', async () => {
+    const { fabrique, programmerAbandon } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    programmerAbandon();
+    await expect(ecrireEtatVolontaires(etatExemple('2026-10-22T08:00:00.000Z'))).resolves.toBe(
+      false,
+    );
   });
 });
 
@@ -842,6 +919,67 @@ describe('effacerEtatVolontaires — purge logout conservatrice (AD-5)', () => {
     await expect(listerRetraits()).resolves.toHaveLength(1);
     expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(1);
     expect(stores.get(IDB_STORE_APPAREIL)?.size).toBe(1);
+  });
+});
+
+describe('lierPocheAuCompte — poche liée au compte (revue 3.3, D1)', () => {
+  function stubCaches(): string[] {
+    const supprimes: string[] = [];
+    vi.stubGlobal('caches', {
+      keys: async () => ['az-volontaires-shell-v1', 'az-volontaires-etat-v1', 'site-cache-v2'],
+      delete: async (nom: string) => {
+        supprimes.push(nom);
+        return true;
+      },
+    });
+    return supprimes;
+  }
+
+  it('même compte : rien n’est purgé', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ecrireEtatVolontaires(etatExemple('2026-10-22T08:00:00.000Z', 'account-karim'));
+    const supprimes = stubCaches();
+
+    await expect(lierPocheAuCompte('account-karim')).resolves.toBe(false);
+    expect(stores.get(IDB_STORE_ETAT)?.size).toBe(1);
+    expect(supprimes).toEqual([]);
+  });
+
+  it('autre compte : fiche + annuaire + caches az-volontaires-* purgés, outbox et appareilId CONSERVÉS', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    await ecrireEtatVolontaires(etatExemple('2026-10-22T08:00:00.000Z', 'account-karim'));
+    await ecrireAnnuaire(annuaireExemple('2026-10-22T08:00:00.000Z'));
+    const appareilAvant = await obtenirAppareilId();
+    await ajouterRetrait(retraitExemple());
+    const supprimes = stubCaches();
+
+    await expect(lierPocheAuCompte('account-nadia')).resolves.toBe(true);
+    await expect(lireEtatVolontaires()).resolves.toBeNull();
+    await expect(lireAnnuaire()).resolves.toBeNull();
+    expect(supprimes.sort()).toEqual(['az-volontaires-etat-v1', 'az-volontaires-shell-v1']);
+    await expect(obtenirAppareilId()).resolves.toBe(appareilAvant);
+    expect(stores.get(IDB_STORE_OUTBOX)?.size).toBe(1);
+  });
+
+  it('fiche antérieure à la liaison (sans accountId) : purgée aussi', async () => {
+    const { fabrique, stores } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    const { accountId: _accountId, ...sansCompte } = etatExemple('2026-10-22T08:00:00.000Z');
+    stores.set(IDB_STORE_ETAT, new Map([[IDB_CLE_COURANT, { ...sansCompte, id: IDB_CLE_COURANT }]]));
+    stubCaches();
+    await expect(lierPocheAuCompte('account-karim')).resolves.toBe(true);
+    expect(stores.get(IDB_STORE_ETAT)?.size).toBe(0);
+  });
+
+  it('poche vide ou stockage absent : rien à lier', async () => {
+    await expect(lierPocheAuCompte('account-karim')).resolves.toBe(false);
+    const { fabrique } = creerIndexedDbMemoire();
+    vi.stubGlobal('indexedDB', fabrique);
+    const supprimes = stubCaches();
+    await expect(lierPocheAuCompte('account-karim')).resolves.toBe(false);
+    expect(supprimes).toEqual([]);
   });
 });
 

@@ -56,3 +56,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-connexion-code-unifiee.md`
   summary: Le migrateur n'exige pas BYPASSRLS — si le rôle propriétaire ne l'a pas (0008 avale `insufficient_privilege` en NOTICE), les UPDATE de backfill d'une migration s'exécutent sous FORCE RLS sans GUC et peuvent toucher 0 ligne avant un DROP destructif (cas de 0035 : backfill `activated_at` / `invitation_outbox_id` puis DROP TABLE invitation).
   evidence: `modules/inscriptions/migrations/0008*.sql:47-62` (exception avalée) ; `modules/inscriptions/migrate.ts:75-83` (aucun contrôle de rôle avant `tx.unsafe`). Sans effet aujourd'hui (owner dev = superuser, aucune donnée volontaire hors dev — choix Q2 du SCP 2026-10-28), mais toute future migration avec backfill en production est exposée. Correctif : garde `rolbypassrls` dans `migrate.ts` (refus explicite) — défaut antérieur à cette story.
+
+## Deferred from: code review of spec-3-2-secteurs-et-missions-typées.md (2026-10-29)
+
+- Test « concurrence affectations » (`modules/missions/secteurs.integration.test.ts:421`) non déterministe : `Promise.all` sans barrière sur un pool `max: 2` — la suppression du `FOR UPDATE` volontaire dans `affecter` n'est détectée que si les deux transactions se chevauchent réellement. Rendre déterministe avec une transaction tenue ouverte (outillage à mutualiser avec le test d'entrelacement `deleteSecteur`).
+
+## Deferred from: code review of spec-3-4-préchargement-de-l-annuaire-des-coureurs.md (2026-10-29)
+
+- Orchestration client de l'annuaire dans `volontaires-pwa.tsx` (états « non enregistré », délai, 401/403, réécriture de la poche après repli) sans test d'effet : aucun harnais DOM dans le dépôt (même décision d'outillage que BF3/BF4 de la 3.4 passe 1 et BF5/VG4 de la 3.3). Réduire l'écart en extrayant les branches restantes en fonctions pures, ou introduire un harnais DOM (happy-dom/jsdom) pour la surface volontaires.

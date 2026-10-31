@@ -80,6 +80,39 @@ deferred: []
 - Given un appareil scanneur ouvert en ligne avant le départ, when l'annuaire se précharge, then « Annuaire prêt — N coureurs » s'affiche et est annoncé au lecteur d'écran, et la réplique survit hors-ligne (IndexedDB).
 - Given un dossard absent de la réplique, when l'épopée 4 cherchera via `chercherParDossard`, then elle obtient null et le libellé `DOSSARD INCONNU` vient du contrat shared (testé).
 
+### Review Findings
+
+_Code review 2026-10-29 (passe 2, lot 4/4 épopée 3 — commit `67d3130` ; blind-hunter 17, edge-case-hunter 15, verification-gap 6+2, acceptance-auditor 9 ; vérifiés sur le code COURANT)._
+
+- [ ] [Review][Decision] Portée de l'annuaire nominatif — `guardVolontaire` sert l'annuaire complet (noms, prénoms, dossards) à TOUT compte volontaire, et `/volontaires` le pousse à chaque volontaire en `annuaireInitial` (donc aussi dans le payload RSC du HTML et le shell mis en cache), alors que la spec parle d'« appareils scanneurs » et invoque NFR-7 (minimisation). Choix : réserver aux volontaires affectés à une mission de scan (`scan_checkpoint`, `distribution_dossards`) — 403 sinon, pas d'`annuaireInitial` — vs garder pour tous (un volontaire réaffecté au scan le matin en zone blanche a déjà l'annuaire).
+- [ ] [Review][Patch] Badge « Annuaire prêt » qui ment (AC2) : `statutInitialAnnuaire` vaut `pret` au rendu serveur AVANT toute écriture IndexedDB ; repli `await ecrireAnnuaire(choix.annuaire)` sans contrôle du booléen ; 401/403 laisse le statut SSR (« prêt » ou « préchargement… » indéfiniment) ; échec réseau avec `navigator.onLine === true` → `pret` au lieu de « hors-ligne » (matrice). « Prêt » seulement après écriture réussie, sinon `non-enregistre`/`hors-ligne`/`indisponible` [apps/web/src/app/volontaires/volontaires-pwa.tsx, apps/web/src/lib/annuaire-replique.ts]
+- [ ] [Review][Patch] Repli hors-ligne qui ignore `editionId` : une poche d'une édition précédente (ou sans édition courante) gagne et sert au scan — écarter l'entrée en cache si l'édition diffère de l'initial ou si aucune édition n'est courante [apps/web/src/lib/annuaire-replique.ts]
+- [ ] [Review][Patch] Règle de fraîcheur dupliquée : le repli « état » 3.3 compare en ligne au lieu d'utiliser le comparateur testé de l'annuaire — exporter un comparateur unique et l'utiliser pour les deux [apps/web/src/lib/annuaire-replique.ts, apps/web/src/app/volontaires/volontaires-pwa.tsx]
+- [ ] [Review][Patch] États d'échec du badge (`non-enregistre`, `indisponible`, `chargement`) stylés comme le succès `--synchro` [apps/web/src/app/volontaires/volontaires-pwa.tsx]
+- [ ] [Review][Patch] Pluriels : « Annuaire prêt — 1 coureurs », « 1 dossard(s) attribué(s) (4–4). » → accords réels (« 1 dossard attribué (n° 4) ») [apps/web/src/app/volontaires/volontaires-pwa.tsx:133, apps/web/src/lib/attribution-dossards.ts:41]
+- [ ] [Review][Patch] Résultat d'attribution : `<p role="status">` monté avec son contenu (souvent ignoré par les lecteurs d'écran) — région live montée en permanence [apps/web/src/app/admin/dossiers/attribution-dossards.tsx]
+- [ ] [Review][Patch] Mapper volontaires générique : `AucuneEditionError` → « L'annuaire des coureurs n'est pas encore publié » aussi sur `/api/volontaires/etat` ; action `admin.dossards_epuises` (« Vérifie les doublons ») inutile — message propre à chaque route, action utile [apps/web/src/app/api/volontaires/guard.ts:46, apps/web/src/modules/inscriptions/errors.ts]
+- [ ] [Review][Patch] `POST /api/admin/dossiers/dossards` : `no-store` seulement sur le 200, pas sur les erreurs (401/403/409/503) [apps/web/src/app/api/admin/dossiers/dossards/route.ts:21]
+- [ ] [Review][Patch] Commentaire faux « aucun import du module inscriptions » alors que `COUREUR_STATUS_VALIDE` en est importé — corriger le commentaire (couplage assumé) [apps/web/src/modules/missions/store.ts:983]
+- [ ] [Review][Patch] Épuisement 9999 jamais testé contre le vrai store (la doublure appelle elle-même la garde) — cas d'intégration : dossard 9998 + 2 validés → `DossardsEpuisesError`, aucun dossard posé [apps/web/src/modules/inscriptions/dossards.integration.test.ts]
+- [ ] [Review][Patch] Tests « RLS cross-org » (annuaire et attribution) qui passent sans RLS (filtres applicatifs suffisants, édition B distincte) — appel `listCoureursAnnuaire(orgA, editionB)` → `[]`, commentaire corrigé [apps/web/src/modules/inscriptions/dossards.integration.test.ts]
+- [ ] [Review][Patch] `no-store` des réponses d'erreur (401/503) des routes `annuaire` et `etat` jamais asserté [apps/web/src/app/api/volontaires/annuaire/route.test.ts, apps/web/src/app/api/volontaires/etat/route.test.ts]
+- [ ] [Review][Patch] Colonne « Dossard » de `/admin/dossiers` et ligne « Dossard attribué » de la fiche jamais rendues en test [apps/web/src/app/admin/dossiers/page.test.tsx, apps/web/src/app/admin/dossiers/[id]/page.tsx]
+- [ ] [Review][Patch] Recette S4 : 4.9 (« avant toute attribution ») après 4.2 sans remise à zéro, 4.8 suppose des validations non décrites, renvois « épopée 1 S6 » sans étapes ; « dans l'ordre d'inscription » faux d'un lot à l'autre ; scénarios manquants (non enregistré en navigation privée, indisponible poche vide, coureur repassé en constitution, 403 coureur/organisateur sur l'annuaire, 409 épuisés via psql) [_bmad-output/implementation-artifacts/scenarios-recette-epic-3.md]
+- [x] [Review][Defer] Orchestration client de l'annuaire (non enregistré, délai, 401/403, réécriture de la poche) sans test d'effet — pas de harnais DOM ; extraction en fonctions pures partielle via le patch « badge » [apps/web/src/app/volontaires/volontaires-pwa.tsx] — deferred: décision d'outillage DOM déjà renvoyée (BF3/BF4 passe 1, BF5/VG4 de la 3.3).
+
+**Rejected (passe 2)**
+- false — Recette S1 décrivant le flux mot de passe : déjà réécrite pour la connexion par code (SCP 2026-10-28 §4.7, étapes 1.4–1.15).
+- carried — `avecStore` qui résout au `put` et non au `complete` : patch en cours dans la revue 3.3 (même défaut, même fichier).
+- spec — Statuts/coquille `CoureurAnnuraire`/libellé attendu « 12 dossards attribués » ; annuaire porté par `missions` au lieu de `chrono` (Code Map de la spec) ; recette livrée avant clôture des stories : correction = édition des documents de pilotage.
+- low — Annuaire dans le payload RSC/HTML et le shell en cache : la réplique complète sur l'appareil EST l'objet de la story (IndexedDB) ; « pas de liste affichée » vise l'UI — la portée relève de la décision ci-dessus. Double chargement SSR + fetch : coût réseau modeste.
+- low — Nom/prénom vides qui feraient rejeter tout l'annuaire : `validateInscription` les rend obligatoires, seul un SQL manuel peut en produire.
+- low — Numéro du max réattribuable si la ligne max est supprimée : aucune suppression de coureur dossardé en V1.
+- low — Attribution irréversible sans confirmation ni aperçu : les dossards doivent être attribués de toute façon, l'ordre intra-lot est documenté.
+- low — 23505 non mappé, nombre de lignes de l'UPDATE non vérifié, lots concurrents non testés : `FOR UPDATE` sérialise, saisie SQL manuelle seule source de collision.
+- low — Validation du résultat d'attribution côté client (bornes incohérentes) : le serveur est la seule source.
+- low — `ouvrirBase` bloqué par un onglet v1 / `versionchange` : migration v1→v2 ponctuelle, onglets multiples rares sur le terrain.
+
 ## Review Triage Log
 
 ### 2026-10-23 — Review pass 1 (blind-hunter 14, edge-case-hunter 7, verification-gap 5 ; 26 findings)

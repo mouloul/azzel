@@ -1,10 +1,10 @@
 import { nowIsoUtc, type AnnuaireEdition } from '@azzel/shared';
 
+import { toVolontairesApiError } from '@/app/api/volontaires/guard';
 import { AssistanceButton } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireRolePage } from '@/modules/iam/session';
-import { toMissionsApiError } from '@/modules/missions/errors';
 import { getAnnuaireEdition, getMissionsVolontaireState } from '@/modules/missions/service';
 
 import { VolontairesPwa } from './volontaires-pwa';
@@ -67,7 +67,8 @@ export default async function VolontairesPage({
   try {
     state = await getMissionsVolontaireState(session);
   } catch (error) {
-    const { envelope } = toMissionsApiError(error);
+    // Enveloppe terrain (volontaires.*, tutoiement), jamais admin.*.
+    const { envelope } = toVolontairesApiError(error);
     return (
       <section className="auth">
         <article className="card">
@@ -112,6 +113,8 @@ export default async function VolontairesPage({
     <VolontairesPwa
       email={session.email}
       etatInitial={{
+        // D1 (revue 3.3) — la fiche est liée au compte de la session.
+        accountId: session.accountId,
         editionNom: state.editionNom,
         assistancePhone,
         mesMissions: state.mesMissions,

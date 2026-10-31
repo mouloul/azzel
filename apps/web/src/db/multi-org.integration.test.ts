@@ -656,9 +656,9 @@ describe.skipIf(testUrls === null)(
     it('story 3.2 : affectation croisée refusée — le volontaire de A ne rejoint pas la mission de B', async () => {
       const editionA = await edition2027Pour(orgAId);
       const editionB = await edition2027Pour(orgBId);
-      const etatA = await missionsStore.listMissionsEtat(orgAId, editionA);
-      const etatB = await missionsStore.listMissionsEtat(orgBId, editionB);
-      const missionB = etatB.missions[0];
+      const etatAAvant = await missionsStore.listMissionsEtat(orgAId, editionA);
+      const etatBAvant = await missionsStore.listMissionsEtat(orgBId, editionB);
+      const missionB = etatBAvant.missions[0];
       if (!missionB) {
         throw new Error('mission org B absente');
       }
@@ -678,7 +678,18 @@ describe.skipIf(testUrls === null)(
           volontaireId: volontaireAId,
         }),
       ).rejects.toBeInstanceOf(MissionNotFoundError);
-      expect(etatA.affectations).toHaveLength(1);
+      // État RELU après les tentatives : aucune affectation n'est apparue, ni
+      // côté A ni côté B (la mission de B reste sans le volontaire de A).
+      const etatAApres = await missionsStore.listMissionsEtat(orgAId, editionA);
+      const etatBApres = await missionsStore.listMissionsEtat(orgBId, editionB);
+      expect(etatAApres.affectations).toEqual(etatAAvant.affectations);
+      expect(etatBApres.affectations).toEqual(etatBAvant.affectations);
+      expect(etatBApres.affectations.some((a) => a.volontaireId === volontaireAId)).toBe(false);
+      const croisees = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM affectation
+        WHERE mission_id = ${missionB.id} AND volontaire_id = ${volontaireAId}
+      `;
+      expect(croisees[0]?.count).toBe(0);
     });
 
     // --- Story 4.5 — module chrono (canal sync) -------------------------------

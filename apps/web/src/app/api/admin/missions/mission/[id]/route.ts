@@ -20,10 +20,14 @@ export async function PUT(
   }
   const { id } = await contexte.params;
   try {
-    await updateMission(guarded.session, id, lu.body);
+    const { avertissement } = await updateMission(guarded.session, id, lu.body);
     // Réponse minimale : le client router.refresh() relit l'état complet —
-    // pas de résumé factice (affectations/couverture) qui mentirait.
-    return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
+    // pas de résumé factice (affectations/couverture) qui mentirait. Seul
+    // l'avertissement de chevauchement (D2, jamais bloquant) l'accompagne.
+    return NextResponse.json(
+      { ok: true, avertissement },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error) {
     return errorResponse(toMissionsApiError(error));
   }

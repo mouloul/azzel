@@ -24,6 +24,7 @@ import {
 } from '@/modules/missions/domain';
 import type {
   ConflitAffectation,
+  ConflitModification,
   MissionSummary,
   SecteurSummary,
   VolontaireOption,
@@ -100,6 +101,75 @@ function ErreurServeur({
 // piègeux fuseaux — jamais réimplémentés localement).
 
 // ---------------------------------------------------------------------------
+// Annonces de succès (revue 3.2) : UNE annonce à la fois, portée par le
+// manager et CIBLÉE (id de mission/secteur, « secteur-ajout », « mission-ajout »,
+// « liste ») — elle survit au démontage du formulaire ou de la ligne qui l'a
+// déclenchée (édition terminée, suppression) et s'affiche au plus près.
+// ---------------------------------------------------------------------------
+
+export interface Annonce {
+  cible: string;
+  message: string;
+  /** D2 — chevauchements révélés par une modification de mission (non bloquant). */
+  conflits?: ConflitModification[];
+}
+
+type OnAnnonce = (annonce: Annonce | null) => void;
+
+/** Regroupe les conflits d'une modification par volontaire (un bandeau chacun). */
+export function conflitsParVolontaire(
+  conflits: ConflitModification[],
+): { volontaireId: string; volontaireNom: string; conflits: ConflitAffectation[] }[] {
+  const groupes = new Map<string, { volontaireId: string; volontaireNom: string; conflits: ConflitAffectation[] }>();
+  for (const conflit of conflits) {
+    const { volontaireId, volontaireNom, ...mission } = conflit;
+    const groupe = groupes.get(volontaireId) ?? { volontaireId, volontaireNom, conflits: [] };
+    groupe.conflits.push(mission);
+    groupes.set(volontaireId, groupe);
+  }
+  return [...groupes.values()];
+}
+
+/**
+ * Issue d'une affectation (pure et testée) : un doublon (`cree: false`) n'a
+ * RIEN créé — ni bandeau « enregistrée quand même », mais « déjà affecté » ;
+ * création avec conflit → bandeau de chevauchement ; sinon confirmation.
+ */
+export function issueAffectation(
+  resultat: { cree: boolean; avertissement: { missions: ConflitAffectation[] } | null },
+  volontaireNom: string,
+  titre: string,
+): { message: string | null; conflits: ConflitAffectation[] | null } {
+  if (!resultat.cree) {
+    return { message: `${volontaireNom} est déjà sur « ${titre} » — rien n’a changé.`, conflits: null };
+  }
+  if (resultat.avertissement !== null && resultat.avertissement.missions.length > 0) {
+    return { message: null, conflits: resultat.avertissement.missions };
+  }
+  return { message: `Affectation enregistrée : ${volontaireNom} sur « ${titre} ».`, conflits: null };
+}
+
+export function AnnonceSucces({ annonce }: { annonce: Annonce }) {
+  return (
+    <>
+      <p className="hint" role="status">
+        {annonce.message}
+      </p>
+      {annonce.conflits !== undefined
+        ? conflitsParVolontaire(annonce.conflits).map((groupe) => (
+            <BandeauAvertissement
+              key={groupe.volontaireId}
+              conflits={groupe.conflits}
+              volontaireNom={groupe.volontaireNom}
+              objet="modification"
+            />
+          ))
+        : null}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Formulaire secteur (nom, lieu, contact) — création et édition pré-remplie.
 // ---------------------------------------------------------------------------
 
@@ -120,9 +190,13 @@ function valeursSecteurInitiales(secteur?: SecteurSummary): SecteurFormValues {
 function SecteurForm({
   secteur,
   onTermine,
+  onEnregistre,
 }: {
   secteur?: SecteurSummary;
+  /** Fin du formulaire : succès OU annulation. */
   onTermine: () => void;
+  /** Succès seulement : annonce + router.refresh() (données à jour). */
+  onEnregistre: (nom: string) => void;
 }) {
   const prefix = secteur ? `secteur-${secteur.id}` : 'secteur-ajout';
   const [values, setValues] = useState<SecteurFormValues>(() => valeursSecteurInitiales(secteur));
@@ -193,6 +267,7 @@ function SecteurForm({
         setValues(valeursSecteurInitiales());
         setFieldErrors(null);
       }
+      onEnregistre(values.nom.trim());
       onTermine();
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -325,11 +400,16 @@ export function MissionForm({
   secteurs,
   mission,
   onTermine,
+  onEnregistre,
 }: {
   secteurs: SecteurSummary[];
   mission?: MissionSummary;
+  /** Fin du formulaire : succès OU annulation. */
   onTermine: () => void;
-}) {  const prefix = mission ? `mission-${mission.id}` : 'mission-ajout';
+  /** Succès seulement — `conflits` : chevauchements révélés par une modification (D2). */
+  onEnregistre?: (titre: string, conflits: ConflitModification[] | null) => void;
+}) {
+  const prefix = mission ? `mission-${mission.id}` : 'mission-ajout';
   const [values, setValues] = useState<MissionFormValues>(() =>
     valeursMissionInitiales(secteurs, mission),
   );
@@ -395,10 +475,17 @@ export function MissionForm({
         }
         return;
       }
+      // PUT : { ok, avertissement } (D2, jamais bloquant) ; POST : résumé sans
+      // avertissement. Corps illisible ≠ échec : la mission EST enregistrée.
+      const corps = (await response.json().catch(() => null)) as {
+        avertissement?: { missions: ConflitModification[] } | null;
+      } | null;
+      const conflits = corps?.avertissement?.missions ?? null;
       if (mission === undefined) {
         setValues(valeursMissionInitiales(secteurs));
         setFieldErrors(null);
       }
+      onEnregistre?.(values.titre.trim(), conflits !== null && conflits.length > 0 ? conflits : null);
       onTermine();
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -604,14 +691,17 @@ export function MissionForm({
 function BandeauAvertissement({
   conflits,
   volontaireNom,
+  objet = 'affectation',
 }: {
   conflits: ConflitAffectation[];
   volontaireNom: string;
+  /** D2 : « modification » quand ce sont les horaires/le secteur qui ont bougé. */
+  objet?: 'affectation' | 'modification';
 }) {
   return (
     <div role="status" aria-live="polite" className="missions-avertissement">
       <p className="missions-avertissement-titre">
-        Chevauchement d’horaires pour {volontaireNom} — affectation enregistrée quand même.
+        Chevauchement d’horaires pour {volontaireNom} — {objet} enregistrée quand même.
       </p>
       <ul>
         {conflits.map((conflit) => (
@@ -632,10 +722,14 @@ function MissionLigne({
   mission,
   volontaires,
   onModifie,
+  annonce,
+  onAnnonce,
 }: {
   mission: MissionSummary;
   volontaires: VolontaireOption[];
   onModifie: () => void;
+  annonce: Annonce | null;
+  onAnnonce: OnAnnonce;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -670,13 +764,12 @@ function MissionLigne({
         cree: boolean;
         avertissement: { missions: ConflitAffectation[] } | null;
       };
-      if (resultat.avertissement !== null) {
-        const volontaire = volontaires.find((v) => v.id === volontaireId);
-        setAvertissement({
-          volontaireNom: volontaire?.nom ?? 'ce volontaire',
-          conflits: resultat.avertissement.missions,
-        });
+      const volontaireNom = volontaires.find((v) => v.id === volontaireId)?.nom ?? 'ce volontaire';
+      const issue = issueAffectation(resultat, volontaireNom, mission.titre);
+      if (issue.conflits !== null) {
+        setAvertissement({ volontaireNom, conflits: issue.conflits });
       }
+      onAnnonce(issue.message !== null ? { cible: mission.id, message: issue.message } : null);
       setVolontaireChoisi('');
       router.refresh();
     } catch (error) {
@@ -712,6 +805,16 @@ function MissionLigne({
         setServerError((await lireErreur(response)) ?? NETWORK_ERROR);
         return;
       }
+      const resultat = (await response.json().catch(() => null)) as { supprime?: boolean } | null;
+      const volontaireNom =
+        mission.affectations.find((a) => a.volontaireId === volontaireId)?.volontaireNom ?? 'Ce volontaire';
+      onAnnonce({
+        cible: mission.id,
+        message:
+          resultat?.supprime === false
+            ? `${volontaireNom} n’était déjà plus sur « ${mission.titre} ».`
+            : `Affectation retirée : ${volontaireNom} n’est plus sur « ${mission.titre} ».`,
+      });
       router.refresh();
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -746,6 +849,11 @@ function MissionLigne({
         setServerError((await lireErreur(response)) ?? NETWORK_ERROR);
         return;
       }
+      // La ligne disparaît : l'annonce vit sur le bloc secteur.
+      onAnnonce({
+        cible: mission.secteurId,
+        message: `Mission « ${mission.titre} » supprimée avec ses affectations.`,
+      });
       router.refresh();
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -847,6 +955,7 @@ function MissionLigne({
       {avertissement !== null && (
         <BandeauAvertissement conflits={avertissement.conflits} volontaireNom={avertissement.volontaireNom} />
       )}
+      {annonce !== null && annonce.cible === mission.id ? <AnnonceSucces annonce={annonce} /> : null}
       {serverError !== null && <ErreurServeur erreur={serverError} reconnect={reconnect} />}
     </div>
   );
@@ -864,6 +973,8 @@ function SecteurBloc({
   onMissionEdition,
   onSecteurEdition,
   secteurEnEdition,
+  annonce,
+  onAnnonce,
 }: {
   secteur: SecteurSummary;
   secteurs: SecteurSummary[];
@@ -872,6 +983,8 @@ function SecteurBloc({
   onMissionEdition: (id: string | null) => void;
   onSecteurEdition: () => void;
   secteurEnEdition: boolean;
+  annonce: Annonce | null;
+  onAnnonce: OnAnnonce;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -900,6 +1013,7 @@ function SecteurBloc({
         setServerError((await lireErreur(response)) ?? NETWORK_ERROR);
         return;
       }
+      onAnnonce({ cible: 'liste', message: `Secteur « ${secteur.nom} » supprimé.` });
       router.refresh();
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
@@ -932,8 +1046,18 @@ function SecteurBloc({
         </div>
       </div>
       {serverError !== null && <ErreurServeur erreur={serverError} reconnect={reconnect} />}
+      {annonce !== null && annonce.cible === secteur.id ? <AnnonceSucces annonce={annonce} /> : null}
       {secteurEnEdition ? (
-        <SecteurForm secteur={secteur} onTermine={onSecteurEdition} />
+        <SecteurForm
+          secteur={secteur}
+          onTermine={onSecteurEdition}
+          onEnregistre={(nom) => {
+            // Édition RÉUSSIE : relire l'état, sinon nom/lieu/contact affichés
+            // resteraient les anciens (l'annulation, elle, ne relit rien).
+            onAnnonce({ cible: secteur.id, message: `Secteur « ${nom} » enregistré.` });
+            router.refresh();
+          }}
+        />
       ) : null}
       {secteur.missions.length === 0 && !secteurEnEdition ? (
         <p className="hint">Aucune mission dans ce secteur pour le moment.</p>
@@ -944,8 +1068,15 @@ function SecteurBloc({
               key={mission.id}
               secteurs={secteurs}
               mission={mission}
-              onTermine={() => {
-                onMissionEdition(null);
+              onTermine={() => onMissionEdition(null)}
+              onEnregistre={(titre, conflits) => {
+                // L'annonce suit la mission (même déplacée de secteur) et porte
+                // le bandeau de chevauchement D2 — informatif, jamais bloquant.
+                onAnnonce({
+                  cible: mission.id,
+                  message: `Mission « ${titre} » enregistrée.`,
+                  ...(conflits !== null ? { conflits } : {}),
+                });
                 router.refresh();
               }}
             />
@@ -955,6 +1086,8 @@ function SecteurBloc({
               mission={mission}
               volontaires={volontaires}
               onModifie={() => onMissionEdition(mission.id)}
+              annonce={annonce}
+              onAnnonce={onAnnonce}
             />
           ),
         )
@@ -979,6 +1112,7 @@ export function MissionsManager({
   const router = useRouter();
   const [secteurEnEdition, setSecteurEnEdition] = useState<string | null>(null);
   const [missionEnEdition, setMissionEnEdition] = useState<string | null>(null);
+  const [annonce, setAnnonce] = useState<Annonce | null>(null);
 
   return (
     <>
@@ -989,9 +1123,17 @@ export function MissionsManager({
         </p>
       ) : (
         <>
-          <SecteurForm onTermine={() => router.refresh()} />
+          <SecteurForm
+            onTermine={() => undefined}
+            onEnregistre={(nom) => {
+              setAnnonce({ cible: 'secteur-ajout', message: `Secteur « ${nom} » ajouté.` });
+              router.refresh();
+            }}
+          />
+          {annonce !== null && annonce.cible === 'secteur-ajout' ? <AnnonceSucces annonce={annonce} /> : null}
           <div className="missions-liste">
             <h2 className="recap-titre">Secteurs et missions ({secteurs.length})</h2>
+            {annonce !== null && annonce.cible === 'liste' ? <AnnonceSucces annonce={annonce} /> : null}
             {secteurs.length === 0 ? (
               <p className="hint">
                 Aucun secteur pour le moment — crée le premier (village départ,
@@ -1007,9 +1149,11 @@ export function MissionsManager({
                   missionEnEdition={missionEnEdition}
                   onMissionEdition={setMissionEnEdition}
                   secteurEnEdition={secteurEnEdition === secteur.id}
+                  annonce={annonce}
+                  onAnnonce={setAnnonce}
                   onSecteurEdition={() => {
-                    // Simple bascule d'édition : aucun refresh nécessaire, les
-                    // props à jour arrivent avec le prochain refresh utile.
+                    // Simple bascule d'édition : aucun refresh ici — le succès
+                    // relit l'état via onEnregistre (SecteurBloc).
                     setSecteurEnEdition((precedent) =>
                       precedent === secteur.id ? null : secteur.id,
                     );
@@ -1022,8 +1166,16 @@ export function MissionsManager({
             <div className="missions-liste">
               <MissionForm
                 secteurs={secteurs}
-                onTermine={() => router.refresh()}
+                onTermine={() => undefined}
+                onEnregistre={(titre) => {
+                  setAnnonce({
+                    cible: 'mission-ajout',
+                    message: `Mission « ${titre} » ajoutée — vacante tant que personne n’y est affecté.`,
+                  });
+                  router.refresh();
+                }}
               />
+              {annonce !== null && annonce.cible === 'mission-ajout' ? <AnnonceSucces annonce={annonce} /> : null}
             </div>
           ) : null}
           <p className="hint">

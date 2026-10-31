@@ -11,9 +11,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 import {
+  AnnonceSucces,
   MissionForm,
   MissionsManager,
+  conflitsParVolontaire,
   corpsMissionSoumis,
+  issueAffectation,
   valeursApresChangementType,
 } from './missions-manager';
 import { isoVersDatetimeLocal } from '@/modules/missions/domain';
@@ -96,9 +99,9 @@ describe('MissionForm — champ « Barrière horaire » réservé au type scan (
     expect(html).toContain('Barrière horaire (facultative)');
     expect(html).toContain('barriereLe');
     expect(html).toContain('type="datetime-local"');
-    // Préremplissage : valeur datetime-local locale dérivée de l’ISO (TZ du
-    // poste de test — on vérifie la FORME, pas le fuseau).
-    expect(html).toMatch(/name="barriereLe"[^>]*value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"/);
+    // Préremplissage : heure murale d’Alger (fuseau produit D1, UTC+1),
+    // indépendante du fuseau du poste de test.
+    expect(html).toMatch(/name="barriereLe"[^>]*value="2027-05-16T11:00"/);
   });
 
   it('mission accueil : le champ est ABSENT du rendu', async () => {
@@ -153,8 +156,8 @@ describe('corpsMissionSoumis — assemblage du corps JSON (story 5.2 revue)', ()
     const corps = corpsMissionSoumis(valeurs);
     expect(corps.titre).toBe('Scan km 12');
     expect(corps.consignes).toBe('Arrive 15 min avant.');
-    // datetime-local → ISO : aller-retour vérifié (fuseau du poste indifférent).
-    expect(corps.debutLe).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    // datetime-local (heure d’Alger, D1) → ISO UTC : valeur absolue.
+    expect(corps.debutLe).toBe('2027-05-16T05:00:00.000Z');
     expect(isoVersDatetimeLocal(corps.debutLe as string)).toBe(valeurs.debutLe);
     expect(isoVersDatetimeLocal(corps.barriereLe as string)).toBe(valeurs.barriereLe);
     expect('barriereLe' in corps).toBe(true);
@@ -192,8 +195,8 @@ describe('MissionsManager — marqueur « — barrière HH:MM » dans la liste (
       />,
     );
     expect(html).toContain('mission-barriere');
-    // React insère un commentaire entre « — barrière » et l’heure locale.
-    expect(html).toMatch(/— barrière (<!-- -->)?\d{2}:\d{2}/);
+    // React insère un commentaire entre « — barrière » et l’heure d’Alger.
+    expect(html).toMatch(/— barrière (<!-- -->)?11:00/);
   });
 
   it('missions sans barrière : aucun marqueur « — barrière »', async () => {
@@ -261,5 +264,89 @@ describe('MissionsManager — marqueur « — arrivée » dans la liste', () => 
       />,
     );
     expect(html).not.toContain('— arrivée');
+  });
+});
+
+// Revue 3.2 — annonces de succès role="status", doublon d'affectation,
+// bandeau de chevauchement après modification (D2, jamais bloquant).
+
+const CONFLIT = {
+  missionId: 'mission-b',
+  secteurNom: 'Tronçon',
+  typeLabel: 'Sécurité tronçon',
+  titre: 'Barrière PK 10',
+  debutLe: '2027-05-16T10:00:00.000Z',
+  finLe: '2027-05-16T14:00:00.000Z',
+};
+
+describe('issueAffectation — doublon ≠ création, conflit → bandeau', () => {
+  it('doublon (cree false) : « déjà sur … », AUCUN bandeau « enregistrée quand même »', () => {
+    expect(
+      issueAffectation({ cree: false, avertissement: { missions: [CONFLIT] } }, 'Karim', 'Accueil village'),
+    ).toEqual({ message: 'Karim est déjà sur « Accueil village » — rien n’a changé.', conflits: null });
+  });
+
+  it('création avec conflit : bandeau (conflits), pas de confirmation simple', () => {
+    expect(
+      issueAffectation({ cree: true, avertissement: { missions: [CONFLIT] } }, 'Karim', 'Accueil village'),
+    ).toEqual({ message: null, conflits: [CONFLIT] });
+  });
+
+  it('création sans conflit : confirmation', () => {
+    expect(issueAffectation({ cree: true, avertissement: null }, 'Karim', 'Accueil village')).toEqual({
+      message: 'Affectation enregistrée : Karim sur « Accueil village ».',
+      conflits: null,
+    });
+  });
+});
+
+describe('conflitsParVolontaire — un groupe par volontaire, ordre conservé', () => {
+  it('regroupe et retire les champs volontaire des conflits', () => {
+    const groupes = conflitsParVolontaire([
+      { ...CONFLIT, volontaireId: 'v-karim', volontaireNom: 'Karim' },
+      { ...CONFLIT, missionId: 'mission-c', volontaireId: 'v-lina', volontaireNom: 'Lina' },
+      { ...CONFLIT, missionId: 'mission-d', volontaireId: 'v-karim', volontaireNom: 'Karim' },
+    ]);
+    expect(groupes).toEqual([
+      {
+        volontaireId: 'v-karim',
+        volontaireNom: 'Karim',
+        conflits: [CONFLIT, { ...CONFLIT, missionId: 'mission-d' }],
+      },
+      { volontaireId: 'v-lina', volontaireNom: 'Lina', conflits: [{ ...CONFLIT, missionId: 'mission-c' }] },
+    ]);
+  });
+});
+
+describe('AnnonceSucces — confirmation role="status" + bandeau D2', () => {
+  it('confirmation seule : role="status", aucun bandeau', async () => {
+    const html = await rendu(
+      <AnnonceSucces annonce={{ cible: 'mission-1', message: 'Mission « Accueil village » enregistrée.' }} />,
+    );
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Mission « Accueil village » enregistrée.');
+    expect(html).not.toContain('missions-avertissement');
+  });
+
+  it('modification en conflit : un bandeau par volontaire, « modification enregistrée quand même », heures d’Alger', async () => {
+    const html = await rendu(
+      <AnnonceSucces
+        annonce={{
+          cible: 'mission-1',
+          message: 'Mission « Accueil village » enregistrée.',
+          conflits: [
+            { ...CONFLIT, volontaireId: 'v-karim', volontaireNom: 'Karim' },
+            { ...CONFLIT, missionId: 'mission-c', volontaireId: 'v-lina', volontaireNom: 'Lina' },
+          ],
+        }}
+      />,
+    );
+    expect(html.match(/class="missions-avertissement"/g)).toHaveLength(2);
+    expect(html).toMatch(/Chevauchement d’horaires pour (<!-- -->)?Karim(<!-- -->)? — (<!-- -->)?modification(<!-- -->)? enregistrée quand même/);
+    expect(html).toContain('Lina');
+    expect(html).not.toContain('affectation enregistrée quand même');
+    // 10:00 Z → 11:00 à Alger (fuseau produit D1).
+    expect(html).toContain('16 mai 2027 à 11:00');
+    expect(html.match(/role="status"/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });

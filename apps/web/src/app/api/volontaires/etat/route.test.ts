@@ -144,6 +144,8 @@ describe('GET /api/volontaires/etat', () => {
       missions: typeof MISSION[];
       generéA: string;
     };
+    // D1 (revue 3.3) — le compte de la session voyage avec l'état.
+    expect((body as { accountId?: string }).accountId).toBe('account-volontaire');
     expect(body.editionNom).toBe('Édition 2027');
     expect(body.assistancePhone).toBe('+213 555 010 200');
     expect(body.mesMissions[0]).toMatchObject({

@@ -148,11 +148,8 @@ describe('manifeste et service worker commités', () => {
     }
   });
 
-  it('apple-touch-icon référencé par le layout existe (iOS Safari)', () => {
-    expect(() =>
-      readFileSync(path.join(DOSSIER_VOLONTAIRES, 'apple-touch-icon-180.png')),
-    ).not.toThrow();
-  });
+  // Liens manifest / apple-touch-icon du layout : vérifiés sur le RENDU du
+  // layout (layout.test.tsx), pas ici.
 
   it('service worker : présent, précache /volontaires, intercepte l’état et rien d’autre', () => {
     const sw = readFileSync(path.join(DOSSIER_PUBLIC, 'sw-volontaires.js'), 'utf8');

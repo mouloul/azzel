@@ -308,7 +308,10 @@ export function toMissionsApiError(error: unknown): ApiError {
       envelope: createErrorEnvelope({
         code: 'admin.missions.aucune_edition',
         message: 'Ton organisation n’a aucune édition : aucun secteur ne peut être créé.',
-        action: 'Crée d’abord une édition, puis reviens découper les secteurs.',
+        // Aucun écran de création d'édition : elle est posée à l'installation
+        // (seed de migration) — renvoyer vers une action qui existe.
+        action:
+          'L’édition se met en place à l’installation de la plateforme : contacte la personne qui gère Azzel pour ton organisation.',
       }),
     };
   }

@@ -466,6 +466,9 @@ describe('createMission — validation puis store', () => {
     const apiError = toMissionsApiError(new AucuneEditionError());
     expect(apiError.status).toBe(409);
     expect(apiError.envelope.error.code).toBe('admin.missions.aucune_edition');
+    // Revue 3.2 : aucune action inexistante proposée (pas d'écran « créer une édition »).
+    expect(apiError.envelope.error.action).not.toMatch(/crée d’abord une édition/i);
+    expect(apiError.envelope.error.action).toContain('installation');
   });
 });
 
@@ -483,23 +486,26 @@ describe('story 5.2 — updateMission : barrière posée, modifiée puis effacé
 
   function storeUpdate(barriereLe: Date | null) {
     const updateMissionStore = vi.fn(async () => ({
-      id: MISSION_ID,
-      secteurId: CORPS_SCAN.secteurId,
-      type: 'scan_checkpoint' as const,
-      titre: 'Scan km 12',
-      debutLe: DEBUT,
-      finLe: FIN,
-      consignes: null,
-      estArrivee: false,
-      barriereLe,
-      createdAt: new Date(),
+      mission: {
+        id: MISSION_ID,
+        secteurId: CORPS_SCAN.secteurId,
+        type: 'scan_checkpoint' as const,
+        titre: 'Scan km 12',
+        debutLe: DEBUT,
+        finLe: FIN,
+        consignes: null,
+        estArrivee: false,
+        barriereLe,
+        createdAt: new Date(),
+      },
+      conflits: [],
     }));
     return { store: storeFactice({ updateMission: updateMissionStore }), updateMissionStore };
   }
 
   it('barrière POSÉE : l’ISO du corps devient une Date transmise au store, répercutée au summary', async () => {
     const { store, updateMissionStore } = storeUpdate(BARRIERE);
-    const mission = await updateMission(
+    const { mission } = await updateMission(
       SESSION_ORGANISATEUR as SessionRecord,
       MISSION_ID,
       { ...CORPS_SCAN, barriereLe: BARRIERE.toISOString() },
@@ -532,7 +538,7 @@ describe('story 5.2 — updateMission : barrière posée, modifiée puis effacé
 
   it('barrière EFFACÉE (absente du corps) : null transmis — l’alerte est désarmée explicitement', async () => {
     const { store, updateMissionStore } = storeUpdate(null);
-    const mission = await updateMission(
+    const { mission } = await updateMission(
       SESSION_ORGANISATEUR as SessionRecord,
       MISSION_ID,
       CORPS_SCAN,
@@ -604,6 +610,80 @@ describe('affecterVolontaire — corps, idempotence, avertissement', () => {
       deps([], false),
     );
     expect(resultat.cree).toBe(false);
+  });
+});
+
+describe('updateMission — avertissement de chevauchement après modification (D2)', () => {
+  const MISSION_ID = '00000000-0000-0000-0000-00000000d201';
+  const CORPS = {
+    secteurId: '00000000-0000-0000-0000-00000000d2e1',
+    type: 'accueil',
+    titre: 'Accueil village',
+    debutLe: DEBUT.toISOString(),
+    finLe: FIN.toISOString(),
+  };
+  const MISSION = {
+    id: MISSION_ID,
+    secteurId: CORPS.secteurId,
+    type: 'accueil' as const,
+    titre: 'Accueil village',
+    debutLe: DEBUT,
+    finLe: FIN,
+    consignes: null,
+    estArrivee: false,
+    barriereLe: null,
+    createdAt: new Date(),
+  };
+
+  it('conflits du store : modification FAITE + avertissement listant mission ET volontaire', async () => {
+    const store = storeFactice({
+      updateMission: async () => ({
+        mission: MISSION,
+        conflits: [
+          {
+            missionId: 'mission-b',
+            secteurNom: 'Tronçon',
+            type: 'securite_troncon',
+            titre: 'Barrière PK 10',
+            debutLe: new Date('2027-05-16T10:00:00.000Z'),
+            finLe: new Date('2027-05-16T14:00:00.000Z'),
+            volontaireId: 'volontaire-karim',
+            volontaireNom: 'Karim',
+          },
+        ],
+      }),
+    });
+    const resultat = await updateMission(SESSION_ORGANISATEUR as SessionRecord, MISSION_ID, CORPS, {
+      store,
+    });
+    expect(resultat.mission.id).toBe(MISSION_ID);
+    expect(resultat.avertissement?.missions).toEqual([
+      {
+        missionId: 'mission-b',
+        secteurNom: 'Tronçon',
+        typeLabel: 'Sécurité tronçon',
+        titre: 'Barrière PK 10',
+        debutLe: '2027-05-16T10:00:00.000Z',
+        finLe: '2027-05-16T14:00:00.000Z',
+        volontaireId: 'volontaire-karim',
+        volontaireNom: 'Karim',
+      },
+    ]);
+  });
+
+  it('aucun conflit : avertissement null', async () => {
+    const store = storeFactice({ updateMission: async () => ({ mission: MISSION, conflits: [] }) });
+    const resultat = await updateMission(SESSION_ORGANISATEUR as SessionRecord, MISSION_ID, CORPS, {
+      store,
+    });
+    expect(resultat.avertissement).toBeNull();
+  });
+
+  it('mission inconnue (store null) : MissionNotFoundError', async () => {
+    const store = storeFactice({ updateMission: async () => null });
+    await expect(
+      updateMission(SESSION_ORGANISATEUR as SessionRecord, MISSION_ID, CORPS, { store }),
+    ).rejects.toBeInstanceOf(MissionNotFoundError);
   });
 });
 

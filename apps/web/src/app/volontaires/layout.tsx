@@ -18,6 +18,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Standalone iOS : env(safe-area-inset-*) n'est renseigné qu'avec
+  // viewport-fit=cover (barre « Appeler l'équipe » hors de l'indicateur).
+  viewportFit: 'cover',
   themeColor: [
     // Aligné sur le theme_color du manifeste (vert Djurdjura) : la barre
     // système porte la couleur terrain dans les deux modes.

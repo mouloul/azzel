@@ -43,7 +43,7 @@ vi.mock('next/navigation', () => ({
 
 import { DbUnavailableError } from '@/modules/iam/errors';
 import VolontairesPage, { MESSAGE_SCAN_PASSAGE, MESSAGE_SCAN_RETRAIT } from './page';
-import { EcranSessionExpiree } from './volontaires-pwa';
+import { BandeauReconnexion } from './volontaires-pwa';
 
 const SESSION_VOLONTAIRE = {
   accountId: 'account-volontaire',
@@ -124,6 +124,31 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
     expect(html).toContain('Arrive 15 min avant.');
   });
 
+  it('couverture visible côté volontaire (story 3.2) : chaque mission de l’édition porte SON état, horaires à l’heure d’Alger', async () => {
+    const vacante = {
+      ...MISSION,
+      id: 'mission-vacante',
+      titre: 'Barrière PK 10',
+      couverture: 'vacante',
+      couvertureLabel: 'Vacante',
+    };
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      missions: [MISSION, vacante],
+    });
+    const html = await rendu();
+    const items = html.match(/<li[^>]*class="volontaires-mission-courte"[^>]*>[\s\S]*?<\/li>/g) ?? [];
+    expect(items).toHaveLength(2);
+    expect(items[0]).toContain('Accueil village');
+    expect(items[0]).toContain('couverture assurée');
+    expect(items[0]).not.toContain('vacante');
+    expect(items[1]).toContain('Barrière PK 10');
+    expect(items[1]).toContain('vacante — besoins volontaires');
+    expect(items[1]).not.toContain('couverture assurée');
+    // 06:00 Z → 07:00 à Alger (fuseau produit D1), quel que soit le serveur.
+    expect(items[0]).toContain('16 mai 2027 à 07:00');
+  });
+
   it('bandeau sync (story 4.5, UX-DR-8) : TOUJOURS dans le rendu nominal — état initial et journal', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
     const html = await rendu();
@@ -132,19 +157,23 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
     expect(html).toContain('Envoyer maintenant');
   });
 
-  it('écran « session expirée » (composant pur) : le bandeau sync RESTE MONTÉ (AD-5 — la file survit au re-login)', async () => {
-    const flux = await renderToReadableStream(
-      <EcranSessionExpiree assistancePhone="+213 555 010 200" />,
-    );
+  it('bandeau « session expirée » (composant pur, revue 3.3) : alerte + lien /connexion, la fiche reste en dessous', async () => {
+    const flux = await renderToReadableStream(<BandeauReconnexion />);
     const html = await new Response(flux).text();
-    expect(html).toContain('Tu es déconnecté');
-    expect(html).toContain('Se reconnecter');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('Ta session a expiré ou a été fermée.');
+    expect(html).toContain('Reconnecte-toi');
     // Story 3.1 — reconnexion sur la page UNIQUE /connexion (code par email).
     expect(html).toContain('href="/connexion"');
     expect(html).not.toMatch(/href="\/connexion-/);
-    expect(html).toContain('Sync de la file…');
-    expect(html).toMatch(/Journal sync \((?:<!-- -->)?0/);
-    expect(html).toContain('Envoyer maintenant');
+    // Plus d'écran plein « Tu es déconnecté » : la fiche n'est jamais remplacée.
+    expect(html).not.toContain('Tu es déconnecté');
+  });
+
+  it('revue 3.3 — rendu nominal marqué data-az-shell="fiche" (seul shell cacheable par le SW)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('data-az-shell="fiche"');
   });
 
   it('en-tête : email du compte, édition, assistance transmise, badge synchronisé', async () => {
@@ -175,10 +204,13 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
   it('service en échec : enveloppe affichée + déconnexion + assistance conservées', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockRejectedValue(new DbUnavailableError());
     const html = await rendu();
+    // Enveloppe terrain volontaires.* (revue 3.3), jamais le texte admin.*.
     expect(html).toContain('Connexion indisponible.');
-    expect(html).toContain('Réessaie dans un instant.');
+    expect(html).toContain('ta fiche reste lisible hors-ligne');
     expect(html).toContain('Se déconnecter');
     expect(html).toContain('Appeler l’équipe');
+    // Page d'erreur : jamais marquée comme shell fiche (anti-empoisonnement SW).
+    expect(html).not.toContain('data-az-shell');
   });
 
   it('garde db-unavailable : message dédié, jamais la fiche', async () => {
@@ -186,6 +218,7 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
     const html = await rendu();
     expect(html).toContain('Connexion indisponible.');
     expect(html).not.toContain('Ton espace mission');
+    expect(html).not.toContain('data-az-shell');
   });
 });
 

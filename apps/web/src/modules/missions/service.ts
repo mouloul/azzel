@@ -43,6 +43,7 @@ import {
 } from './import-format';
 import {
   getMissionsStore,
+  type MissionConflitRecord,
   type MissionRecord,
   type MissionsStore,
   type SecteurRecord,
@@ -546,12 +547,37 @@ export async function createMission(
   return toMissionSummary(record, []);
 }
 
+/** Mission en conflit horaire, prête à afficher dans l'avertissement. */
+export interface ConflitAffectation {
+  missionId: string;
+  secteurNom: string;
+  typeLabel: string;
+  titre: string;
+  debutLe: string;
+  finLe: string;
+}
+
+/** Conflit révélé par une modification (D2) : conflit d'affectation + volontaire. */
+export interface ConflitModification extends ConflitAffectation {
+  volontaireId: string;
+  volontaireNom: string;
+}
+
+export interface MissionModifieeResultat {
+  mission: MissionSummary;
+  /**
+   * Décision D2 — horaires/secteur modifiés créant un chevauchement pour un
+   * volontaire affecté : AVERTISSEMENT informatif, la modification est faite.
+   */
+  avertissement: { missions: ConflitModification[] } | null;
+}
+
 export async function updateMission(
   session: SessionRecord,
   missionId: string,
   rawInput: unknown,
   deps: MissionsServiceDeps = {},
-): Promise<MissionSummary> {
+): Promise<MissionModifieeResultat> {
   const store = deps.store ?? getMissionsStore();
   if (!estUuidValide(missionId)) {
     throw new MissionNotFoundError();
@@ -559,14 +585,26 @@ export async function updateMission(
   const input = normalizeMissionInput(rawInput);
   assertMissionValide(input);
   assertSecteurMissionUuid(input);
-  const record = await store.updateMission(missionId, {
+  const resultat = await store.updateMission(missionId, {
     organisationId: session.organisationId,
     ...missionVersStoreInput(input),
   });
-  if (record === null) {
+  if (resultat === null) {
     throw new MissionNotFoundError();
   }
-  return toMissionSummary(record, []);
+  return {
+    mission: toMissionSummary(resultat.mission, []),
+    avertissement:
+      resultat.conflits.length > 0
+        ? {
+            missions: resultat.conflits.map((conflit) => ({
+              ...versConflitAffectation(conflit),
+              volontaireId: conflit.volontaireId,
+              volontaireNom: conflit.volontaireNom,
+            })),
+          }
+        : null,
+  };
 }
 
 export async function deleteMission(
@@ -585,14 +623,16 @@ export async function deleteMission(
   return { ok: true };
 }
 
-/** Mission en conflit horaire, prête à afficher dans l'avertissement. */
-export interface ConflitAffectation {
-  missionId: string;
-  secteurNom: string;
-  typeLabel: string;
-  titre: string;
-  debutLe: string;
-  finLe: string;
+
+function versConflitAffectation(conflit: MissionConflitRecord): ConflitAffectation {
+  return {
+    missionId: conflit.missionId,
+    secteurNom: conflit.secteurNom,
+    typeLabel: LIBELLES_MISSION_TYPE[conflit.type],
+    titre: conflit.titre,
+    debutLe: conflit.debutLe.toISOString(),
+    finLe: conflit.finLe.toISOString(),
+  };
 }
 
 export interface AffectationResultat {
@@ -631,16 +671,7 @@ export async function affecterVolontaire(
     cree: resultat.cree,
     avertissement:
       resultat.conflits.length > 0
-        ? {
-            missions: resultat.conflits.map((conflit) => ({
-              missionId: conflit.missionId,
-              secteurNom: conflit.secteurNom,
-              typeLabel: LIBELLES_MISSION_TYPE[conflit.type],
-              titre: conflit.titre,
-              debutLe: conflit.debutLe.toISOString(),
-              finLe: conflit.finLe.toISOString(),
-            })),
-          }
+        ? { missions: resultat.conflits.map(versConflitAffectation) }
         : null,
   };
 }

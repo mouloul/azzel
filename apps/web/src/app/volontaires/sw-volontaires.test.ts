@@ -144,6 +144,16 @@ async function declencherActivate(ctx: ContexteSw): Promise<void> {
   await attente;
 }
 
+async function declencherMessage(ctx: ContexteSw, data: unknown): Promise<void> {
+  const handler = ctx.listeners.get('message') as (event: {
+    data: unknown;
+    waitUntil: (promesse: Promise<void>) => void;
+  }) => void;
+  let attente: Promise<void> | undefined;
+  handler({ data, waitUntil: (promesse) => (attente = promesse) });
+  await attente;
+}
+
 async function declencherFetch(
   ctx: ContexteSw,
   request: Requete,
@@ -166,9 +176,15 @@ async function declencherFetch(
 const SHELL_HTML = `<!doctype html><html><head>
 <link rel="stylesheet" href="/_next/static/chunks/styles.css">
 <script src="/_next/static/chunks/app.js"></script>
-</head><body>shell volontaires</body></html>`;
+</head><body><section data-az-shell="fiche">shell volontaires</section></body></html>`;
+
+// Revue 3.3 — page d'erreur rendue en 200 (base indisponible) : jamais le shell.
+const ERREUR_HTML = `<!doctype html><html><head>
+<script src="/_next/static/chunks/app.js"></script>
+</head><body><h1>Connexion indisponible</h1></body></html>`;
 
 const ETAT_JSON = JSON.stringify({
+  accountId: 'account-karim',
   editionNom: 'Édition 2027',
   assistancePhone: '+213 555 010 200',
   mesMissions: [],
@@ -203,6 +219,59 @@ describe('sw-volontaires — install', () => {
     );
     await expect(declencherInstall(ctx)).rejects.toThrow(/précacheable/);
     expect(ctx.cachesParNom.size).toBe(0);
+  });
+});
+
+describe('sw-volontaires — install tolérant et shell sain (revue 3.3)', () => {
+  it('une sous-resource en 404 (déploiement en cours) n’empêche pas l’install : les autres sont cachées', async () => {
+    const html = `<!doctype html><html><head>
+<link rel="stylesheet" href="/_next/static/chunks/styles.css?v=1&amp;h=2">
+<script src="/_next/static/chunks/disparu.js"></script>
+<script src="/_next/static/chunks/app.js"></script>
+</head><body><section data-az-shell="fiche">fiche</section></body></html>`;
+    const ctx = chargerServiceWorker(async (entree) => {
+      const chemin = typeof entree === 'string' ? entree : entree.url;
+      if (chemin.includes('disparu')) {
+        return reponseFactice('introuvable', { status: 404, url: ORIGINE + chemin });
+      }
+      return reponseFactice(chemin === '/volontaires' ? html : 'asset', { url: ORIGINE + chemin });
+    });
+    await declencherInstall(ctx);
+    const statiques = ctx.cachesParNom.get(CACHE_STATIQUES)?.stock ?? new Map();
+    expect(statiques.has('/_next/static/chunks/app.js')).toBe(true);
+    // &amp; décodé : l'URL cachée est celle que le navigateur demandera.
+    expect(statiques.has('/_next/static/chunks/styles.css?v=1&h=2')).toBe(true);
+    expect(statiques.has('/_next/static/chunks/disparu.js')).toBe(false);
+  });
+
+  it('install : page d’erreur en 200 (sans marqueur de fiche) jamais précachée comme shell', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(ERREUR_HTML, {
+        url: ORIGINE + (typeof entree === 'string' ? entree : entree.url),
+      }),
+    );
+    await expect(declencherInstall(ctx)).rejects.toThrow(/précacheable/);
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.size ?? 0).toBe(0);
+  });
+
+  it('message de réchauffage (après purge de changement de compte) : le shell de la session est re-précaché', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(SHELL_HTML, {
+        url: ORIGINE + (typeof entree === 'string' ? entree : entree.url),
+      }),
+    );
+    await declencherMessage(ctx, { type: 'az-volontaires-rechauffer-shell' });
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.has('/volontaires')).toBe(true);
+    expect(ctx.cachesParNom.get(CACHE_STATIQUES)?.stock.has('/_next/static/chunks/app.js')).toBe(
+      true,
+    );
+  });
+
+  it('message de réchauffage hors-ligne : silencieux (jamais de promesse rejetée)', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    await expect(
+      declencherMessage(ctx, { type: 'az-volontaires-rechauffer-shell' }),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -253,13 +322,39 @@ describe('sw-volontaires — GET /api/volontaires/etat', () => {
     expect(ctx.cachesParNom.get(CACHE_ETAT)?.stock.size ?? 0).toBe(0);
   });
 
-  it('hors-ligne : repli sur l’état en cache', async () => {
+  it('hors-ligne : repli sur l’état en cache, MARQUÉ X-Azzel-Source: cache (jamais pris pour un sync)', async () => {
     const ctx = chargerServiceWorker(HORS_LIGNE);
     const cache = new CacheFactice(HORS_LIGNE);
     cache.stock.set('/api/volontaires/etat', reponseFactice(ETAT_JSON));
     ctx.cachesParNom.set(CACHE_ETAT, cache);
     const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
+    expect(reponse?.status).toBe(200);
+    expect(reponse?.headers.get('X-Azzel-Source')).toBe('cache');
     expect(await reponse?.text()).toBe(ETAT_JSON);
+  });
+
+  it('revue 3.3 — en ligne sain → mis en cache, puis hors-ligne → servi depuis CETTE entrée', async () => {
+    let enLigne = true;
+    const ctx = chargerServiceWorker(async (entree) => {
+      if (!enLigne) {
+        throw new TypeError('fetch failed');
+      }
+      return reponseFactice(ETAT_JSON, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      });
+    });
+    const enLigneReponse = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
+    // Réponse réseau rendue telle quelle : aucun marquage X-Azzel-Source.
+    expect(enLigneReponse.reponse?.headers).toBeUndefined();
+    expect(ctx.cachesParNom.get(CACHE_ETAT)?.stock.has('/api/volontaires/etat')).toBe(true);
+
+    enLigne = false;
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/api/volontaires/etat'));
+    expect(reponse?.headers.get('X-Azzel-Source')).toBe('cache');
+    expect(JSON.parse((await reponse?.text()) ?? '{}')).toMatchObject({
+      accountId: 'account-karim',
+      generéA: '2026-10-22T08:00:00.000Z',
+    });
   });
 
   it('hors-ligne sans cache : enveloppe 503 propre (jamais de promesse rejetée)', async () => {
@@ -268,6 +363,7 @@ describe('sw-volontaires — GET /api/volontaires/etat', () => {
     expect(reponse).toBeDefined();
     const corps = JSON.parse(await (reponse as Response).text()) as { error: { code: string } };
     expect(reponse?.status).toBe(503);
+    expect(reponse?.headers.get('X-Azzel-Source')).toBe('hors-ligne');
     expect(corps.error.code).toBe('volontaires.hors_ligne');
   });
 });
@@ -287,6 +383,51 @@ describe('sw-volontaires — navigations /volontaires', () => {
     const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
     expect(reponse?.status).toBe(200);
     expect(await reponse?.text()).toContain('Ta fiche n’est pas encore dans la poche');
+  });
+
+  it('revue 3.3 — en ligne sain (fiche marquée) → caché sous /volontaires, puis hors-ligne → servi depuis CETTE entrée', async () => {
+    let enLigne = true;
+    const ctx = chargerServiceWorker(async (entree) => {
+      if (!enLigne) {
+        throw new TypeError('fetch failed');
+      }
+      return reponseFactice(SHELL_HTML, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      });
+    });
+    const premiere = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(await premiere.reponse?.text()).toBe(SHELL_HTML);
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.has('/volontaires')).toBe(true);
+
+    enLigne = false;
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(await reponse?.text()).toBe(SHELL_HTML);
+  });
+
+  it('revue 3.3 — page d’erreur en 200 (sans marqueur) : rendue en ligne, JAMAIS cachée comme shell', async () => {
+    const ctx = chargerServiceWorker(async () => reponseFactice(ERREUR_HTML));
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    expect(await reponse?.text()).toBe(ERREUR_HTML);
+    // La fiche saine précédente reste le shell hors-ligne.
+    expect(await cache.stock.get('/volontaires')?.text()).toBe(SHELL_HTML);
+  });
+
+  it('revue 3.3 — numéro d’assistance en cache hors format : jamais inséré dans la page', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cacheEtat = new CacheFactice(HORS_LIGNE);
+    cacheEtat.stock.set(
+      '/api/volontaires/etat',
+      reponseFactice(JSON.stringify({ assistancePhone: '"><script>alert(1)</script>' })),
+    );
+    ctx.cachesParNom.set(CACHE_ETAT, cacheEtat);
+    const { reponse } = await declencherFetch(ctx, requete(ORIGINE + '/volontaires', 'navigate'));
+    const corps = (await reponse?.text()) ?? '';
+    expect(corps).not.toContain('<script>');
+    expect(corps).not.toContain('tel:');
+    expect(corps).toContain('Réouvre l’application dès que le réseau revient.');
   });
 
   it('5xx en ligne : le shell en cache vaut mieux que l’erreur serveur', async () => {

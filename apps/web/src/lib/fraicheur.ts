@@ -32,6 +32,15 @@ export function libelleHorsLigne(generéA: string): string {
   return date === null ? 'hors-ligne — données enregistrées' : `hors-ligne — données du ${DATE_HEURE.format(date)}`;
 }
 
+/**
+ * Revue 3.3 — revalidation en échec alors que le réseau semble là (portail
+ * captif, zone grise, 5xx) : « non rafraîchi — données du 16/05 06:00 ».
+ */
+export function libelleNonRafraichi(generéA: string): string {
+  const date = parseIso(generéA);
+  return date === null ? 'non rafraîchi — données enregistrées' : `non rafraîchi — données du ${DATE_HEURE.format(date)}`;
+}
+
 /** Story 3.4 — variante annuaire : « hors-ligne — annuaire du 16/05 06:00 ». */
 export function libelleHorsLigneAnnuaire(genereA: string): string {
   const date = parseIso(genereA);

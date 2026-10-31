@@ -127,6 +127,21 @@ export interface MissionConflitRecord {
   finLe: Date;
 }
 
+/**
+ * Décision D2 (revue 3.2) — conflit révélé par la MODIFICATION d'une mission
+ * affectée : même forme que le conflit d'affectation + le volontaire concerné.
+ */
+export interface ConflitModificationRecord extends MissionConflitRecord {
+  volontaireId: string;
+  volontaireNom: string;
+}
+
+export interface MissionModifieeRecord {
+  mission: MissionRecord;
+  /** Vide si horaires/secteur inchangés ou aucun volontaire en conflit. */
+  conflits: ConflitModificationRecord[];
+}
+
 export interface MissionsStore {
   importVolontaires(input: {
     organisationId: string;
@@ -143,7 +158,10 @@ export interface MissionsStore {
   updateSecteur(secteurId: string, input: SauverSecteurInput): Promise<SecteurRecord | null>;
   deleteSecteur(secteurId: string, organisationId: string): Promise<boolean>;
   createMission(input: SauverMissionInput): Promise<MissionRecord>;
-  updateMission(missionId: string, input: SauverMissionInput): Promise<MissionRecord | null>;
+  updateMission(
+    missionId: string,
+    input: SauverMissionInput,
+  ): Promise<MissionModifieeRecord | null>;
   deleteMission(missionId: string, organisationId: string): Promise<boolean>;
   listMissionsEtat(
     organisationId: string,
@@ -378,6 +396,56 @@ async function assertArriveeUnique(
   if ((dejaCochees[0]?.count ?? 0) > 0) {
     throw new MissionArriveeUniqueError();
   }
+}
+
+/**
+ * Chevauchement AVERTI, jamais bloqué : a.debut < b.fin AND b.debut < a.fin,
+ * même volontaire, même édition (autres secteurs inclus), mission de
+ * référence exclue (elle se chevauche avec elle-même). Requête UNIQUE partagée
+ * par l'affectation et la modification de mission (D2).
+ */
+async function chercherConflits(
+  tx: postgres.TransactionSql,
+  input: {
+    organisationId: string;
+    volontaireId: string;
+    editionId: string;
+    missionId: string;
+    debutLe: Date;
+    finLe: Date;
+  },
+): Promise<MissionConflitRecord[]> {
+  const rows = await tx<
+    {
+      mission_id: string;
+      secteur_nom: string;
+      type: MissionType;
+      titre: string;
+      debut_le: Date;
+      fin_le: Date;
+    }[]
+  >`
+    SELECT m.id AS mission_id, s.nom AS secteur_nom, m.type, m.titre,
+           m.debut_le, m.fin_le
+    FROM affectation af
+    JOIN mission m ON m.id = af.mission_id
+    JOIN secteur s ON s.id = m.secteur_id
+    WHERE af.volontaire_id = ${input.volontaireId}
+      AND af.organisation_id = ${input.organisationId}
+      AND s.edition_id = ${input.editionId}
+      AND m.id <> ${input.missionId}
+      AND m.debut_le < ${input.finLe}
+      AND ${input.debutLe} < m.fin_le
+    ORDER BY m.debut_le ASC
+  `;
+  return rows.map((row) => ({
+    missionId: row.mission_id,
+    secteurNom: row.secteur_nom,
+    type: row.type,
+    titre: row.titre,
+    debutLe: row.debut_le,
+    finLe: row.fin_le,
+  }));
 }
 
 // Statut admin : activated_at (première connexion) + statut outbox de
@@ -673,7 +741,7 @@ export function createMissionsStore(sql: Sql): MissionsStore {
     async updateMission(
       missionId: string,
       input: SauverMissionInput,
-    ): Promise<MissionRecord | null> {
+    ): Promise<MissionModifieeRecord | null> {
       return withDb(() =>
         withOrg(sql, input.organisationId, async (tx) => {
           const secteurs = await tx<{ id: string; edition_id: string }[]>`
@@ -691,6 +759,14 @@ export function createMissionsStore(sql: Sql): MissionsStore {
             missionId,
             estArrivee: input.estArrivee,
           });
+          // État AVANT modification : les conflits ne sont recalculés que si
+          // horaires ou secteur bougent (renommer ne réveille aucun avertissement).
+          const avant = await tx<{ secteur_id: string; debut_le: Date; fin_le: Date }[]>`
+            SELECT secteur_id, debut_le, fin_le FROM mission
+            WHERE id = ${missionId} AND organisation_id = ${input.organisationId}
+            LIMIT 1
+            FOR UPDATE
+          `;
           const rows = await tx<MissionRow[]>`
             UPDATE mission SET
               secteur_id = ${input.secteurId},
@@ -705,7 +781,42 @@ export function createMissionsStore(sql: Sql): MissionsStore {
             RETURNING ${tx.unsafe(MISSION_COLUMNS)}
           `;
           const row = rows[0];
-          return row ? toMissionRecord(row) : null;
+          const precedente = avant[0];
+          if (!row || !precedente) {
+            return null;
+          }
+          const mission = toMissionRecord(row);
+          const deplacee =
+            precedente.secteur_id !== mission.secteurId ||
+            precedente.debut_le.getTime() !== mission.debutLe.getTime() ||
+            precedente.fin_le.getTime() !== mission.finLe.getTime();
+          const conflits: ConflitModificationRecord[] = [];
+          if (deplacee) {
+            // Chevauchement AVERTI, jamais bloquant (D2) : la modification est
+            // déjà faite ; chaque volontaire affecté est confronté à ses autres
+            // missions avec la MÊME requête que l'affectation.
+            const affectes = await tx<{ id: string; nom: string }[]>`
+              SELECT v.id, v.nom
+              FROM affectation af
+              JOIN volontaire v ON v.id = af.volontaire_id
+              WHERE af.mission_id = ${missionId} AND af.organisation_id = ${input.organisationId}
+              ORDER BY v.nom ASC, v.id ASC
+            `;
+            for (const volontaire of affectes) {
+              const trouves = await chercherConflits(tx, {
+                organisationId: input.organisationId,
+                volontaireId: volontaire.id,
+                editionId: secteur.edition_id,
+                missionId,
+                debutLe: mission.debutLe,
+                finLe: mission.finLe,
+              });
+              for (const conflit of trouves) {
+                conflits.push({ ...conflit, volontaireId: volontaire.id, volontaireNom: volontaire.nom });
+              }
+            }
+          }
+          return { mission, conflits };
         }),
       );
     },
@@ -834,40 +945,16 @@ export function createMissionsStore(sql: Sql): MissionsStore {
             ON CONFLICT (mission_id, volontaire_id) DO NOTHING
             RETURNING id
           `;
-          // Chevauchement AVERTI, jamais bloqué : a.debut < b.fin AND b.debut <
-          // a.fin, même volontaire, même édition (autres secteurs inclus),
-          // mission cible exclue (elle se chevauche avec elle-même).
-          const conflitRows = await tx<
-            {
-              mission_id: string;
-              secteur_nom: string;
-              type: MissionType;
-              titre: string;
-              debut_le: Date;
-              fin_le: Date;
-            }[]
-          >`
-            SELECT m.id AS mission_id, s.nom AS secteur_nom, m.type, m.titre,
-                   m.debut_le, m.fin_le
-            FROM affectation af
-            JOIN mission m ON m.id = af.mission_id
-            JOIN secteur s ON s.id = m.secteur_id
-            WHERE af.volontaire_id = ${input.volontaireId}
-              AND af.organisation_id = ${input.organisationId}
-              AND s.edition_id = ${secteur.edition_id}
-              AND m.id <> ${input.missionId}
-              AND m.debut_le < ${mission.fin_le}
-              AND ${mission.debut_le} < m.fin_le
-            ORDER BY m.debut_le ASC
-          `;
-          const conflits: MissionConflitRecord[] = conflitRows.map((row) => ({
-            missionId: row.mission_id,
-            secteurNom: row.secteur_nom,
-            type: row.type,
-            titre: row.titre,
-            debutLe: row.debut_le,
-            finLe: row.fin_le,
-          }));
+          // Chevauchement AVERTI, jamais bloqué (requête partagée, cf.
+          // chercherConflits) : mission cible exclue.
+          const conflits = await chercherConflits(tx, {
+            organisationId: input.organisationId,
+            volontaireId: input.volontaireId,
+            editionId: secteur.edition_id,
+            missionId: input.missionId,
+            debutLe: mission.debut_le,
+            finLe: mission.fin_le,
+          });
           return { cree: inserees.length > 0, conflits };
         }),
       );

@@ -2,11 +2,14 @@
 
 import { useEffect } from 'react';
 
+import { enregistrerSwVolontaires } from '@/lib/pwa-volontaires';
+
 // Story 3.3 — enregistrement du service worker volontaires. Scope réduit à
 // /volontaires : la vitrine, l'admin et l'espace coureur ne passent jamais
 // par lui. L'enregistrement attend la fin du chargement pour ne pas
 // concurrencer le premier rendu ; un échec (navigateur sans SW, premier
-// lancement hors-ligne) est silencieux — la page serveur reste le plan A.
+// lancement hors-ligne) ne casse rien — la page serveur reste le plan A.
+// Chemin, scope et journalisation de l'échec : lib/pwa-volontaires (testé).
 
 export function PwaRegister() {
   useEffect(() => {
@@ -14,9 +17,7 @@ export function PwaRegister() {
       return;
     }
     const enregistrer = () => {
-      navigator.serviceWorker.register('/sw-volontaires.js', { scope: '/volontaires' }).catch(() => {
-        // Réessaiera à la prochaine ouverture de la page.
-      });
+      void enregistrerSwVolontaires(navigator.serviceWorker);
     };
     if (document.readyState === 'complete') {
       enregistrer();

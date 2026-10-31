@@ -81,6 +81,43 @@ deferred: []
 - Given Karim affecté à la mission A (06 h–12 h), when l'admin l'affecte aussi à la mission B (10 h–14 h, autre secteur), then l'affectation est créée et un avertissement de chevauchement s'affiche — sans jamais bloquer.
 - Given deux organisations, when l'org A interroge l'état missions, then aucune donnée de l'org B n'apparaît (RLS testé).
 
+### Review Findings
+
+_Code review 2026-10-29 (passe 2, lot 2/4 épopée 3 — commit `7f13569` ; blind-hunter 17, edge-case-hunter 13, verification-gap 7+2, acceptance-auditor 11 ; constats vérifiés sur le code COURANT, postérieur aux épopées 3.3–7)._
+
+- [x] [Review][Patch] Horaires affichés dans le fuseau du serveur — décision D1 (2026-10-29) : fuseau produit fixe `Africa/Algiers` (constante `shared`) passé en `timeZone` à `formatLocalDateTime`/`formatLocalHeure` (+ convertisseurs `datetime-local` alignés), tests sous TZ serveur UTC [packages/shared/src/datetime.ts:30]
+- [x] [Review][Patch] Modification d'une mission affectée → chevauchements silencieux — décision D2 (2026-10-29) : la réponse PUT renvoie l'avertissement (conflits de chaque volontaire affecté, même requête que l'affectation), bandeau `role="status"` non bloquant côté manager [apps/web/src/modules/missions/store.ts (updateMission), apps/web/src/app/admin/missions/missions-manager.tsx]
+- [x] [Review][Patch] Édition de secteur réussie sans `router.refresh()` → nom/lieu/contact affichés restent les anciens [apps/web/src/app/admin/missions/missions-manager.tsx:936]
+- [x] [Review][Patch] Aucune confirmation `role="status"` après création/modification/suppression de secteur ou mission, affectation sans conflit, désaffectation (spec Always ; le commentaire :35 l'annonce) [apps/web/src/app/admin/missions/missions-manager.tsx]
+- [x] [Review][Patch] Ré-affectation en doublon (`cree: false`) mal restituée : bandeau « enregistrée quand même » alors que rien n'est créé, aucun « déjà affecté » sans conflit [apps/web/src/app/admin/missions/missions-manager.tsx:670]
+- [x] [Review][Patch] `AucuneEditionError` propose « Crée d'abord une édition » — action inexistante (aucun écran de création d'édition) [apps/web/src/modules/missions/errors.ts:311]
+- [x] [Review][Patch] `updateMission` jamais exécuté en intégration (champs, changement de secteur, secteur d'une autre org → 404, mission inconnue → 404) [apps/web/src/modules/missions/secteurs.integration.test.ts]
+- [x] [Review][Patch] Renommage de secteur vers un nom pris : mapping 23505 → `SecteurNomDupliqueError` de `updateSecteur` jamais testé [apps/web/src/modules/missions/secteurs.integration.test.ts]
+- [x] [Review][Patch] Verrou `FOR UPDATE` de `deleteSecteur` (BF1) sans test d'entrelacement déterministe (mission insérée non commitée pendant la suppression) [apps/web/src/modules/missions/secteurs.integration.test.ts]
+- [x] [Review][Patch] Helpers `isoVersDatetimeLocal`/`datetimeLocalVersIso` testés seulement en aller-retour sous TZ=UTC — ajouter un cas `Africa/Algiers` à valeurs absolues [packages/shared/src/datetime.test.ts]
+- [x] [Review][Patch] Couverture côté volontaire (« couverture assurée » / « vacante ») jamais vérifiée au rendu [apps/web/src/app/volontaires/page.test.tsx]
+- [x] [Review][Patch] Test multi-org « affectation croisée » : asserte un état lu AVANT les tentatives, `etatB` jamais relu [apps/web/src/db/multi-org.integration.test.ts]
+- [x] [Review][Patch] Tests faibles : route affectation « corps illisible » n'atteint jamais le service (échoue dans `readJsonBody`) ; UNIQUE `(edition_id, nom)` asserté par `toThrow()` générique [apps/web/src/app/api/admin/missions/affectation/route.test.ts:174, apps/web/src/modules/missions/secteurs.integration.test.ts]
+- [x] [Review][Defer] Test « concurrence affectations » non déterministe (aucune barrière, pool max 2) — la suppression du verrou volontaire n'est détectée que selon l'ordonnancement [apps/web/src/modules/missions/secteurs.integration.test.ts:421] — deferred: outillage de transaction manuelle à mutualiser avec le test `deleteSecteur` ; protège la majorité des exécutions.
+
+**Rejected (passe 2)**
+- false — Helpers horodatage dupliqués domaine/shared : déjà déplacés dans `packages/shared/src/datetime.ts`, `missions/domain.ts:246` ne fait que réexporter.
+- false — Volontaire sans lieu ni contact PC : fiche 3.3 les affiche (`page.test.tsx` « fiche complète : lieu terrain, gros bouton tel: »).
+- false — `VolontaireRow.invitation.expire_le` modifié (3.1 touché) : sans objet, invitation supprimée par la refonte 3.1 (SCP 2026-10-28).
+- carried false — `findCurrentEdition` « la plus récente » vs « la plus proche » : une seule édition par organisation (BF9, passe 1).
+- spec — Vouvoiement admin : convention du dépôt = tutoiement (même décision que revue 3.1).
+- spec — Frontmatter `done`/cases décochées/`deferred: []`/Verification « 0001–0020 » : correction = édition du spec.
+- low — Libellés volontaire « couverture assurée »/« vacante » au lieu de « Couverte »/« Vacante » : sens identique, AC respecté.
+- low — `MissionForm` garde un `secteurId` supprimé entre-temps → 404 : rare, ajout d'effet.
+- low — Course `deleteSecteur`/`createMission` → 23503 en 500 : rare (deux admins), garde supplémentaire.
+- low — NUL `U+0000` → 500 ; 30 février normalisé : saisie `datetime-local` ne peut produire ni l'un ni l'autre, API réservée organisateur.
+- low — UNIQUE secteur sensible à la casse : quasi-doublons visibles, index fonctionnel = migration.
+- low — FK composites `(organisation_id, id)` : défense en profondeur, RLS + store suffisent (pattern projet).
+- low — Index `organisation_id` / `mission_horaires_idx` : volumétrie village (~50 missions).
+- low — Libellé `pending` partagé « Suppression… » ; select proposant les déjà-affectés ; missions perso non signalées dans la liste générale : cosmétique.
+- low — Gating rôle sans test d'intégration ; cas 403/400 manquants sur certains tests de route : `guardAdmin` mutualisé et testé ailleurs.
+- low — Puce couverte/vacante du manager non testée : désormais couverte par `missions-manager.test.tsx` (story 5.1, rendu du chip couverture).
+
 ## Review Triage Log
 
 ### 2026-10-22 — Review pass 1 (blind-hunter 15, edge-case-hunter 6, verification-gap 3 ; 24 findings)

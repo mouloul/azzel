@@ -100,28 +100,59 @@ describe('PUT /api/admin/missions/mission/[id]', () => {
     expect(response.status).toBe(404);
   });
 
-  it('session organisateur : 200 { ok: true } (réponse minimale, le client refresh), no-store', async () => {
+  it('session organisateur : 200 { ok: true, avertissement: null } (réponse minimale, le client refresh), no-store', async () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
     missionsServiceMock.updateMission.mockResolvedValue({
-      id: 'mission-1',
-      ...CORPS,
-      typeLabel: 'Accueil',
-      consignes: null,
-      affectations: [],
-      couverture: 'vacante',
-      couvertureLabel: 'Vacante',
+      mission: {
+        id: 'mission-1',
+        ...CORPS,
+        typeLabel: 'Accueil',
+        consignes: null,
+        affectations: [],
+        couverture: 'vacante',
+        couvertureLabel: 'Vacante',
+      },
+      avertissement: null,
     });
     const response = await putMission(request('mission-1', 'PUT'), {
       params: Promise.resolve({ id: 'mission-1' }),
     });
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    await expect(response.json()).resolves.toEqual({ ok: true });
+    await expect(response.json()).resolves.toEqual({ ok: true, avertissement: null });
     expect(missionsServiceMock.updateMission).toHaveBeenCalledWith(
       SESSION_ORGANISATEUR,
       'mission-1',
       CORPS,
     );
+  });
+
+  it('horaires déplacés en conflit (D2) : 200 quand même — avertissement propagé avec le volontaire, jamais bloquant', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION_ORGANISATEUR);
+    const avertissement = {
+      missions: [
+        {
+          missionId: 'mission-b',
+          secteurNom: 'Ravitaillement',
+          typeLabel: 'Sécurité tronçon',
+          titre: 'Barrière PK 10',
+          debutLe: '2027-05-16T10:00:00.000Z',
+          finLe: '2027-05-16T14:00:00.000Z',
+          volontaireId: 'volontaire-karim',
+          volontaireNom: 'Karim',
+        },
+      ],
+    };
+    missionsServiceMock.updateMission.mockResolvedValue({
+      mission: { id: 'mission-1', ...CORPS },
+      avertissement,
+    });
+    const response = await putMission(request('mission-1', 'PUT'), {
+      params: Promise.resolve({ id: 'mission-1' }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({ ok: true, avertissement });
   });
 });
 

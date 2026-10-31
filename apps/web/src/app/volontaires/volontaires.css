@@ -334,7 +334,9 @@
   z-index: 10;
   display: flex;
   justify-content: center;
-  padding: var(--az-space-2) 0;
+  /* Standalone iOS : la barre reste au-dessus de l'indicateur d'accueil
+     (viewport-fit=cover posé par le layout volontaires). */
+  padding: var(--az-space-2) 0 calc(var(--az-space-2) + env(safe-area-inset-bottom, 0px));
   margin-top: calc(-1 * var(--az-space-2));
   background: var(--az-bg);
   border-top: 1px solid var(--az-filet);
