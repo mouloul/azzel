@@ -199,8 +199,11 @@ describe.skipIf(testUrls === null)(
         requeteVerify({ email, code: capture.code() }),
       );
       expect(responseWeb.status).toBe(200);
-      const bodyWeb = (await responseWeb.json()) as { token?: string };
+      const bodyWeb = (await responseWeb.json()) as { token?: string; redirectTo?: string };
       expect(bodyWeb.token).toBeUndefined();
+      // Connexion web d'un coureur sans dossier, édition 2027 aux inscriptions
+      // ouvertes : première étape non faite de la checklist réelle (Postgres).
+      expect(bodyWeb.redirectTo).toBe('/inscription');
       const tokenWeb = cookieToken(responseWeb);
       expect(tokenWeb).not.toBe(tokenNatif);
 

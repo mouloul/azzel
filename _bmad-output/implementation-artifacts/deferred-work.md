@@ -64,3 +64,12 @@
 ## Deferred from: code review of spec-3-4-préchargement-de-l-annuaire-des-coureurs.md (2026-10-29)
 
 - Orchestration client de l'annuaire dans `volontaires-pwa.tsx` (états « non enregistré », délai, 401/403, réécriture de la poche après repli) sans test d'effet : aucun harnais DOM dans le dépôt (même décision d'outillage que BF3/BF4 de la 3.4 passe 1 et BF5/VG4 de la 3.3). Réduire l'écart en extrayant les branches restantes en fonctions pures, ou introduire un harnais DOM (happy-dom/jsdom) pour la surface volontaires.
+
+## Deferred from: build de spec-accueil-hero-mon-trail.md (2026-10-31)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-accueil-hero-mon-trail.md`
+  summary: Le hero plein écran de l'accueil n'a pas de variante photo au-delà de 1280 px ; l'image LCP est agrandie (floue) sur écran ≥ 1920 px ou haute densité.
+  evidence: `public/charte/photos-2026/` ne contient que des variantes 640 et 1280 ; nécessite un nouvel export depuis les originaux et un arbitrage avec le budget de premier chargement.
+- source_spec: `_bmad-output/implementation-artifacts/spec-accueil-hero-mon-trail.md`
+  summary: Le câblage des effets de l'onglet « Mon trail » (lecture de session à l'ouverture seulement, focus/Échap/clic extérieur via `activerEncart`) n'est couvert par aucun test qui monte le composant.
+  evidence: vitest tourne sans environnement DOM ; les tests appellent les fonctions isolées. Il faudrait un environnement jsdom/happy-dom ou un test e2e Playwright de l'onglet.

@@ -27,11 +27,11 @@ describe('accueil vitrine — HTML servi (intégration opt-in)', () => {
     expect(html).toContain('Sous l’égide de la Fédération et du ministère des Sports');
   });
 
-  it('contient le CTA S’inscrire vers /connexion', (contexte) => {
+  it('contient le CTA S’inscrire vers /connexion?parcours=inscription', (contexte) => {
     if (html === null) {
       contexte.skip();
     }
-    expect(html).toContain('href="/connexion"');
+    expect(html).toContain('href="/connexion?parcours=inscription"');
     expect(html).toContain('S’inscrire');
   });
 

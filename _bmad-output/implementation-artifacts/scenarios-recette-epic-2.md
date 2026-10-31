@@ -15,7 +15,7 @@
 | 1.2 | Throttling « Slow 3G » + rechargement | Titre/CTA lisibles avant l'arrivée de la photo ; aucune page blanche |
 | 1.3 | Bandeau égide | « Sous l'égide de la Fédération et du ministère des Sports » visible sur TOUTES les pages (accuei /connexion, /parcours…) |
 | 1.4 | Section Bilan 2026 | 279 inscrits, 222 dossards, 214 finishers dont 36 femmes, 116 enfants — chiffres exacts, non additionnés |
-| 1.5 | CTA « S'inscrire » | Mène à /connexion ; bouton « Appeler l'équipe » visible avec numéro |
+| 1.5 | CTA « S'inscrire » | Mène à /connexion?parcours=inscription (écran « Créer mon compte ») ; bouton « Appeler l'équipe » visible avec numéro |
 | 1.6 | JS désactivé | Contenu complet lisible (page serveur) |
 | 1.7 | 360 px | Une colonne, symbole seul dans l'en-tête, aucun scroll horizontal |
 

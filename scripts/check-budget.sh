@@ -151,7 +151,11 @@ verifier_contenu() {
   fi
 }
 verifier_contenu "Sous l’égide de la Fédération et du ministère des Sports"
+# Lien « Me connecter » de l'onglet Mon trail (encart fermé, rendu en SSR par
+# le layout) — ce n'est plus le CTA du hero, vérifié juste en dessous.
 verifier_contenu 'href="/connexion"'
+# CTA « S'inscrire » du hero : parcours « Créer mon compte » (même flux code).
+verifier_contenu 'href="/connexion?parcours=inscription"'
 verifier_contenu ">279<"
 verifier_contenu ">222<"
 verifier_contenu ">214<"
