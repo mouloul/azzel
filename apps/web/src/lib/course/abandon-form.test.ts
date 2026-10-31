@@ -15,7 +15,8 @@ import {
 // heure défaut = maintenant en datetime-local), validation locale (mêmes
 // règles que le serveur : dossard, lieu 1–200, motif fermé, heure passée),
 // assemblage du corps POST (heure locale → ISO UTC). Pures, hors effets —
-// fuseaux épinglés à UTC comme alertes-course.
+// processus épinglé à UTC ; les valeurs datetime-local sont à l'heure d'ALGER
+// (fuseau produit D1, UTC+1) : MAINTENANT 10:30 Z = 11:30 au poste PC.
 
 const ORIGINAL_TZ = process.env.TZ;
 
@@ -34,22 +35,22 @@ afterAll(() => {
 const MAINTENANT = new Date('2027-05-16T10:30:00.000Z');
 
 describe('valeursAbandonInitiales — dossard prérempli, heure défaut maintenant', () => {
-  it('depuis une alerte : dossard prérempli, heure = maintenant (datetime-local local)', () => {
+  it('depuis une alerte : dossard prérempli, heure = maintenant (datetime-local, heure d’Alger)', () => {
     const values = valeursAbandonInitiales(102, MAINTENANT);
-    expect(values).toEqual({ dossard: '102', lieu: '', motif: '', heure: '2027-05-16T10:30' });
+    expect(values).toEqual({ dossard: '102', lieu: '', motif: '', heure: '2027-05-16T11:30' });
   });
 
   it('depuis le bouton d’en-tête : dossard vide, heure = maintenant', () => {
     const values = valeursAbandonInitiales(null, MAINTENANT);
     expect(values.dossard).toBe('');
-    expect(values.heure).toBe('2027-05-16T10:30');
+    expect(values.heure).toBe('2027-05-16T11:30');
   });
 });
 
 describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
   it('saisie nominale : aucune erreur', () => {
     const errors = validerFormulaireAbandon(
-      { dossard: '102', lieu: 'Col 1200', motif: 'epuisement', heure: '2027-05-16T10:00' },
+      { dossard: '102', lieu: 'Col 1200', motif: 'epuisement', heure: '2027-05-16T11:00' },
       MAINTENANT,
     );
     expect(aDesErreursAbandon(errors)).toBe(false);
@@ -59,7 +60,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
   it('dossard absent ou non entier : erreur champ dossard (vouvoiement PC)', () => {
     for (const dossard of ['', 'abc', '0', '-3', '12.5']) {
       const errors = validerFormulaireAbandon(
-        { dossard, lieu: 'Col 1200', motif: 'blessure', heure: '2027-05-16T10:00' },
+        { dossard, lieu: 'Col 1200', motif: 'blessure', heure: '2027-05-16T11:00' },
         MAINTENANT,
       );
       expect(errors.dossard).toBe('Indiquez un numéro de dossard.');
@@ -67,7 +68,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
   });
 
   it('lieu vide ou > 200 caractères : erreur champ lieu', () => {
-    const base = { dossard: '102', motif: 'blessure' as const, heure: '2027-05-16T10:00' };
+    const base = { dossard: '102', motif: 'blessure' as const, heure: '2027-05-16T11:00' };
     expect(
       validerFormulaireAbandon({ ...base, lieu: '' }, MAINTENANT).lieu,
     ).toContain('obligatoire');
@@ -78,7 +79,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
 
   it('motif vide (hors liste fermée) : erreur champ motif', () => {
     const errors = validerFormulaireAbandon(
-      { dossard: '102', lieu: 'Col 1200', motif: '', heure: '2027-05-16T10:00' },
+      { dossard: '102', lieu: 'Col 1200', motif: '', heure: '2027-05-16T11:00' },
       MAINTENANT,
     );
     expect(errors.motif).toContain('motif');
@@ -97,7 +98,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
   it('heure dans la tolérance d’horloge (≤ maintenant + 2 min) : VALIDE', () => {
     // +1 min puis exactement +2 min : la dérive d’horloge du poste PC ne
     // bloque pas la saisie du défaut « maintenant ».
-    for (const heure of ['2027-05-16T10:31', '2027-05-16T10:32']) {
+    for (const heure of ['2027-05-16T11:31', '2027-05-16T11:32']) {
       const errors = validerFormulaireAbandon(
         { dossard: '102', lieu: 'Col 1200', motif: 'blessure', heure },
         MAINTENANT,
@@ -108,7 +109,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
 
   it('heure future AU-DELÀ de la tolérance : refusée net (vérifie l’horloge du poste)', () => {
     const errors = validerFormulaireAbandon(
-      { dossard: '102', lieu: 'Col 1200', motif: 'blessure', heure: '2027-05-16T10:33' },
+      { dossard: '102', lieu: 'Col 1200', motif: 'blessure', heure: '2027-05-16T11:33' },
       MAINTENANT,
     );
     expect(errors.heure).toBe(
@@ -118,7 +119,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
 
   it('heure exactement maintenant : valide (bornes incluses)', () => {
     const errors = validerFormulaireAbandon(
-      { dossard: '102', lieu: 'Col 1200', motif: 'hors_delais', heure: '2027-05-16T10:30' },
+      { dossard: '102', lieu: 'Col 1200', motif: 'hors_delais', heure: '2027-05-16T11:30' },
       MAINTENANT,
     );
     expect(errors.heure).toBeUndefined();
@@ -137,7 +138,7 @@ describe('validerFormulaireAbandon — mêmes règles que le serveur', () => {
 describe('corpsAbandonSoumis — heure locale → ISO UTC, corps complet', () => {
   it('assemble dossard nombre, lieu trimé, motif, heure ISO', () => {
     expect(
-      corpsAbandonSoumis({ dossard: ' 102 ', lieu: ' Col 1200 ', motif: 'blessure', heure: '2027-05-16T10:05' }),
+      corpsAbandonSoumis({ dossard: ' 102 ', lieu: ' Col 1200 ', motif: 'blessure', heure: '2027-05-16T11:05' }),
     ).toEqual({
       dossard: 102,
       lieu: 'Col 1200',

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  FUSEAU_PRODUIT,
   datetimeLocalVersIso,
   estHorodatageValide,
   formatLocalDate,
@@ -24,24 +25,42 @@ afterAll(() => {
   }
 });
 
-describe.skipIf(process.platform === 'win32')('horodatages ISO 8601 UTC → affichage local', () => {
+/** Exécute `run` avec le fuseau du PROCESSUS forcé (TZ restauré à UTC ensuite). */
+function sousFuseauProcessus<T>(fuseau: string, run: () => T): T {
+  process.env.TZ = fuseau;
+  try {
+    return run();
+  } finally {
+    process.env.TZ = 'UTC';
+  }
+}
+
+// Décision D1 (revue 3.2) : affichage et saisie à l'heure du TERRAIN (fuseau
+// produit Africa/Algiers, UTC+1 sans heure d'été), jamais celle de la machine.
+const FUSEAUX_PROCESSUS = ['UTC', 'America/New_York', 'Asia/Tokyo'];
+
+describe.skipIf(process.platform === 'win32')('horodatages ISO 8601 UTC → affichage fuseau produit', () => {
   const isoUtc = '2026-03-26T08:42:07.000Z';
 
-  it('affiche l’heure locale à partir d’un instant UTC', () => {
-    expect(formatLocalTime(isoUtc)).toBe('08:42:07');
+  it('le fuseau produit est Africa/Algiers', () => {
+    expect(FUSEAU_PRODUIT).toBe('Africa/Algiers');
   });
 
-  it('affiche la date locale en français', () => {
-    expect(formatLocalDate(isoUtc)).toBe('26 mars 2026');
+  it.each(FUSEAUX_PROCESSUS)('processus en %s : heure d’Alger (UTC+1), jamais celle de la machine', (fuseau) => {
+    sousFuseauProcessus(fuseau, () => {
+      expect(formatLocalTime(isoUtc)).toBe('09:42:07');
+      expect(formatLocalDate(isoUtc)).toBe('26 mars 2026');
+      expect(formatLocalDateTime(isoUtc)).toBe('26 mars 2026 à 09:42');
+      expect(formatLocalHeure(isoUtc)).toBe('09:42');
+      // Passage de minuit : 23:59 Z = 00:59 le lendemain à Alger.
+      expect(formatLocalHeure('2026-03-26T23:59:00.000Z')).toBe('00:59');
+      expect(formatLocalDate('2026-03-26T23:59:00.000Z')).toBe('27 mars 2026');
+    });
   });
 
-  it('affiche date et heure ensemble', () => {
-    expect(formatLocalDateTime(isoUtc)).toBe('26 mars 2026 à 08:42');
-  });
-
-  it('affiche l’heure locale HH:MM (story 5.2 — barrières horaires)', () => {
-    expect(formatLocalHeure(isoUtc)).toBe('08:42');
-    expect(formatLocalHeure('2026-03-26T23:59:00.000Z')).toBe('23:59');
+  it('été comme hiver : toujours UTC+1 (aucune heure d’été en Algérie)', () => {
+    expect(formatLocalHeure('2027-07-16T06:00:00.000Z')).toBe('07:00');
+    expect(formatLocalHeure('2027-01-16T06:00:00.000Z')).toBe('07:00');
   });
 
   it('rejette un horodatage invalide avec un message explicite', () => {
@@ -70,6 +89,20 @@ describe('estHorodatageValide — RFC3339 STRICT en Z, refus des formes ambiguë
   });
 });
 
+describe('helpers datetime-local — heure murale d’Alger, valeurs absolues', () => {
+  it.each(FUSEAUX_PROCESSUS)('processus en %s : résultats identiques', (fuseau) => {
+    sousFuseauProcessus(fuseau, () => {
+      expect(isoVersDatetimeLocal('2027-05-16T06:00:00.000Z')).toBe('2027-05-16T07:00');
+      expect(datetimeLocalVersIso('2027-05-16T07:00')).toBe('2027-05-16T06:00:00.000Z');
+      // Bascule de jour : 23:30 Z = 00:30 le lendemain à Alger (et retour).
+      expect(isoVersDatetimeLocal('2027-12-31T23:30:00.000Z')).toBe('2028-01-01T00:30');
+      expect(datetimeLocalVersIso('2028-01-01T00:30')).toBe('2027-12-31T23:30:00.000Z');
+      // Secondes facultatives de l'input datetime-local.
+      expect(datetimeLocalVersIso('2027-05-16T07:00:30')).toBe('2027-05-16T06:00:30.000Z');
+    });
+  });
+});
+
 describe('helpers datetime-local — aller-retour UTC → locale → UTC (même instant)', () => {
   it('isoVersDatetimeLocal puis datetimeLocalVersIso restitue l’instant exact', () => {
     for (const iso of [
@@ -89,5 +122,7 @@ describe('helpers datetime-local — aller-retour UTC → locale → UTC (même 
     expect(isoVersDatetimeLocal('pas-une-date')).toBe('');
     expect(datetimeLocalVersIso('nimporte')).toBe('');
     expect(datetimeLocalVersIso('')).toBe('');
+    // Forme ambiguë (avec Z / décalage) : refusée, jamais réinterprétée.
+    expect(datetimeLocalVersIso('2027-05-16T07:00Z')).toBe('');
   });
 });

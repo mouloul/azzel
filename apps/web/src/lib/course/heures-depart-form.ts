@@ -6,7 +6,7 @@ import { datetimeLocalVersIso, isoVersDatetimeLocal } from '@azzel/shared';
 // réinventées) ; ici ne restent que la forme du formulaire (datetime-local)
 // et l'assemblage du corps PUT.
 
-/** Valeurs de la carte : heure datetime-local (heure locale du poste PC) par épreuve. */
+/** Valeurs de la carte : heure datetime-local (heure d'Alger, fuseau produit) par épreuve. */
 export type ValeursHeuresDepart = Record<string, string>;
 
 export interface EpreuveHeureDepartForm {
@@ -61,7 +61,10 @@ export function heuresDepartModifiees(
     // Comparaison par INSTANT à la résolution du champ (minute) : une heure
     // serveur à secondes/millisecondes non nulles (posée par API) reste
     // « non modifiée » — jamais de comparaison de chaînes ISO brutes.
-    const instantMinute = Math.floor(Date.parse(locale) / 60_000);
+    // Conversion par le helper shared (fuseau produit) — jamais Date.parse,
+    // qui lirait la valeur dans le fuseau du poste.
+    const iso = datetimeLocalVersIso(locale);
+    const instantMinute = iso === '' ? Number.NaN : Math.floor(Date.parse(iso) / 60_000);
     if (Number.isNaN(instantMinute)) {
       return true;
     }
