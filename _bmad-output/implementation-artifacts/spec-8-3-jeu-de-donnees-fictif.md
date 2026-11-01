@@ -2,7 +2,7 @@
 title: 'Story 8.3 — Jeu de données fictif « édition complète »'
 type: 'feature'
 created: '2026-11-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '54f62893db9fd5685c0c45ecd1defdc73726a34c'
