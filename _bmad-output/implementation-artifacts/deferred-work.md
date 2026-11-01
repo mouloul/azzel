@@ -73,3 +73,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-accueil-hero-mon-trail.md`
   summary: Le câblage des effets de l'onglet « Mon trail » (lecture de session à l'ouverture seulement, focus/Échap/clic extérieur via `activerEncart`) n'est couvert par aucun test qui monte le composant.
   evidence: vitest tourne sans environnement DOM ; les tests appellent les fonctions isolées. Il faudrait un environnement jsdom/happy-dom ou un test e2e Playwright de l'onglet.
+
+## Deferred from: build de spec-8-1-fabrique-de-connexion-unique.md (2026-11-01)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-1-fabrique-de-connexion-unique.md`
+  summary: Quatre stores n'appliquent pas la garde de rôle applicatif `protegerStore` — `missions`, `chrono`, `rapports`, `tracking` — alors que `db/app-role.ts` annonce la garde « appliquée à TOUS les stores ».
+  evidence: `apps/web/src/modules/missions/store.ts` (getMissionsStore), `chrono/store.ts` (getChronoStore), `rapports/store.ts` (getRapportsStore), `tracking/store.ts` (getTrackingStore) : le store est construit directement sur `sql`, sans passer par `protegerStore(sql, …, isProductionRuntime())`, contrairement à `inscriptions`, `sponsors`, `contenus`, `retour-images`, `notifications/outbox-store` et à la forme IAM (`createAppRoleGuard`). Conséquence : une `DATABASE_URL` pointant sur le rôle propriétaire (BYPASSRLS) continuerait de servir ces quatre surfaces en production, là où les autres refusent. L'écart préexiste au refactor de connexion 8.1 et n'a pas été corrigé avec lui : mêler un changement de comportement sécurité à un refactor de connexion aurait rendu la revue des deux impossible. Correctif : envelopper les quatre `createXStore(sql)` dans `protegerStore`, puis vérifier que les suites d'intégration de ces modules passent toujours (le proxy rend asynchrones toutes les méthodes du store).

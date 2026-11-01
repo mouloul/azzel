@@ -3,9 +3,15 @@ import type { Sql } from 'postgres';
 import { createAppRoleGuard } from '@/modules/iam/store';
 
 /**
- * Garde de rôle applicatif (story 1.9) appliquée à TOUS les stores.
+ * Garde de rôle applicatif (story 1.9), appliquée aux stores `inscriptions`,
+ * `iam` (via `createAppRoleGuard`), `sponsors`, `contenus`, `retour-images` et
+ * `notifications/outbox`.
  *
- * Elle n'était câblée que sur le store IAM : les autres modules ouvrent leur
+ * Quatre stores y échappent encore — `missions`, `chrono`, `rapports`,
+ * `tracking` — écart préexistant consigné dans
+ * `_bmad-output/implementation-artifacts/deferred-work.md`.
+ *
+ * Elle n'était câblée que sur le store IAM : les autres modules ouvraient leur
  * propre connexion, si bien qu'une `DATABASE_URL` pointant sur le propriétaire
  * (BYPASSRLS) faisait refuser la connexion mais continuait de servir les
  * lectures vitrine et les écritures d'administration. « On refuse de servir

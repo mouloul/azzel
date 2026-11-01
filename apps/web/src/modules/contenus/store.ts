@@ -1,11 +1,11 @@
-import postgres, { type Sql } from 'postgres';
+import type { Sql } from 'postgres';
 
+import { getDbClient } from '@/db/client';
 import { protegerStore } from '@/db/app-role';
 import { isProductionRuntime } from '@/modules/iam/store';
 
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
-import { readDatabaseUrl } from '@/modules/iam/env';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
 import { PARCOURS_SLUGS, REGION_SLUGS, ordonnerParSlugs } from './domain';
@@ -342,12 +342,10 @@ export function getContenusStore(): ContenusStore {
   if (globals.__azzelContenusStore) {
     return globals.__azzelContenusStore;
   }
-  const databaseUrl = readDatabaseUrl();
   // Garde de rôle applicatif (story 1.9) : la connexion doit être le rôle
   // soumis au RLS, sur CE store comme sur celui de l'IAM.
-  const sql = databaseUrl
-    ? postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 })
-    : null;
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
   const store =
     sql !== null
       ? protegerStore(sql, createContenusStore(sql), isProductionRuntime())

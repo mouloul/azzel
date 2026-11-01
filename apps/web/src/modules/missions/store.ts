@@ -1,10 +1,11 @@
-import postgres, { type Sql } from 'postgres';
+import type postgres from 'postgres';
+import type { Sql } from 'postgres';
 
+import { getDbClient } from '@/db/client';
 import { withOrg } from '@/db/org-scope';
 import { DbUnavailableError } from '@/modules/iam/errors';
 import { COUREUR_STATUS_VALIDE } from '@/modules/inscriptions/domain';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
-import { readDatabaseUrl } from '@/modules/iam/env';
 
 import type { LigneValide, MissionType, StatutInvitation } from './domain';
 import { statutInvitation } from './domain';
@@ -1045,12 +1046,9 @@ export function getMissionsStore(): MissionsStore {
   if (globals.__azzelMissionsStore) {
     return globals.__azzelMissionsStore;
   }
-  const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createMissionsStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
+  const store = sql !== null ? createMissionsStore(sql) : createUnavailableStore();
   globals.__azzelMissionsStore = store;
   return store;
 }

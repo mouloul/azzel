@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-20-2026 22:35
-last_updated: 10-29-2026 14:00
+last_updated: 11-01-2026 00:00
 project: Azzel
 project_key: NOKEY
 tracking_system: file-system
@@ -91,3 +91,10 @@ development_status:
   7-3-carte-publique-anonyme: review
   7-4-rapports-post-course-et-export-commande: review
   epic-7-retrospective: optional
+
+  epic-8: in-progress
+  8-1-fabrique-de-connexion-unique-et-base-hébergée: review
+  8-2-stockage-des-preuves-de-paiement-hors-disque-local: backlog
+  8-3-jeu-de-données-fictif-édition-complète: backlog
+  8-4-mise-en-ligne-de-la-recette-et-remise-au-comité: backlog
+  epic-8-retrospective: optional

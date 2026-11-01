@@ -1,7 +1,8 @@
-import postgres, { type Sql } from 'postgres';
+import type postgres from 'postgres';
+import type { Sql } from 'postgres';
 
+import { getDbClient } from '@/db/client';
 import { withOrg } from '@/db/org-scope';
-import { readDatabaseUrl } from '@/modules/iam/env';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
 import { lireClassementsRecord } from '@/modules/chrono/store';
@@ -361,12 +362,9 @@ export function getRapportsStore(): RapportsStore {
   if (globals.__azzelRapportsStore) {
     return globals.__azzelRapportsStore;
   }
-  const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createRapportsStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
+  const store = sql !== null ? createRapportsStore(sql) : createUnavailableStore();
   globals.__azzelRapportsStore = store;
   return store;
 }

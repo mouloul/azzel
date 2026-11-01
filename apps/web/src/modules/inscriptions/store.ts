@@ -1,14 +1,15 @@
 import { randomBytes } from 'node:crypto';
 
+import { getDbClient } from '@/db/client';
 import { protegerStore } from '@/db/app-role';
 import { isProductionRuntime } from '@/modules/iam/store';
 
-import postgres, { type Sql } from 'postgres';
+import type postgres from 'postgres';
+import type { Sql } from 'postgres';
 
 import { DOSSARD_MAX } from '@azzel/shared';
 
 import { withOrg } from '@/db/org-scope';
-import { readDatabaseUrl } from '@/modules/iam/env';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
 import {
@@ -1230,12 +1231,10 @@ export function getInscriptionsStore(): InscriptionsStore {
   if (globals.__azzelInscriptionsStore) {
     return globals.__azzelInscriptionsStore;
   }
-  const databaseUrl = readDatabaseUrl();
   // Garde de rôle applicatif (story 1.9) : la connexion doit être le rôle
   // soumis au RLS, sur CE store comme sur celui de l'IAM.
-  const sql = databaseUrl
-    ? postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 })
-    : null;
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
   const store =
     sql !== null
       ? protegerStore(sql, createInscriptionsStore(sql), isProductionRuntime())
