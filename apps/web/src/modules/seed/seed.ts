@@ -5,7 +5,7 @@ import postgres from 'postgres';
 
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { createChronoStore } from '@/modules/chrono/store';
-import { COUREUR_STATUS_EN_CONSTITUTION } from '@/modules/inscriptions/domain';
+import { COUREUR_STATUS_EN_CONSTITUTION, isRegistrationOpen } from '@/modules/inscriptions/domain';
 import { LocalDiskProofStore, getProofStore, type ProofStore } from '@/modules/inscriptions/proof-store';
 import { uploadPreuve } from '@/modules/inscriptions/proof-service';
 import {
@@ -26,11 +26,11 @@ import {
   APPAREIL_FICTIF,
   COUREURS_FICTIFS,
   HEURES_DEPART_FICTIVES,
+  LIGNES_PREUVE_FICTIVE,
   ORGANISATEUR_FICTIF,
   PLAN_TERRAIN,
   SECTEURS_FICTIFS,
   SEED_EMAIL_SUFFIXE,
-  TAILLE_PREUVE_OCTETS,
   VOLONTAIRES_FICTIFS,
   contactUrgenceCoureur,
   emailCoureur,
@@ -79,6 +79,25 @@ export class OrganisationManquanteError extends Error {
   }
 }
 
+/**
+ * `submitInscription` refuse toute inscription après `registration_closes_at`.
+ * Passée cette date, le seed ne peut plus créer de coureur : on le dit, avec
+ * le geste de contournement, plutôt que de laisser remonter une
+ * `RegistrationClosedError` au milieu d'une boucle de cinquante.
+ */
+export class InscriptionsFermeesError extends Error {
+  constructor(editionSlug: string, cloture: Date) {
+    super(
+      `Inscriptions de l’édition « ${editionSlug} » closes depuis le ` +
+        `${cloture.toISOString()} : le seed ne peut plus créer de coureur. ` +
+        'Repousse la clôture avant de reseeder, par exemple : ' +
+        `UPDATE edition SET registration_closes_at = now() + interval '1 year' ` +
+        `WHERE slug = '${editionSlug}';`,
+    );
+    this.name = 'InscriptionsFermeesError';
+  }
+}
+
 export interface SeedRapport {
   coureursCrees: number;
   coureursDejaPresents: number;
@@ -111,16 +130,24 @@ function rapportVide(): SeedRapport {
   };
 }
 
-/** Vrai si le seed n'a rien eu à créer (seconde exécution sur base déjà peuplée). */
+/**
+ * Vrai si le seed n'a RIEN changé (seconde exécution sur base déjà peuplée).
+ * Les décisions de dossier et la neutralisation d'emails en font partie : une
+ * reprise de seed interrompu les rejoue, et annoncer « rien à créer » dans ce
+ * cas serait un mensonge.
+ */
 export function rienACreer(rapport: SeedRapport): boolean {
   return (
     rapport.coureursCrees === 0 &&
+    rapport.dossiersValides === 0 &&
+    rapport.dossiersRefuses === 0 &&
     rapport.volontairesCrees === 0 &&
     rapport.secteursCrees === 0 &&
     rapport.missionsCreees === 0 &&
     rapport.affectationsCreees === 0 &&
     rapport.dossardsAttribues === 0 &&
-    rapport.evenementsTerrainCrees === 0
+    rapport.evenementsTerrainCrees === 0 &&
+    rapport.emailsNeutralises === 0
   );
 }
 
@@ -151,12 +178,54 @@ async function verifierSchema(sql: postgres.Sql): Promise<void> {
   }
 }
 
-/** JPEG minimal valide (en-tête JFIF + remplissage) — cohérent avec detectProofFormat. */
-export function octetsPreuveFictive(taille = TAILLE_PREUVE_OCTETS): Uint8Array {
-  const bytes = new Uint8Array(taille);
-  bytes.set([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
-  bytes.fill(0xab, 11);
-  return bytes;
+/** Caractères réservés de la syntaxe des chaînes PDF. */
+function echapperPdf(texte: string): string {
+  return texte.replace(/([\\()])/g, '\\$1');
+}
+
+/**
+ * Preuve de paiement fictive : un PDF d'UNE page, réellement affichable.
+ *
+ * Un en-tête de format suivi d'un remplissage passerait `detectProofFormat`
+ * mais donnerait une pièce illisible à l'écran de validation — or valider un
+ * dossier est précisément le geste que la recette doit permettre d'exercer.
+ * Les offsets de la table `xref` sont calculés ici : le document est valide,
+ * pas « réparé » par la visionneuse.
+ *
+ * Taille produite : moins d'un kilo-octet, très loin du plafond de 300 Ko.
+ */
+export function octetsPreuveFictive(): Uint8Array {
+  const contenu = [
+    'BT',
+    '/F1 13 Tf',
+    ...LIGNES_PREUVE_FICTIVE.map(
+      (ligne, rang) => `1 0 0 1 24 ${170 - 30 * (rang + 1)} Tm (${echapperPdf(ligne)}) Tj`,
+    ),
+    'ET',
+    '',
+  ].join('\n');
+  const objets = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 200] ' +
+      '/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(contenu, 'latin1')} >>\nstream\n${contenu}endstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (const [rang, corps] of objets.entries()) {
+    offsets.push(Buffer.byteLength(pdf, 'latin1'));
+    pdf += `${rang + 1} 0 obj\n${corps}\nendobj\n`;
+  }
+  const debutXref = Buffer.byteLength(pdf, 'latin1');
+  pdf += `xref\n0 ${objets.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objets.length + 1} /Root 1 0 R >>\n`;
+  pdf += `startxref\n${debutXref}\n%%EOF\n`;
+  return new Uint8Array(Buffer.from(pdf, 'latin1'));
 }
 
 /**
@@ -249,12 +318,55 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
   // potentiels : le worker n'est JAMAIS réveillé par le seed.
   const sansOutbox = { store, triggerOutbox: async () => undefined };
 
+  // Rattrapage d'un run précédent interrompu : ses emails sont peut-être
+  // restés « pending ». La promesse « aucun message du seed ne peut partir »
+  // vaut aussi après un échec, d'où la neutralisation en entrée ET le
+  // `finally` qui ferme le peuplement.
+  rapport.emailsNeutralises += await neutraliserEmailsDuSeed(sql, organisationId);
+  try {
+    await peupler({
+      sql,
+      organisationId,
+      store,
+      missionsStore,
+      chronoStore,
+      proofStore,
+      sansOutbox,
+      rapport,
+    });
+  } finally {
+    rapport.emailsNeutralises += await neutraliserEmailsDuSeed(sql, organisationId);
+  }
+
+  return rapport;
+}
+
+interface PeuplementDeps {
+  sql: postgres.Sql;
+  organisationId: string;
+  store: InscriptionsStore;
+  missionsStore: MissionsStore;
+  chronoStore: ReturnType<typeof createChronoStore>;
+  proofStore: ProofStore;
+  sansOutbox: { store: InscriptionsStore; triggerOutbox: () => Promise<undefined> };
+  rapport: SeedRapport;
+}
+
+async function peupler(deps: PeuplementDeps): Promise<void> {
+  const { sql, organisationId, store, missionsStore, chronoStore, proofStore, sansOutbox, rapport } =
+    deps;
+
   const edition = await store.findCurrentEdition(organisationId);
   if (!edition) {
     throw new OrganisationManquanteError(DEFAULT_ORGANISATION_SLUG);
   }
   const epreuves = await store.listEpreuves(edition.id, organisationId);
   const epreuveParSlug = new Map(epreuves.map((epreuve) => [epreuve.slug, epreuve]));
+
+  // Clôture lue en préambule ; l'échec n'est levé qu'au moment où une création
+  // est réellement nécessaire — un rejeu sur base déjà peuplée reste possible
+  // après la clôture, puisqu'il n'inscrit personne.
+  const inscriptionsOuvertes = isRegistrationOpen(edition.registrationClosesAt);
 
   // ———————————————————————————————— coureurs ————————————————————————————————
 
@@ -271,8 +383,12 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
     'organisateur',
   );
 
-  /** Jetons e-dossard des validés, dans l'ordre de la table fictive. */
-  const jetonsValides: string[] = [];
+  /**
+   * Jetons e-dossard des validés, dans l'ordre de la table fictive, avec
+   * l'épreuve de chacun : les départs sont échelonnés, les horaires de passage
+   * se dérivent du départ du coureur et non d'une heure d'horloge unique.
+   */
+  const jetonsValides: { jeton: string; epreuve: 'longue' | 'moyenne' }[] = [];
 
   for (const [index, coureur] of COUREURS_FICTIFS.entries()) {
     const epreuve = epreuveParSlug.get(coureur.epreuve);
@@ -288,6 +404,9 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
 
     let dossier = await store.findCoureurByAccount(compte.id, edition.id, organisationId);
     if (dossier === null) {
+      if (!inscriptionsOuvertes) {
+        throw new InscriptionsFermeesError(edition.slug, edition.registrationClosesAt);
+      }
       const urgence = contactUrgenceCoureur(coureur, index);
       await submitInscription(
         coureurSession,
@@ -351,7 +470,11 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
       // de l'e-dossard par le coureur — jamais régénéré ensuite.
       const edossard = await obtenirEdossard(coureurSession, sansOutbox);
       if (edossard !== null) {
-        jetonsValides.push(edossard.jeton);
+        jetonsValides.push({ jeton: edossard.jeton, epreuve: coureur.epreuve });
+      } else {
+        rapport.avertissements.push(
+          `Coureur ${coureur.cle} validé mais sans jeton e-dossard : il n'aura aucun passage.`,
+        );
       }
     }
   }
@@ -361,14 +484,23 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
 
   // ———————————————————— heures de départ échelonnées ————————————————————
 
-  const heures = (Object.entries(HEURES_DEPART_FICTIVES) as ['longue' | 'moyenne', string][])
-    .map(([slug, heure]) => {
-      const epreuve = epreuveParSlug.get(slug);
-      return epreuve
-        ? { epreuveId: epreuve.id, heureDepart: horodatageJourCourse(edition.dateCourse, heure) }
-        : null;
-    })
-    .filter((ligne): ligne is { epreuveId: string; heureDepart: Date } => ligne !== null);
+  const heureDepartParEpreuve = new Map<'longue' | 'moyenne', Date>();
+  const heures: { epreuveId: string; heureDepart: Date }[] = [];
+  for (const [slug, heure] of Object.entries(HEURES_DEPART_FICTIVES) as [
+    'longue' | 'moyenne',
+    string,
+  ][]) {
+    const epreuve = epreuveParSlug.get(slug);
+    if (epreuve === undefined) {
+      rapport.avertissements.push(
+        `Épreuve « ${slug} » absente de l'édition : aucune heure de départ posée, aucun passage simulé.`,
+      );
+      continue;
+    }
+    const heureDepart = horodatageJourCourse(edition.dateCourse, heure);
+    heureDepartParEpreuve.set(slug, heureDepart);
+    heures.push({ epreuveId: epreuve.id, heureDepart });
+  }
   if (heures.length > 0) {
     await chronoStore.enregistrerHeuresDepart({ organisationId, heures });
   }
@@ -418,14 +550,24 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
     }
   }
 
-  const missionsExistantes = new Set(etat.missions.map((mission) => `${mission.secteurId}|${mission.titre}`));
+  // Clé de mission = (secteur, titre) : c'est l'unicité portée par le SQL.
+  // Un titre seul rattacherait silencieusement affectations et checkpoints à
+  // l'homonyme d'un autre secteur.
+  const cleMission = (secteurId: string, titre: string): string => `${secteurId}|${titre}`;
+
+  const missionsExistantes = new Set(
+    etat.missions.map((mission) => cleMission(mission.secteurId, mission.titre)),
+  );
   for (const secteur of SECTEURS_FICTIFS) {
     const secteurId = secteurIdParNom.get(secteur.nom);
     if (secteurId === undefined) {
+      rapport.avertissements.push(
+        `Secteur « ${secteur.nom} » introuvable : ses ${secteur.missions.length} mission(s) n'ont pas été créées.`,
+      );
       continue;
     }
     for (const mission of secteur.missions) {
-      if (missionsExistantes.has(`${secteurId}|${mission.titre}`)) {
+      if (missionsExistantes.has(cleMission(secteurId, mission.titre))) {
         continue;
       }
       await missionsStore.createMission({
@@ -447,16 +589,29 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
   }
 
   etat = await missionsStore.listMissionsEtat(organisationId, edition.id);
-  const missionIdParTitre = new Map(etat.missions.map((mission) => [mission.titre, mission.id]));
+  const missionIdParCle = new Map(
+    etat.missions.map((mission) => [cleMission(mission.secteurId, mission.titre), mission.id]),
+  );
 
   for (const affectation of AFFECTATIONS_FICTIVES) {
-    const missionId = missionIdParTitre.get(affectation.mission);
+    const secteurId = secteurIdParNom.get(affectation.secteur);
+    const missionId =
+      secteurId !== undefined
+        ? missionIdParCle.get(cleMission(secteurId, affectation.mission))
+        : undefined;
     if (missionId === undefined) {
+      rapport.avertissements.push(
+        `Mission « ${affectation.mission} » (secteur « ${affectation.secteur} ») introuvable : ` +
+          `${affectation.volontaires.length} affectation(s) non posée(s) — la mission restera vacante.`,
+      );
       continue;
     }
     for (const cle of affectation.volontaires) {
       const volontaireId = volontaireIdParEmail.get(emailVolontaire(cle));
       if (volontaireId === undefined) {
+        rapport.avertissements.push(
+          `Volontaire ${cle} introuvable : non affecté à « ${affectation.mission} ».`,
+        );
         continue;
       }
       // UNIQUE (mission_id, volontaire_id) : le doublon est un no-op signalé.
@@ -471,13 +626,22 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
 
   const missionIdParCheckpoint = new Map<Checkpoint, string>();
   for (const secteur of SECTEURS_FICTIFS) {
+    const secteurId = secteurIdParNom.get(secteur.nom);
     for (const mission of secteur.missions) {
-      if (mission.checkpoint !== null) {
-        const missionId = missionIdParTitre.get(mission.titre);
-        if (missionId !== undefined) {
-          missionIdParCheckpoint.set(mission.checkpoint, missionId);
-        }
+      if (mission.checkpoint === null) {
+        continue;
       }
+      const missionId =
+        secteurId !== undefined
+          ? missionIdParCle.get(cleMission(secteurId, mission.titre))
+          : undefined;
+      if (missionId === undefined) {
+        rapport.avertissements.push(
+          `Checkpoint « ${mission.titre} » introuvable : aucun passage ne sera simulé pour ${mission.checkpoint}.`,
+        );
+        continue;
+      }
+      missionIdParCheckpoint.set(mission.checkpoint, missionId);
     }
   }
 
@@ -485,16 +649,11 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
     sql,
     organisationId,
     editionId: edition.id,
-    dateCourse: edition.dateCourse,
     jetons: jetonsValides,
+    heureDepartParEpreuve,
     missionIdParCheckpoint,
+    avertissements: rapport.avertissements,
   });
-
-  // ———————————————————— neutralisation des emails ————————————————————
-
-  rapport.emailsNeutralises = await neutraliserEmailsDuSeed(sql, organisationId);
-
-  return rapport;
 }
 
 /**
@@ -510,11 +669,20 @@ async function semerEvenementsTerrain(input: {
   sql: postgres.Sql;
   organisationId: string;
   editionId: string;
-  dateCourse: string;
-  jetons: string[];
+  jetons: { jeton: string; epreuve: 'longue' | 'moyenne' }[];
+  heureDepartParEpreuve: Map<'longue' | 'moyenne', Date>;
   missionIdParCheckpoint: Map<Checkpoint, string>;
+  avertissements: string[];
 }): Promise<number> {
-  const { sql, organisationId, editionId, dateCourse, jetons, missionIdParCheckpoint } = input;
+  const {
+    sql,
+    organisationId,
+    editionId,
+    jetons,
+    heureDepartParEpreuve,
+    missionIdParCheckpoint,
+    avertissements,
+  } = input;
   if (jetons.length === 0) {
     return 0;
   }
@@ -524,7 +692,7 @@ async function semerEvenementsTerrain(input: {
     reference: string;
     checkpoint: Checkpoint | null;
     coureurs: number;
-    premiereHeure: string;
+    minutesDepuisDepart: number;
     intervalleMinutes: number;
   }
   const lots: Lot[] = [
@@ -539,12 +707,28 @@ async function semerEvenementsTerrain(input: {
     const checkpointId = lot.checkpoint !== null ? missionIdParCheckpoint.get(lot.checkpoint) : null;
     // CHECK SQL : checkpoint_id non nul si et seulement si type = 'passage'.
     if (lot.type === 'passage' && (checkpointId === undefined || checkpointId === null)) {
+      avertissements.push(
+        `Lot « ${lot.reference} » ignoré : aucun checkpoint correspondant en base, aucun passage simulé.`,
+      );
       continue;
     }
-    const base = horodatageJourCourse(dateCourse, lot.premiereHeure);
     const cibles = jetons.slice(0, lot.coureurs);
-    for (const [rang, jeton] of cibles.entries()) {
-      const horodatage = minutesApres(base, rang * lot.intervalleMinutes);
+    for (const [rang, cible] of cibles.entries()) {
+      const { jeton, epreuve } = cible;
+      // L'horaire se dérive du départ de SON épreuve : les départs sont
+      // échelonnés, et un passage antérieur au départ donnerait un temps de
+      // classement négatif.
+      const depart = heureDepartParEpreuve.get(epreuve);
+      if (depart === undefined) {
+        avertissements.push(
+          `Heure de départ de « ${epreuve} » inconnue : lot « ${lot.reference} » non simulé pour ce coureur.`,
+        );
+        continue;
+      }
+      const horodatage = minutesApres(
+        depart,
+        lot.minutesDepuisDepart + rang * lot.intervalleMinutes,
+      );
       const cle = `seed:${lot.reference}:${jeton}`;
       const inseres = await withOrg(sql, organisationId, async (tx) =>
         tx<{ id: string }[]>`
@@ -649,7 +833,11 @@ export async function executerSeedCli(): Promise<void> {
       console.warn(`Avertissement : ${avertissement}`);
     }
   } catch (error) {
-    if (error instanceof MigrationsManquantesError || error instanceof OrganisationManquanteError) {
+    if (
+      error instanceof MigrationsManquantesError ||
+      error instanceof OrganisationManquanteError ||
+      error instanceof InscriptionsFermeesError
+    ) {
       console.error(error.message);
     } else {
       console.error('Seed échoué :', error);

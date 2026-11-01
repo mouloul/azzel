@@ -126,7 +126,8 @@ const LIGNES: readonly Ligne[] = [
   [
     'Nadia',
     'Lamrioui',
-    '1994-03-08', 'moyenne',
+    '1994-03-08',
+    'moyenne',
     'S',
     'refusé',
     'Le versement CCP correspond à une autre épreuve : redéposer une preuve au tarif de La Moyenne.',
@@ -173,7 +174,7 @@ const LIGNES: readonly Ligne[] = [
 const CONTACTS_URGENCE = ['Lounis', 'Ouiza', 'Mouloud', 'Farida', 'Saïd', 'Nouara'];
 
 /**
- * Téléphones : plage d'exemple `+213 555 01 xx xx`, jamais attribuée.
+ * Téléphones : plage d'exemple `+213 555 01 nnnn`, jamais attribuée.
  * Deux numéros distincts par coureur (le sien, celui de son contact).
  */
 function telephoneFictif(index: number, variante: 0 | 1): string {
@@ -402,19 +403,55 @@ export const SECTEURS_FICTIFS: readonly SecteurFictif[] = [
  * attribués à un même volontaire ne se chevauchent pas — l'écran admin montre
  * une couverture propre, sans avertissement de conflit parasite.
  */
-export const AFFECTATIONS_FICTIVES: readonly { mission: string; volontaires: readonly string[] }[] =
-  [
-    { mission: 'Retrait des dossards', volontaires: ['v01', 'v02'] },
-    { mission: 'Accueil et orientation', volontaires: ['v03'] },
-    { mission: 'Scan checkpoint 1', volontaires: ['v04', 'v05'] },
-    { mission: 'Sécurité tronçon km 7–12', volontaires: ['v06'] },
-    { mission: 'Scan checkpoint 2', volontaires: ['v07', 'v08'] },
-    { mission: 'Scan arrivée', volontaires: ['v09', 'v10'] },
-    { mission: 'Sécurité zone d’arrivée', volontaires: ['v11'] },
-    // « Annonces et speaker » reste VACANTE : le comité doit pouvoir exercer
-    // l'affectation d'une mission non couverte.
-    { mission: 'Annonces et speaker', volontaires: [] },
-  ];
+export const AFFECTATIONS_FICTIVES: readonly {
+  /** L'unicité SQL porte sur (secteur, titre) : les deux sont nécessaires. */
+  secteur: string;
+  mission: string;
+  volontaires: readonly string[];
+}[] = [
+  {
+    secteur: 'Départ — Place du village',
+    mission: 'Retrait des dossards',
+    volontaires: ['v01', 'v02'],
+  },
+  {
+    secteur: 'Départ — Place du village',
+    mission: 'Accueil et orientation',
+    volontaires: ['v03'],
+  },
+  {
+    secteur: 'Checkpoint 1 — Col des Oliviers',
+    mission: 'Scan checkpoint 1',
+    volontaires: ['v04', 'v05'],
+  },
+  {
+    secteur: 'Checkpoint 1 — Col des Oliviers',
+    mission: 'Sécurité tronçon km 7–12',
+    volontaires: ['v06'],
+  },
+  {
+    secteur: 'Checkpoint 2 — Crête de Tizi',
+    mission: 'Scan checkpoint 2',
+    volontaires: ['v07', 'v08'],
+  },
+  {
+    secteur: 'Arrivée — Stade municipal',
+    mission: 'Scan arrivée',
+    volontaires: ['v09', 'v10'],
+  },
+  {
+    secteur: 'Arrivée — Stade municipal',
+    mission: 'Sécurité zone d’arrivée',
+    volontaires: ['v11'],
+  },
+  // « Annonces et speaker » reste VACANTE : le comité doit pouvoir exercer
+  // l'affectation d'une mission non couverte.
+  {
+    secteur: 'Arrivée — Stade municipal',
+    mission: 'Annonces et speaker',
+    volontaires: [],
+  },
+];
 
 /** Heures de départ officielles, échelonnées (UTC, jour de la course). */
 export const HEURES_DEPART_FICTIVES: Readonly<Record<'longue' | 'moyenne', string>> = {
@@ -427,17 +464,33 @@ export const HEURES_DEPART_FICTIVES: Readonly<Record<'longue' | 'moyenne', strin
  * et les rapports sans rejouer une course entière. Les coureurs concernés sont
  * les N PREMIERS validés (ordre de la table ci-dessus), ceux-là seuls ont un
  * jeton e-dossard à scanner.
+ *
+ * Les horaires sont RELATIFS AU DÉPART DE L'ÉPREUVE DU COUREUR, pas à une
+ * heure d'horloge unique : les départs sont échelonnés (La Longue à 07:00, La
+ * Moyenne à 08:00) et un passage antérieur au départ donnerait un temps de
+ * classement négatif. `minutesDepuisDepart` est donc strictement positif pour
+ * les passages ; seul le retrait de dossard précède le départ.
  */
 export const PLAN_TERRAIN = {
-  /** Retrait de dossard au départ. */
-  retrait: { coureurs: 20, premiereHeure: '06:05', intervalleMinutes: 2 },
-  cp1: { coureurs: 18, premiereHeure: '07:38', intervalleMinutes: 3 },
-  cp2: { coureurs: 14, premiereHeure: '08:36', intervalleMinutes: 4 },
-  arrivee: { coureurs: 11, premiereHeure: '09:22', intervalleMinutes: 5 },
+  /** Retrait de dossard, 55 minutes avant le départ de son épreuve. */
+  retrait: { coureurs: 20, minutesDepuisDepart: -55, intervalleMinutes: 2 },
+  cp1: { coureurs: 18, minutesDepuisDepart: 38, intervalleMinutes: 3 },
+  cp2: { coureurs: 14, minutesDepuisDepart: 96, intervalleMinutes: 4 },
+  arrivee: { coureurs: 11, minutesDepuisDepart: 142, intervalleMinutes: 5 },
 } as const;
 
 /** Identifiant d'appareil scanneur fictif porté par les événements terrain. */
 export const APPAREIL_FICTIF = 'seed-scanneur-01';
 
-/** Octets de preuve : JPEG minimal valide, bien sous le plafond de 300 Ko. */
-export const TAILLE_PREUVE_OCTETS = 24_000;
+/**
+ * Texte de la preuve de paiement fictive. Elle doit être RÉELLEMENT AFFICHABLE
+ * (valider un dossier est le geste que la recette doit permettre d'exercer) et
+ * dire sur elle-même qu'elle ne vaut rien. ASCII pur : le PDF est encodé en
+ * latin-1 avec la police Helvetica standard.
+ */
+export const LIGNES_PREUVE_FICTIVE: readonly string[] = [
+  'RECU DE VERSEMENT CCP - DOCUMENT FICTIF',
+  'Trail d Ait-Aissi, edition 2027',
+  'Jeu de donnees de recette (story 8.3)',
+  'Aucune valeur : ce recu n a jamais existe.',
+];

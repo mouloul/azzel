@@ -132,14 +132,83 @@ context:
   8.2 n'est pas livrée ; le script l'annonce à chaque exécution.
 - La réinitialisation supprime les lignes `preuve` mais ne balaie pas les fichiers du
   stockage : des octets orphelins subsistent (sans conséquence fonctionnelle).
-- Le seed s'appuie sur l'ouverture des inscriptions de l'édition courante
-  (`registration_closes_at`, 2027-03-16 pour l'édition 2027) : passée cette date,
-  `submitInscription` refusera — il faudra repousser la clôture en base pour
-  reseeder.
+- Passée la clôture des inscriptions (`registration_closes_at`, 2027-03-16 pour
+  l'édition 2027), le seed ne peut plus créer de coureur : il échoue alors sur
+  `InscriptionsFermeesError`, qui donne le `UPDATE` de contournement. Un rejeu sur
+  base déjà peuplée reste possible après la clôture (il n'inscrit personne).
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Passe 1 — trois couches. Chaque verdict vérifié sur le code ou sur la base, pas repris du rapport.
+
+| # | Trouvaille | Verdict | Évidence |
+|---|---|---|---|
+| 1 | Passages de checkpoint antérieurs au départ | **high** | **Prouvé par requête sur la base seedée** : `moyenne` part à 08:00, 3 passages à partir de 07:47. Temps négatifs au classement. `PLAN_TERRAIN.cp1` part de 07:38 pour les deux épreuves alors que les départs sont échelonnés. |
+| 2 | Ligne de matrice « réinitialisation sans rôle propriétaire » non testée | **high** | Vérifié : ni `RoleProprietaireManquant` ni `DATABASE_OWNER_URL` n'apparaissent dans `seed.test.ts`. Échec d'audit de matrice — bloquant par règle du workflow. |
+| 3 | Neutralisation des emails hors `try/finally` | **medium** | Vérifié : dernière instruction du chemin nominal. Toute exception laisse les lignes en `pending`, et `.env.example` promet qu'aucun message ne peut partir. Impact réel atténué : `.invalid` ne résout pas, donc rien n'atteindrait une boîte — mais la promesse écrite est fausse. |
+| 4 | `affectationsCreees`, `avertissements`, `heure_depart` jamais assertés | **medium** | Vérifié : absents de `seed.test.ts`. Perdre toutes les affectations, tous les passages ou toutes les heures de départ ne ferait échouer aucun test (`toBeGreaterThan(0)` survit à la perte des trois quarts des données). |
+| 5 | `missionIdParTitre` clavetée sur le titre seul | **medium** | Vérifié : `new Map(etat.missions.map((m) => [m.titre, m.id]))`, alors que l'unicité SQL est `(secteur_id, titre)`. Aucune collision aujourd'hui, invariant ni documenté ni testé. |
+| 6 | `continue` muets sur affectations et lots terrain | **medium** | Vérifié. Une cible introuvable est sautée sans trace ; le comité recevrait une édition sans couverture de mission, sans explication. |
+| 7 | Preuve JPEG non décodable (en-tête + remplissage `0xAB`) | **medium** | L'écran de validation afficherait une image cassée — or valider un dossier est le geste que la recette doit permettre d'exercer. |
+| 8 | `rienACreer` ignore `dossiersValides` / `dossiersRefuses` | **medium** | Vérifié. Une reprise annoncerait « rien à créer » tout en décidant des dossiers. |
+| 9 | Clôture des inscriptions non gardée | **medium** | `submitInscription` refuse après `registration_closes_at` (2027-03-16). Erreur brute au lieu d'un message nommé. |
+| 10 | Purge : aucune garde si elle n'efface rien | **medium** | Le propriétaire a `BYPASSRLS` sur Supabase (vérifié : `rolbypassrls = t`) et en local. Si un hôte futur ne l'accorde pas, la purge supprimerait zéro ligne en annonçant « base déjà vierge ». |
+| 11 | Dérive des listes de purge non détectée | **medium** | Les deux listes couvrent exactement les 30 tables actuelles. C'est leur dérive future qui n'est pas protégée. |
+| 12 | `readDatabaseOwnerUrl() ?? ownerUrl` inatteignable, commentaire faux | **low** | Vérifié : `readDatabaseOwnerUrl()` renvoie la variable verbatim. Aucune normalisation. |
+| 13 | `vi.unstubAllEnvs()` hors `afterEach` | **low** | Un échec d'assertion laisse l'environnement pollué pour les cas suivants. |
+| 14 | Commentaire de `telephoneFictif` contredit sa sortie ; une ligne de données mal formatée | **low** | Vérifié. Fichier dont le contrat affiché est la relecture d'un coup d'œil. |
+| 15 | Absence d'appareils, abandons, annulations, positions | **defer** | Réel, mais la story ne les demande pas. Le comité ne pourra pas exercer les écrans PC course ni la carte. À arbitrer pour 8.4. |
+| 16 | La purge efface la vitrine sans la resemer | **defer** | `sponsor`, `temoignage`, configs vitrine effacés et jamais recréés. À documenter ou à semer. |
+| 17 | Fichiers de preuve orphelins après purge | **defer** | Sans conséquence fonctionnelle ; à surveiller face au plafond de 1 Go. |
+| 18 | Fabrique `getDbClient()` non réutilisée par les CLI du seed | **false** | Les CLI de courte vie gardent leur connexion propre : c'est la frontière posée par la story 8.1, pas un oubli. |
+
+
+### Résolution (passe 1)
+
+Les quatorze trouvailles **high / medium / low** sont traitées ; les trois **defer**
+et le **false** restent tels quels.
+
+- **1** — `PLAN_TERRAIN` exprime désormais chaque lot en `minutesDepuisDepart`,
+  relatif au départ de l'épreuve DU COUREUR (les jetons portent leur épreuve).
+  Strictement positif pour les passages ; seul le retrait précède le départ.
+  Revérifié par requête sur la base seedée : écart minimal +38 min (longue),
+  +47 min (moyenne), **0 passage avant départ**.
+- **2** — cas « réinitialisation sans rôle propriétaire » ajouté dans
+  `describe('seed — CLI hors base')`, sur le modèle du cas voisin.
+- **3** — neutralisation en entrée de run (rattrapage d'un run interrompu) ET dans
+  un `finally` ; le peuplement est extrait dans `peupler()` pour rendre le `finally`
+  lisible.
+- **4** — `affectationsCreees` dérivé d'`AFFECTATIONS_FICTIVES`, `GROUP BY type` sur
+  `terrain_evenement` conforme à `PLAN_TERRAIN` avec `checkpoint_id` non nul sur les
+  passages, `heure_depart` non nulle et distincte sur les deux épreuves,
+  `heuresDepartEffacees` asserté à la purge, comptes à zéro sur TOUTES les tables
+  purgées, et `avertissements` exigé à exactement un élément (celui de la story 8.2) —
+  tout saut de cible fait donc échouer la suite.
+- **5** — clé `secteurId|titre` partout ; `AFFECTATIONS_FICTIVES` porte le secteur de
+  chaque mission.
+- **6** — chaque `continue` pousse un avertissement nommant la cible manquée.
+- **7** — la preuve est un **PDF d'une page de 805 octets**, table `xref` calculée,
+  portant « RECU DE VERSEMENT CCP — DOCUMENT FICTIF ». Validé en rendu réel
+  (Quick Look / CoreGraphics), pas seulement par `detectProofFormat`.
+- **8** — `rienACreer` inclut `dossiersValides`, `dossiersRefuses` et
+  `emailsNeutralises`.
+- **9** — `InscriptionsFermeesError`, levée à la première création nécessaire (un
+  rejeu sur base peuplée reste donc possible après la clôture), message portant le
+  `UPDATE` de contournement.
+- **10** — `PurgeSansEffetError` : purge sans effet + rôle sans SUPERUSER ni
+  BYPASSRLS → échec explicite. La détection passe par `pg_roles`, un `SELECT` de
+  contrôle étant filtré par les mêmes politiques.
+- **11** — test comparant l'union des deux listes à `information_schema.tables`, dans
+  les deux sens. Il a trouvé un défaut réel dès sa première exécution : `invitation`,
+  listée à la purge, est supprimée par la migration 0035 — entrée retirée.
+- **12** — simplifié ; le commentaire dit maintenant la vraie raison d'exiger la
+  variable (ne pas purger sur une URL devinée par `readDatabaseOwnerUrl`).
+- **13** — `vi.unstubAllEnvs()` dans `afterEach`.
+- **14** — commentaire de `telephoneFictif` corrigé, ligne « Nadia Lamrioui »
+  reformatée.
+
 
 ## Verification
 

@@ -12,6 +12,7 @@ vi.mock('@/modules/notifications/worker', async () => {
 
 import { findOrganisationIdBySlug, resetOrganisationIdMemoForTests, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
+import { detectProofFormat } from '@/modules/inscriptions/proof-format';
 import { LocalDiskProofStore } from '@/modules/inscriptions/proof-store';
 import {
   closeAzzelTestDb,
@@ -21,7 +22,10 @@ import {
 } from '@/test/integration-db';
 
 import {
+  AFFECTATIONS_FICTIVES,
   COUREURS_FICTIFS,
+  HEURES_DEPART_FICTIVES,
+  PLAN_TERRAIN,
   SEED_EMAIL_SUFFIXE,
   SECTEURS_FICTIFS,
   VOLONTAIRES_FICTIFS,
@@ -29,7 +33,9 @@ import {
 import {
   AutorisationResetManquanteError,
   RESET_ENV_NAME,
+  RoleProprietaireManquantError,
   TABLES_PRESERVEES,
+  TABLES_PURGEES,
   executerReset,
   executerResetCli,
   resetAutorise,
@@ -39,14 +45,15 @@ import {
   compterEmailsExpediables,
   executerSeed,
   executerSeedCli,
+  octetsPreuveFictive,
   rienACreer,
 } from './seed';
 
 // Story 8.3 — matrice I/O du seed : premier passage, rejeu idempotent,
-// migrations absentes, base absente, neutralisation des emails, cycle
-// réinitialisation → seed. Base azzel_test, rôle azzel_app pour le seed,
-// rôle propriétaire pour la purge (les tables append-only du chrono n'ont ni
-// UPDATE ni DELETE côté applicatif).
+// migrations absentes, base absente, réinitialisation sans rôle propriétaire,
+// neutralisation des emails, cycle réinitialisation → seed. Base azzel_test,
+// rôle azzel_app pour le seed, rôle propriétaire pour la purge (les tables
+// append-only du chrono n'ont ni UPDATE ni DELETE côté applicatif).
 
 const testUrls = resolveTestDatabaseUrls('seed édition complète');
 
@@ -56,13 +63,25 @@ const MISSIONS_ATTENDUES = SECTEURS_FICTIFS.reduce(
   (total, secteur) => total + secteur.missions.length,
   0,
 );
+const AFFECTATIONS_ATTENDUES = AFFECTATIONS_FICTIVES.reduce(
+  (total, affectation) => total + affectation.volontaires.length,
+  0,
+);
+const RETRAITS_ATTENDUS = Math.min(PLAN_TERRAIN.retrait.coureurs, VALIDES_ATTENDUS);
+const PASSAGES_ATTENDUS =
+  Math.min(PLAN_TERRAIN.cp1.coureurs, VALIDES_ATTENDUS) +
+  Math.min(PLAN_TERRAIN.cp2.coureurs, VALIDES_ATTENDUS) +
+  Math.min(PLAN_TERRAIN.arrivee.coureurs, VALIDES_ATTENDUS);
 
 describe('seed — CLI hors base (aucune connexion requise)', () => {
   const exitCodeInitial = process.exitCode;
 
   afterEach(() => {
-    process.exitCode = exitCodeInitial;
+    // Nettoyage dans afterEach, PAS en fin de corps de test : un échec
+    // d'assertion laisserait sinon l'environnement pollué pour les cas suivants.
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    process.exitCode = exitCodeInitial;
   });
 
   it('DATABASE_URL absente : échec explicite, aucune trace partielle', async () => {
@@ -76,7 +95,6 @@ describe('seed — CLI hors base (aucune connexion requise)', () => {
 
     expect(process.exitCode).toBe(1);
     expect(String(erreurs[0]?.[0])).toContain('DATABASE_URL absente');
-    vi.unstubAllEnvs();
   });
 
   it('réinitialisation sans autorisation : refus nommant la variable de garde', async () => {
@@ -92,7 +110,42 @@ describe('seed — CLI hors base (aucune connexion requise)', () => {
     expect(process.exitCode).toBe(1);
     expect(String(erreurs[0]?.[0])).toContain(RESET_ENV_NAME);
     expect(new AutorisationResetManquanteError().message).toContain(RESET_ENV_NAME);
-    vi.unstubAllEnvs();
+  });
+
+  it('réinitialisation sans rôle propriétaire : refus nommant DATABASE_OWNER_URL', async () => {
+    const erreurs: unknown[][] = [];
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      erreurs.push(args);
+    });
+    vi.stubEnv(RESET_ENV_NAME, '1');
+    vi.stubEnv('DATABASE_OWNER_URL', '');
+
+    expect(resetAutorise()).toBe(true);
+    await executerResetCli();
+
+    expect(process.exitCode).toBe(1);
+    expect(String(erreurs[0]?.[0])).toContain('DATABASE_OWNER_URL');
+    expect(new RoleProprietaireManquantError().message).toContain('DATABASE_OWNER_URL');
+  });
+});
+
+describe('preuve de paiement fictive', () => {
+  it('est un PDF réellement affichable, cohérent avec detectProofFormat', () => {
+    const octets = octetsPreuveFictive();
+    const texte = Buffer.from(octets).toString('latin1');
+
+    expect(detectProofFormat(octets)).toBe('pdf');
+    expect(octets.byteLength).toBeGreaterThan(0);
+    expect(octets.byteLength).toBeLessThanOrEqual(300 * 1024);
+    // Structure minimale d'un PDF valide : une page, une table xref dont
+    // l'offset déclaré tombe bien sur le mot-clé « xref », et un %%EOF.
+    expect(texte).toContain('/Type /Page');
+    expect(texte.endsWith('%%EOF\n')).toBe(true);
+    const startxref = Number(/startxref\n(\d+)\n/.exec(texte)?.[1]);
+    expect(Number.isInteger(startxref)).toBe(true);
+    expect(texte.slice(startxref, startxref + 4)).toBe('xref');
+    // Le document dit lui-même qu'il ne vaut rien.
+    expect(texte).toContain('DOCUMENT FICTIF');
   });
 });
 
@@ -143,8 +196,14 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
     expect(rapport.volontairesCrees).toBe(VOLONTAIRES_FICTIFS.length);
     expect(rapport.secteursCrees).toBe(SECTEURS_FICTIFS.length);
     expect(rapport.missionsCreees).toBe(MISSIONS_ATTENDUES);
-    expect(rapport.evenementsTerrainCrees).toBeGreaterThan(0);
+    expect(rapport.affectationsCreees).toBe(AFFECTATIONS_ATTENDUES);
+    expect(rapport.evenementsTerrainCrees).toBe(RETRAITS_ATTENDUS + PASSAGES_ATTENDUS);
     expect(rienACreer(rapport)).toBe(false);
+
+    // Seul avertissement attendu : la dépendance assumée à la story 8.2. Tout
+    // saut de cible (secteur, mission, volontaire, checkpoint) en ajouterait un.
+    expect(rapport.avertissements).toHaveLength(1);
+    expect(rapport.avertissements[0]).toContain('story 8.2');
 
     const statuts = await owner<{ status: string; total: number }[]>`
       SELECT status, count(*)::int AS total FROM coureur GROUP BY status
@@ -176,6 +235,42 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
       SELECT email FROM account WHERE email NOT LIKE ${`%${SEED_EMAIL_SUFFIXE}`}
     `;
     expect(horsDomaine).toEqual([]);
+
+    // Heures de départ échelonnées posées sur les DEUX épreuves.
+    const departs = await owner<{ slug: string; heure_depart: Date | null }[]>`
+      SELECT slug, heure_depart FROM epreuve ORDER BY slug
+    `;
+    expect(departs).toHaveLength(Object.keys(HEURES_DEPART_FICTIVES).length);
+    expect(departs.every((ligne) => ligne.heure_depart !== null)).toBe(true);
+    const heuresDistinctes = new Set(
+      departs.map((ligne) => (ligne.heure_depart as Date).toISOString()),
+    );
+    expect(heuresDistinctes.size).toBe(departs.length);
+
+    // Événements terrain : les deux types, et checkpoint_id non nul sur les
+    // passages (CHECK SQL : non nul si et seulement si type = 'passage').
+    const terrain = await owner<{ type: string; total: number; sans_checkpoint: number }[]>`
+      SELECT type, count(*)::int AS total,
+             count(*) FILTER (WHERE checkpoint_id IS NULL)::int AS sans_checkpoint
+      FROM terrain_evenement GROUP BY type ORDER BY type
+    `;
+    const parType = new Map(terrain.map((ligne) => [ligne.type, ligne]));
+    expect(parType.get('retrait')?.total).toBe(RETRAITS_ATTENDUS);
+    expect(parType.get('retrait')?.sans_checkpoint).toBe(RETRAITS_ATTENDUS);
+    expect(parType.get('passage')?.total).toBe(PASSAGES_ATTENDUS);
+    expect(parType.get('passage')?.sans_checkpoint).toBe(0);
+
+    // Aucun passage ne précède le départ de l'épreuve de SON coureur : des
+    // départs échelonnés avec une heure de passage unique donneraient des
+    // temps de classement négatifs.
+    const avantDepart = await owner<{ total: number }[]>`
+      SELECT count(*)::int AS total
+      FROM terrain_evenement te
+      JOIN coureur c ON c.jeton_edossard = te.jeton_coureur
+      JOIN epreuve e ON e.id = c.epreuve_id
+      WHERE te.type = 'passage' AND te.horodatage_reception < e.heure_depart
+    `;
+    expect(avantDepart[0]?.total).toBe(0);
   }, 180_000);
 
   it('aucune ligne email_outbox produite par le seed n’est expédiable', async () => {
@@ -219,21 +314,27 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
     expect(await compterEmailsExpediables(app, organisationId)).toBe(0);
   }, 180_000);
 
+  it('les listes de purge couvrent toutes les tables du schéma', async () => {
+    const rows = await owner<{ nom: string }[]>`
+      SELECT table_name AS nom FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      ORDER BY table_name
+    `;
+    const connues = new Set<string>([...TABLES_PURGEES, ...TABLES_PRESERVEES]);
+    const oubliees = rows.map((row) => row.nom).filter((nom) => !connues.has(nom));
+    // Une table ajoutée par une migration future doit être classée
+    // explicitement : purgée, ou préservée parce que les migrations la peuplent.
+    expect(oubliees).toEqual([]);
+    const fantomes = [...connues].filter((nom) => !rows.some((row) => row.nom === nom));
+    expect(fantomes).toEqual([]);
+  });
+
   it('réinitialisation : les données du seed disparaissent, les migrations subsistent', async () => {
     const rapport = await executerReset(owner);
 
     expect(rapport.total).toBeGreaterThan(0);
-    for (const table of [
-      'coureur',
-      'account',
-      'preuve',
-      'volontaire',
-      'secteur',
-      'mission',
-      'affectation',
-      'terrain_evenement',
-      'email_outbox',
-    ]) {
+    expect(rapport.heuresDepartEffacees).toBe(Object.keys(HEURES_DEPART_FICTIVES).length);
+    for (const table of TABLES_PURGEES) {
       expect(await compter(table)).toBe(0);
     }
     for (const table of TABLES_PRESERVEES) {
@@ -250,6 +351,8 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
 
     expect(rapport.coureursCrees).toBe(COUREURS_FICTIFS.length);
     expect(rapport.dossardsAttribues).toBe(VALIDES_ATTENDUS);
+    expect(rapport.affectationsCreees).toBe(AFFECTATIONS_ATTENDUES);
+    expect(rapport.evenementsTerrainCrees).toBe(RETRAITS_ATTENDUS + PASSAGES_ATTENDUS);
     expect(await compter('coureur')).toBe(COUREURS_FICTIFS.length);
     expect(await compterEmailsExpediables(app, organisationId)).toBe(0);
   }, 180_000);
@@ -262,6 +365,10 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
     expect(vues).toBe(COUREURS_FICTIFS.length);
   });
 
+  // ⚠️ DERNIER CAS DE LA SUITE — il mutile le schéma de la base partagée
+  // (DROP TABLE terrain_evenement CASCADE) pour éprouver la détection des
+  // migrations manquantes. Tout cas ajouté après lui tournerait sur un schéma
+  // incomplet : insérer les nouveaux cas AVANT celui-ci.
   it('seed sans migrations : échec explicite renvoyant vers db:migrate', async () => {
     await owner`DROP TABLE IF EXISTS terrain_evenement CASCADE`;
 

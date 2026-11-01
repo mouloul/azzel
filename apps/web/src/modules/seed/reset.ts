@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
-import { readDatabaseOwnerUrl, readEnv } from '@/modules/iam/env';
+import { readEnv } from '@/modules/iam/env';
 
 /**
  * Story 8.3 — réinitialisation de l'environnement de recette.
@@ -40,7 +40,7 @@ export const RESET_ENV_VALEUR_ATTENDUE = '1';
  *   annulation → terrain_evenement (FK composite)
  *   position   → appareil_coureur → account
  *   affectation → mission → secteur ; affectation → volontaire → account
- *   invitation → email_outbox ET account
+ *   volontaire → email_outbox (invitation_outbox_id) ET account
  *   preuve → coureur → account
  *   resultats_visite, abandon → edition (conservée)
  */
@@ -55,7 +55,6 @@ export const TABLES_PURGEES = [
   'mission',
   'secteur',
   'volontaire',
-  'invitation',
   'preuve',
   'coureur',
   'resultats_visite',
@@ -113,6 +112,24 @@ export class RoleProprietaireManquantError extends Error {
   }
 }
 
+/**
+ * Purge sans effet alors que le rôle ne peut pas traverser les politiques
+ * `FORCE RLS` : un `DELETE` hors GUC d'organisation ne voit alors AUCUNE ligne
+ * et la commande annoncerait « base déjà vierge » en laissant tout en place.
+ * Mieux vaut échouer que mentir.
+ */
+export class PurgeSansEffetError extends Error {
+  constructor(role: string) {
+    super(
+      `Réinitialisation sans effet : le rôle « ${role} » n’a ni SUPERUSER ni BYPASSRLS. ` +
+        'Les politiques FORCE RLS filtrent ses suppressions hors GUC d’organisation : ' +
+        'aucune ligne n’a pu être supprimée. Connecte-toi avec le rôle propriétaire ' +
+        'des tables (celui des migrations) — voir .env.example, DATABASE_OWNER_URL.',
+    );
+    this.name = 'PurgeSansEffetError';
+  }
+}
+
 /** Vrai si l'autorisation explicite de purger est posée dans l'environnement. */
 export function resetAutorise(): boolean {
   return readEnv(RESET_ENV_NAME) === RESET_ENV_VALEUR_ATTENDUE;
@@ -144,6 +161,18 @@ export async function executerReset(sql: postgres.Sql): Promise<ResetRapport> {
     const heures = await tx<{ id: string }[]>`
       UPDATE epreuve SET heure_depart = NULL WHERE heure_depart IS NOT NULL RETURNING id
     `;
+    // Zéro ligne supprimée : soit la base est vraiment vierge, soit le rôle
+    // s'est fait filtrer par FORCE RLS et n'a rien vu. Les deux cas se
+    // distinguent par le privilège du rôle, pas par un SELECT (lui aussi filtré).
+    if (total === 0) {
+      const roles = await tx<{ nom: string; peutContourner: boolean }[]>`
+        SELECT rolname AS nom, (rolsuper OR rolbypassrls) AS "peutContourner"
+        FROM pg_roles WHERE rolname = current_user
+      `;
+      if (roles[0]?.peutContourner !== true) {
+        throw new PurgeSansEffetError(roles[0]?.nom ?? 'inconnu');
+      }
+    }
     return { suppressions, heuresDepartEffacees: heures.length, total };
   });
   return resultat as ResetRapport;
@@ -155,17 +184,16 @@ export async function executerResetCli(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  // La variable est EXIGÉE explicitement : `readDatabaseOwnerUrl()` sait la
+  // dériver de DATABASE_URL en devinant le rôle, et une purge ne se lance pas
+  // sur une URL devinée.
   const ownerUrl = readEnv('DATABASE_OWNER_URL');
   if (!ownerUrl) {
     console.error(new RoleProprietaireManquantError().message);
     process.exitCode = 1;
     return;
   }
-  // readDatabaseOwnerUrl() sait dériver une URL propriétaire depuis
-  // DATABASE_URL ; ici on EXIGE la variable explicite (voir le refus ci-dessus)
-  // puis on repasse par le lecteur commun pour une normalisation identique.
-  const databaseUrl = readDatabaseOwnerUrl() ?? ownerUrl;
-  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5, prepare: false });
+  const sql = postgres(ownerUrl, { max: 1, connect_timeout: 5, prepare: false });
   try {
     const rapport = await executerReset(sql);
     if (rapport.total === 0 && rapport.heuresDepartEffacees === 0) {
