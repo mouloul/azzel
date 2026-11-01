@@ -11,6 +11,16 @@ import {
   type ProofFormat,
 } from './proof-format';
 
+import {
+  ObjetProofStore,
+  ObjetProofStoreConfigError,
+  PROOF_STORAGE_DRIVER_DISQUE,
+  PROOF_STORAGE_DRIVER_ENV,
+  PROOF_STORAGE_DRIVER_OBJET,
+  readObjetProofStoreOptions,
+  readProofStorageDriver,
+} from './proof-store-objet';
+
 import type { StoredProofFile } from './store';
 
 export const DEFAULT_STORAGE_DIR = './data/preuves';
@@ -96,12 +106,47 @@ export class LocalDiskProofStore implements ProofStore {
   }
 }
 
+type ProofStoreGlobals = typeof globalThis & { __azzelProofStore?: ProofStore };
+
+/**
+ * Fabrique l'implémentation désignée par la configuration (story 8.2).
+ *
+ * **Le disque local reste le défaut** : sans `PROOF_STORAGE_DRIVER`, rien ne
+ * change et un développeur qui clone le dépôt n'a besoin d'aucune clé. Seule
+ * la valeur `objet` retient le stockage objet ; une valeur inconnue est une
+ * erreur nommée plutôt qu'un repli silencieux sur le disque, qui ferait
+ * disparaître les preuves en hébergé sans que personne s'en aperçoive.
+ *
+ * Aucun appelant n'est modifié : ce point de bascule est le seul.
+ */
+export function createProofStore(): ProofStore {
+  const driver = readProofStorageDriver();
+  if (driver === null || driver === PROOF_STORAGE_DRIVER_DISQUE) {
+    return new LocalDiskProofStore();
+  }
+  if (driver === PROOF_STORAGE_DRIVER_OBJET) {
+    return new ObjetProofStore(readObjetProofStoreOptions());
+  }
+  throw new ObjetProofStoreConfigError(
+    PROOF_STORAGE_DRIVER_ENV,
+    `valeur « ${driver} » inconnue (attendu : ` +
+      `${PROOF_STORAGE_DRIVER_DISQUE} ou ${PROOF_STORAGE_DRIVER_OBJET})`,
+  );
+}
+
 export function getProofStore(): ProofStore {
-  const globals = globalThis as typeof globalThis & { __azzelProofStore?: ProofStore };
+  const globals = globalThis as ProofStoreGlobals;
   if (globals.__azzelProofStore) {
     return globals.__azzelProofStore;
   }
-  const store = new LocalDiskProofStore();
+  // Une configuration incomplète lève ici : rien n'est mémoïsé, et le prochain
+  // appel relèvera une fois la variable posée.
+  const store = createProofStore();
   globals.__azzelProofStore = store;
   return store;
+}
+
+/** Tests uniquement : oublie le store mémoïsé (isolation entre cas). */
+export function resetProofStoreForTests(): void {
+  delete (globalThis as ProofStoreGlobals).__azzelProofStore;
 }

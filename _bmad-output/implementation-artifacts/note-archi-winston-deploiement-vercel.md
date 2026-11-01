@@ -112,6 +112,39 @@ le disque. Il faut une implémentation `SupabaseProofStore` derrière cette mêm
 interface, sélectionnée par configuration, conservant la vérification de cohérence
 format/contenu (`detectProofFormat`) et les clés de stockage opaques.
 
+#### Story 8.2 livrée (2026-11-01) — forme retenue et reste-à-faire
+
+`ObjetProofStore` (`apps/web/src/modules/inscriptions/proof-store-objet.ts`) parle à
+l'API Storage par `fetch`, sans SDK : trois routes suffisent — `POST` / `GET` /
+`DELETE` sur `{base}/object/{bucket}/{clé}`, authentifiées en `Bearer` (routes
+confirmées sur la spécification OpenAPI officielle du service, le 2026-11-01).
+Ajouter `@supabase/supabase-js` pour trois appels HTTP contredirait le principe de
+technologie ennuyeuse de la spine.
+
+Le point de bascule est unique : `getProofStore()`. Aucun appelant n'a été modifié.
+**`LocalDiskProofStore` reste le défaut** — `PROOF_STORAGE_DRIVER` absent ou `disque`
+— et un dépôt cloné ne demande aucune clé. Variables documentées dans `.env.example` :
+`PROOF_STORAGE_DRIVER`, `PROOF_STORAGE_URL`, `PROOF_STORAGE_KEY` (secrète),
+`PROOF_STORAGE_BUCKET` (défaut `preuves`). Une valeur de sélecteur inconnue, ou une
+configuration incomplète, échoue au démarrage en nommant la variable : pas de repli
+silencieux sur un disque qui perdrait les preuves.
+
+**Reste à faire — ce n'est pas un oubli.** Au moment de la livraison, le projet
+Supabase existe (`dhxuqnikxivagvlhhrmp`, eu-west-1) mais **aucun bucket n'est créé et
+aucune clé de stockage n'est configurée**. L'implémentation et ses tests ont donc été
+éprouvés contre une doublure du transport HTTP. Avant la mise en ligne (story 8.4) :
+
+1. créer le bucket `preuves`, **privé** — les preuves sont des données personnelles de
+   coureurs, elles transitent par le backend, jamais par une URL publique ni signée ;
+2. poser `PROOF_STORAGE_DRIVER=objet`, `PROOF_STORAGE_URL`, `PROOF_STORAGE_KEY` et, si
+   le bucket porte un autre nom, `PROOF_STORAGE_BUCKET` dans les variables du
+   déploiement ;
+3. **vérifier contre le stockage réel** : dépôt, relecture, suppression, suppression
+   répétée, et persistance d'une preuve après redémarrage — c'est ce dernier point qui
+   distingue ce stockage du disque local ;
+4. surveiller le plafond du free tier (storage 1 Go) : une preuve pèse au plus 300 Ko,
+   le jeu de données fictif de la story 8.3 en dépose plusieurs dizaines.
+
 ---
 
 ## 3. Envoi des emails
