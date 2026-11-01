@@ -9,6 +9,8 @@
     "db:migrate": "tsx src/modules/inscriptions/migrate.ts",
     "emails:send": "tsx src/modules/notifications/send-cli.ts",
     "emails:j7": "tsx src/modules/notifications/j7-cli.ts",
+    "seed": "tsx src/modules/seed/seed.ts",
+    "seed:reset": "tsx src/modules/seed/reset.ts",
     "build": "pnpm tokens:sync && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
