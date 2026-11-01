@@ -172,6 +172,35 @@ personnes réelles, et aucune adresse email sortante autre que celles de l'équi
 Le script doit pouvoir **réinitialiser** l'environnement : le comité va expérimenter,
 casser des choses, et devra pouvoir repartir d'un état propre sans intervention.
 
+### Fait d'architecture découvert à la story 8.3 — la réinitialisation exige le rôle propriétaire
+
+Le seed, lui, tourne sous le rôle applicatif (`DATABASE_URL`, GUC
+`app.organisation_id` posé par `withOrg`) : AD-4 reste intact de bout en bout.
+
+**La purge, non.** Les tables append-only du chrono et du tracking —
+`terrain_evenement` (0025), `abandon` (0028), `annulation` (0029), `position`
+(0030) — ont `UPDATE` et `DELETE` explicitement **révoqués** pour `azzel_app` ;
+`resultats_visite` (0034) perd `DELETE`. C'est voulu et structurel : AD-8 (une
+erreur s'annule, elle ne se réécrit pas) tient parce que le rôle applicatif ne
+peut pas réécrire l'histoire. Conséquence directe : **aucune commande de
+réinitialisation ne peut s'exécuter sous le rôle applicatif**, et
+`pnpm -F @azzel/web seed:reset` tourne donc sous `DATABASE_OWNER_URL` — la
+connexion directe, celle des migrations, jamais le pooler.
+
+Deux conséquences pour le déploiement (story 8.4) :
+
+1. `DATABASE_OWNER_URL` doit rester disponible à l'opérateur de la recette, pas
+   seulement au moment des migrations.
+2. La réinitialisation n'est pas, et ne doit pas devenir, une action exposée
+   dans l'application : elle n'a pas le rôle pour, et ne doit pas l'avoir.
+   Elle reste une commande, gardée par une autorisation explicite
+   (`AZZEL_SEED_RESET=1`) — l'inspection du contenu de la base a été écartée,
+   elle bloquerait une recette légitimement salie par le comité, précisément le
+   moment où la réinitialisation sert.
+
+`scripts/dev-db.sh reset` ne tient pas ce rôle : il supprime le conteneur et le
+volume Docker, n'existe pas sur une base hébergée, et effacerait le schéma.
+
 ---
 
 ## 5. Séquencement
