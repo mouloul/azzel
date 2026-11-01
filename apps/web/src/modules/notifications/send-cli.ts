@@ -27,7 +27,9 @@ async function main(): Promise<void> {
     }
     limit = parsed;
   }
-  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5 });
+  // `prepare: false` : DATABASE_URL peut pointer sur un pooler en mode
+  // transaction, qui ne supporte pas les requêtes préparées nommées.
+  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5, prepare: false });
   try {
     const store = createOutboxStore(sql);
     const summary = await processOutbox(limit, { store });

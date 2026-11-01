@@ -1,10 +1,11 @@
-import postgres, { type Sql } from 'postgres';
+import type postgres from 'postgres';
+import type { Sql } from 'postgres';
 
+import { getDbClient } from '@/db/client';
 import { protegerStore } from '@/db/app-role';
 import { isProductionRuntime } from '@/modules/iam/store';
 
 import { listOrganisationIds, withOrg } from '@/db/org-scope';
-import { readDatabaseUrl } from '@/modules/iam/env';
 import { DbUnavailableError } from '@/modules/iam/errors';
 
 import type { NotificationType, RappelJ7Payload } from './email-contents';
@@ -279,12 +280,10 @@ export function getOutboxStore(): OutboxStore {
   if (globals.__azzelOutboxStore) {
     return globals.__azzelOutboxStore;
   }
-  const databaseUrl = readDatabaseUrl();
   // Garde de rôle applicatif (story 1.9) : la connexion doit être le rôle
   // soumis au RLS, sur CE store comme sur celui de l'IAM.
-  const sql = databaseUrl
-    ? postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 })
-    : null;
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
   const store =
     sql !== null
       ? protegerStore(sql, createOutboxStore(sql), isProductionRuntime())

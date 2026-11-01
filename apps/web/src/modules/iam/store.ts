@@ -1,4 +1,6 @@
-import postgres, { type Sql } from 'postgres';
+import type { Sql } from 'postgres';
+
+import { getDbClient } from '@/db/client';
 
 import {
   findOrganisationIdBySlug,
@@ -17,7 +19,8 @@ import {
   MAX_CODE_REQUESTS_PER_WINDOW,
   type AccountRole,
 } from './constants';
-import { readDatabaseUrl, readEnv } from './env';
+
+import { readEnv } from './env';
 import {
   AppRoleMisconfiguredError,
   DbUnavailableError,
@@ -488,10 +491,10 @@ export function getIamStore(): IamStore {
   if (globals.__azzelIamStore) {
     return globals.__azzelIamStore;
   }
-  const databaseUrl = readDatabaseUrl();
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
   let store: IamStore;
-  if (databaseUrl) {
-    const sql = postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 });
+  if (sql !== null) {
     store = createIamStore(sql, {
       ensureAppRole: createAppRoleGuard(sql, { production: isProductionRuntime() }),
     });

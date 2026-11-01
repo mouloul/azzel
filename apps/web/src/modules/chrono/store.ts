@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
-import postgres, { type Sql } from 'postgres';
+import type postgres from 'postgres';
+import type { Sql } from 'postgres';
 
 import {
   MOTIF_REJET_CHECKPOINT_INCONNU,
@@ -8,11 +9,11 @@ import {
   type EvenementSyncTerrain,
 } from '@azzel/shared';
 
+import { getDbClient } from '@/db/client';
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
 import { DbUnavailableError } from '@/modules/iam/errors';
 import { sha256Hex } from '@/modules/iam/service';
-import { readDatabaseUrl } from '@/modules/iam/env';
 
 import type {
   AbandonRecord,
@@ -1375,12 +1376,9 @@ export function getChronoStore(): ChronoStore {
   if (globals.__azzelChronoStore) {
     return globals.__azzelChronoStore;
   }
-  const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createChronoStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
+  const store = sql !== null ? createChronoStore(sql) : createUnavailableStore();
   globals.__azzelChronoStore = store;
   return store;
 }

@@ -1,13 +1,14 @@
 import { randomBytes } from 'node:crypto';
 
-import postgres, { type Sql } from 'postgres';
+import type postgres from 'postgres';
+import type { Sql } from 'postgres';
 
 import { cleIdempotencePosition, type PositionTerrain } from '@azzel/shared';
 
+import { getDbClient } from '@/db/client';
 import { withOrg } from '@/db/org-scope';
 import { DbUnavailableError } from '@/modules/iam/errors';
 import { sha256Hex } from '@/modules/iam/service';
-import { readDatabaseUrl } from '@/modules/iam/env';
 
 import { calculerOffsetEstimeMs, type AppareilCoureurRecord } from './domain';
 import { AppareilRevokedError } from './errors';
@@ -378,12 +379,9 @@ export function getTrackingStore(): TrackingStore {
   if (globals.__azzelTrackingStore) {
     return globals.__azzelTrackingStore;
   }
-  const databaseUrl = readDatabaseUrl();
-  const store = databaseUrl
-    ? createTrackingStore(
-        postgres(databaseUrl, { max: 5, connect_timeout: 5, idle_timeout: 20 }),
-      )
-    : createUnavailableStore();
+  // Pool applicatif partagé — voir `@/db/client`.
+  const sql = getDbClient();
+  const store = sql !== null ? createTrackingStore(sql) : createUnavailableStore();
   globals.__azzelTrackingStore = store;
   return store;
 }
