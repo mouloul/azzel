@@ -12,6 +12,7 @@ inputDocuments:
   - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/brainstorm-intent.md
   - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/note-licences-cartographiques.md
   - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/poc/
+  - ../../implementation-artifacts/note-archi-winston-deploiement-vercel.md
 ---
 
 # Azzel - Epic Breakdown
@@ -192,7 +193,11 @@ FR-27: Épopée 1 — Schéma organisation_id + RLS dès la V1
 
 ## Epic List
 
-### Epic 1: S'inscrire et boucler son dossier
+#### Epic 8: Environnement de recette hébergé
+Épopée technique, hors périmètre produit : `apps/web` est mis en ligne sur une URL stable pour que le comité d'organisation prenne l'application en main avant le jour J. Données entièrement fictives, le comité s'authentifie dans l'application comme n'importe quel utilisateur. Suppose une fabrique de connexion unique compatible pooler, le stockage des preuves hors disque local, un jeu de données d'édition complète régénérable et un expéditeur email qui délivre réellement. La production du jour de course reste sur VPS.
+**FRs covered:** aucune — socle de déploiement (NFR-9 éprouvée de bout en bout)
+
+## Epic 1: S'inscrire et boucler son dossier
 Un coureur crée son accès (email + code, session unique), remplit le formulaire d'inscription à l'édition, accepte décharge et règlement horodatés, téléverse sa preuve CCP, suit sa checklist pièce par pièce et reçoit les notifications email. Inclut le scaffold du monorepo (apps/web, apps/runners, packages/shared), les design tokens Vert Djurdjura, le module iam et le socle de données multi-organisation (schéma + RLS).
 **FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-27
 
@@ -740,9 +745,98 @@ So que la réputation s'appuie sur des chiffres, et que rien ne soit commandé �
 **And** le format d'export suit le choix local du module admin (question ouverte archi) ; les abandons y figurent (5.3).
 
 
+## Epic 8: Environnement de recette hébergé
 
+Épopée technique, hors périmètre produit. `apps/web` est mis en ligne sur une URL stable pour que le comité d'organisation prenne l'application en main avant le jour J. Le jeu de données est entièrement fictif et régénérable ; le comité s'authentifie dans l'application comme n'importe quel utilisateur, sans protection au niveau de l'hébergeur. La production du jour de course reste sur VPS, conformément à la spine.
 
+Référence : `_bmad-output/implementation-artifacts/note-archi-winston-deploiement-vercel.md`.
 
+**Règle cardinale de l'épopée : aucune donnée réelle de coureur ne doit atteindre cet environnement.** Les seules adresses email réelles sont celles des membres du comité, qui reçoivent leurs codes de connexion.
 
+### Story 8.1: Fabrique de connexion unique et base hébergée
 
+As a développeur bénévole de l'équipe Azzel,
+I want une fabrique de connexion Postgres unique, compatible avec un pooler en mode transaction, et une base hébergée sur laquelle tourner ailleurs que sur ma machine,
+So that l'application puisse être déployée sans saturer la base ni échouer sur des requêtes préparées, et que les dix modules cessent d'ouvrir chacun leur propre pool.
 
+**Acceptance Criteria:**
+
+**Given** les dix modules qui instancient aujourd'hui `postgres(databaseUrl, { max: 5, ... })` chacun de leur côté — `inscriptions`, `iam`, `missions`, `chrono`, `rapports`, `sponsors`, `contenus`, `tracking`, `retour-images`, `outbox`
+**When** le refactor est appliqué
+**Then** une fabrique unique `apps/web/src/db/client.ts` expose un pool mémoïsé, et aucun module n'appelle plus `postgres(...)` directement — seuls les CLI (`migrate`, `send-cli`, `j7-cli`) et les utilitaires de test conservent leur connexion propre
+**And** la fabrique pose `prepare: false` — `postgres.js` prépare par défaut et PgBouncer en mode transaction ne le supporte pas : sans cela des erreurs `prepared statement already exists` surviennent dès qu'une connexion est recyclée
+**And** la taille du pool est pilotée par l'environnement : réduite en exécution serverless, inchangée en local
+**And** la garde de rôle applicatif `protegerStore` et la mémoïsation par `globalThis` sont conservées telles quelles sur chaque store
+**And** `withOrg` et `set_config(..., true)` ne sont pas modifiés : le contexte RLS est déjà de portée transaction, donc déjà compatible pooler (audit du 2026-11-01)
+**And** `multi-org.integration.test.ts` et l'ensemble de la suite passent sans modification de test — ils constituent la preuve que le RLS multi-organisation survit au refactor (AD-4)
+
+**Given** le besoin d'une base joignable depuis l'extérieur
+**When** le projet Supabase est provisionné
+**Then** les migrations s'appliquent avec `DATABASE_OWNER_URL` sur la connexion directe (port 5432), jamais via le pooler
+**And** l'application se connecte avec `DATABASE_URL` sur le pooler en mode transaction (port 6543), sous le rôle `azzel_app` soumis au RLS
+**And** une vérification documentée atteste qu'une organisation ne voit pas les données d'une autre sur la base hébergée, et pas seulement en local.
+
+### Story 8.2: Stockage des preuves de paiement hors disque local
+
+As a membre du comité d'organisation,
+I want pouvoir téléverser une preuve de paiement et la revoir plus tard sur l'environnement de recette,
+So that je puisse éprouver le parcours de validation de dossier, qui est l'un des gestes que j'aurai à faire pour de vrai.
+
+**Acceptance Criteria:**
+
+**Given** l'interface `ProofStore` existante (`put` / `read` / `remove`) et son implémentation `LocalDiskProofStore`, qui écrit dans `STORAGE_DIR` — inutilisable sur un système de fichiers éphémère
+**When** une implémentation de stockage objet est ajoutée derrière la même interface
+**Then** l'implémentation retenue est sélectionnée par configuration, sans modification des appelants, et `LocalDiskProofStore` reste le comportement par défaut en développement local
+**And** la vérification de cohérence entre le format déclaré et le contenu détecté (`detectProofFormat`) est conservée : un contenu incohérent est refusé à l'écriture, comme aujourd'hui
+**And** les clés de stockage restent opaques et vérifiées par `isSafeStorageKey` — aucune clé ne peut désigner un chemin hors du dépôt de preuves
+**And** `put` retourne les mêmes métadonnées qu'avant : clé, type MIME, taille, empreinte SHA-256 du contenu
+**And** `read` sur une clé inconnue retourne l'absence, sans erreur ; `remove` est idempotent
+
+**Given** une preuve téléversée sur l'environnement hébergé
+**When** le serveur est redémarré ou la fonction réinstanciée
+**Then** la preuve est toujours lisible et l'écran de validation de dossier l'affiche — c'est le critère qui distingue ce stockage du disque local.
+
+### Story 8.3: Jeu de données fictif « édition complète »
+
+As a membre du comité d'organisation,
+I want arriver sur une application déjà peuplée d'une édition crédible,
+So that je puisse exercer tout de suite les écrans qui m'intéressent, sans avoir à saisir cinquante coureurs avant de voir quoi que ce soit.
+
+**Acceptance Criteria:**
+
+**Given** une base hébergée vide, migrations appliquées
+**When** le script de seed est exécuté
+**Then** une organisation et une édition datée existent, avec plusieurs épreuves et des horaires de départ échelonnés
+**And** une cinquantaine de coureurs sont inscrits, répartis sur tous les stades du dossier — en attente de pièces, en attente de validation, validé, refusé — de sorte qu'il y ait réellement matière à valider et à refuser
+**And** des preuves de paiement sont déposées pour les dossiers qui en sont à ce stade, lisibles via le stockage retenu en 8.2
+**And** le découpage en secteurs, les missions typées et les volontaires assignés existent, de quoi ouvrir une fiche mission
+**And** de quoi exercer le chrono et les rapports est présent : dossards attribués, quelques passages enregistrés
+**And** noms, adresses et numéros sont manifestement inventés ; aucune adresse email sortante n'appartient à une personne extérieure à l'équipe
+
+**Given** un environnement dans lequel le comité a expérimenté et cassé des choses
+**When** le script est relancé
+**Then** il est idempotent — une seconde exécution ne duplique rien
+**And** une commande de réinitialisation documentée ramène l'environnement à l'état initial sans intervention manuelle en base.
+
+### Story 8.4: Mise en ligne de la recette et remise au comité
+
+As a membre du comité d'organisation,
+I want recevoir une adresse où me connecter avec mon email, et y retrouver l'application complète,
+So that je puisse me former à l'outil et dire ce qui ne va pas, longtemps avant le jour de la course.
+
+**Acceptance Criteria:**
+
+**Given** les stories 8.1, 8.2 et 8.3 livrées
+**When** l'application est déployée
+**Then** elle est servie depuis `apps/web` sur une URL stable, sous le domaine du projet, en HTTPS
+**And** `APP_URL` pointe sur cette adresse : les liens contenus dans les emails de notification y mènent, et non vers `localhost`
+**And** aucune protection n'est posée au niveau de l'hébergeur — le comité s'authentifie par le code à six chiffres de l'application ; la confidentialité repose sur ce code et sur une URL non publiée, ce qui n'est tenable que parce qu'aucune donnée réelle n'est en jeu
+**And** `AZZEL_ADMIN_EMAILS` contient les adresses des membres du comité, qui arrivent donc organisateurs dès leur première connexion
+
+**Given** un expéditeur email configuré sur le domaine du projet, avec DKIM et SPF posés
+**When** un membre du comité demande son code de connexion
+**Then** il le reçoit dans sa boîte, en moins d'une minute, hors dossier indésirables
+**And** la vérification a été faite **sur chaque adresse du comité** avant l'annonce de l'URL — un membre qui ne reçoit pas son code ne prend rien en main
+**And** les emails sortants portent une mention explicite d'environnement de démonstration à données fictives, pour qu'un message égaré ne soit jamais pris pour une communication officielle
+**And** le `Reply-To` renvoie vers la boîte humaine de l'événement
+**And** un enregistrement SPF unique existe sur le domaine : deux enregistrements SPF font échouer les deux.
