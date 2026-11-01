@@ -1,8 +1,15 @@
 import { CODE_TTL_MINUTES } from './constants';
-import { readSmtpUrl } from './env';
+import { readEnv, readSmtpUrl } from './env';
 import { EmailSendError } from './errors';
 
-export const APP_EMAIL_FROM = 'Azzel <no-reply@azzel.dz>';
+export const APP_EMAIL_FROM_DEFAUT = 'Azzel <no-reply@azzel.dz>';
+
+/**
+ * Les fournisseurs d'envoi refusent les expéditeurs qu'ils n'ont pas validés :
+ * une adresse en dur empêche tout envoi depuis un environnement dont le domaine
+ * n'est pas le nôtre, et l'échec se découvre quand quelqu'un attend son code.
+ */
+export const APP_EMAIL_FROM = readEnv('APP_EMAIL_FROM') ?? APP_EMAIL_FROM_DEFAUT;
 
 export const LOGIN_CODE_EMAIL_SUBJECT = 'Ton code de connexion Azzel';
 
