@@ -5,6 +5,7 @@ import {
   DEFAULT_PROOF_BUCKET,
   ObjetProofStore,
   ObjetProofStoreConfigError,
+  estClePubliable,
   ObjetProofStoreError,
   PROOF_STORAGE_BUCKET_ENV,
   PROOF_STORAGE_DRIVER_ENV,
@@ -662,5 +663,38 @@ describe('getProofStore — sélection par configuration', () => {
 
     process.env[PROOF_STORAGE_KEY_ENV] = CLE;
     expect(getProofStore()).toBeInstanceOf(ObjetProofStore);
+  });
+});
+
+describe('refus des clés destinées au navigateur', () => {
+  // Une clé publiable ne peut pas lire un bucket privé, et le stockage répond
+  // « objet introuvable » au lieu de « accès refusé » : la panne se présenterait
+  // comme « toutes les preuves ont disparu ». Ces cas échouent si la garde saute.
+  it('reconnaît le préfixe publiable du système actuel', () => {
+    expect(estClePubliable('sb_publishable_EXEMPLE_FICTIF_0000')).toBe(true);
+  });
+
+  it("reconnaît un jeton portant le rôle anon de l'ancien système", () => {
+    const corps = Buffer.from(JSON.stringify({ role: 'anon' }), 'utf8').toString('base64url');
+    expect(estClePubliable(`entete.${corps}.signature`)).toBe(true);
+  });
+
+  it('laisse passer une clé secrète et un jeton de service', () => {
+    expect(estClePubliable('sb_secret_EXEMPLE_FICTIF_0000')).toBe(false);
+    const corps = Buffer.from(JSON.stringify({ role: 'service_role' }), 'utf8').toString(
+      'base64url',
+    );
+    expect(estClePubliable(`entete.${corps}.signature`)).toBe(false);
+  });
+
+  it('refuse la construction et nomme la variable fautive', () => {
+    expect(
+      () =>
+        new ObjetProofStore({
+          baseUrl: 'https://projet.supabase.co',
+          key: 'sb_publishable_EXEMPLE_FICTIF_0000',
+          bucket: 'preuves',
+        }),
+    ).toThrow(ObjetProofStoreConfigError);
   });
 });

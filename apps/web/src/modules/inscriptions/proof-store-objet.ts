@@ -75,6 +75,32 @@ export type ProofTransport = (url: string, init: RequestInit) => Promise<Respons
  * manquante. Sans cela, l'erreur surviendrait en 401 opaque au premier
  * téléversement d'un coureur.
  */
+/**
+ * Reconnaît une clé destinée au navigateur. Deux familles coexistent chez
+ * l'hébergeur : le préfixe `sb_publishable_` du système actuel, et le jeton
+ * JWT portant le rôle `anon` de l'ancien. Aucune des deux ne peut lire un
+ * bucket privé.
+ */
+export function estClePubliable(key: string): boolean {
+  if (key.startsWith('sb_publishable_')) {
+    return true;
+  }
+  const corps = key.split('.')[1];
+  if (corps === undefined) {
+    return false;
+  }
+  try {
+    const charge: unknown = JSON.parse(Buffer.from(corps, 'base64url').toString('utf8'));
+    return (
+      typeof charge === 'object' &&
+      charge !== null &&
+      (charge as { role?: unknown }).role === 'anon'
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class ObjetProofStoreConfigError extends Error {
   constructor(
     readonly variable: string,
@@ -286,6 +312,18 @@ export class ObjetProofStore implements ProofStore {
     const key = options.key?.trim() ?? '';
     if (key.length === 0) {
       throw new ObjetProofStoreConfigError(PROOF_STORAGE_KEY_ENV);
+    }
+    if (estClePubliable(key)) {
+      // Une clé publiable n'a aucun droit sur un bucket privé, mais le stockage
+      // ne répond pas « accès refusé » : il répond « objet introuvable », pour ne
+      // pas révéler ce que contient le bucket. La panne se présenterait donc
+      // comme « toutes les preuves ont disparu », sans jamais parler de droits.
+      // On la refuse ici, où la forme de la clé est encore lisible.
+      throw new ObjetProofStoreConfigError(
+        PROOF_STORAGE_KEY_ENV,
+        'clé publiable fournie — elle est destinée au navigateur et ne peut pas ' +
+          'lire un bucket privé ; utilisez la clé secrète du projet',
+      );
     }
     const bucket = (options.bucket ?? DEFAULT_PROOF_BUCKET).trim();
     if (bucket.length === 0) {
