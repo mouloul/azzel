@@ -263,3 +263,110 @@ story 1.5 et resserviront en production quel que soit le socle retenu.
   Aucun SSE n'existe dans le code à ce jour.
 - **La localisation des données** : sans objet tant que tout est fictif, à trancher
   avant toute donnée réelle.
+
+---
+
+## 7. Ce que le déploiement réel a appris (2026-11-02, story 8.4)
+
+Cette section **corrige** la note là où la mise en ligne l'a contredite, et la précise
+là où elle était silencieuse. Le mode opératoire complet, avec les messages d'erreur
+littéraux, vit dans `deploiement-recette.md` ; ce qui suit n'en retient que ce qui
+touche aux décisions d'architecture.
+
+### 7.1 Les migrations ne passent pas par la connexion directe — elles ne le peuvent pas
+
+La note affirmait (§2 V1, §5) que les migrations tournent sur la **connexion directe**
+(port 5432), « pas sur le pooler ». **C'est inapplicable en l'état :**
+`db.<ref>.supabase.co` ne résout **aucune adresse IPv4**, et la connexion échoue depuis
+un réseau sans IPv6.
+
+Forme réellement retenue : **tout passe par le pooler**, en distinguant les modes —
+**transaction (6543)** pour l'application, **session (5432)** pour les migrations et
+pour `seed:reset`. Le mode session rétablit ce que les migrations exigent (requêtes
+préparées, objets de session) ; l'intention de la note est donc préservée, c'est
+l'hôte qui change, pas la règle.
+
+### 7.2 `DATABASE_OWNER_URL` ne doit pas être posée sur l'hébergeur
+
+Le §5 la listait parmi les variables du câblage Vercel, et le §4 demandait qu'elle
+reste « disponible à l'opérateur ». À préciser : **disponible depuis un poste**, jamais
+posée dans les variables du déploiement. Le rôle propriétaire a `BYPASSRLS` et n'a
+**aucun usage à l'exécution** ; une `DATABASE_URL` utilisant le rôle `postgres`
+désactiverait l'isolation multi-organisation **en silence**, sans erreur ni symptôme.
+C'est la seule panne possible de ce déploiement qui ne se voit pas. `AZZEL_APP_PASSWORD`
+est dans le même cas.
+
+Inversement, deux variables manquaient à la liste du §5 : **`APP_EMAIL_FROM`** (voir
+7.5) et les quatre **`PROOF_STORAGE_*`**.
+
+### 7.3 Le TLS ne peut pas être laissé à la configuration
+
+Non anticipé par la note : la base hébergée refuse les connexions en clair — `build` en
+échec au prérendu sur `SSL connection is required for user: azzel_app`. Un `sslmode` dans
+l'URL n'est pas une garantie : il dépend de quelqu'un qui pense à l'écrire, et d'autres
+hébergeurs acceptent le clair **en silence**, ce qui est pire.
+
+Décision prise en conséquence : `exigeTls` (`apps/web/src/db/client.ts`) impose
+`ssl: 'require'` dès que l'hôte n'est pas local, et chiffre aussi lorsque l'URL est
+illisible. Le repli sûr n'est jamais le clair, et la règle ne se contourne pas par
+configuration.
+
+### 7.4 L'API Storage exige l'en-tête `apikey`, en plus du porteur
+
+Le §2 V2 décrivait trois routes « authentifiées en `Bearer` ». **Insuffisant :** le jeton
+porteur seul donne `Invalid Compact JWS` — la passerelle tente de lire la clé comme un
+JWT et refuse avant d'atteindre le stockage. L'en-tête `apikey` est ce qui l'identifie
+comme une clé de projet. Dépôt, relecture et suppression échouaient toutes.
+
+**Et le choix de la clé est un point d'architecture, pas un réglage.** Une clé publiable
+n'a aucun droit sur un bucket privé, mais le stockage ne répond pas « accès refusé » : il
+répond « objet introuvable », pour ne pas révéler le contenu du bucket. **Toute panne de
+droits se présente donc comme une disparition de données**, et c'est ce qui a fait
+chercher au mauvais endroit pendant des heures. D'où la garde `estClePubliable`, qui
+refuse la **forme** de la clé à la construction, là où elle est encore lisible.
+
+### 7.5 L'expéditeur validé est un prérequis au même titre que le domaine
+
+Le §3 traitait l'alignement SPF/DKIM. Il manquait le point en amont : les fournisseurs
+d'envoi **refusent un expéditeur qu'ils n'ont pas validé**. Sur un environnement dont le
+domaine n'est pas le nôtre, il faut poser dans `APP_EMAIL_FROM` l'adresse effectivement
+validée chez le fournisseur — **sans quoi rien ne part, y compris les codes de connexion,
+seule porte d'entrée de l'application**.
+
+### 7.6 L'absence de protection d'hébergeur est un réglage à désactiver, pas un défaut
+
+Le §1 posait « pas de protection au niveau de l'hébergeur » comme une décision. En
+pratique la protection est **active par défaut** : toute URL redirigeait vers
+`vercel.com/sso-api`. Elle se retire explicitement (Settings → Deployment Protection →
+Vercel Authentication → Disabled). À reconduire sur tout nouveau projet, et à ne pas
+confondre avec un oubli de configuration.
+
+Dans le même registre, non anticipé : sur un dépôt privé en plan Hobby, un commit dont
+l'auteur n'est pas rattaché au compte fait **refuser le build**
+(`commit author did not have contributing access`).
+
+### 7.7 Pas de `vercel.json`
+
+Les réglages (répertoire racine, branche, protection, variables) vivent dans le tableau
+de bord. Y ajouter un fichier au dépôt créerait **deux sources de vérité** qui
+divergeront. Décision prise à la mise en ligne, à tenir.
+
+### 7.8 Piège de méthode : le déploiement servi n'est pas forcément le dernier commit
+
+Plusieurs builds ont échoué pendant la session, et l'hébergeur **continue de servir le
+dernier build réussi**. On a donc diagnostiqué du code périmé en croyant éprouver un
+correctif qu'on venait de pousser. Toute observation sur l'environnement hébergé doit
+commencer par vérifier le commit réellement servi.
+
+### 7.9 État à la clôture de la story 8.4 — l'épopée reste ouverte
+
+Vérifié en production : vitrine et résultats servis depuis la base ; connexion par code ;
+promotion organisateur ; **isolation multi-organisation constatée sur la base hébergée**
+(sans GUC : zéro ligne ; avec : 50 coureurs, 22 validés, 6 refusés) ; 38 preuves dans le
+bucket avec empreintes SHA-256 conformes ; aucun email du seed expédiable.
+
+**Non résolu :** le téléchargement d'une preuve depuis l'administration rend
+`admin.internal_error` (HTTP 500). Le reste à faire du §2 V2 — point 3, « vérifier contre
+le stockage réel » — n'est donc **pas** soldé pour la relecture par l'application.
+Diagnostic et ordre de reprise : `deferred-work.md`, section « Point d'arrêt : preuves
+illisibles depuis l'application déployée (2026-11-02) ». **L'épopée 8 n'est pas close.**
