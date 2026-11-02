@@ -90,7 +90,10 @@ class StockageFactice {
     this.appels.push({ url, method, headers: normaliserEnTetes(init), body });
 
     const entetes = normaliserEnTetes(init);
-    if (entetes.authorization !== `Bearer ${CLE}`) {
+    // La passerelle exige les DEUX : le jeton porteur et l'en-tête apikey qui
+    // identifie la clé de projet. Constaté contre l'API réelle le 2026-11-02 —
+    // sans apikey, la requête est refusée avant d'atteindre le stockage.
+    if (entetes.authorization !== `Bearer ${CLE}` || entetes.apikey !== CLE) {
       // Le bucket est PRIVÉ : sans clé, l'API Storage répond 401 InvalidJWT.
       return Response.json(
         { statusCode: '401', error: 'Unauthorized', message: 'invalid JWT', code: 'InvalidJWT' },
@@ -183,6 +186,7 @@ describe('ObjetProofStore — dépôt', () => {
     expect(appel.method).toBe('POST');
     expect(appel.url).toBe(`${BASE_URL}/object/${DEFAULT_PROOF_BUCKET}/${stored.storageKey}`);
     expect(appel.headers.authorization).toBe(`Bearer ${CLE}`);
+    expect(appel.headers.apikey).toBe(CLE);
     expect(appel.headers['content-type']).toBe('image/jpeg');
     // Les clés sont des UUID : un objet déjà présent est une anomalie, jamais
     // un remplacement à accepter.
@@ -292,7 +296,9 @@ describe('ObjetProofStore — authentification (bucket privé)', () => {
     expect(await store.read(stored.storageKey)).not.toBeNull();
     await expect(store.remove(stored.storageKey)).resolves.toBeUndefined();
     expect(
-      stockage.appels.every((appel) => appel.headers.authorization === `Bearer ${CLE}`),
+      stockage.appels.every(
+        (appel) => appel.headers.authorization === `Bearer ${CLE}` && appel.headers.apikey === CLE,
+      ),
     ).toBe(true);
   });
 });
