@@ -302,8 +302,15 @@ export class ObjetProofStore implements ProofStore {
     return `${this.baseUrl}/object/${encodeURIComponent(this.bucket)}/${encodeURIComponent(storageKey)}`;
   }
 
+  /**
+   * Le jeton porteur seul ne suffit pas : la passerelle refuse la requête avant
+   * même d'atteindre le stockage et répond « Invalid Compact JWS », parce
+   * qu'elle tente de lire la clé comme un JWT. L'en-tête `apikey` est ce qui
+   * l'identifie comme une clé de projet. Constaté contre l'API réelle le
+   * 2026-11-02 : sans lui, dépôt, relecture et suppression échouent toutes.
+   */
   private enTetes(supplement: Record<string, string> = {}): Record<string, string> {
-    return { authorization: `Bearer ${this.key}`, ...supplement };
+    return { authorization: `Bearer ${this.key}`, apikey: this.key, ...supplement };
   }
 
   private async appeler(
