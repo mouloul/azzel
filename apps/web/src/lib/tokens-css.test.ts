@@ -98,6 +98,32 @@ describe('buildTokensCss', () => {
     expect(darkBlock).toContain('--az-sync-envoye:');
   });
 
+  it('expose les paires sombres opérationnelles en variables distinctes, hors thème (story 9.1)', () => {
+    // Chaque rôle *-sombre devient --az-<rôle>-sombre dans :root, utilisable
+    // par une surface toujours sombre quel que soit le thème global.
+    for (const [role, valeur] of Object.entries(operationsTokens.colors)) {
+      if (!role.endsWith('-sombre')) continue;
+      expect(rootBlock).toContain(`--az-${role}: ${valeur};`);
+    }
+    // Invariants de thème : jamais redéfinies sous [data-theme="dark"].
+    expect(darkBlock).not.toContain('--az-succes-sombre:');
+    expect(darkBlock).not.toContain('--az-texte-sombre:');
+  });
+
+  it('émet les rayons opérationnels (--az-rayon-*) pour cartes 14–20 px (story 9.1)', () => {
+    expect(rootBlock).toContain(`--az-rayon-md: ${operationsTokens.rounded.md};`);
+    expect(rootBlock).toContain(`--az-rayon-sm: ${operationsTokens.rounded.sm};`);
+    expect(rootBlock).toContain(`--az-rayon-lg: ${operationsTokens.rounded.lg};`);
+    expect(rootBlock).toContain(`--az-rayon-full: ${operationsTokens.rounded.full};`);
+  });
+
+  it('émet la palette poster du trailer en :root, invariante de thème (story 9.1)', () => {
+    expect(rootBlock).toContain(`--forest-800: ${siteTokens.colors['forest-800']};`);
+    expect(rootBlock).toContain(`--vert-altitude: ${siteTokens.colors['vert-altitude']};`);
+    expect(darkBlock).not.toContain('--forest-800:');
+    expect(darkBlock).not.toContain('--vert-altitude:');
+  });
+
   it('émet les variables typographie, rayon et espacement représentatives', () => {
     expect(rootBlock).toContain('--az-font-display: var(--font-display);');
     expect(rootBlock).toContain('--az-font-body: var(--font-body);');

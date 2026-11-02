@@ -127,6 +127,12 @@ export const siteColorTokens = {
   forest: '#183A2B',
   'forest-600': '#24503C',
   'forest-400': '#2F6A4F',
+  // Story 9.1 — arrêt sombre du dégradé du poster trailer (domain.ts
+  // POSTER_DEGRADE_COULEURS) : remonté en token pour sortir les hex du CSS.
+  'forest-800': '#122C20',
+  // Vert altitude (palette Vert Djurdjura) — pastille de lecture du trailer.
+  // Même valeur qu’action-sombre côté operations, sémantique charte vitrine.
+  'vert-altitude': '#8FD4A8',
   ochre: '#C8742B',
   'ochre-300': '#D98A45',
   sage: '#8FA58A',

@@ -906,10 +906,11 @@ So that un changement de charte se fasse en un endroit et qu'aucun écran ne dé
 
 **Acceptance Criteria:**
 
-**Given** les quatorze feuilles CSS actuelles d'`apps/web` — `globals.css` (1 485 lignes), `volontaires/volontaires.css` (446), `volontaires/scan/scan.css` (273), `tokens-synchronises.css` (159), `espace-coureur/e-dossard/e-dossard.css` (143), `resultats/resultats.css` (109), `admin/course/course.css` (93), `vitrine-textes.css` (52) et les six feuilles admin résiduelles
+**Given** l'état mesuré du CSS au 2026-11-02 — contrairement à ce que supposait la rédaction initiale de cette story, `globals.css` (1 485 lignes), les six feuilles admin, `volontaires/volontaires.css` (446) et `resultats/resultats.css` (109) ne contiennent **aucune** couleur en dur ; seuls trois fichiers en portent, et pour une raison légitime : `volontaires/scan/scan.css` (14), `espace-coureur/e-dossard/e-dossard.css` (12) et `vitrine-textes.css` (7) décrivent des écrans toujours sombres, indépendants du thème, alors que les tokens opérationnels ne sont exposés qu'en valeurs claires sous `--az-*`, leurs variantes sombres n'étant appliquées que sous `[data-theme='dark']`
 **When** le socle est posé
-**Then** un jeu de classes sémantiques couvre les primitives partagées — action (pilule), chip, carte, en-tête de surface, pastille d'état, tableau dense, champ de formulaire — chacune lisant exclusivement les tokens de `packages/shared/src/tokens.ts` (UX-DR-32, UX-DR-39)
-**And** aucune feuille de surface ne redéfinit une valeur de couleur, de rayon, d'espacement ou de graisse : toute valeur littérale restante est soit justifiée en commentaire, soit remontée en token
+**Then** les tokens opérationnels sombres sont exposés de façon utilisable par une surface toujours sombre — portée CSS dédiée ou jeu de variables propre, décidé à l'implémentation — et les 33 valeurs littérales de ces trois fichiers passent en `var()`, sans changement de rendu
+**And** un jeu de classes sémantiques couvre les primitives partagées — action (pilule), chip, carte, en-tête de surface, pastille d'état, tableau dense, champ de formulaire — chacune lisant exclusivement les tokens générés depuis `packages/shared/src/tokens.ts` (UX-DR-32, UX-DR-39)
+**And** un test interdit l'apparition de nouvelles couleurs littérales dans les feuilles écrites à la main : le fichier généré `tokens-synchronises.css` en est exclu, et le décompte autorisé ne peut que décroître
 **And** le vocabulaire de rayons est unifié — pilule pour les actions et les chips, 14 à 20 px pour les cartes — et le mélange 4/6/8 px hérité disparaît de la surface publique
 **And** `packages/shared/src/tokens.test.ts` continue de passer sans modification : la parité clair/sombre et les valeurs de la charte ne bougent pas
 

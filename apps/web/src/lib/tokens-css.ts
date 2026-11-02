@@ -141,6 +141,19 @@ function operationsDarkDeclarations(): string {
     .join('\n');
 }
 
+/* Story 9.1 — paires sombres opérationnelles en variables DISTINCTES, émises
+ * une seule fois dans :root : une surface toujours sombre (scanner plein
+ * écran, e-dossard) lit --az-succes-sombre etc. et obtient la paire sombre
+ * quel que soit le thème global, sans toucher aux --az-* qui suivent
+ * [data-theme="dark"]. Noms distincts = zéro collision, zéro changement de
+ * rendu pour les surfaces qui basculent avec le thème. */
+function operationsDarkSurfaceDeclarations(): string {
+  return Object.entries(operationsTokens.colors)
+    .filter(([role]) => role.endsWith(DARK_SUFFIX))
+    .map(([role, value]) => `  --az-${role}: ${value};`)
+    .join('\n');
+}
+
 function typographyDeclarations(): string {
   return Object.entries(operationsTokens.typography)
     .filter(([name]) => AZ_TYPOGRAPHY_ROLES.has(name))
@@ -171,6 +184,17 @@ function roundedDeclarations(): string {
   ].join('\n');
 }
 
+/* Story 9.1 — rayons opérationnels (8/16/24 px) en variables propres : les
+ * --az-radius-* sont remappés sur les rayons charte vitrine (4/6/8 px), le
+ * socle et les surfaces terrain ont besoin des rayons cartes 14–20 px. */
+function rayonDeclarations(): string {
+  return Object.entries(operationsTokens.rounded)
+    .map(([name, value]) =>
+      name === 'DEFAULT' ? `  --az-rayon: ${value};` : `  --az-rayon-${name}: ${value};`,
+    )
+    .join('\n');
+}
+
 function spacingDeclarations(): string {
   return Object.entries(operationsTokens.spacing)
     .map(([name, value]) => `  --az-space-${name}: ${value};`)
@@ -188,8 +212,10 @@ ${siteStaticDeclarations()}
 ${siteStyleDeclarations()}
 ${azRemapDeclarations()}
 ${operationsLightDeclarations()}
+${operationsDarkSurfaceDeclarations()}
 ${typographyDeclarations()}
 ${roundedDeclarations()}
+${rayonDeclarations()}
 ${spacingDeclarations()}
 }
 

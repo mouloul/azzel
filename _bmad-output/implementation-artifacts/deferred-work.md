@@ -125,3 +125,15 @@
     présente donc comme une disparition de données. C'est ce qui a fait chercher au
     mauvais endroit ; la garde sur la forme de la clé a été ajoutée pour ça.
 
+
+## Deferred from: build de la story 9.1 — socle de style partagé (2026-11-02)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
+  summary: `volontaires/scan/scan.css` pose le fond de l'écran caméra à `#0C1610` avec un commentaire qui annonce `bg-sombre`, alors que `bg-sombre` vaut `#101A14`. Dérive historique non tranchée : soit la valeur devient un token dédié, soit l'écran s'aligne sur `bg-sombre` en acceptant le changement de rendu.
+  evidence: la story 9.1 interdisait tout changement de rendu ; le littéral a été figé avec son nombre épinglé dans `apps/web/src/app/css-sans-litteraux.test.ts`. Le `rgba(12,22,16,…)` du voile partage la même base non tokenisée, et `page.test.tsx:301` exige l'opacité 0,96 telle quelle.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
+  summary: `#FFD9D6`, encre du bouton d'appel du voyant « dossard inconnu » dans `scan.css`, est une teinte claire du danger qui n'existe dans aucun token. À remonter en token si elle ressert ailleurs.
+  evidence: figée en exception épinglée dans `css-sans-litteraux.test.ts` ; aucune variable existante ne vaut cette couleur.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
+  summary: Les deux tokens ajoutés par la story — `forest-800` (arrêt sombre du dégradé du poster trailer) et `vert-altitude` (pastille de lecture) — portent des noms choisis par cohérence d'échelle, sans validation de la charte. `vert-altitude` a la même valeur que `action-sombre` côté opérations mais une sémantique vitrine distincte, volontairement découplée.
+  evidence: `packages/shared/src/tokens.ts`, section `siteColorTokens` ; épinglage des constantes dans `apps/web/src/app/contrastes.test.ts`.

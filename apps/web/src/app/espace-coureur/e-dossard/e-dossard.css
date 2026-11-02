@@ -1,18 +1,19 @@
 /* Story 4.1 — e-dossard (surface coureur, palette operationsTokens).
    Fichier propre à /espace-coureur/e-dossard. La carte sombre est TOUJOURS
    sombre (guichet, plein soleil) : couleurs fixes issues des rôles *-sombre
-   des tokens (bg-sombre #101A14, texte-sombre #E8F0E9, texte-2-sombre
-   #A9C0AE, action-sombre #8FD4A8) — indépendantes du mode clair/sombre du
-   site. Le QR vit sur carte blanche coins 16 px, modules encre : contrastes
-   fixes pour rester scannable dans les deux modes. */
+   des tokens (bg-sombre, texte-sombre, texte-2-sombre, action-sombre),
+   exposés en variables distinctes --az-*-sombre depuis la story 9.1 —
+   indépendantes du mode clair/sombre du site. Le QR vit sur carte blanche
+   coins 16 px, modules encre : contrastes fixes pour rester scannable dans
+   les deux modes. */
 
 /* --- Carte sombre : identité + numéro 74 px -------------------------------- */
 
 .edossard-carte-sombre {
-  --edossard-fond: #101A14;
-  --edossard-encre: #E8F0E9;
-  --edossard-encre-2: #A9C0AE;
-  --edossard-accent: #8FD4A8;
+  --edossard-fond: var(--az-bg-sombre);
+  --edossard-encre: var(--az-texte-sombre);
+  --edossard-encre-2: var(--az-texte-2-sombre);
+  --edossard-accent: var(--az-action-sombre);
 
   display: grid;
   gap: var(--az-space-2);
@@ -76,7 +77,7 @@
   padding: var(--az-space-1) var(--az-space-3);
   border-radius: var(--az-radius-full);
   background: var(--edossard-accent);
-  color: #0C2415; /* action-texte-sombre */
+  color: var(--az-action-texte-sombre);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: var(--az-font-size-meta-lg);
   font-weight: var(--az-font-weight-surtitre);
@@ -91,6 +92,12 @@
 }
 
 /* --- Carte QR : blanche, coins 16 px, SVG haute définition ------------------ */
+/* Story 9.1 — les #FFFFFF qui suivent restent en littéraux : le blanc du
+   support du QR est une contrainte de lisibilité du scanner (modules clairs
+   purs sur fond du document), pas une couleur de charte. Aucune variable
+   ne le remplace : --surface-raised bascule en sombre, les encres *-encre
+   sont sémantiquement autre chose. Exception tracée dans le garde-fou
+   anti-littéraux (css-sans-litteraux.test.ts). */
 
 .edossard-carte-qr {
   display: grid;

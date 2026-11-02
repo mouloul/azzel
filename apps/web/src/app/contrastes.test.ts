@@ -290,12 +290,24 @@ describe('contrastes WCAG — paire interdite (jamais rendue)', () => {
 });
 
 /* Story 2.5 — poster du trailer : le dégradé forêt et la pastille de lecture
- * « vert altitude » sont des hex fixes (pas des rôles de thème) : le poster
- * remplace une image, identique dans les deux thèmes. Sources uniques des
- * couleurs : modules/retour-images/domain.ts — le garde ci-dessous lit le CSS
- * réellement servi et vérifie que chaque hex s'y trouve dans la règle
- * correspondante (précédent tokens-css.test : le CSS peut trahir les constantes). */
+ * « vert altitude » sont des couleurs charte fixes (pas des rôles de thème) :
+ * le poster remplace une image, identique dans les deux thèmes. Depuis la
+ * story 9.1, le CSS lit les variables de palette (--forest-600, --forest,
+ * --forest-800, --vert-altitude) : le garde ci-dessous ÉPINGLE les constantes
+ * du domaine aux tokens de la charte (aucune dérive silencieuse) puis vérifie
+ * que le CSS servi référence exactement ces variables dans les règles du
+ * poster (précédent tokens-css.test : le CSS peut trahir les constantes). */
 describe('contrastes WCAG — poster trailer (story 2.5)', () => {
+  it('les constantes du domaine restent épinglées aux tokens charte (story 9.1)', () => {
+    expect(POSTER_DEGRADE_COULEURS).toEqual([
+      siteTokens.colors['forest-600'],
+      siteTokens.colors.forest,
+      siteTokens.colors['forest-800'],
+    ]);
+    expect(PASTILLE_LECTURE).toBe(siteTokens.colors['vert-altitude']);
+    expect(GLYPHE_LECTURE).toBe(siteTokens.colors.forest);
+  });
+
   for (const stop of POSTER_DEGRADE_COULEURS) {
     it(`pastille lecture (vert altitude) / dégradé ${stop} — ≥ 3:1 (non textuel, 1.4.11)`, () => {
       const ratio = ratioContraste(PASTILLE_LECTURE, stop);
@@ -323,24 +335,20 @@ describe('contrastes WCAG — poster trailer (story 2.5)', () => {
     ).toBeGreaterThanOrEqual(SEUIL_NON_TEXTUEL);
   });
 
-  it('vitrine-textes.css servit exactement les hex du domaine dans les règles du poster', () => {
+  it('vitrine-textes.css sert exactement les variables charte du poster (story 9.1)', () => {
     const css = readFileSync(
       fileURLToPath(new URL('./vitrine-textes.css', import.meta.url)),
       'utf8',
-    ).toLowerCase();
+    );
     const poster = extraireRegle(css, '.aa-trailer__poster');
-    for (const stop of POSTER_DEGRADE_COULEURS) {
-      expect(
-        poster,
-        `${stop} doit figurer dans le dégradé de .aa-trailer__poster`,
-      ).toContain(stop.toLowerCase());
-    }
+    expect(poster).toContain('var(--forest-600)');
+    expect(poster).toContain('var(--forest)');
+    expect(poster).toContain('var(--forest-800)');
+    // Halo du focus aligné sur l’arrêt médian du dégradé.
+    const focus = extraireRegle(css, '.aa-trailer__poster:focus-visible');
+    expect(focus).toContain('box-shadow:0 0 0 4px var(--forest)');
     const play = extraireRegle(css, '.aa-trailer__play');
-    expect(play, `${PASTILLE_LECTURE} est le fond de la pastille`).toContain(
-      PASTILLE_LECTURE.toLowerCase(),
-    );
-    expect(play, `${GLYPHE_LECTURE} est la couleur du glyphe`).toContain(
-      GLYPHE_LECTURE.toLowerCase(),
-    );
+    expect(play).toContain('background:var(--vert-altitude)');
+    expect(play).toContain('color:var(--forest)');
   });
 });
