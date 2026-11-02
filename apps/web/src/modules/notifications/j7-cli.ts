@@ -3,6 +3,8 @@ import { pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
+import { exigeTls } from '@/db/client';
+
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { createInscriptionsStore } from '@/modules/inscriptions/store';
 
@@ -34,7 +36,7 @@ async function main(): Promise<void> {
   }
   // `prepare: false` : DATABASE_URL peut pointer sur un pooler en mode
   // transaction, qui ne supporte pas les requêtes préparées nommées.
-  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5, prepare: false });
+  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5, prepare: false, ...(exigeTls(databaseUrl) ? { ssl: 'require' as const } : {}) });
   try {
     const outbox = createOutboxStore(sql);
     const inscriptions = createInscriptionsStore(sql);
