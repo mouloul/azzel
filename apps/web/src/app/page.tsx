@@ -13,6 +13,7 @@ import { SectionPartenaires } from '@/components/section-partenaires';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { getPartenairesSection } from '@/modules/sponsors/service';
 
+
 const PHOTOS = '/charte/photos-2026';
 
 const PILIERS = [
@@ -60,9 +61,13 @@ export default async function HomePage() {
   return (
     <>
       <Frise />
-      {/* Hero plein écran (modèle page course UTMB) : photo sous voile,
-          en-tête du site posé dessus (body:has(.aa-hero--plein), sans JS),
-          titre centré, bandeau date, badge des épreuves en bas à gauche. */}
+      {/* Hero plein écran (story 9.2) : photo de la ligne de départ 2026
+          conservée (LCP), en-tête du site posé dessus (body:has(.aa-hero--plein),
+          sans JS), titre condensé à très grande échelle à gauche, rail de
+          chiffres clés cloisonné à droite (sous le titre en mobile). Le bandeau
+          de date et le badge des épreuves se fondent dans le rail. Les chiffres
+          du rail sont les seuls officiels : date, épreuves, départ, cadre —
+          D+ et tracés 2027 attendent la confirmation du comité (page /parcours). */}
       <section className="aa-hero aa-hero--plein" aria-labelledby="titre-accueil">
         <AaPhoto
           variant="couverture"
@@ -79,53 +84,61 @@ export default async function HomePage() {
             Week-end Sportif <em>Aït Aïssi</em>
           </h1>
           <Crete />
-          <p className="aa-hero__date">2ᵉ édition — 26 mars 2027</p>
+          <dl className="aa-hero__rail">
+            <dt>Date</dt>
+            <dd>2ᵉ édition — 26 mars 2027</dd>
+            <dt>Épreuves</dt>
+            <dd>35 km · 12 km</dd>
+            <dt>Départ</dt>
+            <dd>Stade Agni Lhoudh</dd>
+            <dt>Cadre</dt>
+            <dd>Forêt de Yakouren</dd>
+          </dl>
           <p className="aa-hero__meta">
-            Trail en forêt au départ du stade Agni Lhoudh — Aït Aïssi, commune de Yakouren.
+            Deux trails au village d’Aït Aïssi, commune de Yakouren.
           </p>
           <div className="aa-hero__actions">
-            <Link className="aa-btn aa-btn--primary" href="/connexion?parcours=inscription">
+            <Link className="socle-action" href="/connexion?parcours=inscription">
               S’inscrire
             </Link>
-            <a className="aa-btn aa-btn--on-forest" href={assistancePhoneHref(telephone)}>
+            <a
+              className="socle-action socle-action--contour"
+              href={assistancePhoneHref(telephone)}
+            >
               Appeler l’équipe
             </a>
           </div>
         </div>
-        <p className="aa-hero__badge">
-          <span className="visually-hidden">Épreuves : </span>35 km · 12 km
-        </p>
       </section>
 
-      <section className="vitrine-bande" aria-labelledby="titre-bilan-2026">
+      <section
+        className="vitrine-bande vitrine-bande--foret aa-bilan"
+        aria-labelledby="titre-bilan-2026"
+      >
         <div className="aa-section">
           <p className="aa-eyebrow">Bilan 2026</p>
           <h2 className="aa-h2" id="titre-bilan-2026">
             Une première édition réussie
           </h2>
-          <p className="aa-lead">
-            En 2026, la première édition a réuni coureurs, familles et bénévoles au village
-            d’Aït Aïssi. Voici les chiffres officiels.
-          </p>
-          <div className="aa-stats">
-            <div className="aa-stat">
-              <p className="aa-stat__value">279</p>
-              <p className="aa-stat__label">Inscrits</p>
+          <dl className="aa-bilan__rail">
+            <div className="aa-bilan__stat">
+              <dt>Inscrits</dt>
+              <dd>279</dd>
             </div>
-            <div className="aa-stat">
-              <p className="aa-stat__value">222</p>
-              <p className="aa-stat__label">Dossards distribués</p>
+            <div className="aa-bilan__stat">
+              <dt>Dossards distribués</dt>
+              <dd>222</dd>
             </div>
-            <div className="aa-stat">
-              <p className="aa-stat__value">214</p>
-              <p className="aa-stat__label">Finishers au trail</p>
-              <p className="aa-stat__note">dont 36 femmes</p>
+            <div className="aa-bilan__stat">
+              <dt>Finishers au trail</dt>
+              <dd>214</dd>
+              <dd>dont 36 femmes</dd>
             </div>
-            <div className="aa-stat">
-              <p className="aa-stat__value">116</p>
-              <p className="aa-stat__label">Enfants à la Course Kids</p>
+            <div className="aa-bilan__stat">
+              <dt>Enfants à la Course Kids</dt>
+              <dd>116</dd>
             </div>
-          </div>
+          </dl>
           <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
         </div>
       </section>
@@ -223,7 +236,10 @@ export default async function HomePage() {
             Sportif Aït Aïssi vous répond au téléphone.
           </p>
           <div className="aa-section__actions">
-            <a className="aa-btn aa-btn--on-forest" href={assistancePhoneHref(telephone)}>
+            <a
+              className="socle-action socle-action--contour"
+              href={assistancePhoneHref(telephone)}
+            >
               Appeler l’équipe
             </a>
             <p className="aa-contact-numero">{telephone}</p>

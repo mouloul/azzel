@@ -157,38 +157,73 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
     return bloc;
   }
 
-  it('structure : section plein écran, titre centré, crête, bandeau date, actions, badge épreuves', () => {
+  it('structure : section plein écran, titre, crête, rail de chiffres clés (date + épreuves), méta, actions', () => {
     const html = HTML_ACCUEIL;
     const debut = html.indexOf('class="aa-hero aa-hero--plein"');
     expect(debut).toBeGreaterThan(-1);
     const titre = html.indexOf('aa-hero__title');
     const crete = html.indexOf('data-crete');
-    const date = html.indexOf('class="aa-hero__date"');
+    const rail = html.indexOf('class="aa-hero__rail"');
+    const date = html.indexOf('2ᵉ édition — 26 mars 2027');
+    const epreuves = html.indexOf('35 km · 12 km');
+    const meta = html.indexOf('class="aa-hero__meta"');
     const actions = html.indexOf('class="aa-hero__actions"');
-    const badge = html.indexOf('class="aa-hero__badge"');
     expect(debut).toBeLessThan(titre);
     expect(titre).toBeLessThan(crete);
-    expect(crete).toBeLessThan(date);
-    expect(date).toBeLessThan(actions);
-    expect(actions).toBeLessThan(badge);
-    expect(badge).toBeLessThan(html.indexOf('titre-bilan-2026'));
+    expect(crete).toBeLessThan(rail);
+    expect(rail).toBeLessThan(date);
+    expect(rail).toBeLessThan(epreuves);
+    expect(rail).toBeLessThan(meta);
+    expect(meta).toBeLessThan(actions);
+    expect(actions).toBeLessThan(html.indexOf('titre-bilan-2026'));
+    // Story 9.2 : le bandeau de date et le badge des épreuves se fondent
+    // dans le rail — plus d'éléments flottants autonomes.
+    expect(html).not.toContain('aa-hero__badge');
+    expect(html).not.toContain('aa-hero__date');
+    // Rail en liste de définitions : quatre paires dt/dd (une paire = une
+    // cellule cloisonnée).
+    const railHtml = html.slice(html.indexOf('aa-hero__rail'), html.indexOf('</dl>'));
+    expect((railHtml.match(/<dt>/g) ?? []).length).toBe(4);
+    expect((railHtml.match(/<dd>/g) ?? []).length).toBe(4);
+    expect(railHtml).toContain('Stade Agni Lhoudh</dd>');
+    expect(railHtml).toContain('Forêt de Yakouren</dd>');
     // Une seule photo prioritaire, avant le titre (LCP).
     expect((html.match(/data-hero-photo/g) ?? []).length).toBe(1);
     expect(html.indexOf('data-hero-photo')).toBeLessThan(titre);
     expect(html).toMatch(/<h1 class="aa-hero__title" id="titre-accueil">/);
     expect(html).toContain('aria-labelledby="titre-accueil"');
-    expect(html).toContain('35 km · 12 km');
   });
 
-  it('CSS : hero à hauteur d’écran moins l’égide, contenu centré', () => {
+  it('CSS : hero à hauteur d’écran moins l’égide, titre à gauche / rail à droite sur socle, rail sous le titre en mobile', () => {
     const plein = regle('.aa-hero--plein');
     expect(plein).toMatch(/min-height:\s*calc\(100svh - var\(--egide-hauteur\)/);
     const corps = regle('.aa-hero--plein .aa-hero__body');
-    expect(corps).toContain('text-align: center');
-    expect(corps).toContain('align-items: center');
+    // Composition 9.2 : grille deux colonnes (titre à gauche, rail à droite),
+    // texte à gauche — plus de contenu centré.
+    expect(corps).toContain('display: grid');
+    expect(corps).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(/);
+    expect(corps).toContain('text-align: left');
+    // Socle translucide forest-800 : porte l’accent ocre du nom (≥ 3,49:1,
+    // grand texte) et l’encre on-forest (≥ 8,39:1) — mesurés story 9.2.
+    expect(corps).toContain('color-mix(in srgb, var(--forest-800) 45%, transparent)');
+    const titre = regle('.aa-hero--plein .aa-hero__title');
+    // Très grande échelle dégressive : plafond 136 px (UX-DR-33), plancher
+    // mobile 44 px (paliers dans les media queries ci-dessous).
+    expect(titre).toMatch(/font-size:\s*clamp\(72px, 10\.5vw, 136px\)/);
+    // Mobile/tablette : une colonne — le rail passe SOUS le titre au lieu de
+    // le comprimer (ordre vertical titre, crête, rail, méta, actions). Le bloc
+    // media capture sa première règle : celle du corps, qui porte la bascule.
+    const mobile = CSS.match(/@media \(max-width: 959\.98px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(mobile).toContain('.aa-hero--plein .aa-hero__body');
+    expect(mobile).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
+    expect(mobile.indexOf('"titre"')).toBeLessThan(mobile.indexOf('"rail"'));
+    expect(mobile.indexOf('"rail"')).toBeLessThan(mobile.indexOf('"actions"'));
+    // Paliers du titre : 44 px plancher téléphone, 40 px très petit écran.
+    expect(CSS).toMatch(/clamp\(44px, 12\.5vw, 72px\)/);
+    expect(CSS).toMatch(/clamp\(40px, 11vw, 44px\)/);
   });
 
-  it('CSS : en-tête superposé à la photo sans JS (logo négatif, texte clair)', () => {
+  it('CSS : en-tête superposé à la photo sans JS (logo négatif, texte clair) — conservé par la refonte 9.2', () => {
     const entete = regle('body:has(.aa-hero--plein) .site-header');
     expect(entete).toContain('position: absolute');
     expect(entete).toContain('background: transparent');
@@ -291,14 +326,17 @@ describe('accueil vitrine — identité village (story 2.2)', () => {
     expect(derniere).toBeGreaterThan(html.indexOf('id="titre-contact"'));
   });
 
-  it('crête : ligne ocre 1,5 px sous le titre du hero, aria-hidden', () => {
+  it('crête : ligne ocre 1,5 px directement sous le titre du hero (avant le rail), aria-hidden', () => {
     const html = HTML_ACCUEIL;
     const crete = html.match(/<svg[^>]*data-crete[^>]*>/)?.[0] ?? '';
     expect(crete).not.toBe('');
     expect(crete).toContain('aria-hidden="true"');
     expect(crete).toContain('stroke-width="1.5"');
     expect((html.match(/data-crete/g) ?? []).length).toBe(1);
+    // Identité story 2.2 conservée dans la composition 9.2 : la crête reste
+    // sous le titre, déplacée ni par le rail ni par la méta.
     expect(html.indexOf('data-crete')).toBeGreaterThan(html.indexOf('aa-hero__title'));
+    expect(html.indexOf('data-crete')).toBeLessThan(html.indexOf('aa-hero__rail'));
     expect(html.indexOf('data-crete')).toBeLessThan(html.indexOf('aa-hero__meta'));
   });
 

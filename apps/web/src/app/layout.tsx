@@ -7,6 +7,7 @@ import { MonTrail } from '@/components/mon-trail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildThemeInitScript } from '@/lib/theme';
 import './globals.css';
+import './socle.css';
 import './tokens-synchronises.css';
 
 export const metadata: Metadata = {

@@ -775,10 +775,12 @@ main {
 .aa-stat__value{font-family:var(--font-display);font-weight:800;font-size:96px;line-height:.82;color:var(--highlight);font-variant-numeric:tabular-nums}
 .aa-stat__value--neutral{color:var(--heading)}
 .aa-stat__label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);margin-top:8px}
-.aa-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-md);padding:24px;box-shadow:var(--shadow-card)}
+/* Story 9.2 — rayons harmonisés sur les primitives du socle : cartes 16 px
+   (--az-rayon-md), chips en pilule (--az-radius-full). */
+.aa-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--az-rayon-md);padding:24px;box-shadow:var(--shadow-card)}
 .aa-card__title{font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading);margin:0}
 .aa-card__text{font-size:14px;line-height:1.5;color:var(--ink-muted);margin:8px 0 0}
-.aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-sm);line-height:1.2}
+.aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 12px;border-radius:var(--az-radius-full);line-height:1.2}
 .aa-chip--phare{background:var(--action);color:var(--on-action)}
 .aa-chip--nouveau{background:var(--forest-surface);color:var(--on-forest)}
 .aa-chip--tbc{border:1.5px dashed var(--accent);color:var(--accent)}
@@ -788,9 +790,9 @@ main {
 .aa-hero__veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,36,26,.85) 0%,rgba(15,36,26,.7) 40%,rgba(15,36,26,.1) 75%)}
 .aa-hero__body{position:relative;padding:48px 32px;max-width:640px}
 .aa-hero__title{font-family:var(--font-display);font-weight:800;font-size:72px;line-height:.92;text-transform:uppercase;margin:12px 0 0}
-.aa-hero__title em{font-style:normal;color:var(--ochre-300)}
+.aa-hero__title em{display:block;font-style:normal;color:var(--ochre-300)}
 .aa-hero__meta{font-size:16px;margin:16px 0 24px}
-@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-stat__value{font-size:72px}.aa-hero__body{padding:32px 16px}}
+@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-hero__body{padding:32px 16px}}
 
 /* Bandeau égide — toujours visible, toutes pages (layout) */
 .egide {
@@ -863,25 +865,63 @@ main {
   color: var(--on-forest);
 }
 
-/* Vitrine — chiffres officiels */
-.aa-stats {
+/* Vitrine — bande bilan 2026 (story 9.2) : bande horizontale compacte sur
+   fond forêt, plus de cartes pleine hauteur. Valeurs inchangées (279 / 222 /
+   214 / 116, dont 36 femmes). Valeurs ochre-300 réservé au grand texte
+   (≥ 24 px — règle contrastes.test.ts sur bande forêt), libellés on-forest. */
+.aa-bilan .aa-section {
+  padding-block: var(--space-12);
+}
+
+.aa-bilan__rail {
   display: grid;
-  gap: var(--az-space-6);
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   margin: var(--space-8) 0 0;
 }
 
-.aa-stat__value,
-.aa-stat__label,
-.aa-stat__note {
+.aa-bilan__stat {
+  display: grid;
+  justify-items: start;
+  padding-block: var(--space-2);
+}
+
+.aa-bilan__stat > dt,
+.aa-bilan__stat > dd {
   margin: 0;
 }
 
-.aa-stat__note {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--ink-muted);
+/* dl : dt précède dd (HTML) — la grille place la valeur au-dessus. */
+.aa-bilan__stat > dd {
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(32px, 4.5vw, 44px);
+  line-height: 1;
+  color: var(--ochre-300);
 }
+
+.aa-bilan__stat > dt {
+  grid-row: 2;
+  margin-top: var(--az-space-2);
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--on-forest);
+}
+
+.aa-bilan__stat > dd + dd {
+  grid-row: 3;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--on-forest);
+}
+
+/* ink-muted est interdit sur bande forêt (≈1,95:1 en clair — garde
+   contrastes.test.ts) : la note passe en on-forest. */
+.aa-bilan .aa-note {
+  color: var(--on-forest);
+}
+
 
 .aa-note {
   margin: var(--az-space-6) 0 0;
@@ -997,12 +1037,12 @@ main {
    (charte « bandeau partenaires ») ; option B : grille sobre d’emplacements
    équivalents. Contrastes : on-forest / forest-surface (testés), heading / surface-raised. */
 .aa-signature{margin:var(--space-8) 0 0;display:grid;gap:var(--space-3);justify-items:start}
-.aa-signature__mention{margin:0;font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-forest);border:1.5px solid var(--on-forest);border-radius:var(--radius-sm);padding:4px 10px}
+.aa-signature__mention{margin:0;font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-forest);border:1.5px solid var(--on-forest);border-radius:var(--az-radius-full);padding:4px 12px}
 .aa-signature__nom{margin:0;font-family:var(--font-display);font-weight:800;font-size:48px;line-height:1;text-transform:uppercase;color:var(--on-forest)}
 a.aa-signature__nom{text-decoration:underline;text-underline-offset:6px}
 .aa-signature__nom:hover{text-decoration:none}
 .aa-partenaires{list-style:none;display:grid;gap:var(--space-6);grid-template-columns:1fr;margin:var(--space-8) 0 0;padding:0}
-.aa-partenaire{display:grid;gap:var(--space-3);justify-items:center;align-content:center;text-align:center;background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-6);min-height:120px}
+.aa-partenaire{display:grid;gap:var(--space-3);justify-items:center;align-content:center;text-align:center;background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--az-rayon-md);padding:var(--space-6);min-height:120px}
 .aa-partenaire__nom{margin:0;font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading)}
 a.aa-partenaire__nom{color:inherit}
 /* Logo fourni par URL (jamais déformé) ; onError masque l’image côté client. */
@@ -1094,6 +1134,8 @@ a.aa-partenaire__nom{color:inherit}
   --egide-hauteur: 40px;
   --frise-hauteur: 16px;
   --mon-trail-largeur: 44px;
+  /* Cloisons du rail de chiffres et de la bande bilan (décoratives) */
+  --cloison: color-mix(in srgb, var(--on-forest) 40%, transparent);
 }
 
 @media (max-width: 640px) {
@@ -1156,96 +1198,158 @@ body:has(.aa-hero--plein) .site-header :is(a, button):focus-visible {
 }
 
 /* Voile charte : opacité bornée 60–85 % sur toute la hauteur (en-tête lisible
-   en haut, badge lisible en bas) — vérifié par page.test.tsx. */
+   en haut) — vérifié par page.test.tsx. Arrêts médians remontés en 9.2 pour
+   la nouvelle échelle typographique : ratios MESURÉS sur la photo réelle
+   (fenêtres 8 px, compositing du dégradé) — on-forest ≥ 5,69:1 en clair et
+   ≥ 7,18:1 en sombre sur le pire vitrage, hors socle. */
 .aa-hero--plein .aa-hero__veil {
-  background: linear-gradient(180deg, rgba(15, 36, 26, 0.78) 0%, rgba(15, 36, 26, 0.6) 30%, rgba(15, 36, 26, 0.62) 65%, rgba(15, 36, 26, 0.85) 100%);
+  background: linear-gradient(180deg, rgba(15, 36, 26, 0.8) 0%, rgba(15, 36, 26, 0.68) 30%, rgba(15, 36, 26, 0.7) 65%, rgba(15, 36, 26, 0.85) 100%);
 }
 
 [data-theme='dark'] .aa-hero--plein .aa-hero__veil {
   background: linear-gradient(180deg, rgba(8, 18, 13, 0.82) 0%, rgba(8, 18, 13, 0.7) 30%, rgba(8, 18, 13, 0.72) 65%, rgba(8, 18, 13, 0.85) 100%);
 }
 
+/* Composition 9.2 : titre condensé à très grande échelle à gauche, rail de
+   chiffres clés cloisonné à droite ; sous le titre en mobile. Le bloc repose
+   sur un socle translucide forest-800 (45 %) qui, composé au voile, porte
+   l'accent ocre du nom (≥ 3,49:1, grand texte ≥ 24 px) et l'encre on-forest
+   (≥ 8,39:1) — MESURÉS sur la photo, story 9.2. */
 .aa-hero--plein .aa-hero__body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-areas:
+    "titre rail"
+    "crete rail"
+    "meta rail"
+    "actions rail";
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
+  column-gap: var(--space-8);
+  align-content: center;
   width: 100%;
-  max-width: 1040px;
+  max-width: var(--container-max);
   margin-inline: auto;
-  padding: calc(var(--header-height) + 48px) 24px 112px;
-  text-align: center;
+  padding: calc(var(--header-height) + 48px) var(--az-space-gutter) var(--space-12);
+  text-align: left;
+  background: color-mix(in srgb, var(--forest-800) 45%, transparent);
 }
 
 .aa-hero--plein .aa-hero__title {
+  grid-area: titre;
   margin: 0;
-  font-size: clamp(40px, 9vw, 128px);
+  font-size: clamp(72px, 10.5vw, 136px);
   line-height: 0.9;
   text-wrap: balance;
 }
 
+/* Crête d'identité (story 2.2) : toujours sous le titre, calée à gauche
+   avec lui depuis la refonte 9.2 (plus de centrage). */
 .aa-hero--plein .aa-crete {
-  margin: var(--space-4) auto 0;
+  grid-area: crete;
+  margin: var(--space-4) 0 0;
 }
 
-.aa-hero__date {
-  margin: var(--space-6) 0 0;
-  padding: 10px var(--space-6);
-  border-block: 1px solid var(--on-forest);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 20px;
-  line-height: 1.2;
-  letter-spacing: 0.2em;
+/* Rail de chiffres clés (story 9.2) : grille cloisonnée. Absorbe le bandeau
+   de date et le badge des épreuves. Paires dt/dd directes (une paire = une
+   cellule) ; les cloisons, décoratives, n'ont aucun seuil 1.4.11. Textes
+   on-forest sur le socle du bloc (≥ 8,39:1, mesuré story 9.2). */
+.aa-hero__rail {
+  grid-area: rail;
+  align-self: center;
+  margin: 0;
+  border: 1px solid var(--cloison);
+}
+
+.aa-hero__rail dt,
+.aa-hero__rail dd {
+  margin: 0;
+}
+
+.aa-hero__rail dd + dt {
+  border-top: 1px solid var(--cloison);
+}
+
+.aa-hero__rail dt {
+  padding: var(--az-space-4) var(--az-space-5) 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--on-forest);
 }
 
+.aa-hero__rail dd {
+  padding: 0 var(--az-space-5) var(--az-space-4);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--on-forest);
+}
+
 .aa-hero--plein .aa-hero__meta {
+  grid-area: meta;
   max-width: 46ch;
-  margin: var(--space-4) 0 28px;
+  margin: var(--space-4) 0 var(--space-6);
   font-size: 17px;
   line-height: 1.5;
 }
 
 .aa-hero--plein .aa-hero__actions {
-  justify-content: center;
+  grid-area: actions;
+  align-self: start;
 }
 
-.aa-hero__badge {
-  position: absolute;
-  left: var(--space-8);
-  bottom: var(--space-8);
-  margin: 0;
-  padding: 10px var(--space-4);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+/* Pilules du socle (9.1) sur fond photo voilée : la variante contour passe
+   en on-forest — l'encre --az-action ne tient pas sur forêt (même décision
+   que l'outline de focus hero, WCAG 1.4.11/1.4.3 ; sur socle : ≥ 8,39:1,
+   mesuré story 9.2). Le survol inverse la pair (forêt sur crème, testée). */
+.aa-hero .socle-action--contour,
+.vitrine-bande--foret .socle-action--contour {
+  border-color: var(--on-forest);
   color: var(--on-forest);
-  background: rgba(15, 36, 26, 0.72);
-  border: 1.5px solid var(--on-forest);
-  border-radius: var(--radius-md);
+}
+
+.aa-hero .socle-action--contour:hover:not(:disabled),
+.vitrine-bande--foret .socle-action--contour:hover:not(:disabled) {
+  background: var(--on-forest);
+  color: var(--forest-surface);
+}
+
+/* Mobile/tablette (story 9.2) : une colonne — le rail passe SOUS le titre
+   au lieu de le comprimer ; le titre descend par paliers sans jamais
+   déborder (minmax(0, 1fr) + text-wrap). Sélecteurs en but de ligne pour
+   le garde page.test.tsx. */
+@media (max-width: 959.98px) {
+.aa-hero--plein .aa-hero__body {
+  grid-template-areas:
+    "titre"
+    "crete"
+    "rail"
+    "meta"
+    "actions";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.aa-hero--plein .aa-hero__title {
+  font-size: clamp(56px, 12vw, 96px);
+}
+
 }
 
 @media (max-width: 640px) {
-  .aa-hero--plein .aa-hero__body {
-    padding: calc(var(--header-height) + 32px) var(--space-4) 96px;
-  }
+.aa-hero--plein .aa-hero__body {
+  padding: calc(var(--header-height) + 32px) var(--az-space-margin-mobile) var(--space-8);
+}
 
-  .aa-hero__date {
-    font-size: 16px;
-    letter-spacing: 0.14em;
-    padding: 8px var(--space-3);
-  }
+.aa-hero--plein .aa-hero__title {
+  font-size: clamp(44px, 12.5vw, 72px);
+}
+}
 
-  .aa-hero__badge {
-    left: var(--space-4);
-    bottom: var(--space-6);
-    font-size: 20px;
-  }
+@media (max-width: 400px) {
+.aa-hero--plein .aa-hero__title {
+  font-size: clamp(40px, 11vw, 44px);
+}
 }
 
 /* Navigation vitrine dans l'en-tête — à partir de 960 px seulement (le pied

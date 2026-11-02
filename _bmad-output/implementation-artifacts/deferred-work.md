@@ -137,3 +137,15 @@
 - source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
   summary: Les deux tokens ajoutés par la story — `forest-800` (arrêt sombre du dégradé du poster trailer) et `vert-altitude` (pastille de lecture) — portent des noms choisis par cohérence d'échelle, sans validation de la charte. `vert-altitude` a la même valeur que `action-sombre` côté opérations mais une sémantique vitrine distincte, volontairement découplée.
   evidence: `packages/shared/src/tokens.ts`, section `siteColorTokens` ; épinglage des constantes dans `apps/web/src/app/contrastes.test.ts`.
+
+## Deferred from: build de la story 9.2 — accueil refondu (2026-11-02)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
+  summary: Le budget de premier chargement de l'accueil est à 306 848 octets, soit 299,7 Kio pour un plafond de 300 Kio (NFR-2). La marge est de 0,3 Kio : la prochaine addition, même minime, le fera passer.
+  evidence: mesure sur build frais après la refonte du hero. Le socle de la story 9.1 a dû être importé depuis `layout.tsx` plutôt que depuis la page pour gagner le kilo-octet manquant par fusion de chunk CSS.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
+  summary: `socle.css` est importé par `layout.tsx` : il charge donc sur toutes les routes, y compris celles qui ne consomment pas encore ses classes. Choix dicté par le budget, pas par l'architecture.
+  evidence: import depuis la page coûtait un chunk CSS séparé et faisait dépasser les 300 Kio. À réexaminer quand les stories 9.4, 9.5 et 10.x auront effectivement consommé le socle partout.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
+  summary: Le rail de chiffres clés du hero n'affiche que Date, Épreuves, Départ et Cadre. Les cellules D+, plage d'altitude et nombre de places attendent des valeurs validées par le comité : aucune source officielle n'existe aujourd'hui, et les chiffres de la maquette viennent du relevé d'essai (28 km, D+ 1 280 m), contradictoires avec les 35 km annoncés.
+  evidence: la grille cloisonnée est dimensionnée pour les accueillir ; `page.test.tsx` interdit par ailleurs tout objectif 2027 chiffré sur l'accueil.
