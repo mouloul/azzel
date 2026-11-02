@@ -13,7 +13,11 @@ vi.mock('@/modules/notifications/worker', async () => {
 import { findOrganisationIdBySlug, resetOrganisationIdMemoForTests, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
 import { detectProofFormat } from '@/modules/inscriptions/proof-format';
-import { LocalDiskProofStore } from '@/modules/inscriptions/proof-store';
+import { LocalDiskProofStore, type ProofStore } from '@/modules/inscriptions/proof-store';
+import {
+  PROOF_STORAGE_DRIVER_ENV,
+  PROOF_STORAGE_DRIVER_OBJET,
+} from '@/modules/inscriptions/proof-store-objet';
 import {
   closeAzzelTestDb,
   recreateAzzelTestDb,
@@ -42,6 +46,7 @@ import {
 } from './reset';
 import {
   MigrationsManquantesError,
+  avertissementStockagePreuves,
   compterEmailsExpediables,
   executerSeed,
   executerSeedCli,
@@ -129,6 +134,33 @@ describe('seed — CLI hors base (aucune connexion requise)', () => {
   });
 });
 
+describe('avertissement de stockage des preuves', () => {
+  it('disque local : avertit en nommant la variable à poser, jamais une story', () => {
+    const avertissement = avertissementStockagePreuves(new LocalDiskProofStore('/tmp/inexistant'));
+
+    expect(avertissement).not.toBeNull();
+    expect(avertissement as string).toContain('DISQUE LOCAL');
+    // L'opérateur doit lire QUOI FAIRE, pas un numéro de story qui le laisse
+    // conclure qu'il n'y a rien à faire.
+    expect(avertissement as string).toContain(PROOF_STORAGE_DRIVER_ENV);
+    expect(avertissement as string).toContain(PROOF_STORAGE_DRIVER_OBJET);
+    expect(avertissement as string).not.toContain('story 8.2');
+  });
+
+  it('tout autre ProofStore (stockage objet) : aucun avertissement', () => {
+    // Doublure : seule compte ici l'absence d'héritage de LocalDiskProofStore.
+    const objet: ProofStore = {
+      put: async () => {
+        throw new Error('non sollicité');
+      },
+      read: async () => null,
+      remove: async () => undefined,
+    };
+
+    expect(avertissementStockagePreuves(objet)).toBeNull();
+  });
+});
+
 describe('preuve de paiement fictive', () => {
   it('est un PDF réellement affichable, cohérent avec detectProofFormat', () => {
     const octets = octetsPreuveFictive();
@@ -200,10 +232,13 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
     expect(rapport.evenementsTerrainCrees).toBe(RETRAITS_ATTENDUS + PASSAGES_ATTENDUS);
     expect(rienACreer(rapport)).toBe(false);
 
-    // Seul avertissement attendu : la dépendance assumée à la story 8.2. Tout
-    // saut de cible (secteur, mission, volontaire, checkpoint) en ajouterait un.
+    // Seul avertissement attendu : les preuves atterrissent sur le disque local,
+    // et le message nomme la variable à poser. Tout saut de cible (secteur,
+    // mission, volontaire, checkpoint) en ajouterait un.
     expect(rapport.avertissements).toHaveLength(1);
-    expect(rapport.avertissements[0]).toContain('story 8.2');
+    expect(rapport.avertissements[0]).toContain('DISQUE LOCAL');
+    expect(rapport.avertissements[0]).toContain(PROOF_STORAGE_DRIVER_ENV);
+    expect(rapport.avertissements[0]).toContain(PROOF_STORAGE_DRIVER_OBJET);
 
     const statuts = await owner<{ status: string; total: number }[]>`
       SELECT status, count(*)::int AS total FROM coureur GROUP BY status

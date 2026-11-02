@@ -26,6 +26,10 @@ apps/web/data/
 .env
 .env.*
 !.env.example
+# Copies de fichiers d'environnement dont le nom ne commence pas par un point :
+# « env copy.recette » et consorts échappent à la règle .env.* ci-dessus alors
+# qu'ils portent les mêmes identifiants en clair.
+*.recette
 
 # Config outil locale (contient des secrets)
 .opencode/

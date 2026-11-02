@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { isServerlessRuntime } from '@/db/client';
 import { readEnv } from '@/modules/iam/env';
 
 import {
@@ -17,6 +18,8 @@ import {
   PROOF_STORAGE_DRIVER_DISQUE,
   PROOF_STORAGE_DRIVER_ENV,
   PROOF_STORAGE_DRIVER_OBJET,
+  PROOF_STORAGE_KEY_ENV,
+  PROOF_STORAGE_URL_ENV,
   readObjetProofStoreOptions,
   readProofStorageDriver,
 } from './proof-store-objet';
@@ -122,6 +125,23 @@ type ProofStoreGlobals = typeof globalThis & { __azzelProofStore?: ProofStore };
 export function createProofStore(): ProofStore {
   const driver = readProofStorageDriver();
   if (driver === null || driver === PROOF_STORAGE_DRIVER_DISQUE) {
+    if (driver === null && isServerlessRuntime()) {
+      // Le défaut disque reste le défaut — cloner le dépôt n'exige aucune clé —
+      // mais en serverless il est très probablement un oubli de configuration :
+      // le système de fichiers est éphémère, les preuves déposées seront
+      // perdues. Le silence serait exactement le mode de panne que cette
+      // implémentation existe pour empêcher.
+      console.warn(
+        '[preuves] %s absente en exécution serverless : les preuves sont écrites sur le ' +
+          'DISQUE LOCAL, éphémère, et seront perdues à la prochaine invocation. ' +
+          'Posez %s=%s avec %s et %s.',
+        PROOF_STORAGE_DRIVER_ENV,
+        PROOF_STORAGE_DRIVER_ENV,
+        PROOF_STORAGE_DRIVER_OBJET,
+        PROOF_STORAGE_URL_ENV,
+        PROOF_STORAGE_KEY_ENV,
+      );
+    }
     return new LocalDiskProofStore();
   }
   if (driver === PROOF_STORAGE_DRIVER_OBJET) {

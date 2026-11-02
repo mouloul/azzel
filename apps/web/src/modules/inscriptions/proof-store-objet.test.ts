@@ -89,6 +89,15 @@ class StockageFactice {
     const body = corpsEnvoye(init);
     this.appels.push({ url, method, headers: normaliserEnTetes(init), body });
 
+    const entetes = normaliserEnTetes(init);
+    if (entetes.authorization !== `Bearer ${CLE}`) {
+      // Le bucket est PRIVÉ : sans clé, l'API Storage répond 401 InvalidJWT.
+      return Response.json(
+        { statusCode: '401', error: 'Unauthorized', message: 'invalid JWT', code: 'InvalidJWT' },
+        { status: 401 },
+      );
+    }
+
     const chemin = new URL(url).pathname;
     const prefixe = `/storage/v1/object/${DEFAULT_PROOF_BUCKET}/`;
     if (!chemin.startsWith(prefixe)) {
@@ -97,12 +106,21 @@ class StockageFactice {
     const cle = decodeURIComponent(chemin.slice(prefixe.length));
 
     if (method === 'POST') {
-      if (this.objets.has(cle)) {
-        return this.absence(); // ne devrait jamais arriver : clés UUID
+      if (this.objets.has(cle) && entetes['x-upsert'] !== 'true') {
+        // Objet déjà présent sans upsert : l'API Storage répond 409.
+        return Response.json(
+          {
+            statusCode: '409',
+            error: 'Duplicate',
+            message: 'The resource already exists',
+            code: 'KeyAlreadyExists',
+          },
+          { status: 409 },
+        );
       }
       this.objets.set(cle, {
         bytes: body ?? new Uint8Array(),
-        contentType: normaliserEnTetes(init)['content-type'] ?? 'application/octet-stream',
+        contentType: entetes['content-type'] ?? 'application/octet-stream',
       });
       return Response.json({ Key: `${DEFAULT_PROOF_BUCKET}/${cle}` }, { status: 200 });
     }
@@ -166,6 +184,9 @@ describe('ObjetProofStore — dépôt', () => {
     expect(appel.url).toBe(`${BASE_URL}/object/${DEFAULT_PROOF_BUCKET}/${stored.storageKey}`);
     expect(appel.headers.authorization).toBe(`Bearer ${CLE}`);
     expect(appel.headers['content-type']).toBe('image/jpeg');
+    // Les clés sont des UUID : un objet déjà présent est une anomalie, jamais
+    // un remplacement à accepter.
+    expect(appel.headers['x-upsert']).toBe('false');
     expect(appel.body).not.toBeNull();
     expect(sha256Hex(appel.body as Uint8Array)).toBe(stored.sha256);
   });
@@ -198,6 +219,24 @@ describe('ObjetProofStore — dépôt', () => {
     expect(stockage.objets.size).toBe(0);
   });
 
+  it('put : objet déjà présent — la doublure refuse le POST en doublon, put lève', async () => {
+    const stockage = new StockageFactice();
+    const store = storeFactice(stockage);
+    // On pré-remplit la clé que le prochain put va tirer : impossible à viser,
+    // donc on force la collision en figeant la réponse sur un 409.
+    const enDoublon = new ObjetProofStore({
+      baseUrl: BASE_URL,
+      key: CLE,
+      transport: async (url, init) => {
+        const cle = decodeURIComponent(new URL(url).pathname.split('/').pop() as string);
+        stockage.objets.set(cle, { bytes: new Uint8Array(), contentType: 'image/jpeg' });
+        return stockage.transport(url, init);
+      },
+    });
+
+    await expect(enDoublon.put(jpegBytes(64), 'jpeg')).rejects.toThrow(/dépôt.*409/s);
+  });
+
   it('put : panne du stockage (5xx) — erreur nommant l’opération, jamais de succès silencieux', async () => {
     const store = new ObjetProofStore({
       baseUrl: BASE_URL,
@@ -221,6 +260,40 @@ describe('ObjetProofStore — dépôt', () => {
     });
 
     await expect(store.put(jpegBytes(64), 'jpeg')).rejects.toThrow(/dépôt.*ECONNREFUSED/s);
+  });
+});
+
+describe('ObjetProofStore — authentification (bucket privé)', () => {
+  it('les TROIS opérations portent la clé : sans elle, la doublure répond 401 et tout échoue', async () => {
+    const stockage = new StockageFactice();
+    // Store construit sur une clé qui n'est pas celle qu'attend la doublure :
+    // c'est la seule différence, et elle doit se voir sur dépôt, relecture ET
+    // suppression. Le bucket est privé — une opération non authentifiée ne
+    // doit jamais passer pour un succès ni pour une absence.
+    const sansCle = new ObjetProofStore({
+      baseUrl: BASE_URL,
+      key: 'clé-qui-ne-vaut-rien',
+      transport: stockage.transport,
+    });
+    const cle = '11111111-2222-4333-8444-555555555555.jpg';
+
+    await expect(sansCle.put(jpegBytes(64), 'jpeg')).rejects.toThrow(/dépôt.*401/s);
+    await expect(sansCle.read(cle)).rejects.toThrow(/relecture.*401/s);
+    await expect(sansCle.remove(cle)).rejects.toThrow(/suppression.*401/s);
+    expect(stockage.appels).toHaveLength(3);
+    expect(stockage.objets.size).toBe(0);
+  });
+
+  it('avec la clé, les mêmes trois opérations aboutissent', async () => {
+    const stockage = new StockageFactice();
+    const store = storeFactice(stockage);
+
+    const stored = await store.put(jpegBytes(64), 'jpeg');
+    expect(await store.read(stored.storageKey)).not.toBeNull();
+    await expect(store.remove(stored.storageKey)).resolves.toBeUndefined();
+    expect(
+      stockage.appels.every((appel) => appel.headers.authorization === `Bearer ${CLE}`),
+    ).toBe(true);
   });
 });
 
@@ -275,6 +348,62 @@ describe('ObjetProofStore — relecture', () => {
     await expect(echec).rejects.toThrow(/relecture/);
   });
 
+  it('read : 404 NoSuchBucket (bucket mal configuré) lève au lieu de rendre null', async () => {
+    // Le piège : rendre `null` ici présenterait une erreur de configuration au
+    // comité comme « toutes les preuves ont disparu ».
+    const store = new ObjetProofStore({
+      baseUrl: BASE_URL,
+      key: CLE,
+      transport: async () =>
+        Response.json(
+          {
+            statusCode: '404',
+            error: 'Bucket not found',
+            message: 'Bucket not found',
+            code: 'NoSuchBucket',
+          },
+          { status: 404 },
+        ),
+    });
+
+    const echec = store.read('11111111-2222-4333-8444-555555555555.jpg');
+    await expect(echec).rejects.toBeInstanceOf(ObjetProofStoreError);
+    await expect(echec).rejects.toThrow(/relecture/);
+    await expect(echec).rejects.toThrow(PROOF_STORAGE_BUCKET_ENV);
+    await expect(echec).rejects.toThrow(PROOF_STORAGE_URL_ENV);
+  });
+
+  it('read : 404 sans corps exploitable (route introuvable) lève au lieu de rendre null', async () => {
+    const store = new ObjetProofStore({
+      baseUrl: BASE_URL,
+      key: CLE,
+      transport: async () => new Response('<html>Not Found</html>', { status: 404 }),
+    });
+
+    await expect(store.read('11111111-2222-4333-8444-555555555555.jpg')).rejects.toThrow(
+      PROOF_STORAGE_URL_ENV,
+    );
+  });
+
+  it('read : 404 NoSuchKey reste une absence — null, pas une erreur', async () => {
+    const store = new ObjetProofStore({
+      baseUrl: BASE_URL,
+      key: CLE,
+      transport: async () =>
+        Response.json(
+          {
+            statusCode: '404',
+            error: 'not_found',
+            message: 'Object not found',
+            code: 'NoSuchKey',
+          },
+          { status: 404 },
+        ),
+    });
+
+    expect(await store.read('11111111-2222-4333-8444-555555555555.jpg')).toBeNull();
+  });
+
   it('read : 403 (clé invalide) ne doit JAMAIS passer pour une absence', async () => {
     const store = new ObjetProofStore({
       baseUrl: BASE_URL,
@@ -312,6 +441,28 @@ describe('ObjetProofStore — suppression', () => {
 
     await expect(store.remove('../../etc/passwd')).resolves.toBeUndefined();
     expect(stockage.appels).toHaveLength(0);
+  });
+
+  it('remove : 404 NoSuchBucket lève au lieu de réussir en silence', async () => {
+    const store = new ObjetProofStore({
+      baseUrl: BASE_URL,
+      key: CLE,
+      transport: async () =>
+        Response.json(
+          {
+            statusCode: '404',
+            error: 'Bucket not found',
+            message: 'Bucket not found',
+            code: 'NoSuchBucket',
+          },
+          { status: 404 },
+        ),
+    });
+
+    const echec = store.remove('11111111-2222-4333-8444-555555555555.jpg');
+    await expect(echec).rejects.toBeInstanceOf(ObjetProofStoreError);
+    await expect(echec).rejects.toThrow(/suppression/);
+    await expect(echec).rejects.toThrow(PROOF_STORAGE_BUCKET_ENV);
   });
 
   it('remove : panne du stockage (5xx) — erreur nommant l’opération', async () => {
@@ -373,6 +524,9 @@ describe('getProofStore — sélection par configuration', () => {
     PROOF_STORAGE_URL_ENV,
     PROOF_STORAGE_KEY_ENV,
     PROOF_STORAGE_BUCKET_ENV,
+    // Marqueur d'exécution serverless reconnu par isServerlessRuntime() (story 8.1).
+    'VERCEL',
+    'AWS_LAMBDA_FUNCTION_NAME',
   ];
   const sauvegarde = new Map<string, string | undefined>();
 
@@ -401,6 +555,59 @@ describe('getProofStore — sélection par configuration', () => {
     expect(getProofStore()).toBeInstanceOf(LocalDiskProofStore);
     // Mémoïsation conservée.
     expect(getProofStore()).toBe(getProofStore());
+  });
+
+  it('sélecteur absent HORS serverless : disque local, et AUCUN avertissement', () => {
+    const avertissements: unknown[][] = [];
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      avertissements.push(args);
+    });
+
+    expect(getProofStore()).toBeInstanceOf(LocalDiskProofStore);
+    expect(avertissements).toHaveLength(0);
+  });
+
+  it('sélecteur absent EN serverless : disque local, mais avertissement serveur nommant la variable', () => {
+    process.env.VERCEL = '1';
+    const avertissements: unknown[][] = [];
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      avertissements.push(args);
+    });
+
+    // Le défaut disque tient — cloner le dépôt n'exige aucune clé — mais le
+    // silence n'est pas défendable : c'est le mode de panne que la story 8.2
+    // existe pour empêcher.
+    expect(getProofStore()).toBeInstanceOf(LocalDiskProofStore);
+    expect(avertissements).toHaveLength(1);
+    const message = avertissements[0]?.map(String).join(' ') ?? '';
+    expect(message).toContain(PROOF_STORAGE_DRIVER_ENV);
+    expect(message).toContain('DISQUE LOCAL');
+  });
+
+  it('stockage objet configuré EN serverless : aucun avertissement', () => {
+    process.env.VERCEL = '1';
+    process.env[PROOF_STORAGE_DRIVER_ENV] = 'objet';
+    process.env[PROOF_STORAGE_URL_ENV] = BASE_URL;
+    process.env[PROOF_STORAGE_KEY_ENV] = CLE;
+    const avertissements: unknown[][] = [];
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      avertissements.push(args);
+    });
+
+    expect(getProofStore()).toBeInstanceOf(ObjetProofStore);
+    expect(avertissements).toHaveLength(0);
+  });
+
+  it('disque DEMANDÉ explicitement en serverless : choix assumé, aucun avertissement', () => {
+    process.env.VERCEL = '1';
+    process.env[PROOF_STORAGE_DRIVER_ENV] = 'disque';
+    const avertissements: unknown[][] = [];
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      avertissements.push(args);
+    });
+
+    expect(getProofStore()).toBeInstanceOf(LocalDiskProofStore);
+    expect(avertissements).toHaveLength(0);
   });
 
   it('PROOF_STORAGE_DRIVER=disque : disque local explicite', () => {

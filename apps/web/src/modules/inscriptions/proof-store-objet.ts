@@ -195,31 +195,64 @@ function corpsBinaire(bytes: Uint8Array): ArrayBuffer {
   return copie;
 }
 
-const CODES_ABSENCE = new Set(['nosuchkey', 'not_found', 'notfound', 'object_not_found']);
+/**
+ * Codes d'erreur de l'API Storage désignant un **objet** manquant.
+ * Source : documentation officielle des codes d'erreur Storage
+ * (https://supabase.com/docs/guides/storage/debugging/error-codes, consultée le
+ * 2026-11-02) — `NoSuchKey`, 404, « The specified key does not exist ».
+ */
+const CODES_OBJET_ABSENT = new Set(['nosuchkey']);
 
 /**
- * Deux arêtes connues de l'API Storage : un objet absent peut répondre 404,
- * mais aussi **400 avec le vrai code dans le corps** (`statusCode: "404"`,
- * `code: "NoSuchKey"`). Les deux signifient « absent », et seule cette
- * reconnaissance rend `read` silencieux sur une clé inconnue et `remove`
- * idempotent.
+ * Codes de la même table répondant eux aussi en **404**, mais qui désignent une
+ * erreur de CONFIGURATION, pas une preuve manquante : `NoSuchBucket` (« The
+ * specified bucket does not exist ») et `TenantNotFound`.
  */
-function estAbsence(status: number, corps: CorpsErreur): boolean {
-  if (status === 404) {
-    return true;
-  }
-  if (corps.statusCode === '404') {
-    return true;
-  }
-  for (const candidat of [corps.code, corps.error]) {
-    if (candidat !== null && CODES_ABSENCE.has(candidat.toLowerCase())) {
-      return true;
+const CODES_CONFIGURATION = new Set(['nosuchbucket', 'tenantnotfound']);
+
+/**
+ * Verdict porté sur une réponse en échec.
+ *
+ * Le piège que ce classement existe pour éviter : **tout 404 n'est pas une
+ * preuve absente.** Un `PROOF_STORAGE_BUCKET` erroné ou une `PROOF_STORAGE_URL`
+ * pointant sur un mauvais chemin répond 404 elle aussi ; la lire comme une
+ * absence ferait rendre `null` à `read` et réussir `remove`, et l'erreur de
+ * configuration se présenterait au comité comme « toutes les preuves ont
+ * disparu ». Seul ce qui désigne explicitement un objet manquant vaut absence ;
+ * un 404 sans corps exploitable (route introuvable) lève.
+ *
+ * Deux arêtes connues restent couvertes : l'absence peut arriver en 404 franc
+ * comme en **400 portant le vrai code dans le corps**.
+ */
+type VerdictReponse = 'absence' | 'configuration' | 'panne';
+
+function classerReponse(status: number, corps: CorpsErreur): VerdictReponse {
+  const code = corps.code?.toLowerCase() ?? null;
+  if (code !== null) {
+    if (CODES_OBJET_ABSENT.has(code)) {
+      return 'absence';
     }
+    if (CODES_CONFIGURATION.has(code)) {
+      return 'configuration';
+    }
+    return 'panne';
   }
-  return false;
+  // Ancien système de codes, encore servi : `{ statusCode, error, message }`.
+  const texte = `${corps.error ?? ''} ${corps.message ?? ''}`.toLowerCase();
+  if (texte.includes('bucket') || texte.includes('tenant')) {
+    return 'configuration';
+  }
+  if (texte.includes('object not found') || corps.error?.toLowerCase() === 'not_found') {
+    return 'absence';
+  }
+  if (status === 404) {
+    // 404 sans corps exploitable : la route elle-même est introuvable.
+    return 'configuration';
+  }
+  return 'panne';
 }
 
-function detailPanne(status: number, corps: CorpsErreur): string {
+function detailPanne(status: number, corps: CorpsErreur, verdict: VerdictReponse): string {
   const parts = [`HTTP ${status}`];
   if (corps.statusCode !== null && corps.statusCode !== String(status)) {
     parts.push(`statusCode ${corps.statusCode}`);
@@ -229,6 +262,12 @@ function detailPanne(status: number, corps: CorpsErreur): string {
     parts.push(libelle);
   } else if (corps.brut.length > 0) {
     parts.push(corps.brut.slice(0, 200));
+  }
+  if (verdict === 'configuration') {
+    parts.push(
+      `bucket ou route introuvable — vérifiez ${PROOF_STORAGE_BUCKET_ENV} et ${PROOF_STORAGE_URL_ENV} ` +
+        '(ce n’est PAS une preuve absente)',
+    );
   }
   return parts.join(' — ');
 }
@@ -306,7 +345,10 @@ export class ObjetProofStore implements ProofStore {
     });
     if (!response.ok) {
       const corps = await lireCorpsErreur(response);
-      throw new ObjetProofStoreError('dépôt', detailPanne(response.status, corps));
+      throw new ObjetProofStoreError(
+        'dépôt',
+        detailPanne(response.status, corps, classerReponse(response.status, corps)),
+      );
     }
     return {
       storageKey,
@@ -328,10 +370,11 @@ export class ObjetProofStore implements ProofStore {
     });
     if (!response.ok) {
       const corps = await lireCorpsErreur(response);
-      if (estAbsence(response.status, corps)) {
+      const verdict = classerReponse(response.status, corps);
+      if (verdict === 'absence') {
         return null;
       }
-      throw new ObjetProofStoreError('relecture', detailPanne(response.status, corps));
+      throw new ObjetProofStoreError('relecture', detailPanne(response.status, corps, verdict));
     }
     let buffer: ArrayBuffer;
     try {
@@ -358,11 +401,12 @@ export class ObjetProofStore implements ProofStore {
       return;
     }
     const corps = await lireCorpsErreur(response);
-    if (estAbsence(response.status, corps)) {
+    const verdict = classerReponse(response.status, corps);
+    if (verdict === 'absence') {
       // Objet déjà supprimé : succès silencieux, comme sur disque.
       return;
     }
-    throw new ObjetProofStoreError('suppression', detailPanne(response.status, corps));
+    throw new ObjetProofStoreError('suppression', detailPanne(response.status, corps, verdict));
   }
 }
 

@@ -2,7 +2,7 @@
 title: 'Story 8.2 — Stockage des preuves hors disque local'
 type: 'feature'
 created: '2026-11-01'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '872ee7374f0ec277b5ec73894ecc0562273a9d1d'
