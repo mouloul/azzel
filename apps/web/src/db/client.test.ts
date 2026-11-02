@@ -20,6 +20,7 @@ import {
   POOL_MAX_LOCAL,
   POOL_MAX_SERVERLESS,
   databasePoolOptions,
+  exigeTls,
   getDbClient,
   isServerlessRuntime,
   resetDbClientForTests,
@@ -107,5 +108,33 @@ describe('databasePoolOptions', () => {
     );
 
     expect(databasePoolOptions().max).toBe(POOL_MAX_SERVERLESS);
+  });
+});
+
+describe('exigeTls', () => {
+  // Le mot de passe et les données personnelles des coureurs traversent le
+  // réseau : une base distante se joint chiffrée, et le repli sûr n'est jamais
+  // le clair. Ces cas échouent si quelqu'un retire la règle.
+  it('exige TLS pour un hôte distant', () => {
+    expect(exigeTls('postgresql://u:p@aws-0-eu-west-1.pooler.supabase.com:6543/postgres')).toBe(
+      true,
+    );
+    expect(exigeTls('postgresql://u:p@db.exemple.supabase.co:5432/postgres')).toBe(true);
+  });
+
+  it('laisse une base locale en clair', () => {
+    expect(exigeTls('postgres://azzel_app:azzel@localhost:54329/azzel')).toBe(false);
+    expect(exigeTls('postgres://azzel_app:azzel@127.0.0.1:54329/azzel')).toBe(false);
+  });
+
+  it("exige TLS quand l'URL est illisible — le doute ne profite pas au clair", () => {
+    expect(exigeTls('pas-une-url')).toBe(true);
+  });
+
+  it('pose ssl: require dans les options pour une base distante, pas en local', () => {
+    expect(
+      databasePoolOptions('postgresql://u:p@aws-0-eu-west-1.pooler.supabase.com:6543/postgres').ssl,
+    ).toBe('require');
+    expect(databasePoolOptions('postgres://u:p@localhost:54329/azzel').ssl).toBeUndefined();
   });
 });

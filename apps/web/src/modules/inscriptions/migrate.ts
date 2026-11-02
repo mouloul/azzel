@@ -4,6 +4,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
+import { exigeTls } from '@/db/client';
+
 import { APP_PASSWORD_ENV_NAME, DEV_APP_PASSWORD_FALLBACK } from '../iam/constants';
 import { readDatabaseOwnerUrl, readEnv } from '../iam/env';
 
@@ -98,7 +100,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5 });
+  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 5, ...(exigeTls(databaseUrl) ? { ssl: 'require' as const } : {}) });
   try {
     const applied = await applyAllMigrations(sql);
     if (applied.length === 0) {

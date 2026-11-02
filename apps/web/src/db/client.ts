@@ -42,13 +42,43 @@ export function isServerlessRuntime(): boolean {
  * un comportement unique entre local et hébergé vaut mieux qu'un écart qui ne
  * se révèle qu'en production.
  */
-export function databasePoolOptions(): PoolOptions {
-  return {
+/** Hôtes considérés comme locaux : eux seuls peuvent se passer de chiffrement. */
+const HOTES_LOCAUX = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
+
+/**
+ * Une base distante se joint en TLS, sans exception : sinon le mot de passe et
+ * les données personnelles des coureurs traversent le réseau en clair. Certains
+ * hébergeurs l'exigent et refusent la connexion — Supabase répond
+ * « SSL connection is required » sur sa connexion directe — mais d'autres
+ * acceptent le clair en silence, ce qui est bien pire. On ne s'en remet donc
+ * pas au serveur, et pas davantage à un paramètre d'URL que quelqu'un doit
+ * penser à écrire.
+ */
+export function exigeTls(databaseUrl: string): boolean {
+  try {
+    return !HOTES_LOCAUX.has(new URL(databaseUrl).hostname);
+  } catch {
+    // URL illisible : on chiffre, le repli sûr n'est jamais le clair.
+    return true;
+  }
+}
+
+/**
+ * Options du pool applicatif. `prepare: false` est posé inconditionnellement :
+ * un comportement unique entre local et hébergé vaut mieux qu'un écart qui ne
+ * se révèle qu'en production.
+ */
+export function databasePoolOptions(databaseUrl?: string): PoolOptions {
+  const options: PoolOptions = {
     max: isServerlessRuntime() ? POOL_MAX_SERVERLESS : POOL_MAX_LOCAL,
     connect_timeout: 5,
     idle_timeout: 20,
     prepare: false,
   };
+  if (databaseUrl !== undefined && exigeTls(databaseUrl)) {
+    options.ssl = 'require';
+  }
+  return options;
 }
 
 type DbGlobals = typeof globalThis & { __azzelDbClient?: Sql };
@@ -68,7 +98,7 @@ export function getDbClient(): Sql | null {
   if (!databaseUrl) {
     return null;
   }
-  const sql = postgres(databaseUrl, databasePoolOptions());
+  const sql = postgres(databaseUrl, databasePoolOptions(databaseUrl));
   globals.__azzelDbClient = sql;
   return sql;
 }
