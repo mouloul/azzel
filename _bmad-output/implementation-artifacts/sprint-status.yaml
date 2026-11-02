@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-20-2026 22:35
-last_updated: 11-01-2026 00:00
+last_updated: 11-02-2026 00:00
 project: Azzel
 project_key: NOKEY
 tracking_system: file-system
@@ -98,3 +98,29 @@ development_status:
   8-3-jeu-de-données-fictif-édition-complète: review
   8-4-mise-en-ligne-de-la-recette-et-remise-au-comité: review
   epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-socle-de-style-partagé: backlog
+  9-2-accueil-refondu: backlog
+  9-3-coquille-de-la-section-parcours: backlog
+  9-4-inscription-et-checklist-refondues: backlog
+  9-5-résultats-refondus: backlog
+  9-6-non-régression-de-la-vitrine-refondue: backlog
+  epic-9-retrospective: optional
+
+  epic-10: backlog
+  10-1-pwa-volontaires-refondue: backlog
+  10-2-app-coureurs-refondue: backlog
+  10-3-back-office-refondu: backlog
+  10-4-non-régression-des-surfaces-d-exploitation: backlog
+  epic-10-retrospective: optional
+
+  epic-11: backlog
+  11-1-pipeline-gpx-vers-parcours-json: backlog
+  11-2-fond-cartographique-de-production-et-attributions: backlog
+  11-3-carte-3d-du-parcours: backlog
+  11-4-profil-altimétrique-et-graphe-de-technicité: backlog
+  11-5-curseur-partagé-et-bascule-d-épreuve: backlog
+  11-6-confort-de-lecture-du-parcours: backlog
+  11-7-barrières-horaires-sur-le-parcours: backlog
+  epic-11-retrospective: optional

@@ -4,6 +4,7 @@ stepsCompleted:
   - step-01-validate-prerequisites
   - step-02-design-epics
   - step-03-create-stories
+  - 2026-11-02 extension epopees 9-10-11 (step-01 a step-03)
 inputDocuments:
   - ../prds/prd-Azzel-2026-10-19/prd.md
   - ../architecture/architecture-Azzel-2026-10-19/ARCHITECTURE-SPINE.md
@@ -13,6 +14,7 @@ inputDocuments:
   - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/note-licences-cartographiques.md
   - ../../brainstorming/brainstorm-carte-3d-parcours-course-2026-10-23/poc/
   - ../../implementation-artifacts/note-archi-winston-deploiement-vercel.md
+  - ../../implementation-artifacts/maquettes-refonte-design-2026-11-02.md
 ---
 
 # Azzel - Epic Breakdown
@@ -56,7 +58,7 @@ FR-27: Isolation des données par organisation (triplet organisation → événe
 <!-- Extension épopée 8 — carte 3D du parcours (source : brainstorm 2026-10-23, périmètre MUST + SHOULD) -->
 
 FR-28: Pipeline build-time GPX → `parcours.json` — entrée : export GPX **manuel** de la trace relevée (montre Garmin → Garmin Connect ou Strava), altitude barométrique embarquée dans le fichier. Traitements : rejet des points à vitesse implausible (le relevé d'essai contient un téléport de 366 m en 1 s), lissage du bruit, distances cumulées (`s`), altitude **lue dans le GPX** (aucun échantillonnage du MNT), D+/D− global et par segment inter-checkpoint. Le **seuil d'accumulation du D+ est fixé une fois pour toutes dans le pipeline** et documenté : sur le relevé d'essai, le D+ varie de 641 m (brut) à 604 m (seuil 5 m), soit 6 % d'écart selon une constante arbitraire.
-FR-28b: Porte de qualité du relevé — le pipeline refuse ou signale explicitement une trace hors seuils de recevabilité (pas médian entre points, part de la distance couverte par des segments > 30 s, nombre de points à vitesse implausible) et nomme le défaut. Référence mesurée sur le relevé d'essai `activity_24827718657.gpx` : 598 points sur 20,47 km, **69 % de la distance en segments > 30 s** (jusqu'à 483 s et 479 m entre deux points) — inexploitable en l'état pour un tracé officiel.
+FR-28b: Porte de qualité du relevé — le pipeline refuse ou signale explicitement une trace hors seuils de recevabilité (pas médian entre points, part de la distance couverte par des segments > 30 s, nombre de points à vitesse implausible) et nomme le défaut. Deux relevés de référence encadrent les seuils : `activity_24827718657.gpx` **inexploitable** (598 points sur 20,47 km, 69 % de la distance en segments > 30 s, jusqu'à 483 s entre deux points) et `activity_24920331005.gpx` **exploitable** (26 933 points sur 30,68 km, pas médian 1 s, aucun segment > 30 s, boucle fermée à 18 m).
 FR-29: Carte 3D du parcours sur la vitrine — moteur MapLibre GL JS, relief terrarium (`setTerrain`), tracé officiel, marqueurs de checkpoints cliquables (nom, km, altitude, D+ du segment, services).
 FR-30: Profil altimétrique du parcours — couples `(s, altitude)` issus de `parcours.json`, checkpoints positionnés, services et bornes de segment (km + D+) lisibles.
 FR-31: Synchronisation profil ↔ carte par l'abscisse curviligne `s` — curseur partagé bidirectionnel (survol/tap sur le profil déplace le repère sur la carte, et réciproquement) ; `s` est l'unique variable d'état partagée.
@@ -117,8 +119,8 @@ NFR-17: Qualité du relevé terrain (prérequis non logiciel) — le relevé off
 - **Le MNT ne sert plus qu'au rendu.** L'altitude du profil est lue dans le GPX ; le relief terrarium n'intervient que pour le terrain 3D affiché sous la trace. `dem.py` et l'échantillonnage MNT du POC sortent du pipeline de production, conservés au mieux en contrôle croisé hors CI.
 - **Trace gelée à la publication** : une fois le parcours annoncé publiquement, le tracé ne change plus ; toute évolution ultérieure est une nouvelle version explicite de `parcours.json`, jamais une modification silencieuse.
 - **MapLibre ne peut pas servir de mode hors-ligne par préchargement de tuiles** (interdiction de téléchargement massif). Le hors-ligne 3D de l'app coureur passera par le ruban .glb Draco — reporté à l'épopée 6, hors périmètre ici.
-- **Statut du POC : faisabilité technique uniquement, aucune donnée de course réelle.** Le POC a été produit à partir de points pris au hasard autour du village d'Ait-Aissi ; ses chiffres (15 614 m, 337 points, D+ 1 156 m, 6 checkpoints et leurs services) sont **fictifs** et ne tranchent rien sur la vraie course. Seuls les **motifs d'intégration** sont acquis et réutilisables : `poc/index.html` (carte MapLibre, bascules satellite/topo et 3D, profil SVG synchronisé, curseur partagé, bandeau repliable). `poc/route.py` et `poc/dem.py` sont périmés en production (cf. source de la trace ci-dessus).
-- **Relevé d'essai disponible** : `docs/GPX/activity_24827718657.gpx` (Garmin Connect, « Ait aissi Trail petite boucle essai », 2026-10-23) — 598 points, 20,47 km, 4 h 18, altitude 271–673 m, D+ 641 m / D− 687 m brut. Sert de jeu d'essai au pipeline et de référence chiffrée pour les seuils de recevabilité ; **n'est pas le tracé officiel** (non bouclé, enregistrement intelligent, ne correspond ni à la Moyenne 10–15 km ni à la Longue ~35 km du PRD).
+- **Statut du POC : `poc/index.html` est le modèle d'intégration de la carte**, à reprendre tel quel dans la vitrine (carte MapLibre, bascules satellite/topo et 3D, profil SVG synchronisé, curseur partagé, bandeau repliable). Il tourne désormais sur le relevé réel `activity_24920331005.gpx` et non plus sur des points fictifs ; ses **checkpoints restent arbitraires** (« Point 1 » à « Point 3 », posés tous les 7 km) et ne préjugent pas des ravitaillements réels. Motifs acquis et réutilisables : `poc/index.html` (carte MapLibre, bascules satellite/topo et 3D, profil SVG synchronisé, curseur partagé, bandeau repliable). `poc/route.py` et `poc/dem.py` sont périmés en production (cf. source de la trace ci-dessus).
+- **Relevés d'essai disponibles** : `docs/GPX/activity_24920331005.gpx` (« essai trail ait ainsi 2027 », Garmin Connect, 2026-10-31) — 26 933 points, 30,68 km, 8 h 14, altitude 221–837 m, D+ 1 459 m / D− 1 462 m brut, **pas médian 1 s, aucun segment > 30 s, boucle fermée (18 m)**. C'est ce relevé qui alimente désormais le POC (`parcours.json` : 28,0 km, D+ 1 280 m, 5 points de passage) et les maquettes. Le premier relevé `docs/GPX/activity_24827718657.gpx` (598 points, 20,47 km, enregistrement intelligent) reste au dépôt comme **contre-exemple** de la porte de qualité FR-28b. Ni l'un ni l'autre n'est le tracé officiel : le découpage des deux épreuves sur cette géométrie reste à arrêter.
 - **Position live sur la carte 3D : hors périmètre** (WON'T de cette itération). Cadrage déjà arrêté pour plus tard — fusion scans checkpoints + ping GPS 10 min, point figé sur le dernier `s` connu avec « vu il y a X min », aucune extrapolation inter-ping.
 - **Questions ouvertes d'architecture** : lieu d'exécution du pipeline (script Python hors CI vs script Node en build web) ; versionnement de `parcours.json` par édition ; altitude brute du GPX vs correction d'altitude Strava, et seuil d'accumulation du D+ ; ordre d'enchaînement des boucles sur l'épreuve longue (le pipeline doit supporter les deux cas) ; valeur par défaut de l'exagération verticale dans la plage x1,5–2 ; modélisation des barrières horaires (rattachement aux checkpoints de l'épopée 4 ou entité propre).
 - **Hors périmètre, à arbitrer plus tard** : la carte publique livrée en story 7.3 affiche les dossards sur **un** tracé ; avec deux épreuves partageant une portion, elle devra filtrer par épreuve ou superposer les deux. L'information existe déjà (le dossard porte son épreuve, FR-2/FR-15), l'affichage n'a pas été conçu pour.
@@ -161,6 +163,19 @@ UX-DR-29: Bloc d'attributions — permanent, lisible (contraste AA+), jamais sup
 UX-DR-30: Dégradation et motion — sans WebGL ou tuiles injoignables, un bloc parcours textuel complet remplace la carte avec un message clair ; `prefers-reduced-motion` neutralise le survol animé et les transitions de caméra ; aucun mouvement automatique non demandé.
 UX-DR-31: Épreuve active toujours qualifiée — sur la portion commune, un même checkpoint affiche un kilomètre différent selon l'épreuve ; l'épreuve active reste donc visible en permanence au contact du kilométrage, sur la carte comme sur le profil. Basculer d'épreuve ne laisse jamais un chiffre orphelin de son référentiel, et la bascule se lit comme voulue, jamais comme un défaut.
 
+<!-- Extension épopée 9 — refonte du design de l'application (source : maquettes du 2026-11-02) -->
+
+UX-DR-32: Vocabulaire de forme unifié et modernisé — actions et chips en pilule (rayon plein), cartes 14–20 px, fin du mélange 4/6/8 px hérité ; le même vocabulaire sur les quatre surfaces (vitrine, PWA volontaires, app coureurs, back-office).
+UX-DR-33: Hero d'accueil sombre plein cadre — dégradé radial forêt, silhouette de crête en deux plans (SVG, aucune image bitmap), titre condensé très grande échelle (≈136 px desktop, fluide jusqu'au mobile), accent ocre sur le nom de l'événement, rail de chiffres clés cloisonné (épreuves, D+, altitude, places) à droite du titre.
+UX-DR-34: Bande bilan compacte — les chiffres de l'édition précédente tiennent sur une bande horizontale fond forêt, et non plus sur une section pleine hauteur de cartes.
+UX-DR-35: Section parcours sur la page d'accueil — sélecteur d'épreuve (Longue / Moyenne) pilotant **ensemble** carte, profil, synthèse chiffrée et liste des points de passage ; l'épreuve active est l'unique état partagé de la section, en cohérence avec UX-DR-31.
+UX-DR-36: Graphe de technicité du parcours — profil altimétrique coloré par pente, échelle verrouillée : < 5 % roulant, 5–12 % soutenu, 12–20 % raide, > 20 % très raide ; légende en trait **et** en texte, jamais la couleur seule ; les quatre teintes diffèrent aussi en clarté.
+UX-DR-37: Panneau carte 3D intégré à la page — barre de contrôles en chips labellisés (bascule 3D, survol, exagération du relief, fond), mention de la source du relief, indication explicite de l'interaction (glisser pour pivoter, molette pour zoomer), hauteur contenue : la carte ne prend jamais le premier écran (UX-DR-25).
+UX-DR-38: Colonne de synthèse d'épreuve — distance, D+, D−, plage d'altitude, heure de départ et barrière horaire en chiffres monospace alignés, suivies de la liste des points de passage avec leurs services en toutes lettres.
+UX-DR-39: Convergence des feuilles de style — les 14 feuilles CSS actuelles d'`apps/web` (1 485 lignes de `globals.css`, 446 de `volontaires.css`, 273 de `scan.css`, etc.) convergent vers un socle commun de classes sémantiques : en-tête de surface, pastille d'état, barre de navigation basse, tableau dense, carte. Aucune surface ne redéfinit localement une valeur de token.
+UX-DR-40: Non-régression performance — budget vitrine < 300 Ko au premier chargement et premier rendu lisible < 5 s en 3G lent (NFR-2) tenus **malgré** le hero refondu et la section parcours ; carte 3D et profil chargés hors chemin critique, après le contenu textuel.
+UX-DR-41: Non-régression accessibilité — le plancher UX-DR-23 est reconduit écran par écran sur tout ce qui est refondu : focus visible 2 px, cibles ≥ 44 px jamais au bord, contrastes AA y compris sur les libellés gris, `prefers-reduced-motion` neutralisant les transitions, zoom 200 % sans perte.
+
 ### FR Coverage Map
 
 FR-1: Épopée 1 — Inscription email vérifié + session unique (iam)
@@ -190,6 +205,26 @@ FR-24: Épopée 5 — Tableau de bord live, fraîcheur affichée
 FR-25: Épopée 5 — Alertes hors-délais
 FR-26: Épopée 7 — Rapports post-course + export « commande » J-10
 FR-27: Épopée 1 — Schéma organisation_id + RLS dès la V1
+FR-28: Épopée 11 — Pipeline build-time GPX → parcours.json (lissage, s, D+/D−)
+FR-28b: Épopée 11 — Porte de qualité du relevé, défaut nommé
+FR-29: Épopée 11 — Carte 3D MapLibre, relief terrarium, checkpoints cliquables
+FR-30: Épopée 11 — Profil altimétrique et graphe de technicité
+FR-31: Épopée 11 — Curseur partagé carte ↔ profil par l'abscisse s
+FR-32: Épopée 11 — Attributions permanentes, adaptées au fond actif
+FR-33: Épopée 11 — Arbitrage du fond cartographique de production (bloquant)
+FR-34: Épopée 11 — Survol animé du parcours (Should)
+FR-35: Épopée 11 — Exagération verticale et bascule 3D on/off (Should)
+FR-36: Épopée 11 — Bandeau profil repliable (Should)
+FR-37: Épopée 11 — Barrières horaires sur le parcours (Should, dépendance CHECKPOINT épopée 4)
+FR-38: Épopée 11 — Deux épreuves sur géométrie partagée, s par épreuve
+FR-39: Épopée 11 — Checkpoints de l'édition positionnés sur la trace, km par épreuve
+
+### Décisions de découpage (2026-11-02)
+
+- **Axe retenu : calendaire.** La refonte est scindée selon l'horizon de livraison — surface publique (épopée 9) contre outils du jour J (épopée 10) — et non selon la nature du travail. Le parcours 3D reste une épopée propre (11) parce que son fond cartographique porte un arbitrage de licence bloquant : le fondre dans la refonte prendrait celle-ci en otage.
+- **Stories 2.1 et 2.2 remplacées en habillage.** `spec-2-1-page-d-annonce-publique-minimale.md` et `spec-2-2-identite-village-piliers-frises-sombre.md` gardent leur statut et leurs critères d'acceptation, qui restent exigibles et sont repris dans les stories 9.2 et 9.3. Seul l'habillage est remplacé.
+- **Risque assumé.** Les épopées 9 et 10 refondent des écrans livrés par 36 stories en statut `review`, dont la recette humaine n'a pas été passée. Le markup sur lequel portent les tests existants et les scénarios de recette non joués sera réécrit : la preuve de ce qui n'a jamais été vérifié disparaît avec lui. Décision prise en connaissance de cause le 2026-11-02 ; les documents `scenarios-recette-epic-*.md` devront être réalignés après refonte.
+- **Échéance.** Aucune story n'est calée sur le jalon du 15/11/2026 du PRD, faute d'arbitrage sur sa validité.
 
 ## Epic List
 
@@ -224,6 +259,21 @@ Yacine installe l'app native (Expo — stores + repli APK), y retrouve dossier e
 ### Epic 7: La course visible de l'extérieur
 Classements par épreuve (départs échelonnés), résultats en direct partageables (jamais incohérents, suivi anonyme compté), carte publique anonyme (tracé GPX, pastilles dossards, positions > 1 h estompées) et rapports chiffrés post-course pour le directoire + export « commande » J-10.
 **FRs covered:** FR-15, FR-16, FR-19 (affichage public), FR-26
+
+### Epic 9: Refonte de la vitrine publique
+Tout visiteur retrouve une vitrine qui se lit d'un coup d'œil : accueil à hero plein cadre, section parcours avec sélecteur d'épreuve, inscription en étapes, résultats. Vocabulaire de forme unique sur toute la surface publique, socle de classes sémantiques partagé en remplacement des feuilles CSS divergentes, budget 3G et plancher d'accessibilité tenus écran par écran. Livrable **sans** la carte 3D : la section parcours reste complète en texte (UX-DR-30).
+**FRs covered:** aucune nouvelle — refonte de FR-21, FR-22, FR-23 déjà livrés
+**UX-DRs covered:** UX-DR-32, 33, 34, 38, 39, 40, 41
+
+### Epic 10: Refonte des surfaces d'exploitation
+Les trois outils du jour J — PWA volontaires, app coureurs, back-office — passent sur le vocabulaire visuel de l'épopée 9, et les écarts aux spécifications UX déjà validées sont corrigés au passage (voyants de scan sous-dimensionnés, bandeaux de synchronisation, densité des tableaux admin).
+**FRs covered:** aucune nouvelle — refonte des surfaces de FR-7 à FR-14, FR-24, FR-26
+**UX-DRs covered:** UX-DR-32, 39, 41 ; reconduction de UX-DR-6 à UX-DR-12
+
+### Epic 11: Le parcours en 3D
+Le visiteur voit la course avant de la courir : pipeline build-time GPX → `parcours.json` avec porte de qualité, carte MapLibre à relief terrarium reprenant `poc/index.html`, profil altimétrique coloré par pente, curseur partagé carte ↔ profil par l'abscisse curviligne `s`, attributions permanentes, fond cartographique arbitré, deux épreuves sur géométrie partagée. Se branche dans la coquille livrée par la story 9.3 ; dégradation textuelle complète sans WebGL.
+**FRs covered:** FR-28, FR-28b, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39
+**UX-DRs covered:** UX-DR-25 à UX-DR-31, 35, 36, 37
 
 ## Epic 1: S'inscrire et boucler son dossier
 
@@ -840,3 +890,396 @@ So that je puisse me former à l'outil et dire ce qui ne va pas, longtemps avant
 **And** les emails sortants portent une mention explicite d'environnement de démonstration à données fictives, pour qu'un message égaré ne soit jamais pris pour une communication officielle
 **And** le `Reply-To` renvoie vers la boîte humaine de l'événement
 **And** un enregistrement SPF unique existe sur le domaine : deux enregistrements SPF font échouer les deux.
+
+
+## Epic 9: Refonte de la vitrine publique
+
+Tout visiteur retrouve une vitrine qui se lit d'un coup d'œil : accueil à hero plein cadre, section parcours avec sélecteur d'épreuve, inscription en étapes, résultats. Vocabulaire de forme unique sur toute la surface publique, socle de classes sémantiques partagé en remplacement des feuilles CSS divergentes, budget 3G et plancher d'accessibilité tenus écran par écran. Livrable sans la carte 3D : la section parcours reste complète en texte.
+
+Référence visuelle : `_bmad-output/implementation-artifacts/maquettes-refonte-design-2026-11-02.md` (artboards `Main`, `Inscription`, `Resultats`).
+
+### Story 9.1: Socle de style partagé
+
+As a développeur de l'équipe Azzel,
+I want un socle de classes sémantiques dérivé des tokens, au lieu de quatorze feuilles qui redéfinissent chacune leurs valeurs,
+So that un changement de charte se fasse en un endroit et qu'aucun écran ne dérive silencieusement.
+
+**Acceptance Criteria:**
+
+**Given** les quatorze feuilles CSS actuelles d'`apps/web` — `globals.css` (1 485 lignes), `volontaires/volontaires.css` (446), `volontaires/scan/scan.css` (273), `tokens-synchronises.css` (159), `espace-coureur/e-dossard/e-dossard.css` (143), `resultats/resultats.css` (109), `admin/course/course.css` (93), `vitrine-textes.css` (52) et les six feuilles admin résiduelles
+**When** le socle est posé
+**Then** un jeu de classes sémantiques couvre les primitives partagées — action (pilule), chip, carte, en-tête de surface, pastille d'état, tableau dense, champ de formulaire — chacune lisant exclusivement les tokens de `packages/shared/src/tokens.ts` (UX-DR-32, UX-DR-39)
+**And** aucune feuille de surface ne redéfinit une valeur de couleur, de rayon, d'espacement ou de graisse : toute valeur littérale restante est soit justifiée en commentaire, soit remontée en token
+**And** le vocabulaire de rayons est unifié — pilule pour les actions et les chips, 14 à 20 px pour les cartes — et le mélange 4/6/8 px hérité disparaît de la surface publique
+**And** `packages/shared/src/tokens.test.ts` continue de passer sans modification : la parité clair/sombre et les valeurs de la charte ne bougent pas
+
+**Given** le socle posé
+**When** la suite de tests est exécutée
+**Then** `pnpm test` et `pnpm typecheck` passent sur les trois paquets
+**And** aucun écran existant n'est visuellement cassé : les stories suivantes refondent, celle-ci ne change que la provenance des valeurs.
+
+### Story 9.2: Accueil refondu
+
+As a visiteur qui découvre la course,
+I want une page d'accueil qui me dise en un écran de quoi il s'agit et quand,
+So that je sache en trois secondes si cette course est pour moi.
+
+**Acceptance Criteria:**
+
+**Given** la page `apps/web/src/app/page.tsx` et son rendu serveur mis en cache 60 s
+**When** la refonte est appliquée
+**Then** le hero occupe le premier écran : fond sombre à dégradé radial forêt, silhouette de crête en deux plans dessinée en SVG — aucune image bitmap ajoutée au chemin critique —, titre condensé à très grande échelle avec le nom de l'événement en accent ocre, date de l'édition, et rail de chiffres clés cloisonné (épreuves, D+ maximal, plage d'altitude, places) (UX-DR-33)
+**And** les chiffres du bilan de l'édition précédente tiennent sur une bande horizontale fond forêt, et non plus sur une section pleine hauteur de cartes (UX-DR-34)
+**And** les quatre piliers, l'appel aux bénévoles et le bloc partenaires reprennent le vocabulaire de formes de la story 9.1
+
+**Given** les critères d'acceptation des stories 2.1 et 2.2, qui restent exigibles
+**When** l'accueil refondu est servi
+**Then** la mention « sous l'égide de la fédération et du ministère des sports » reste visible sans défilement conditionnel (FR-21)
+**And** les frises kabyles et les glyphes des piliers sont conservés, décoratifs, `aria-hidden`, jamais derrière du texte (UX-DR-3, UX-DR-4)
+**And** le bloc sponsors conserve la bascule option A / option B sans dev, lue en base (FR-22)
+**And** le premier chargement reste sous 300 Ko et le premier rendu lisible sous 5 s en 3G lent (NFR-2, UX-DR-40) — mesuré, pas supposé
+
+**Given** un visiteur sur téléphone
+**When** il ouvre l'accueil
+**Then** le titre du hero descend par paliers jusqu'à rester lisible sans débordement horizontal
+**And** le rail de chiffres passe sous le titre au lieu de le comprimer
+**And** aucune cible tactile ne descend sous 44 px ni ne touche le bord de l'écran.
+
+### Story 9.3: Coquille de la section parcours
+
+As a coureur qui hésite entre les deux épreuves,
+I want comparer les deux parcours sur la page d'accueil,
+So that je choisisse mon épreuve sans aller chercher un PDF.
+
+**Acceptance Criteria:**
+
+**Given** l'accueil refondu de la story 9.2
+**When** la section parcours est ajoutée
+**Then** un sélecteur d'épreuve pilote d'un seul geste l'ensemble de la section : synthèse chiffrée, liste des points de passage et emplacements réservés à la carte et au profil (UX-DR-35)
+**And** l'épreuve active est l'unique état partagé de la section ; basculer n'affiche jamais un kilométrage orphelin de son référentiel (UX-DR-31)
+**And** la synthèse donne distance, D+, D−, plage d'altitude, heure de départ et barrière horaire en chiffres monospace alignés, suivie des points de passage avec leurs services en toutes lettres — jamais en icône seule (UX-DR-38, UX-DR-26)
+
+**Given** que la carte 3D et le profil ne sont pas encore livrés (épopée 11)
+**When** un visiteur ouvre la section
+**Then** elle est complète et utile sans eux : le bloc parcours textuel tient seul, avec un emplacement explicitement annoncé pour la visualisation à venir, jamais un cadre vide ni un message d'erreur (UX-DR-30)
+**And** le contrat de données que consommera l'épopée 11 est posé : la section lit une structure unique par épreuve (métadonnées, points de passage) et la story 11.1 la remplira depuis `parcours.json` sans changer le rendu
+
+**Given** le budget de la vitrine
+**When** la section est rendue
+**Then** elle n'ajoute aucune dépendance JavaScript au chemin critique
+**And** la section ne prend jamais le premier écran de la page (UX-DR-25).
+
+### Story 9.4: Inscription et checklist refondues
+
+As a coureur qui monte son dossier,
+I want voir où j'en suis et ce qu'il me reste à faire,
+So that je ne laisse pas mon inscription à moitié faite.
+
+**Acceptance Criteria:**
+
+**Given** les écrans `apps/web/src/app/inscription/` et la checklist de dossier
+**When** la refonte est appliquée
+**Then** les étapes du dossier sont matérialisées par un fil d'étapes indiquant l'étape courante par la forme et par le texte, jamais par la couleur seule
+**And** chaque champ porte un `<label>` associé, les champs obligatoires sont annoncés en texte, et les messages d'erreur suivent l'enveloppe d'erreur unique avec le bouton d'assistance (UX-DR-21, UX-DR-11)
+**And** le dépôt de la preuve de paiement conserve la compression client ≤ 300 Ko avec retour visible, le rejet de format listant les formats acceptés, et le brouillon conservé (UX-DR-20)
+**And** la checklist conserve son compteur de pièces, l'action nommée pour chaque pièce manquante, et le bandeau « Dossier validé — dossard prêt » quand tout est vert (UX-DR-10, FR-5)
+
+**Given** un dossier en cours sur téléphone
+**When** l'écran est affiché
+**Then** le formulaire tient en une colonne, le récapitulatif passe sous le formulaire
+**And** les critères d'acceptation des stories 1.3, 1.4, 1.5 et 1.7 restent satisfaits : clôture J-10, horodatage de la version des documents acceptés, formats refusés avec message clair.
+
+### Story 9.5: Résultats refondus
+
+As a proche d'un coureur,
+I want retrouver un coureur et lire son temps sans effort,
+So that je suive la course depuis mon téléphone.
+
+**Acceptance Criteria:**
+
+**Given** la page `apps/web/src/app/resultats/`
+**When** la refonte est appliquée
+**Then** la recherche par nom ou dossard, le filtre d'épreuve et le filtre de catégorie sont visibles sans défilement sur mobile
+**And** le tableau de classement reste lisible en écran étroit : conteneur à défilement horizontal propre, en-têtes de colonnes associés, places et temps en chiffres monospace alignés
+**And** les mentions « Classement provisoire » et la fraîcheur des données restent affichées en toutes lettres (UX-DR-22, NFR-5)
+**And** l'état vide avant départ affiche « Pas encore de partants — départ à HH:MM »
+
+**Given** les critères des stories 7.1 et 7.2
+**When** la page est rafraîchie
+**Then** aucun classement partiel incohérent n'est exposé (NFR-4)
+**And** le paramètre de suivi anonyme des partages continue d'être compté côté serveur (FR-16, SM-5).
+
+### Story 9.6: Non-régression de la vitrine refondue
+
+As a responsable de la mise en ligne,
+I want la preuve chiffrée que la refonte n'a rien dégradé,
+So that la vitrine reste utilisable sur un téléphone d'entrée de gamme en 3G.
+
+**Acceptance Criteria:**
+
+**Given** les quatre écrans refondus par les stories 9.2 à 9.5
+**When** la mesure de performance est passée
+**Then** le premier chargement de l'accueil reste sous 300 Ko et le premier rendu lisible sous 5 s en 3G lent, mesure consignée écran par écran (NFR-2, UX-DR-40)
+**And** aucune police supplémentaire n'est chargée au-delà de celles déjà servies, et les SVG décoratifs sont inlinés plutôt que requêtés
+
+**Given** le plancher d'accessibilité UX-DR-23
+**When** chaque écran refondu est audité
+**Then** le focus est visible à 2 px sur tout élément interactif, les cibles font au moins 44 px et ne touchent jamais le bord, l'écart entre deux cibles est d'au moins 8 px
+**And** tous les textes passent le contraste AA, y compris les libellés gris de petite taille — un ratio de 4,3:1 est un échec, pas un arrondi
+**And** le zoom navigateur à 200 % ne provoque ni perte de contenu ni défilement horizontal, et le pincement n'est jamais désactivé
+**And** `prefers-reduced-motion` neutralise toutes les transitions ajoutées par la refonte (UX-DR-41)
+**And** le document `_bmad-output/implementation-artifacts/scenarios-recette-epic-2.md` est réaligné sur les écrans refondus — les étapes qui désignent un élément disparu sont corrigées, pas supprimées.
+
+
+## Epic 10: Refonte des surfaces d'exploitation
+
+Les trois outils du jour J — PWA volontaires, app coureurs, back-office — passent sur le vocabulaire visuel posé par la story 9.1, et les écarts aux spécifications UX déjà validées sont corrigés au passage. Ces surfaces ne sont pas publiques : la priorité y est la lisibilité en plein soleil, au bout du bras, avec des gants, et non l'effet.
+
+Référence visuelle : artboards `Volontaires`, `VolontairesScan`, `CoureurEdossard`, `CoureurSuivi`, `AdminDossiers` des maquettes du 2026-11-02.
+
+**Dépendance :** la story 9.1 doit être livrée — c'est elle qui fournit le socle de classes.
+
+### Story 10.1: PWA volontaires refondue
+
+As a volontaire en poste au ravitaillement,
+I want voir d'un coup d'œil ma mission, l'état de mes envois et le résultat de mon dernier scan,
+So that je ne m'arrête jamais pour comprendre mon écran pendant qu'un coureur attend.
+
+**Acceptance Criteria:**
+
+**Given** les écrans `apps/web/src/app/volontaires/` et `volontaires/scan/`, et leurs feuilles `volontaires.css` (446 lignes) et `scan.css` (273 lignes)
+**When** la refonte est appliquée
+**Then** les deux feuilles consomment le socle de la story 9.1 et ne portent plus que ce qui est propre à ces écrans
+**And** la mission en cours, les missions à suivre et l'état de synchronisation sont hiérarchisés : la mission en cours domine l'écran, l'état de synchro reste visible en permanence sans masquer l'action (UX-DR-8)
+**And** le bandeau de synchronisation affiche « ◷ N passages en attente » puis « ✓ envoyés — file : 0 », et le journal de synchro reste accessible en lecture seule
+
+**Given** la spécification UX-DR-7, à laquelle l'écran de scan actuel déroge
+**When** l'écran de scan est refondu
+**Then** le voyant de résultat occupe une pastille d'au moins 96 px de haut en plein cadre, texte d'au moins 24 px en graisse 800, heure en monospace d'au moins 16 px
+**And** les trois états sont distingués par la forme et le texte autant que par la couleur : succès, « ↻ DÉJÀ PASSÉ » avec l'heure du premier passage, « ⚠ DOSSARD INCONNU » avec le bouton d'appel direct au PC course
+**And** le clignotement ne dépasse jamais un éclat par seconde, et le voyant est annoncé en `aria-live="assertive"`
+**And** le viseur reste plein cadre avec les badges LIVE et heure posés sur un voile d'au moins 96 % d'opacité (UX-DR-6)
+
+**Given** un appareil hors réseau
+**When** le volontaire enchaîne les scans
+**Then** le comportement hors-ligne est inchangé : file locale, confirmation en moins d'une seconde, aucun passage perdu (FR-13, NFR-1, NFR-3)
+**And** les tests existants de la PWA et du service worker passent sans modification de leur intention — seuls les sélecteurs de markup sont réalignés.
+
+### Story 10.2: App coureurs refondue
+
+As a coureur en course,
+I want lire mon dossard et ma progression sans réfléchir,
+So that mon téléphone ne me coûte pas d'attention que je dois au sentier.
+
+**Acceptance Criteria:**
+
+**Given** les écrans `apps/runners/src/ecrans/` — `edossard.tsx`, `suivi.tsx`, `dossier.tsx`, `journal-sync.tsx`, `batterie.tsx` — et le thème de l'application
+**When** la refonte est appliquée
+**Then** le thème de l'app lit les tokens opérationnels de `packages/shared` sans valeur littérale résiduelle, mode sombre par défaut conformément à l'écran e-dossard existant
+**And** l'e-dossard conserve son numéro à 74 px, la mention « HORS-LIGNE PRÊT » en monospace et le QR sur carte blanche à coins arrondis (UX-DR-9, FR-7)
+**And** l'écran de suivi hiérarchise progression, position sur le tracé et journal de synchronisation, avec l'état du suivi (activé / désactivé / en pause) toujours lisible en haut d'écran
+**And** les actions destructrices ou irréversibles — abandon, arrêt du suivi — sont distinctes des actions courantes par la forme, pas seulement par la couleur
+
+**Given** un téléphone Android d'entrée de gamme, en plein soleil
+**When** les écrans sont affichés
+**Then** aucune information ne dépend du survol, les cibles font au moins 44 dp, les contrôles de pause et d'arrêt du scan au moins 64 dp (UX-DR-23, UX-DR-24)
+**And** `prefers-reduced-motion` rend les transitions statiques
+
+**Given** le e-dossard mis en cache
+**When** l'appareil est hors réseau depuis trente jours
+**Then** le QR reste lisible et l'écran reste complet (NFR-6) — la refonte ne touche ni au cache ni à la génération du code.
+
+### Story 10.3: Back-office refondu
+
+As a membre du comité d'organisation,
+I want parcourir les dossiers et piloter la course sur des écrans denses mais lisibles,
+So that je travaille vite sans me tromper de ligne.
+
+**Acceptance Criteria:**
+
+**Given** les écrans `apps/web/src/app/admin/` — dossiers, missions, course, sponsors, contenus, retour-images, rapports, volontaires — et leurs six feuilles CSS résiduelles
+**When** la refonte est appliquée
+**Then** les six feuilles admin convergent sur le socle de la story 9.1 ; la densité est obtenue par l'espacement, jamais en descendant sous le plancher de lisibilité
+**And** les tableaux partagent un même gabarit : en-têtes associés, badges de statut en forme et en texte, dossards et heures en monospace alignés à droite, séparateurs discrets, conteneur à défilement horizontal en écran étroit
+**And** les compteurs de tête de page (validés, à contrôler, acceptations manquantes, dossards attribués) sont lisibles sans survol et renvoient au filtre correspondant
+
+**Given** le tableau de bord live de la story 5.1
+**When** des données arrivent
+**Then** la mise à jour ne provoque pas de clignotement complet de l'écran, la fraîcheur reste affichée en pied (UX-DR-12, NFR-5)
+**And** l'alerte hors-délais conserve son texte intégral, sa période de clignotement d'au moins une seconde et ses actions « Appeler le secteur » et « Saisir l'abandon »
+
+**Given** les tests d'écrans admin existants
+**When** la suite est exécutée
+**Then** elle passe : `missions-manager.test.tsx` et les tests de routes admin ne sont réalignés que sur les sélecteurs, jamais sur l'intention.
+
+### Story 10.4: Non-régression des surfaces d'exploitation
+
+As a responsable du jour J,
+I want la preuve que la refonte n'a rien cassé de ce qui doit marcher sans réseau,
+So that personne ne découvre un défaut au km 18 avec un coureur devant lui.
+
+**Acceptance Criteria:**
+
+**Given** les trois surfaces refondues par les stories 10.1 à 10.3
+**When** le parcours hors-ligne est éprouvé de bout en bout
+**Then** retrait, scan de passage, file d'attente, reprise de réseau et synchronisation par lots fonctionnent à l'identique (FR-8, FR-13, FR-14)
+**And** la confirmation de scan reste sous une seconde sur le repli iOS Safari (NFR-1)
+**And** aucun actif nouvellement introduit par la refonte n'échappe au service worker : un écran refondu chargé hors-ligne n'affiche jamais de style manquant
+
+**Given** le plancher d'accessibilité UX-DR-23
+**When** chaque écran d'exploitation est audité
+**Then** focus visible, cibles d'au moins 44 px jamais au bord, écart d'au moins 8 px, contrastes AA y compris en mode sombre, icônes labellisées, décorations `aria-hidden`
+**And** les trois canaux de retour du scan — visuel, sonore, vibration — restent distincts et testés (UX-DR-6)
+**And** les documents `scenarios-recette-epic-3.md`, `-4.md` et `-5.md` sont réalignés sur les écrans refondus.
+
+
+## Epic 11: Le parcours en 3D
+
+Le visiteur voit la course avant de la courir : pipeline build-time GPX → `parcours.json` avec porte de qualité, carte MapLibre à relief terrarium reprenant les motifs de `poc/index.html`, profil altimétrique coloré par pente, curseur partagé carte ↔ profil par l'abscisse curviligne `s`, attributions permanentes, fond cartographique arbitré, deux épreuves sur géométrie partagée.
+
+**Dépendance :** la story 9.3 fournit la coquille et le contrat de données. La story 11.2 conditionne 11.3 à 11.6 : tant que le fond de production n'est pas arbitré, rien ne part en ligne.
+
+**Relevés de référence :** `docs/GPX/activity_24920331005.gpx` (exploitable — 26 933 points, pas médian 1 s, boucle fermée) et `docs/GPX/activity_24827718657.gpx` (contre-exemple — 598 points, 69 % de la distance en segments > 30 s).
+
+### Story 11.1: Pipeline GPX vers parcours.json
+
+As a organisateur qui relève le tracé sur le terrain,
+I want transformer mon export GPX en données de parcours vérifiées,
+So that le site publie des chiffres dont je réponds, et refuse un relevé qui n'en vaut pas la peine.
+
+**Acceptance Criteria:**
+
+**Given** un export GPX manuel versionné dans `docs/GPX/`, avec altitude barométrique embarquée
+**When** le pipeline est exécuté
+**Then** il produit `parcours.json` : géométrie de base une seule fois, vues d'épreuve, `profile[[dist_m, alt]]`, points de passage et métadonnées (FR-28)
+**And** l'altitude est lue dans le GPX, jamais échantillonnée depuis le modèle numérique de terrain — le relief ne sert plus qu'au rendu
+**And** les points à vitesse implausible sont rejetés, le bruit lissé, les distances cumulées calculées, le D+ et le D− produits globalement et par segment entre points de passage
+**And** le seuil d'accumulation du D+ est une constante unique du pipeline, documentée dans le code avec son effet chiffré — sur le premier relevé d'essai, le D+ passe de 641 m brut à 604 m au seuil de 5 m, soit 6 % d'écart pour une constante arbitraire
+
+**Given** la porte de qualité (FR-28b)
+**When** un relevé hors seuils est soumis
+**Then** le pipeline le refuse ou le signale en nommant le défaut — pas médian, part de la distance en segments de plus de 30 s, nombre de points à vitesse implausible — jamais un échec muet
+**And** `activity_24827718657.gpx` est refusé par cette porte, `activity_24920331005.gpx` est accepté : les deux cas sont couverts par un test
+
+**Given** deux épreuves partageant départ, arrivée et une portion de sentier (FR-38)
+**When** le pipeline produit les vues d'épreuve
+**Then** `s` est calculé par épreuve et jamais globalement
+**And** chaque point de passage porte une identité unique sur la géométrie de base — celle partagée avec l'entité CHECKPOINT de l'épopée 4 — et un kilométrage distinct par épreuve traversée, plus ses services (FR-39)
+**And** les points de passage du POC, posés arbitrairement tous les 7 km, ne sont pas repris comme ravitaillements réels
+
+**Given** un tracé annoncé publiquement
+**When** une évolution du tracé est nécessaire
+**Then** elle produit une nouvelle version explicite de `parcours.json`, jamais une modification silencieuse.
+
+### Story 11.2: Fond cartographique de production et attributions
+
+As a organisation qui vend des inscriptions et affiche des sponsors,
+I want un fond de carte dont le droit d'usage couvre réellement notre situation,
+So that la carte ne devienne jamais un problème juridique à trois semaines de la course.
+
+**Acceptance Criteria:**
+
+**Given** la note licences, dont le paragraphe 3 conditionne EOX Sentinel-2 cloudless au caractère strictement non monétisé du projet, et Azzel qui a déjà des inscriptions payantes (FR-4) et un bloc sponsors visible (FR-22)
+**When** l'arbitrage est rendu
+**Then** une décision tracée retient l'une des options — ArcGIS Location Platform avec clé, fournisseur payant, ou OpenTopoMap seul sans fond satellite — avec son coût, son plafond d'usage et sa clause de monétisation cités (FR-33)
+**And** les endpoints Esri sans clé du POC ne partent pas en production
+**And** la clé éventuelle est tenue hors du dépôt et restreinte au domaine de production
+
+**Given** les fonds disponibles et le relief terrarium
+**When** une carte est affichée
+**Then** un bloc d'attributions est visible en permanence, adapté au fond actif, au texte conforme au paragraphe 5 de la note licences (FR-32)
+**And** il n'est jamais superposé à du contenu, reste lisible au contraste AA, et le déploiement d'un détail ne fait pas disparaître la mention courte (UX-DR-29).
+
+### Story 11.3: Carte 3D du parcours
+
+As a coureur qui prépare sa course,
+I want voir le relief que je vais traverser,
+So that je comprenne l'effort avant de m'inscrire.
+
+**Acceptance Criteria:**
+
+**Given** la coquille de la story 9.3, le `parcours.json` de la story 11.1 et le fond arbitré de la story 11.2
+**When** la carte est intégrée
+**Then** elle reprend les motifs de `poc/index.html` : MapLibre GL JS, relief terrarium en `raster-dem` posé par `setTerrain`, tracé officiel de l'épreuve active, bascule entre fond satellite et fond topographique, `NavigationControl` avec visualisation du tangage (FR-29)
+**And** les points de passage sont des pastilles numérotées sur la trace, ouvrant au tap comme au clavier une fiche donnant nom, kilomètre, altitude, D+ du segment amont et services en icône et en texte (UX-DR-26)
+**And** la barre de contrôles est faite de chips labellisés — bascule 3D, survol, exagération du relief, choix du fond — accompagnés de la source du relief et d'une indication explicite de l'interaction (glisser pour pivoter, molette pour zoomer) ; cibles d'au moins 44 px, jamais collées au bord de l'écran (UX-DR-25, UX-DR-37)
+**And** la carte ne charge pas dans le chemin critique : elle est différée après le contenu textuel, et le budget de l'accueil reste tenu (NFR-2)
+
+**Given** un navigateur sans WebGL ou des tuiles injoignables
+**When** la page est ouverte
+**Then** le bloc parcours textuel de la story 9.3 reste affiché et un message explique l'indisponibilité — jamais un cadre vide (UX-DR-30).
+
+### Story 11.4: Profil altimétrique et graphe de technicité
+
+As a coureur qui lit un profil,
+I want voir où ça monte, où ça descend et à quel point c'est raide,
+So that je règle mon allure avant de partir.
+
+**Acceptance Criteria:**
+
+**Given** les couples `(s, altitude)` de `parcours.json`
+**When** le profil est rendu
+**Then** il est dessiné en SVG lisible d'abord sur téléphone, avec les points de passage repérés et les bornes de segment donnant kilomètre et D+ (FR-30)
+**And** l'aire sous la courbe est colorée par pente selon une échelle verrouillée : moins de 5 % roulant, 5 à 12 % soutenu, 12 à 20 % raide, plus de 20 % très raide (UX-DR-36)
+**And** la légende donne chaque palier en trait et en toutes lettres ; les quatre teintes diffèrent aussi en clarté, de sorte qu'un daltonien ou une impression en niveaux de gris restent lisibles
+**And** la lecture est possible au survol comme au tap — aucune information ne dépend du survol (UX-DR-27)
+**And** les valeurs sous le curseur sont annoncées en texte accessible : kilomètre, altitude, pente.
+
+### Story 11.5: Curseur partagé et bascule d'épreuve
+
+As a visiteur qui explore le parcours,
+I want que la carte et le profil se répondent,
+So that je sache à quel endroit du terrain correspond la bosse que je regarde.
+
+**Acceptance Criteria:**
+
+**Given** la carte de la story 11.3 et le profil de la story 11.4
+**When** le visiteur survole ou touche le profil
+**Then** un repère se déplace sur la carte à la position correspondante, et réciproquement (FR-31)
+**And** `s` est l'unique variable d'état partagée entre les deux surfaces — aucune autre donnée n'est synchronisée
+
+**Given** deux épreuves sur géométrie partagée
+**When** le visiteur bascule d'épreuve dans le sélecteur de la story 9.3
+**Then** carte, profil, synthèse et points de passage basculent ensemble
+**And** sur la portion commune, un même point de passage affiche le kilomètre de l'épreuve active, et l'épreuve active reste visible au contact du kilométrage : aucun chiffre n'est jamais orphelin de son référentiel (UX-DR-31)
+**And** la bascule se lit comme voulue, jamais comme un défaut d'affichage.
+
+### Story 11.6: Confort de lecture du parcours
+
+As a visiteur qui découvre le relief,
+I want survoler le parcours et ajuster ce que je vois,
+So that je me fasse une idée du terrain sans savoir manipuler une carte.
+
+**Acceptance Criteria:**
+
+**Given** la carte et le profil livrés
+**When** le survol animé est déclenché
+**Then** la caméra est paramétrée par `s`, le démarrage et l'arrêt sont explicites, et rien ne démarre tout seul (FR-34)
+**And** `prefers-reduced-motion` neutralise le survol et les transitions de caméra (UX-DR-30)
+
+**Given** les contrôles de rendu
+**When** le visiteur les manipule
+**Then** l'exagération verticale est réglable entre 1,5 et 2, avec une valeur par défaut documentée, et la bascule 3D rend par `setTerrain(null)` une carte 2D pleinement fonctionnelle (FR-35)
+**And** le bandeau du profil est repliable : en-tête cliquable, résumé kilomètres / D+ / nombre de points quand il est replié, état mémorisé, carte correctement redimensionnée au basculement (FR-36, UX-DR-28)
+
+**Given** le périmètre Should de cette story
+**When** l'arbitrage de la story 11.2 interdit le fond visé ou que le calendrier se tend
+**Then** cette story est coupée sans toucher aux stories 11.1 à 11.5.
+
+### Story 11.7: Barrières horaires sur le parcours
+
+As a coureur qui part sur l'épreuve longue,
+I want savoir à quelle heure je dois être passé où,
+So that je sache si je suis dans les temps avant qu'on me le dise.
+
+**Acceptance Criteria:**
+
+**Given** les points de passage de l'édition
+**When** une barrière horaire est définie
+**Then** elle porte une heure limite par point de passage et par épreuve, visible sur le profil et dans la fiche du point de passage (FR-37)
+**And** le modèle retenu — rattachement à l'entité CHECKPOINT de l'épopée 4 ou entité propre — est tranché et documenté dans cette story
+
+**Given** que l'épopée 4 est en recette
+**When** cette story modifie le modèle de données des points de passage
+**Then** l'impact sur les écrans de scan et sur l'arbitrage serveur des passages est évalué et nommé avant toute migration
+**And** aucune modification ne casse les critères d'acceptation des stories 4.3, 4.4 et 4.5 — la dépendance est portée ici, pas rouverte là-bas.

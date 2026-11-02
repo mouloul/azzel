@@ -12,6 +12,11 @@ warnings: []
 deferred: []
 ---
 
+> **Habillage remplacé par la story 9.2 — Accueil refondu (épopée 9, décision du 2026-11-02).**
+> Les critères d'acceptation ci-dessous restent exigibles et sont repris tels quels
+> dans la story de refonte : seule la mise en forme des écrans change. Le statut de
+> cette story et sa recette restent dus.
+
 <intent-contract>
 
 ## Intent
