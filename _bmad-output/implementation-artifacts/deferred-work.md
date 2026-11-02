@@ -79,3 +79,49 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-8-1-fabrique-de-connexion-unique.md`
   summary: Quatre stores n'appliquent pas la garde de rôle applicatif `protegerStore` — `missions`, `chrono`, `rapports`, `tracking` — alors que `db/app-role.ts` annonce la garde « appliquée à TOUS les stores ».
   evidence: `apps/web/src/modules/missions/store.ts` (getMissionsStore), `chrono/store.ts` (getChronoStore), `rapports/store.ts` (getRapportsStore), `tracking/store.ts` (getTrackingStore) : le store est construit directement sur `sql`, sans passer par `protegerStore(sql, …, isProductionRuntime())`, contrairement à `inscriptions`, `sponsors`, `contenus`, `retour-images`, `notifications/outbox-store` et à la forme IAM (`createAppRoleGuard`). Conséquence : une `DATABASE_URL` pointant sur le rôle propriétaire (BYPASSRLS) continuerait de servir ces quatre surfaces en production, là où les autres refusent. L'écart préexiste au refactor de connexion 8.1 et n'a pas été corrigé avec lui : mêler un changement de comportement sécurité à un refactor de connexion aurait rendu la revue des deux impossible. Correctif : envelopper les quatre `createXStore(sql)` dans `protegerStore`, puis vérifier que les suites d'intégration de ces modules passent toujours (le proxy rend asynchrones toutes les méthodes du store).
+
+## Point d'arrêt : preuves illisibles depuis l'application déployée (2026-11-02)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-2-stockage-preuves.md`
+  summary: Sur la recette hébergée, télécharger une preuve de paiement depuis l'écran d'administration renvoie HTTP 500 `admin.internal_error`. Non résolu à l'arrêt de la session.
+  evidence: |
+    CE QUI EST PROUVÉ, À NE PAS REFAIRE
+    - La route s'exécute et l'authentification fonctionne : appelée sans session,
+      `/api/admin/preuves/<id>` rend un 401 propre avec l'enveloppe `iam.unauthenticated`,
+      sur `azzel-moulouls-projects.vercel.app` comme sur `azzel-beta.vercel.app`.
+    - Le bucket `preuves` existe, privé, et contient les 38 preuves référencées par la
+      base hébergée. Aller-retour vérifié en HTTP direct, et empreintes SHA-256 des
+      cinq premières conformes à ce que la table `preuve` déclare.
+    - Le chemin de code réel fonctionne depuis un poste : `getProofStore()` rend bien
+      `ObjetProofStore`, et `read()` rapporte 805 octets sur une clé du jeu de données.
+    - La panne est reproduite à l'identique en local : avec la clé PUBLIABLE, le code
+      lève `ObjetProofStoreConfigError`, ce qui donne exactement `admin.internal_error` ;
+      avec la clé SECRÈTE, la même lecture rend 805 octets.
+
+    DIAGNOSTIC AU MOMENT DE L'ARRÊT
+    `admin.internal_error` signifie que la lecture a LEVÉ (et non rendu « absent », qui
+    donnerait `admin.preuve_storage_error`). Les causes possibles sont donc :
+    (a) `PROOF_STORAGE_KEY` posée sur Vercel est encore la clé publiable — la garde la
+        refuse à la construction ; (b) la clé est secrète mais `PROOF_STORAGE_URL` ou
+        `PROOF_STORAGE_BUCKET` sont erronées, ce qui donne `NoSuchBucket` ; (c) la
+        variable n'est pas posée sur l'environnement effectivement servi.
+    L'hypothèse (a) a été retenue mais non confirmée : la valeur réelle posée sur Vercel
+    n'a jamais été constatée, seulement supposée d'après ce qui avait été collé.
+
+    POUR REPRENDRE, DANS CET ORDRE
+    1. Lire les journaux d'exécution Vercel pendant une tentative : depuis le correctif
+       de la clé publiable, le message nomme la variable fautive en clair. C'est la
+       seule observation qui manque, et elle tranche entre (a), (b) et (c).
+    2. Constater la valeur réellement posée sur Vercel pour les quatre `PROOF_STORAGE_*`,
+       et sur QUELS environnements (Production et Preview), plutôt que de s'en remettre
+       à ce qui était prévu.
+    3. Vérifier que le déploiement servi porte bien le commit attendu : plusieurs builds
+       ont échoué pendant la session, et Vercel continue de servir le dernier build
+       réussi, ce qui a fait diagnostiquer du code périmé pendant des heures.
+
+    PIÈGE DE MÉTHODE À RETENIR
+    Une clé sans droits ne produit pas « accès refusé » mais « objet introuvable », le
+    stockage refusant de révéler le contenu d'un bucket privé. Toute panne de droits se
+    présente donc comme une disparition de données. C'est ce qui a fait chercher au
+    mauvais endroit ; la garde sur la forme de la clé a été ajoutée pour ça.
+
