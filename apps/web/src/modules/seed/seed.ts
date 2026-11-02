@@ -7,6 +7,12 @@ import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { createChronoStore } from '@/modules/chrono/store';
 import { COUREUR_STATUS_EN_CONSTITUTION, isRegistrationOpen } from '@/modules/inscriptions/domain';
 import { LocalDiskProofStore, getProofStore, type ProofStore } from '@/modules/inscriptions/proof-store';
+import {
+  PROOF_STORAGE_DRIVER_ENV,
+  PROOF_STORAGE_DRIVER_OBJET,
+  PROOF_STORAGE_KEY_ENV,
+  PROOF_STORAGE_URL_ENV,
+} from '@/modules/inscriptions/proof-store-objet';
 import { uploadPreuve } from '@/modules/inscriptions/proof-service';
 import {
   acceptDocuments,
@@ -286,6 +292,27 @@ export interface SeedDeps {
   missionsStore?: MissionsStore;
 }
 
+/**
+ * Avertit quand les preuves semées atterrissent sur le disque local.
+ *
+ * En hébergé elles y disparaîtraient au redémarrage, et le comité découvrirait
+ * des écrans de validation vides. Le message **nomme la variable à poser**, pas
+ * une story : l'opérateur qui le lit doit savoir quoi faire, pas conclure qu'il
+ * n'y a rien à faire. `null` dès qu'un autre `ProofStore` est en place — le
+ * stockage objet de la story 8.2 n'a rien à signaler.
+ */
+export function avertissementStockagePreuves(proofStore: ProofStore): string | null {
+  if (!(proofStore instanceof LocalDiskProofStore)) {
+    return null;
+  }
+  return (
+    'Stockage des preuves sur DISQUE LOCAL : en environnement hébergé, les preuves ' +
+    'déposées par le seed seront perdues au prochain redémarrage. Posez ' +
+    `${PROOF_STORAGE_DRIVER_ENV}=${PROOF_STORAGE_DRIVER_OBJET} ` +
+    `(avec ${PROOF_STORAGE_URL_ENV} et ${PROOF_STORAGE_KEY_ENV}) pour écrire sur le stockage objet.`
+  );
+}
+
 export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
   const { sql } = deps;
   const rapport = rapportVide();
@@ -302,15 +329,9 @@ export async function executerSeed(deps: SeedDeps): Promise<SeedRapport> {
   const chronoStore = createChronoStore(sql);
   const proofStore = deps.proofStore ?? getProofStore();
 
-  // Dépendance ASSUMÉE à la story 8.2 : tant que `SupabaseProofStore` n'existe
-  // pas, `getProofStore()` sert le disque local. En hébergé, les preuves
-  // déposées par le seed disparaissent au redémarrage — le script le dit au
-  // lieu de laisser le comité découvrir des écrans de validation vides.
-  if (proofStore instanceof LocalDiskProofStore) {
-    rapport.avertissements.push(
-      'Stockage des preuves sur DISQUE LOCAL (story 8.2 non livrée) : en environnement ' +
-        'hébergé, les preuves déposées par le seed seront perdues au prochain redémarrage.',
-    );
+  const avertissementStockage = avertissementStockagePreuves(proofStore);
+  if (avertissementStockage !== null) {
+    rapport.avertissements.push(avertissementStockage);
   }
 
   // Les services déclenchent l'envoi best effort de la file d'emails après
