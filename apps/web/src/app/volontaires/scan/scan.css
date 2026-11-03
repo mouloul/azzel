@@ -1,6 +1,7 @@
 /* Story 4.2 — scanner e-dossard (surface volontaire). Deux ambiances :
    - écrans d'état (prêt, permission, annuaire absent) : cartes claires de la
-     surface volontaires ;
+     surface volontaires — depuis la story 10.1, chrome de CARTE et ACTIONS en
+     pilule fournis par le socle (socle.css, importé par le layout racine) ;
    - écran actif : caméra PLEIN ÉCRAN par-dessus la mise en page du site
      (position fixed), voile quasi opaque ≥ 96 %, palette sombre FIXE issue
      des rôles *-sombre des tokens — indépendante du mode clair/sombre (guichet
@@ -45,31 +46,17 @@
   gap: var(--az-space-2);
 }
 
-.scan-etat-actions .btn-action,
-.scan-etat-actions .btn-contour {
+/* Cibles terrain : les pilules du socle montent à 48 px. */
+.scan-etat-actions .socle-action {
   min-height: 48px;
 }
 
 /* Gros bouton de démarrage : geste fondateur (débloque audio + caméra),
-   cible généreuse ≥ 64 px. */
+    cible généreuse ≥ 64 px. Pilule du socle (.socle-action porte fond, encre,
+    rayon full, focus 2 px) ; ici la cible et la frappe terrain (20 px). */
 .scan-demarrer {
   min-height: 64px;
-  padding: var(--az-space-3) var(--az-space-5);
-  border: none;
-  border-radius: var(--az-radius);
-  background: var(--az-action);
-  color: var(--az-action-texte);
-  font-family: var(--az-font-surtitre);
   font-size: 20px;
-  font-weight: var(--az-font-weight-surtitre);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.scan-demarrer:focus-visible {
-  outline: 3px solid var(--az-focus);
-  outline-offset: 2px;
 }
 
 /* --- Écran actif : caméra plein écran ---------------------------------------- */

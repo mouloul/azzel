@@ -127,7 +127,9 @@ function Consignes({ texte }: { texte: string | null }) {
 
 function FicheMission({ mission }: { mission: MissionVolontaireView }) {
   return (
-    <article className="volontaires-fiche">
+    // Story 10.1 — chrome de carte du socle (rayon 16 px, ombre), densité
+    // terrain (padding 16 px) gardée par .volontaires-fiche.
+    <article className="socle-carte volontaires-fiche">
       <p className="volontaires-surtitre volontaires-fiche-role">{mission.typeLabel}</p>
       <h3 className="volontaires-fiche-titre">{mission.titre}</h3>
       <dl className="volontaires-fiche-details">
@@ -147,7 +149,7 @@ function FicheMission({ mission }: { mission: MissionVolontaireView }) {
       </dl>
       {mission.secteurContact !== null ? (
         <a
-          className="volontaires-tel"
+          className="socle-action volontaires-tel"
           href={assistancePhoneHref(mission.secteurContact)}
           aria-label={`Appeler le PC du secteur au ${mission.secteurContact}`}
         >
@@ -440,16 +442,12 @@ export function VolontairesPwa({
               sans t’éblouir.
             </p>
             <div className="volontaires-bandeau-actions">
-              <button
-                type="button"
-                className="btn-action"
-                onClick={choisirSombre}
-              >
+              <button type="button" className="socle-action" onClick={choisirSombre}>
                 Oui, mode sombre
               </button>
               <button
                 type="button"
-                className="btn-contour"
+                className="socle-action socle-action--contour"
                 onClick={reporterInvitation}
               >
                 Plus tard
@@ -469,7 +467,10 @@ export function VolontairesPwa({
         </p>
       )}
 
-      <h2 className="volontaires-titre">Ta fiche mission</h2>
+      {/* Story 10.1 (AC2) — titre de section PRINCIPAL : la mission en cours
+          domine ; « Toutes les missions » et l’annuaire restent au poids
+          eyebrow secondaire. */}
+      <h2 className="volontaires-titre volontaires-titre--principal">Ta fiche mission</h2>
       {etat.mesMissions.length === 0 ? (
         <p className="hint volontaires-attente">
           Tu n’as pas encore de mission attribuée. Dès que l’équipe t’affecte une mission, elle
@@ -490,13 +491,13 @@ export function VolontairesPwa({
             {titreSectionScan}
           </h2>
           {missionScan !== null && (
-            <a className="volontaires-scan-lien" href="/volontaires/scan">
+            <a className="socle-action volontaires-scan-lien" href="/volontaires/scan">
               <span className="volontaires-scan-libelle">Démarrer le scan</span>
               <span className="volontaires-scan-mission">{missionScan.titre}</span>
             </a>
           )}
           {missionRetrait !== null && (
-            <a className="volontaires-scan-lien" href="/volontaires/scan?mode=retrait">
+            <a className="socle-action volontaires-scan-lien" href="/volontaires/scan?mode=retrait">
               <span className="volontaires-scan-libelle">Scan retrait</span>
               <span className="volontaires-scan-mission">{missionRetrait.titre}</span>
             </a>
@@ -525,7 +526,7 @@ export function VolontairesPwa({
             <li key={mission.id} className="volontaires-mission-courte">
               <span className="volontaires-mission-titre">
                 <strong>{mission.titre}</strong>
-                <span className="volontaires-chip">
+                <span className="socle-chip">
                   {mission.couverture === 'couverte'
                     ? 'couverture assurée'
                     : 'vacante — besoins volontaires'}
@@ -540,7 +541,11 @@ export function VolontairesPwa({
         </ul>
       )}
 
-      <section className="volontaires-annuaire" aria-labelledby="volontaires-annuaire-titre">
+      {/* Story 10.1 — carte du socle, padding terrain (12 px) local. */}
+      <section
+        className="socle-carte volontaires-annuaire"
+        aria-labelledby="volontaires-annuaire-titre"
+      >
         <h2 className="volontaires-titre" id="volontaires-annuaire-titre">
           Annuaire des coureurs
         </h2>

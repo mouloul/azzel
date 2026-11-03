@@ -38,8 +38,9 @@ async function rendu(element: ReactElement): Promise<string> {
 }
 
 describe('libellerBandeauSync — états ◷/⏳/✓/⚠ (textes intégraux, AD accessibilité)', () => {
-  it('attente : « ◷ N en attente », envoi : progression, envoyé : file à 0', () => {
-    expect(libellerBandeauSync('attente', 217)).toBe('◷ 217 en attente');
+  it('attente : « ◷ N passages en attente », envoi : progression, envoyé : file à 0', () => {
+    // Story 10.1 — textes exacts du bandeau, verbatim.
+    expect(libellerBandeauSync('attente', 217)).toBe('◷ 217 passages en attente');
     expect(libellerBandeauSync('envoi', 12)).toBe('⏳ Envoi en cours — 12 en attente');
     expect(libellerBandeauSync('envoye', 0)).toBe('✓ envoyés — file : 0');
   });
@@ -68,7 +69,7 @@ describe('VueBandeauSync — rendu par phase', () => {
         surEnvoyer={() => undefined}
       />,
     );
-    expect(html).toContain('◷ 12 en attente');
+    expect(html).toContain('◷ 12 passages en attente');
     expect(html).toContain('id="volontaires-sync-titre"');
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');

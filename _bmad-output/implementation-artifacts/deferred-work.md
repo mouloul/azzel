@@ -212,3 +212,11 @@
 - source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
   summary: `.aa-lien-texte` est utilisée sur six pages (accueil, section parcours, `/parcours`, `/region`, `/resultats`, `/retour-en-images`). Le correctif de cible tactile (`display: inline-flex; min-height: 44px`) s'applique donc aux six, pas seulement à l'accueil.
   evidence: `grep` des usages ; les tests de ces pages passent.
+
+## Deferred from: build de la story 10.1 — PWA volontaires refondue (2026-11-03)
+
+- **Rendu non comparé visuellement** : les deltas (cartes 16 px + ombre, CTA pilules, chips) sont jugés sur le code, pas sur capture. Recette humaine requise sur appareil.
+- **Prémisse UX-DR-7 de la story fausse** : le voyant était déjà conforme ; le critère de la story était périmé. Consigné dans la spec 10.1.
+- **`.volontaires-badge` hors socle** : pilule pleine « HORS-LIGNE PRÊT » ; `.socle-pastille` est point + libellé. Arbitrer si le socle doit offrir une variante pleine.
+- **`LogoutButton` / `AssistanceButton` (`.btn-contour`)** restent sur l'ancienne classe globale, partagée par 8+ surfaces : à migrer dans 10.3 ou une story transverse.
+- **Pas de `bmad-code-review`** sur cette story.

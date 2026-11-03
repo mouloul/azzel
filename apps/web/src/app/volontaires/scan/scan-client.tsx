@@ -144,7 +144,7 @@ export function EcranCameraRefusee({
   const textes = TEXTES_SCAN[mode];
   return (
     <section className="scan-page-etat">
-      <article className="card scan-cadre">
+      <article className="socle-carte scan-cadre">
         <p className="surtitre">{textes.surtitre}</p>
         <h1>{refusee ? 'Autoriser la caméra' : 'Caméra indisponible'}</h1>
         {refusee ? (
@@ -167,11 +167,14 @@ export function EcranCameraRefusee({
         )}
         <div className="scan-etat-actions">
           {onReessayer !== undefined && (
-            <button type="button" className="btn-action" onClick={onReessayer}>
+            <button type="button" className="socle-action" onClick={onReessayer}>
               Réessayer
             </button>
           )}
-          <a className="btn-contour" href={assistancePhoneHref(assistancePhone)}>
+          <a
+            className="socle-action socle-action--contour"
+            href={assistancePhoneHref(assistancePhone)}
+          >
             Appeler le PC
           </a>
           <Link className="btn-lien" href="/volontaires">
@@ -187,7 +190,7 @@ export function EcranCameraRefusee({
 export function EcranAnnuaireAbsent({ mode = 'checkpoint' }: { mode?: ModeScan }) {
   return (
     <section className="scan-page-etat">
-      <article className="card scan-cadre">
+      <article className="socle-carte scan-cadre">
         <p className="surtitre">{TEXTES_SCAN[mode].surtitre}</p>
         <h1>Annuaire non chargé</h1>
         <p className="lead">
@@ -195,7 +198,7 @@ export function EcranAnnuaireAbsent({ mode = 'checkpoint' }: { mode?: ModeScan }
           hors-ligne. Connecte-toi une fois en ligne, ouvre ta fiche mission, puis reviens ici.
         </p>
         <div className="scan-etat-actions">
-          <Link className="btn-action" href="/volontaires">
+          <Link className="socle-action" href="/volontaires">
             Revenir à ma fiche
           </Link>
         </div>
@@ -491,7 +494,7 @@ export function ScanClient({
   if (phase === 'chargement') {
     return (
       <section className="scan-page-etat">
-        <article className="card scan-cadre">
+        <article className="socle-carte scan-cadre">
           <p className="surtitre">{textes.surtitre}</p>
           <h1>{textes.titrePreparation}</h1>
           <p className="hint" role="status">
@@ -520,7 +523,7 @@ export function ScanClient({
   if (phase === 'module') {
     return (
       <section className="scan-page-etat">
-        <article className="card scan-cadre">
+        <article className="socle-carte scan-cadre">
           <p className="surtitre">{textes.surtitre}</p>
           <h1>Lecteur QR indisponible</h1>
           <p className="lead">
@@ -528,7 +531,10 @@ export function ScanClient({
             fois en ligne, reviens sur cette page, puis réessaie.
           </p>
           <div className="scan-etat-actions">
-            <a className="btn-contour" href={assistancePhoneHref(assistancePhone)}>
+            <a
+              className="socle-action socle-action--contour"
+              href={assistancePhoneHref(assistancePhone)}
+            >
               Appeler le PC
             </a>
             <Link className="btn-lien" href="/volontaires">
@@ -543,12 +549,12 @@ export function ScanClient({
   if (phase === 'prete') {
     return (
       <section className="scan-page-etat">
-        <article className="card scan-cadre">
+        <article className="socle-carte scan-cadre">
           <p className="surtitre">{textes.surtitre}</p>
           <h1>{textes.titrePret}</h1>
           <p className="lead">{textes.leadPret(nombreCoureurs)}</p>
           <p className="hint">{textes.hintPret}</p>
-          <button type="button" className="scan-demarrer" onClick={demarrer}>
+          <button type="button" className="socle-action scan-demarrer" onClick={demarrer}>
             Démarrer le scan
           </button>
           <div className="scan-etat-actions">

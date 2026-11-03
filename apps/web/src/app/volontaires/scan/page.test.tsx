@@ -145,6 +145,8 @@ describe('page /volontaires/scan — garde serveur et mission', () => {
     expect(html).toContain('Scan des e-dossards');
     // Écran initial : lecture de l'annuaire local (IndexedDB), pas de fetch.
     expect(html).toContain('Lecture de l’annuaire enregistré');
+    // Story 10.1 — écrans d'état sur la carte du socle.
+    expect(html).toContain('socle-carte scan-cadre');
   });
 
   it('état missions en échec : redirection SILENCIEUSE (l’indisponibilité n’est pas l’absence, pattern 4.3)', async () => {
@@ -231,6 +233,8 @@ describe('écran caméra refusée (UX-DR-18)', () => {
     // Bouton assistance PC — numéro formaté tel:.
     expect(html).toContain('Appeler le PC');
     expect(html).toContain('href="tel:+213555010200"');
+    // Story 10.1 — actions en pilule du socle sur les écrans d'état.
+    expect(html).toContain('socle-action');
   });
 
   it('variante caméra indisponible : titre dédié + assistance', async () => {
@@ -302,8 +306,31 @@ describe('scan.css — garde-fous UX-DR-6/7, SCOPÉS au sélecteur concerné', (
     expect(regleCss('.scan-voile')).toMatch(/rgba\([^)]*,\s*0\.9[6-9]\)/);
   });
 
+  it('cible d’appel PC du voyant inconnu ≥ 44 px DANS la règle .scan-voyant-action', () => {
+    expect(regleCss('.scan-voyant-action')).toMatch(/min-height: (4[4-9]|[5-9][0-9])px/);
+  });
+
   it('stop ≥ 64 dp DANS la règle .scan-stop', () => {
     expect(regleCss('.scan-stop')).toContain('min-height: 64px');
+  });
+});
+
+describe('scan-client.tsx — voyant annoncé au lecteur d’écran (UX-DR-7, story 10.1)', () => {
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'scan-client.tsx'),
+    'utf8',
+  );
+
+  it('les DEUX voyants (succès/doublon ET inconnu) portent role="status" + aria-live="assertive" et la classe scan-voyant', () => {
+    // Chaque voyant est un conteneur role="status" aria-live="assertive" dont
+    // la className commence par scan-voyant (l'écran actif ne se rend qu'après
+    // le geste caméra : le garde lit le source, même principe que scan.css).
+    const voyantsAssertifs = source.match(
+      /role="status"\s+aria-live="assertive"\s+className=\{`scan-voyant/g,
+    );
+    expect(voyantsAssertifs).toHaveLength(2);
+    // Aucun autre aria-live assertif caché ailleurs dans l'écran actif.
+    expect(source.split('aria-live="assertive"').length - 1).toBe(2);
   });
 });
 

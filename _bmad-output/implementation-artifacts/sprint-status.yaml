@@ -108,8 +108,8 @@ development_status:
   9-6-non-régression-de-la-vitrine-refondue: review
   epic-9-retrospective: optional
 
-  epic-10: backlog
-  10-1-pwa-volontaires-refondue: backlog
+  epic-10: in-progress
+  10-1-pwa-volontaires-refondue: review
   10-2-app-coureurs-refondue: backlog
   10-3-back-office-refondu: backlog
   10-4-non-régression-des-surfaces-d-exploitation: backlog

@@ -222,6 +222,57 @@ describe('page /volontaires — rendu serveur PWA (story 3.3)', () => {
   });
 });
 
+describe('page /volontaires — consommation du socle et hiérarchie (story 10.1)', () => {
+  it('fiches mission, annuaire : chrome de carte du socle (.socle-carte)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('socle-carte volontaires-fiche');
+    expect(html).toContain('socle-carte volontaires-annuaire');
+  });
+
+  it('CTA terrain (tel PC, Démarrer le scan) : actions en pilule du socle (.socle-action)', async () => {
+    const missionScan = { ...MISSION, type: 'scan_checkpoint', typeLabel: 'Scan checkpoint', titre: 'Scan km 12' };
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      ...ETAT,
+      mesMissions: [missionScan],
+      missions: [missionScan],
+    });
+    const html = await rendu();
+    expect(html).toContain('socle-action volontaires-tel');
+    expect(html).toContain('socle-action volontaires-scan-lien');
+  });
+
+  it('chip de couverture : celle du socle (.socle-chip), plus de chip locale', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('class="socle-chip"');
+    expect(html).not.toContain('volontaires-chip');
+  });
+
+  it('hiérarchie (AC2) : « Ta fiche mission » titre principal, « Toutes les missions » secondaire', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    // La section dominante porte le modificateur principal (24 px / 800).
+    expect(html).toMatch(
+      /<h2 class="volontaires-titre volontaires-titre--principal">Ta fiche mission<\/h2>/,
+    );
+    // Les sections secondaires gardent le poids eyebrow, sans le modificateur.
+    expect(html).toMatch(/<h2 class="volontaires-titre">Toutes les missions de l’édition<\/h2>/);
+    expect(html).not.toMatch(
+      /volontaires-titre--principal">Toutes les missions/,
+    );
+  });
+
+  it('bandeau sync : textes exacts de la story 10.1 verbatim dans le rendu', async () => {
+    // « ✓ envoyés — file : 0 » est couvert par bandeau-sync.test.tsx ; ici on
+    // verrouille que le bandeau reste dans la page (état initial SSR compris).
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+    const html = await rendu();
+    expect(html).toContain('volontaires-sync');
+    expect(html).toContain('Journal sync');
+  });
+});
+
 describe('page /volontaires — section « Annuaire des coureurs » (story 3.4)', () => {
   it('annuaire initial : badge role=status aria-live=polite « Annuaire prêt — N coureurs »', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
