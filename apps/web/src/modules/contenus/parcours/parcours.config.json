@@ -1,0 +1,17 @@
+{
+  "source": {
+    "gpx": "docs/GPX/activity_24920331005.gpx"
+  },
+  "pointsDePassage": [],
+  "epreuves": [
+    {
+      "slug": "longue",
+      "portions": [
+        {
+          "de": "depart",
+          "a": "arrivee"
+        }
+      ]
+    }
+  ]
+}

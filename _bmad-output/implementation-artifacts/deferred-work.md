@@ -246,3 +246,12 @@
 - **Recette de l'épopée 5 inchangée** : aucun pas ne désignait d'élément modifié ; recette 6 étendue (2 pas) car les écrans de l'app coureurs en dépendent.
 - **Ce que GLM a touché en base de dev** : sessions de sonde créées puis supprimées pour mesurer le précache sur build réel ; à confirmer que la base de dev est propre.
 - **Pas de `bmad-code-review`** sur 10.1 à 10.4.
+
+## Deferred from: build de la story 11.1 — pipeline GPX vers parcours.json (2026-11-03)
+
+- **Chiffres publiés issus d'un relevé d'ESSAI** : le GPX source est « essai trail ait ainsi 2027 » (28,0 km, D+ 1 186 m) ; l'accueil affiche désormais ce D+ pour la longue alors que la distance affichée vient de la base (la page parcours annonce ~35 km). Risque de contradiction visible. À trancher : relevé officiel, ou retrait de la fusion (suppression de `parcours.json` ⇒ retour à `null`, sans autre changement).
+- **Manques côté organisation (rien inventé)** : tracé GPX de l'épreuve moyenne ; ravitaillements et services réels (seuls Départ et Arrivée existent) ; heure de départ et barrière horaire (toujours `null`).
+- **Seuil D+ 5 m** : brut 1 280 m → 1 186 m (−7,3 %), constante arbitraire à valider avec l'organisation ; D+ calculé sur altitudes non arrondies (arrondir à 0,1 m le ferait passer à 1 176 m).
+- **Porte de qualité** : constantes (pas médian ≤ 2 s, ≤ 5 % de la distance en segments > 30 s, ≤ 1 % de points > 12,5 m/s) calibrées sur DEUX relevés seulement ; elles refusent le second sur trois défauts à la fois.
+- **Postgres de dev** arrêté par la session GLM ; relancé par l'architecte (`scripts/dev-db.sh up`). Les tests d'intégration échouent base arrêtée (25 fichiers) : piège pour toute session suivante.
+- **Pas de `bmad-code-review`** sur cette story.

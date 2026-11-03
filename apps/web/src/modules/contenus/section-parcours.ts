@@ -3,15 +3,13 @@
 // Cette section vit côté vitrine mais ne possède AUCUNE source de vérité
 // propre : les épreuves (slug, nom, distance, GPX) viennent de
 // `getParcoursPage()` (mêmes lignes que la page /parcours, même store). Les
-// champs que l’épopée 11 remplira — dénivelés, altitudes, horaires, points de
-// passage — sont OPTIONNELS et valent `null` tant que `parcours.json`
-// (story 11.1) n’existe pas : un champ null n’est simplement pas rendu.
+// métriques et points de passage viennent de `parcours.json` (story 11.1,
+// branché CI-DESSOUS dans `fusionnerEpreuve`) : un champ null n’est
+// simplement pas rendu — une épreuve absente du JSON n’affiche AUCUN chiffre.
 //
-// POINT DE BRANCHEMENT ÉPOPÉE 11 (story 11.1) : c’est ICI, et seulement ici,
-// que `parcours.json` se raccordera — `getSectionParcours()` fusionnera les
-// métriques et points de passage du JSON dans ce contrat, SANS toucher au
-// composant de rendu (`components/section-parcours.tsx`), qui sait déjà
-// afficher chaque champ non nul.
+// POINT DE BRANCHEMENT ÉPOPÉE 11 (story 11.1, réalisé) : la fusion se fait
+// ICI, et seulement ici — le composant de rendu (`components/section-parcours.tsx`)
+// n’a PAS été modifié, il sait déjà afficher chaque champ non nul.
 //
 // Référentiel des kilométrages (UX-DR-31) : un point de passage partagé par
 // les deux épreuves n’a pas le même kilomètre dans chacune. Les points vivent
@@ -20,6 +18,8 @@
 // active (il est dans le panneau de l’épreuve, sous son nom).
 
 import { getParcoursPage, type ContenusServiceDeps, type EpreuveView } from './service';
+import { getParcoursDoc } from './parcours/lecture';
+import type { EpreuveDoc, ParcoursDoc } from './parcours/construire';
 
 /**
  * Synthèse chiffrée d’une épreuve. Tous les champs sont optionnels : la
@@ -71,6 +71,50 @@ export interface SectionParcoursView {
 export const SECTION_PARCOURS_VIDE: SectionParcoursView = { epreuves: [] };
 
 /**
+ * Story 11.1 — fusion d’une épreuve avec sa vue parcours.json.
+ *
+ * Les métriques viennent du D+/D− PUBLIÉ (hystérésis, constante unique du
+ * pipeline) : carte, profil et vitrine lisent le même chiffre. L’heure de
+ * départ et la barrière horaire restent `null` tant que l’organisation ne
+ * les a pas fournies — aucun chiffre inventé. Les services inconnus restent
+ * `null`. Une épreuve ABSENTE du JSON (ex. la moyenne, tracé non fourni)
+ * garde `metriques: null` / `pointsDePassage: null` : sa fiche n’affiche
+ * aucun chiffre.
+ */
+function fusionnerEpreuve(
+  epreuve: EpreuveView,
+  doc: ParcoursDoc | null,
+): EpreuveSectionParcours {
+  const vue: EpreuveDoc | undefined = doc?.epreuves[epreuve.slug];
+  if (doc === null || vue === undefined) {
+    return { ...epreuve, metriques: null, pointsDePassage: null };
+  }
+  const nomParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.nom]));
+  const altitudeParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.altitudeM]));
+  const servicesParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.services]));
+  return {
+    ...epreuve,
+    metriques: {
+      denivelePositifM: vue.dplusM,
+      deniveleNegatifM: vue.dmoinsM,
+      altitudeMinM: vue.altitudeMinM,
+      altitudeMaxM: vue.altitudeMaxM,
+      heureDepart: null,
+      barriereHoraire: null,
+    },
+    pointsDePassage: vue.pointsDePassage.map((point) => ({
+      id: point.id,
+      nom: nomParId.get(point.id) ?? point.id,
+      // FR-38 : kilométrage dans le référentiel de CETTE épreuve.
+      kilometre: point.kilometre,
+      altitudeM: point.altitudeM ?? altitudeParId.get(point.id) ?? null,
+      // FR-39 : services inconnus ⇒ null (jamais inventés).
+      services: servicesParId.get(point.id) ?? null,
+    })),
+  };
+}
+
+/**
  * Lecture de la section parcours de l’accueil. Réutilise la source de vérité
  * unique des épreuves (`getParcoursPage`, base au rechargement/ISR) : les
  * blocs sans épreuve associée sont ignorés — la section n’affiche jamais un
@@ -82,10 +126,11 @@ export async function getSectionParcours(
   deps: ContenusServiceDeps = {},
 ): Promise<SectionParcoursView> {
   const { blocs } = await getParcoursPage(deps);
+  const doc = getParcoursDoc();
   return {
     epreuves: blocs
       .map((bloc) => bloc.epreuve)
       .filter((epreuve): epreuve is EpreuveView => epreuve !== null)
-      .map((epreuve) => ({ ...epreuve, metriques: null, pointsDePassage: null })),
+      .map((epreuve) => fusionnerEpreuve(epreuve, doc)),
   };
 }
