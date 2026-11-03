@@ -1109,7 +1109,9 @@ a.aa-partenaire__nom{color:inherit}
    vitrine-textes.css, importé par ces pages seules : hors du chemin critique
    de l’accueil (budget premier chargement < 300 Ko). */
 .aa-liens-vitrine{display:flex;flex-wrap:wrap;gap:var(--az-space-4) var(--az-space-6);margin:var(--space-8) 0 0}
-.aa-lien-texte{color:var(--heading);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+/* Cible tactile ≥ 44 px (story 9.6 : mesuré 25,5 px de haut au harnais CDP
+   avant cette règle — même contrat que .fil-etape-lien, dossier.css). */
+.aa-lien-texte{display:inline-flex;align-items:center;min-height:44px;color:var(--heading);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .aa-lien-texte:hover{color:var(--accent)}
 
 /* Pied de page — liens texte sobres vers les pages vitrine (story 2.4) */

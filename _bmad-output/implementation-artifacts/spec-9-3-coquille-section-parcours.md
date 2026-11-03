@@ -38,7 +38,7 @@ context:
 
 - **Sélecteur en boutons radio natifs + règles `:has()` générées côté serveur.** Un groupe de radios = une seule variable d'état, possédée par le navigateur. Zéro JavaScript client ajouté (chunks du chemin critique inchangés). Clavier natif, cibles ≥ 44 px, épreuve active annoncée par le radio coché, le fond plein du chip et le nom répété en `<h3>` du panneau, pas seulement par la couleur. Repli `@supports not selector(:has(*))` : panneaux empilés lisibles.
 - **Contrat de données** (`modules/contenus/section-parcours.ts`, `getSectionParcours()`) : nom, distance, GPX https depuis la base ; `denivelePositifM`, `deniveleNegatifM`, `altitudeMin/MaxM`, `heureDepart`, `barriereHoraire` et points de passage à `null` jusqu'à l'épopée 11. Story 11.1 ne touche que cette fonction ; le rendu sait déjà afficher des valeurs non nulles (test avec un point partagé).
-- **Dépassement de budget arbitré, pas subi.** Section remplie : 308 526 octets contre 307 200, soit **1 326 octets de trop**. Refusé : relever le plafond (NFR-2 est une promesse faite à un coureur en 3G), dégrader la section, toucher à la photo LCP. Retenu : retrait du **seul `<link rel="preload">` de Barlow Condensed 700**, dont le `@font-face` reste en place. Mesuré en CDP avec la police retardée de 2,5 s : géométrie des sections identique au centième de pixel, CLS 0,002 desktop et 0,000025 mobile pour un seuil de 0,1 ; le repli métriquement calibré (`ascent`, `descent`, `size-adjust`) fait ce pour quoi il a été construit. Gain : 22 471 octets.
+- **Dépassement de budget arbitré, pas subi.** Section remplie : 308 526 octets contre 307 200, soit **1 326 octets de trop**. Refusé : relever le plafond (NFR-2 est une promesse faite à un coureur en 3G), dégrader la section, toucher à la photo LCP. Retenu : retrait du **seul `<link rel="preload">` de Barlow Condensed 700**, dont le `@font-face` reste en place. Mesuré en CDP avec la police retardée de 2,5 s : géométrie des sections identique au centième de pixel, CLS 0,002 desktop et 0,000025 mobile pour un seuil de 0,1 ; le repli métriquement calibré (`ascent`, `descent`, `size-adjust`) fait ce pour quoi il a été construit. Gain : 22 471 octets **sur le décompte de `pnpm budget`**. **Correction (2026-11-03, story 9.6) : ce ne sont pas des octets économisés.** `check-budget.sh` ne compte que les ressources référencées par le HTML, préchargements compris ; la police est toujours téléchargée dès qu'un texte en graisse 700 s'affiche. Le retrait garantit un premier rendu non bloqué, pas un poids moindre. Voir `deferred-work.md`.
 
 ## I/O & Edge-Case Matrix
 
@@ -65,7 +65,7 @@ context:
 - [x] Sélecteur d'épreuve sans JavaScript
 - [x] Aucun chiffre de parcours inventé
 - [x] Section complète sans la visualisation
-- [x] Budget tenu sans relever le plafond
+- [x] Budget de chemin critique tenu sans relever le plafond (le poids transféré réel reste au-dessus de 300 Ko : voir Review Triage Log)
 
 ## Implementation Notes
 
@@ -73,7 +73,7 @@ Bascule d'épreuve testée par rendu serveur ; le comportement navigateur du sé
 
 ## Spec Change Log
 
-- 2026-11-03 — aucun changement d'intention.
+- 2026-11-03 — correction de l'affirmation sur le gain de budget : retrait d'un préchargement ≠ octets économisés (mesuré par la story 9.6).
 
 ## Review Triage Log
 
@@ -83,4 +83,4 @@ Bascule d'épreuve testée par rendu serveur ; le comportement navigateur du sé
 
 - `pnpm typecheck` : vert
 - `pnpm test` : 177 fichiers, 2411 passés (+14), zéro échec
-- `pnpm budget` : 286 052 octets, 279 Kio, marge 21 Ko
+- `pnpm budget` : 286 052 octets, 279 Kio, marge 21 Ko — **mesure de chemin critique** ; poids réellement transféré : 321 Kio (story 9.6)

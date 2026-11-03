@@ -336,6 +336,15 @@ describe('accueil vitrine — section parcours (story 9.3)', () => {
   it('la page détaillée reste à portée : lien /parcours dans la section', () => {
     expect(trancheSection()).toContain('href="/parcours"');
   });
+
+  it('liens texte : cibles tactiles ≥ 44 px (mesuré 25,5 px avant la garde, story 9.6)', () => {
+    const css = readFileSync(fileURLToPath(new URL('./globals.css', import.meta.url)), 'utf8');
+    const regleCss = css
+      .replace(/\s+/g, ' ')
+      .match(/\.aa-lien-texte\{([^}]*)\}/)?.[1] ?? '';
+    expect(regleCss).toMatch(/min-height:\s*44px/);
+    expect(regleCss).toContain('display:inline-flex');
+  });
 });
 
 describe('accueil vitrine — mode de rendu', () => {

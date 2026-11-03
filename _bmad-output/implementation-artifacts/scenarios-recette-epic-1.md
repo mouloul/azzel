@@ -2,6 +2,7 @@
 
 **Produit :** Azzel · **Périmètre :** stories 1-1 → 1-9 · **Date :** 2026-10-21
 **Durée estimée :** 60–90 min (module par module, arrêt/reprise possible)
+**Réaligné story 9-6 (2026-11-03) :** parcours de dossier refondu (story 9-4) — fil d'étapes « Étapes du dossier » sur /inscription, /acceptations et /preuve ; libellés de la checklist vérifiés inchangés. Modules S1, S2, S6, S8 et S9 inchangés.
 
 Chaque module se teste indépendamment : cochez au fur et à mesure et notez les écarts dans la colonne Observations du tableau final.
 
@@ -70,6 +71,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | 3.4 | Soumettre complet (photo la catégorie calculée en direct si affichée) | Retour espace coureur ; récap épreuve + catégorie + t-shirt ; compteur checklist progressé |
 | 3.5 | Re-soumettre avec l'autre épreuve (« Modifier mon inscription ») | Mise à jour sans doublon |
 | 3.6 | (Optionnel SQL) `UPDATE edition SET registration_closes_at = now() - interval '1 day';` puis tenter une modification | Refus « Les inscriptions sont fermées » avec la date ; restaurer ensuite (`2027-03-16T22:59:59Z`) |
+| 3.7 | Regarder le haut de la page /inscription | Fil d'étapes « Étapes du dossier » : Inscription, Documents, Paiement, Validation. Inscription porte « Étape 1 sur 4 — en cours » ; les trois suivantes n'affichent AUCUN état et ne sont pas cliquables |
 
 - [ ] S3 conforme — Observations : …………
 
@@ -81,6 +83,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | 4.2 | Cocher une seule case et soumettre | Refus : les deux acceptations sont exigées ensemble |
 | 4.3 | Cocher les deux et accepter | Récap : « acceptés le … (décharge v1 · règlement v1) », horodatage visible |
 | 4.4 | Ré-accepter | Horodatage mis à jour (tant que le dossier n'est pas validé) |
+| 4.5 | Fil d'étapes en haut de /acceptations | Inscription marquée « Fait » et cliquable (retour vers /inscription) ; Documents porte « Étape 2 sur 4 — en cours » ; Paiement et Validation sans mention ni lien |
 
 - [ ] S4 conforme — Observations : …………
 
@@ -94,6 +97,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | 5.4 | Couper Mailpit (`dev-mail.sh down`), puis déposer un PDF valide | Refus propre ; PDF retenté après `dev-mail.sh up` : OK |
 | 5.5 | Déposer une 2ᵉ image | Nouvelle preuve active ; l'ancienne conservée (remplacée) |
 | 5.6 | Vérifier `apps/web/data/preuves/` (ou STORAGE_DIR) | Fichiers UUID ≤ 300 Ko, jamais le nom d'origine |
+| 5.7 | Fil d'étapes en haut de /preuve | Inscription « Fait » (lien vers /inscription) ; Documents « Fait » ou « À faire » selon l'état réel du dossier (lien vers /acceptations) ; Paiement porte « Étape 3 sur 4 — en cours » ; Validation sans mention ni lien |
 
 - [ ] S5 conforme — Observations : …………
 

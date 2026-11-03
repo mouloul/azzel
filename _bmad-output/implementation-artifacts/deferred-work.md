@@ -191,3 +191,24 @@
 - source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
   summary: `proof-service.ts` expose maintenant `documentsAcceptes` dans son read-model pour que le fil d'étapes de `/preuve` sache si les documents sont acceptés. Seul fichier de service modifié par la story, ajout pur dérivé de champs déjà chargés.
   evidence: `apps/web/src/modules/inscriptions/proof-service.ts`, un test ajouté dans `preuve.test.ts`.
+
+## Deferred from: build de la story 9.6 — non-régression de la vitrine (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: **Le budget mesuré par `pnpm budget` n'est pas le poids réellement transféré.** `scripts/check-budget.sh` compte les ressources référencées par le HTML servi, `<link rel="preload">` compris ; une police déclarée uniquement en `@font-face` n'y figure pas. La story 9.3 a retiré le préchargement de Barlow Condensed 700 : le décompte est passé de 301 à 279 Kio, mais le navigateur télécharge toujours la police dès qu'un texte en graisse 700 s'affiche. Mesure réelle au harnais CDP, cache désactivé : 321,2 Kio sur `/`, 334,7 sur `/resultats`, 300,5 sur `/connexion`, dont environ 68,5 Kio de polices non préchargées (Inter 600, Barlow 600 et 700). Ce que le retrait du préchargement garantit réellement : un premier rendu lisible non bloqué (`font-display: swap`, repli calibré, CLS 0,002) ; pas une réduction des octets. NFR-2 dit « premier chargement < 300 Ko » : à la lettre, il n'est pas tenu en octets transférés, et il ne l'était vraisemblablement pas avant la refonte non plus.
+  evidence: rapport de la story 9.6 ; `scripts/check-budget.sh` lignes 1 à 25. Décision à prendre : soit redéfinir NFR-2 comme budget de chemin critique (et le dire dans la définition du script), soit réduire réellement les octets. Le sous-ensemble de caractères de Barlow, estimé à environ 23 Ko de gain réel sur les deux fichiers préchargés, est le levier honnête.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Zoom 200 % : toutes les pages publiques débordent horizontalement (227 px pour 195 px de largeur utile) à cause de `header-actions` (bascule de thème et lien admin, stories 1.6 et 3.3) et de l'onglet « Mon trail » (accueil, story 8.x). Défaut antérieur à l'épopée 9, à traiter globalement.
+  evidence: harnais CDP, émulation 195 px ; `/resultats` est passé de 265 à 227 px grâce au correctif 9.5, le résidu est ce défaut commun.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Pied de page : quatre liens de 25,5 px de haut, et trois paires de liens séparées par 7,5 px au lieu de 8. Skip-link déployé au focus : 43,5 px. Tous antérieurs à l'épopée 9 (stories 2.4 et 1.1).
+  evidence: harnais CDP à 390 px.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Sur `/resultats`, les titres d'épreuve (« La Longue — 35 km ») et la méta (« 35 km — départ à 08:00 ») débordent de 6 px à 195 px parce que leurs espaces sont insécables. Le corriger impose de toucher au formatage des textes, ce qui est un choix de contenu.
+  evidence: résidu après correctif 9.5, harnais CDP.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Quatre écrans n'ont pas pu être mesurés à l'écran faute de base de données (`/inscription`, `/acceptations`, `/preuve`, `/espace-coureur` redirigent vers `/connexion`). Ils sont couverts par des tests qui lisent les feuilles de style (`socle.test.ts`, `dossier-css.test.ts`, `fil-etapes.test.tsx`, `contrastes.test.ts`), ce qui prouve les règles et non le rendu.
+  evidence: `curl` : 307 vers `/connexion`. À mesurer en recette sur l'environnement déployé, ou avec la base de dev.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: `.aa-lien-texte` est utilisée sur six pages (accueil, section parcours, `/parcours`, `/region`, `/resultats`, `/retour-en-images`). Le correctif de cible tactile (`display: inline-flex; min-height: 44px`) s'applique donc aux six, pas seulement à l'accueil.
+  evidence: `grep` des usages ; les tests de ces pages passent.

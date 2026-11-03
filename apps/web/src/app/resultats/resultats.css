@@ -11,6 +11,16 @@
 
 .resultats-live{display:grid;gap:var(--space-6)}
 
+/* Reflux zoom 200 % (story 9.6, mesuré au harnais CDP) : les pistes 1fr des
+   grilles de la page ne descendaient pas sous la largeur intrinsèque des
+   contrôles natifs (~118 px chacun) — la recherche seule forçait 249 px de
+   défilement à 195 px de viewport. min-width: 0 rend les blocs réellement
+   rétractables ; le tableau reste dans sa zone dédiée (.resultats-defile). */
+.resultats-live > *,
+.resultats-epreuves > * {
+  min-width: 0;
+}
+
 /* SSR dégradé (base indisponible à l’ouverture) : message doux + assistance,
    jamais d’erreur brute — le rafraîchisseur reste monté dessous. Gabarit
    socle-carte (posé dans le balisage) : cette feuille ne porte que l'écart. */
@@ -95,15 +105,22 @@
 
 @media (max-width:640px){
   /* Mobile : recherche pleine largeur puis épreuve/catégorie en duo — les
-     trois contrôles restent visibles sans défilement. */
-  .resultats-recherche-champs{grid-template-columns:1fr 1fr}
+     trois contrôles restent visibles sans défilement. Pistes fluides
+     (story 9.6) : au zoom 200 % (viewport ~195 px) le duo cède la place à
+     une colonne au lieu de forcer le défilement horizontal. */
+  .resultats-recherche-champs{grid-template-columns:repeat(auto-fit,minmax(min(8rem,100%),1fr))}
   .resultats-recherche-dossard{grid-column:1 / -1}
-  /* Podium : une carte par ligne (rang à gauche, dossard et temps à droite). */
+  /* Podium : une carte par ligne (rang à gauche, dossard et temps à droite).
+     Le temps est insécutable (mono nowrap) : au zoom 200 % la carte peut
+     passer à la ligne plutôt que de déborder (story 9.6). */
   .resultats-podium{grid-template-columns:1fr}
+  .resultats-podium-carte{flex-wrap:wrap}
   /* Mobile : l'épreuve des derniers arrivés qualifie le dossard (anonymat) —
       elle reste VISIBLE, compacte et tronquée proprement, jamais masquée
-      (jamais un dossard nu). */
-  .resultats-arrive{gap:var(--space-2)}
+      (jamais un dossard nu). Le temps est insécable (mono) : au zoom 200 %
+      la ligne peut passer le temps à la ligne au lieu de déborder
+      (story 9.6, même principe que le podium). */
+  .resultats-arrive{flex-wrap:wrap;gap:var(--space-2)}
   .resultats-arrive-epreuve{flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
