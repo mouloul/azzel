@@ -1117,6 +1117,41 @@ a.aa-partenaire__nom{color:inherit}
 .footer-nav a{color:var(--az-texte);text-decoration:underline;text-underline-offset:3px}
 .footer-nav a:hover{color:var(--az-texte-2)}
 
+/* Section parcours de l’accueil (story 9.3) — sélecteur SANS JavaScript :
+   radios natifs masqués visuellement, labels .socle-action en cibles ≥ 44 px,
+   focus 2 px porté sur le label par le radio adjacent ; les règles de
+   bascule `:has()` par épreuve sont générées dans le composant (section-parcours.tsx).
+   Chiffres en monospace système alignés à droite (zéro octet téléchargé).
+   Contrastes : paires déjà testées — heading et ink-muted sur surface /
+   surface-raised, az-action-texte / az-action (socle), filet-controle 3:1. */
+.aa-parcours-accueil [data-panneau]{display:none}
+.aa-parcours-accueil__selecteur{border:0;padding:0;margin:var(--space-8) 0 0;min-inline-size:0}
+.aa-parcours-accueil__legende{padding:0;margin:0 0 var(--az-space-3);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted)}
+.aa-parcours-accueil__choix{display:flex;flex-wrap:wrap;gap:var(--az-space-3)}
+.aa-parcours-accueil__radio{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.aa-parcours-accueil__radio:focus-visible + .aa-parcours-accueil__libelle{outline:2px solid var(--az-focus);outline-offset:2px}
+.aa-parcours-accueil__panneaux{display:grid;gap:var(--az-space-4);margin:var(--az-space-5) 0 0}
+.aa-parcours-accueil__synthese{display:grid;gap:var(--az-space-2);margin:var(--az-space-4) 0 0}
+.aa-parcours-accueil__ligne{display:flex;align-items:baseline;justify-content:space-between;gap:var(--az-space-4);border-bottom:1px solid var(--line);padding-bottom:var(--az-space-2)}
+.aa-parcours-accueil__ligne dt{margin:0;font-size:13px;color:var(--ink-muted)}
+.aa-parcours-accueil__ligne dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;font-weight:600;color:var(--heading);text-align:right}
+.aa-parcours-accueil__gpx{display:inline-block;margin-top:var(--az-space-4)}
+.aa-parcours-accueil__passages{margin:var(--az-space-5) 0 0;border-top:1px solid var(--line);padding-top:var(--az-space-4)}
+.aa-parcours-accueil__passages-titre{margin:0 0 var(--az-space-2);font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--heading)}
+.aa-parcours-accueil__passages ul{list-style:none;display:grid;gap:var(--az-space-2);margin:0;padding:0}
+.aa-parcours-accueil__passages li{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--az-space-1) var(--az-space-3);font-size:15px}
+.aa-parcours-accueil__passage-nom{font-weight:600;color:var(--ink)}
+.aa-parcours-accueil__passage-km{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;color:var(--ink-muted)}
+.aa-parcours-accueil__passage-services{font-size:13px;color:var(--ink-muted)}
+.aa-parcours-accueil__viz{display:grid;gap:var(--az-space-2);margin:var(--az-space-5) 0 0;padding:var(--az-space-5);border:1.5px dashed var(--az-filet-controle);border-radius:var(--az-rayon-md)}
+.aa-parcours-accueil__viz svg{color:var(--accent)}
+.aa-parcours-accueil__viz-surtitre{margin:0;font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-muted)}
+.aa-parcours-accueil__viz-titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--heading)}
+.aa-parcours-accueil__viz-texte{margin:0;font-size:15px;line-height:1.55;color:var(--ink)}
+/* Filet de sécurité : sans :has(), les panneaux se ploient en pile lisible
+   (dégradation progressive — la section ne perd jamais son contenu). */
+@supports not selector(:has(*)){.aa-parcours-accueil [data-panneau]{display:block}}
+
 /* Thème sombre — voile hero assombri */
 [data-theme='dark'] .aa-hero__veil {
   background: linear-gradient(

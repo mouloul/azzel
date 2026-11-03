@@ -149,3 +149,15 @@
 - source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
   summary: Le rail de chiffres clés du hero n'affiche que Date, Épreuves, Départ et Cadre. Les cellules D+, plage d'altitude et nombre de places attendent des valeurs validées par le comité : aucune source officielle n'existe aujourd'hui, et les chiffres de la maquette viennent du relevé d'essai (28 km, D+ 1 280 m), contradictoires avec les 35 km annoncés.
   evidence: la grille cloisonnée est dimensionnée pour les accueillir ; `page.test.tsx` interdit par ailleurs tout objectif 2027 chiffré sur l'accueil.
+
+## Deferred from: build de la story 9.3 — coquille de la section parcours (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
+  summary: Sous-ensemble de caractères de Barlow Condensed. Le jeu réellement rendu par les huit pages publiques tient en 69 caractères ; en sous-ensemble prudent (87 caractères, a–z, 0–9, ponctuation française), Barlow 700 passe de 22 444 à 10 940 octets et Barlow 800 de 22 464 à 10 884, soit environ 23 Ko de moins sur le chemin critique.
+  evidence: mesuré avec fonttools dans un environnement isolé hors dépôt. Deux réserves : le jeu strict n'inclut pas le « 8 », qu'aucune page publique n'affiche aujourd'hui, ce qui montre sa fragilité ; et les surfaces authentifiées (e-dossard, admin) rendent aussi du Barlow avec des noms de coureurs libres, il faut donc un inventaire ou un fichier pleine plage réservé au dossard.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
+  summary: Le sélecteur d'épreuve repose sur `:has()` généré côté serveur, avec un repli en panneaux empilés pour les navigateurs sans `:has()` (Firefox avant la 121). Ce repli n'a été testé sur aucun vieil appareil réel.
+  evidence: prévu par la règle `@supports not selector(:has(*))` dans `globals.css` ; vérification uniquement par lecture du CSS.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
+  summary: Quand la story 11.1 branchera `parcours.json`, le formatage des nombres devra rester identique côté serveur : `Intl.NumberFormat('fr-FR')` produit une espace fine insécable comme séparateur de milliers, et le rendu comme les tests reposent sur le même moteur.
+  evidence: contrat de données `apps/web/src/modules/contenus/section-parcours.ts` ; rendu `apps/web/src/components/section-parcours.tsx`.

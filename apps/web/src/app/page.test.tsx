@@ -21,12 +21,47 @@ vi.mock(
     sponsorsServiceMock as unknown as typeof import('@/modules/sponsors/service'),
 );
 
+// Story 9.3 : la section parcours de l’accueil lit les épreuves via le
+// contrat dédié (lui-même branché sur getParcoursPage — voir
+// section-parcours.test.tsx pour le rendu complet, vues actuelle et épopée 11).
+const sectionParcoursMock = vi.hoisted(() => ({
+  getSectionParcours: vi.fn(),
+}));
+
+vi.mock(
+  '@/modules/contenus/section-parcours',
+  () =>
+    sectionParcoursMock as unknown as typeof import('@/modules/contenus/section-parcours'),
+);
+
 import HomePage, { revalidate as ACCUEIL_REVALIDATE } from './page';
+
+const VUE_PARCOURS_ACCUEIL = {
+  epreuves: [
+    {
+      slug: 'longue',
+      nom: 'La Longue — 35 km',
+      distanceKm: 35,
+      gpxUrl: 'https://files.exemple.dz/longue.gpx',
+      metriques: null,
+      pointsDePassage: null,
+    },
+    {
+      slug: 'moyenne',
+      nom: 'La Moyenne — 12 km',
+      distanceKm: 12,
+      gpxUrl: null,
+      metriques: null,
+      pointsDePassage: null,
+    },
+  ],
+};
 
 let HTML_ACCUEIL = '';
 
 beforeAll(async () => {
   sponsorsServiceMock.getPartenairesSection.mockResolvedValue(null);
+  sectionParcoursMock.getSectionParcours.mockResolvedValue(VUE_PARCOURS_ACCUEIL);
   HTML_ACCUEIL = await renduAccueil();
 });
 
@@ -245,6 +280,61 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
       expect(alpha).toBeGreaterThanOrEqual(0.6);
       expect(alpha).toBeLessThanOrEqual(0.85);
     }
+  });
+});
+
+describe('accueil vitrine — section parcours (story 9.3)', () => {
+  function trancheSection(): string {
+    const debut = HTML_ACCUEIL.indexOf('titre-parcours-accueil');
+    expect(debut).toBeGreaterThan(-1);
+    const fin = HTML_ACCUEIL.indexOf('titre-piliers', debut);
+    return HTML_ACCUEIL.slice(debut, fin);
+  }
+
+  it('après le hero et la section épreuves — jamais le premier écran', () => {
+    const html = HTML_ACCUEIL;
+    expect(html.indexOf('aa-hero--plein')).toBeLessThan(html.indexOf('titre-parcours-accueil'));
+    expect(html.indexOf('titre-epreuves-2027')).toBeLessThan(html.indexOf('titre-parcours-accueil'));
+    expect(html.indexOf('titre-parcours-accueil')).toBeLessThan(html.indexOf('titre-piliers'));
+  });
+
+  it('sélecteur servi : deux radios homonymes, premier coché, fiches des deux épreuves', () => {
+    const section = trancheSection();
+    const radios = section.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
+    expect(radios.length).toBe(2);
+    for (const radio of radios) {
+      expect(radio).toContain('name="epreuve-parcours-accueil"');
+    }
+    expect(radios[0]).toContain('checked');
+    expect(section).toContain('La Longue — 35 km');
+    expect(section).toContain('La Moyenne — 12 km');
+    expect(section).toContain('href="https://files.exemple.dz/longue.gpx"');
+  });
+
+  it('aucun chiffre de dénivelé, altitude, horaire ou barrière tant que la donnée est nulle', () => {
+    const section = trancheSection();
+    for (const interdit of [
+      'Dénivelé',
+      'Altitude',
+      'Heure de départ',
+      'Barrière horaire',
+      'Points de passage',
+    ]) {
+      expect(section).not.toContain(interdit);
+    }
+  });
+
+  it('emplacement de la visualisation annoncé, section rendue sans la visualisation', () => {
+    const section = trancheSection();
+    expect(section).toContain('titre-viz-parcours');
+    expect(section).toContain('carte en relief et le profil altimétrique');
+    expect(section).not.toContain('<iframe');
+    expect(section).not.toContain('<canvas');
+    expect(section).not.toContain('maplibre');
+  });
+
+  it('la page détaillée reste à portée : lien /parcours dans la section', () => {
+    expect(trancheSection()).toContain('href="/parcours"');
   });
 });
 

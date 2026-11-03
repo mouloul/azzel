@@ -10,7 +10,9 @@ import {
   GlypheYaz,
 } from '@/components/glyphes-piliers';
 import { SectionPartenaires } from '@/components/section-partenaires';
+import { SectionParcours } from '@/components/section-parcours';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { getSectionParcours } from '@/modules/contenus/section-parcours';
 import { getPartenairesSection } from '@/modules/sponsors/service';
 
 
@@ -53,9 +55,10 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [telephone, partenaires] = await Promise.all([
+  const [telephone, partenaires, parcours] = await Promise.all([
     readAssistancePhone(),
     getPartenairesSection(),
+    getSectionParcours(),
   ]);
 
   return (
@@ -194,6 +197,12 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Section parcours (story 9.3) : coquille de comparaison des deux
+          épreuves — sélecteur sans JS, champs réels seulement (nom, distance,
+          GPX), emplacement de la visualisation annoncé (épopée 11). Après le
+          hero et la section épreuves : jamais le premier écran. */}
+      <SectionParcours view={parcours} />
 
       <section
         className="vitrine-bande"
