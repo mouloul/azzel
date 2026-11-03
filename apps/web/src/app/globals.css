@@ -1,4 +1,7 @@
-:where(a, button, input, select, textarea):focus-visible {
+/* Story 10.4 — summary ajouté au sélecteur : le commutateur « Journal sync »
+   du bandeau volontaires (et tout <details> du site) est une cible interactive
+   et montrait AUCUN focus clavier (écart prouvé en audit UX-DR-23). */
+:where(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--surface);

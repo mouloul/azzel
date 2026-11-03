@@ -1,6 +1,6 @@
 # Scénarios de recette — Épopée 6 : App coureurs & suivi GPS
 
-**Produit :** Azzel · **Périmètre :** stories 6-1 → 6-4 · **Date :** 2026-10-23
+**Produit :** Azzel · **Périmètre :** stories 6-1 → 6-4 · **Date :** 2026-10-23 · **Révision :** 2026-11-03 (story 10.2 : état du suivi en tête d'écran, « Se déconnecter » en pastille destructive — pas de pas supprimé)
 **Durée estimée :** 75–100 min (module par module, arrêt/reprise possible)
 
 Chaque module se teste indépendamment. Prérequis : recettes épopées 1 à 5 terminées (comptes coureurs, dossier validé + dossard attribué, e-dossard consulté au moins une fois).
@@ -48,12 +48,14 @@ Installer l'APK/`dev build` retourné par EAS, puis `pnpm dev:runners` et ouvrir
 | 1.8 | Mode avion SANS avoir ouvert l'app avant | Écran « Première connexion requise » + bouton Réessayer |
 | 1.9 | Se connecter au WEB avec le même compte (autre navigateur) | La session de l'app est révoquée (AD-5) : prochaine requête app → écran de reconnexion, cache CONSERVÉ |
 | 1.10 | « Se déconnecter » dans l'app | Données locales purgées (e-dossard invisible hors reconnexion) |
+| 1.10b | Forme du bouton « Se déconnecter » (refonte 10.2, écrans dossier ET e-dossard) | Pastille ROUGE pleine, seule action de cette forme sur l'écran — distincte des boutons contour par la forme et le libellé, pas seulement par la couleur |
 
 ## S2 — Suivi GPS opt-in (story 6-2)
 
 | # | Action | Résultat attendu |
 |---|--------|------------------|
 | 2.1 | Écran Suivi (depuis dossier ou e-dossard) | Toggle à OFF par défaut + texte « **Désactivé : rien n'est enregistré.** » |
+| 2.1b | Première ligne de l'écran Suivi (refonte 10.2) | L'état du suivi en toutes lettres AVANT le titre « Ta famille te suit » : « Suivi désactivé », « Suivi activé », « Suivi activé (app ouverte) », « Suivi en pause » ou « Suivi interrompu » — jamais la couleur seule, aucune donnée de progression/position inventée |
 | 2.2 | Activer le suivi | Demandes de permission (avant-plan + arrière-plan) puis état actif ; navigation automatique vers la rubrique batterie (S3) |
 | 2.3 | Refuser la permission | Suivi silencieusement inactif, message SANS culpabilisation (« en pause… il repartira tout seul ») — aucun crash |
 | 2.4 | Attendre un cycle (ou marcher) | Bandeau « ◷ 1 position en attente » ; le journal (clic bandeau) montre l'entrée d'envoi après synchronisation « ✓ envoyés — file : 0 » |

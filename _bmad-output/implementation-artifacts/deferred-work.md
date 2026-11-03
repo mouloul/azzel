@@ -238,3 +238,11 @@
 - **Fraîcheur en en-tête** et non en pied (critère 5.1 historique).
 - **Artboard `AdminDossiers`** absent du dépôt.
 - **Pas de `bmad-code-review`** sur cette story.
+
+## Deferred from: build de la story 10.4 — non-régression des surfaces d'exploitation (2026-11-03)
+
+- **Cibles sous 44 px, antérieures à l'épopée 10, non corrigées** : `.btn-lien` ≈ 41,5 px (`globals.css:489`, « Revenir à ma fiche », « Reconnecte-toi ») ; `.admin-nav__lien` ≈ 43,2 px (`admin.css:18`) ; `.course-ligne-annuler` ≈ 21 px (`course.css:71`, annulation d'un passage, story 5.4). Ce dernier est le plus grave : action d'annulation du PC à 21 px.
+- **Non vérifiable sans appareil** : latence réelle de confirmation < 1 s sur iPhone (couverte seulement par la structure du code), rendu natif, hors-ligne de bout en bout dans un navigateur réel. Le câblage de reprise réseau est couvert par lecture de source, pas par comportement (vitest sans DOM).
+- **Recette de l'épopée 5 inchangée** : aucun pas ne désignait d'élément modifié ; recette 6 étendue (2 pas) car les écrans de l'app coureurs en dépendent.
+- **Ce que GLM a touché en base de dev** : sessions de sonde créées puis supprimées pour mesurer le précache sur build réel ; à confirmer que la base de dev est propre.
+- **Pas de `bmad-code-review`** sur 10.1 à 10.4.

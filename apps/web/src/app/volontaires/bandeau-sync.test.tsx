@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { renderToReadableStream } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -137,5 +141,36 @@ describe('BandeauSync — rendu initial (SSR, avant effets)', () => {
     expect(html).toContain('Envoyer maintenant');
     expect(html).toMatch(/Journal sync \((?:<!-- -->)?0/);
     expect(html).toContain('volontaires-sync');
+  });
+});
+
+describe('BandeauSync — déclenchements de reprise réseau câblés (story 10.4, FR-14)', () => {
+  // Les effets exigeraient un DOM (harnais node) : le câblage est épinglé par
+  // lecture de source, même principe que suivi-etat.test.ts côté app coureurs.
+  // Le MOTEUR de reprise (coupure au 2ᵉ lot, reprise par tranches, retry
+  // register-then) est couvert en pur dans sync-terrain.test.ts.
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'bandeau-sync.tsx'),
+    'utf8',
+  );
+
+  it('retour du réseau : écouteur online → relance de la sync (retiré au démontage)', () => {
+    expect(source).toContain("window.addEventListener('online', auRetour)");
+    expect(source).toContain("window.removeEventListener('online', auRetour)");
+  });
+
+  it('signal du parent (ouverture en ligne après fetch etat) : declenchement > 0 → lancer', () => {
+    expect(source).toContain('if (declenchement > 0)');
+  });
+
+  it('un déclenchement PENDANT un envoi est mémorisé puis rejoué (jamais perdu)', () => {
+    expect(source).toContain('relance.current = true');
+    expect(source).toContain('void lancer();');
+  });
+
+  it('l’ouverture en ligne tente la sync dès le montage (canal appareil, AD-5)', () => {
+    const montage = source.indexOf("typeof navigator === 'undefined'");
+    const tentative = source.indexOf('await lancer();', montage);
+    expect(tentative).toBeGreaterThan(-1);
   });
 });

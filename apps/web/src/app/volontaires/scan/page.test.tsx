@@ -340,6 +340,27 @@ describe('clignotement borné dans le temps', () => {
   });
 });
 
+describe('scan-client.tsx — émission immédiate, append arrière-plan (NFR-1, story 10.4)', () => {
+  const sourceClient = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'scan-client.tsx'),
+    'utf8',
+  );
+
+  it('voyant + bip partent AVANT l’attente de l’append outbox dans surPayload (les DEUX modes)', () => {
+    // Le contrat « le bip et le voyant SONT la confirmation (< 1 s) » tient
+    // au câblage : setVoyant + emettreRetourAudio précèdent void termine.then.
+    // Les orchestrateurs purs sont couverts dans etats-scan.test.ts ; ce garde
+    // empêche de déplacer l’émission derrière l’écriture IndexedDB.
+    for (const mode of ['traiterScanRetrait', 'traiterScanPassage']) {
+      const bloc = sourceClient.slice(sourceClient.indexOf(mode));
+      const emission = bloc.indexOf('emettreRetourAudio');
+      const append = bloc.indexOf('termine.then');
+      expect(emission).toBeGreaterThan(-1);
+      expect(append).toBeGreaterThan(emission);
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Story 4.3 — mode retrait (?mode=retrait) : débloqué par une mission
 // distribution_dossards « en cours », libellés dédiés, redirection douce.
