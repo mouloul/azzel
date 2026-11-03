@@ -161,3 +161,18 @@
 - source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
   summary: Quand la story 11.1 branchera `parcours.json`, le formatage des nombres devra rester identique côté serveur : `Intl.NumberFormat('fr-FR')` produit une espace fine insécable comme séparateur de milliers, et le rendu comme les tests reposent sur le même moteur.
   evidence: contrat de données `apps/web/src/modules/contenus/section-parcours.ts` ; rendu `apps/web/src/components/section-parcours.tsx`.
+
+## Deferred from: build de la story 9.5 — résultats refondus (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Les garanties « un rafraîchissement ne vide pas la recherche » et « Effacer les filtres remet les trois états à zéro » ne sont pas testées en comportement. L'environnement vitest est `node`, sans DOM : la frappe, le polling et le clic ne sont pas simulables. Elles reposent sur le rendu d'un champ contrôlé et sur des regex lues dans le code source (`setSaisieDossard('')`, absence de `key` sur `VueResultats`), ce qui prouve la structure mais pas le comportement.
+  evidence: `apps/web/src/app/resultats/resultats-live.test.tsx`. Même limite déjà notée pour l'onglet « Mon trail » (build du 2026-10-31). Décision d'architecture à prendre une fois pour toutes : ajouter jsdom ou happy-dom, ou un test Playwright, ce qui couvrirait les deux surfaces.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Quand un filtre ne retient que des dossards d'une épreuve sans heure de départ configurée, les classements affichent « Aucun dossard ne correspond à cette recherche » alors que le dossard apparaît dans « Derniers arrivés ». Cas rare, jour J, documenté par un test de caractérisation et non par une garantie voulue.
+  evidence: test « CARACTÉRISATION (à arbitrer) » dans `resultats-live.test.tsx`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Les abandons ne sont filtrés que par dossard, pas par catégorie : le contrat public ne porte pas la catégorie sur les abandons.
+  evidence: contrat `ResultatsPublic` dans `packages/shared`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Un champ de recherche par nom est exclu par NFR-7 (canaux publics anonymes). La story avait été rédigée à tort avec « par nom ou dossard » ; texte corrigé dans `epics.md`. Si le comité veut chercher un coureur par nom, il faut une surface authentifiée, pas la page publique.
+  evidence: NFR-7 et AD-7 dans `epics.md`.

@@ -1000,7 +1000,7 @@ So that je suive la course depuis mon téléphone.
 
 **Given** la page `apps/web/src/app/resultats/`
 **When** la refonte est appliquée
-**Then** la recherche par nom ou dossard, le filtre d'épreuve et le filtre de catégorie sont visibles sans défilement sur mobile
+**Then** la recherche par numéro de dossard, le filtre d'épreuve et le filtre de catégorie sont visibles sans défilement sur mobile — la recherche par nom est exclue : les canaux publics n'exposent jamais un nom, seulement le dossard qualifié par édition (NFR-7, AD-7)
 **And** le tableau de classement reste lisible en écran étroit : conteneur à défilement horizontal propre, en-têtes de colonnes associés, places et temps en chiffres monospace alignés
 **And** les mentions « Classement provisoire » et la fraîcheur des données restent affichées en toutes lettres (UX-DR-22, NFR-5)
 **And** l'état vide avant départ affiche « Pas encore de partants — départ à HH:MM »

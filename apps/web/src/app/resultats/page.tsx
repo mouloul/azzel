@@ -72,7 +72,7 @@ export default async function ResultatsPage({
           </p>
 
           {resultats === null ? (
-            <div role="status" className="resultats-indisponible">
+            <div role="status" className="socle-carte resultats-indisponible">
               <p className="resultats-indisponible-message">
                 Les résultats ne sont pas disponibles pour le moment.
               </p>

@@ -1,30 +1,46 @@
-/* Page publique /resultats (story 7.2, FR-16, SM-5) — registre sobre
-   vouvoyé, tokens vitrine existants (zéro lib, budget 3G). Fichier propre à
-   la page : hors du chunk CSS partagé avec l’accueil (budget, calque
-   course.css). Seule animation : le point pulsé du témoin « direct », coupé
-   sous prefers-reduced-motion — le texte porte seul l’info dans tous les cas.
-   Badge dossard : calque course-dossard (méta + tabular-nums, « mono »). */
+/* Page publique /resultats (stories 7.2/7.3, refonte 9.5) — registre sobre
+   vouvoyé, socle de classes sémantiques (socle.css chargé par layout.tsx :
+   socle-carte, socle-entete, socle-table, socle-champ, socle-action) + tokens
+   uniquement (zéro littéral, garde css-sans-litteraux.test.ts). Fichier propre
+   à la page : hors du chunk CSS partagé avec l’accueil (budget, calque
+   course.css). Seules animations : le point pulsé du témoin « direct » et les
+   squelettes, coupées sous prefers-reduced-motion — le texte porte seul
+   l’info dans tous les cas. Badge dossard : calque course-dossard (méta +
+   tabular-nums, « mono »). Chiffres de rangs/temps : pile monospace système
+   (calque aa-parcours-accueil__ligne dd, story 9.3), alignés à droite. */
 
 .resultats-live{display:grid;gap:var(--space-6)}
 
 /* SSR dégradé (base indisponible à l’ouverture) : message doux + assistance,
-   jamais d’erreur brute — le rafraîchisseur reste monté dessous. */
-.resultats-indisponible{display:grid;gap:var(--space-2);padding:var(--space-4);border:2px solid var(--line);border-radius:var(--radius-md)}
+   jamais d’erreur brute — le rafraîchisseur reste monté dessous. Gabarit
+   socle-carte (posé dans le balisage) : cette feuille ne porte que l'écart. */
+.resultats-indisponible{display:grid;gap:var(--space-2)}
 .resultats-indisponible-message{margin:0;font-family:var(--font-display);font-weight:700;font-size:17px;color:var(--heading)}
 .resultats-indisponible-action{margin:0;font-size:15px;line-height:1.6;color:var(--ink)}
 .resultats-indisponible-action a{color:var(--heading);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 
-.resultats-entete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-3)}
+.resultats-entete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-3);padding-bottom:var(--space-3);border-bottom:1px solid var(--az-filet)}
 .resultats-temoin{display:inline-flex;align-items:center;gap:calc(var(--space-3) / 2);margin:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:var(--heading)}
 .resultats-temoin-point{flex-shrink:0;width:10px;height:10px;border-radius:9999px;background:var(--action);animation:resultats-point-pulse 2s ease-in-out infinite}
 @keyframes resultats-point-pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .resultats-fraicheur{margin:0;font-size:15px;font-variant-numeric:tabular-nums;color:var(--ink-muted)}
 .resultats-reconnexion{margin-left:calc(var(--space-3) / 2);color:var(--ink-muted)}
-.resultats-vide{margin:0;padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-md);font-size:16px;color:var(--ink)}
+.resultats-vide{margin:0;font-size:16px;line-height:1.6;color:var(--ink)}
 
-/* Derniers arrivés (10) : le plus récent en tête, épreuve qualifie le dossard. */
-.resultats-derniers{border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4);display:grid;gap:var(--space-3)}
-.resultats-derniers-titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--heading)}
+/* Recherche + filtres (story 9.5) : contrôles natifs étiquetés au gabarit du
+   socle (socle-champ = cibles 48 px, focus 2 px). Champs côte à côte sur
+   écran large, dossard pleine largeur PUIS épreuve/catégorie en duo sur
+   téléphone — tout tient dans le premier écran. */
+.resultats-recherche{margin:0}
+.resultats-recherche-cadre{border:0;padding:0;margin:0;min-inline-size:0}
+.resultats-recherche-legende{margin:0 0 var(--az-space-3);padding:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--heading)}
+.resultats-recherche-champs{display:grid;grid-template-columns:minmax(160px,2fr) 1fr 1fr;gap:var(--az-space-3);align-items:end}
+.resultats-recherche-effacer{justify-self:start}
+
+/* Derniers arrivés (10) : le plus récent en tête, épreuve qualifie le dossard.
+   Gabarit socle-carte + socle-entete (posés dans le balisage). */
+.resultats-derniers{display:grid;gap:var(--az-space-3)}
+.resultats-derniers .socle-entete{margin-bottom:0}
 .resultats-derniers-liste{list-style:none;margin:0;padding:0;display:grid}
 .resultats-arrive{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0}
 .resultats-arrive + .resultats-arrive{border-top:1px dashed var(--line)}
@@ -33,20 +49,34 @@
 .resultats-derniers-vide{margin:0;font-size:14px;color:var(--ink-muted)}
 
 /* Classements par épreuve : le libellé « Classement provisoire » en toutes
-   lettres fait partie du contrat (jamais « officiel », jamais « temps réel »). */
+   lettres fait partie du contrat (jamais « officiel », jamais « temps réel »).
+   Chaque épreuve vit dans une socle-carte à en-tête socle-entete. */
 .resultats-epreuves{display:grid;gap:var(--space-6)}
-.resultats-libelle{margin:0;font-family:var(--font-display);font-weight:700;font-size:22px;text-transform:uppercase;color:var(--heading)}
-.resultats-epreuve{border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4);display:grid;gap:var(--space-3)}
-.resultats-epreuve-titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--heading)}
-.resultats-epreuve-meta{margin:0;font-size:14px;color:var(--ink-muted)}
-.resultats-table{width:100%;border-collapse:collapse;font-size:15px}
-.resultats-table th{font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);text-align:left;padding:0 var(--space-2) var(--space-2) 0}
-.resultats-table td{padding:var(--space-2) var(--space-2) var(--space-2) 0;border-top:1px dashed var(--line);vertical-align:middle}
-.resultats-table thead th{border-top:none}
-.resultats-temps,.resultats-rang{font-variant-numeric:tabular-nums}
-.resultats-statut{color:var(--ink-muted)}
-.resultats-abandons{margin:0;font-size:14px;color:var(--ink-muted)}
+.resultats-libelle{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--heading)}
+.resultats-epreuve{display:grid;gap:var(--az-space-3)}
+.resultats-epreuve .socle-entete{margin-bottom:0}
+.resultats-epreuve-meta{margin:0;font-size:14px;font-variant-numeric:tabular-nums;color:var(--ink-muted)}
 .resultats-epreuve-vide{margin:0;font-size:14px;color:var(--ink-muted)}
+.resultats-abandons{margin:0;font-size:14px;color:var(--ink-muted)}
+.resultats-aucun{margin:0;padding:var(--az-space-4);border:1.5px dashed var(--az-filet-controle);border-radius:var(--az-rayon-sm);font-size:15px;line-height:1.6;color:var(--ink)}
+
+/* Podium (story 9.5) : mise en avant des PREMIERS servis (rang ex æquo lu
+   tel quel, aucun recalcul). Rang en display, dossard en badge, temps mono. */
+.resultats-podium{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:var(--az-space-3)}
+.resultats-podium-carte{display:flex;align-items:center;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-rayon-sm);padding:var(--az-space-3) var(--az-space-4)}
+.resultats-podium-rang{margin:0;font-family:var(--font-display);font-weight:800;font-size:30px;line-height:1;color:var(--heading)}
+.resultats-podium-infos{margin:0;margin-left:auto;display:grid;gap:var(--az-space-1);justify-items:end}
+.resultats-podium-temps{font-size:14px;color:var(--ink)}
+
+/* Tableau dense du socle dans son conteneur à défilement : en écran étroit la
+   ZONE défile (focusable, rôle region annoncé), le tableau ne déborde jamais.
+   Rangs et temps en monospace aligné (pile système, calque 9.3). */
+.resultats-defile{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.resultats-defile:focus-visible{outline:2px solid var(--az-focus);outline-offset:2px}
+.resultats-table{min-width:480px}
+.resultats-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.resultats-table .resultats-mono{text-align:right}
+.resultats-statut{color:var(--ink-muted)}
 
 /* Badge dossard : calque course-dossard — « mono » = méta + tabular-nums. */
 .resultats-dossard{font-family:var(--az-font-meta);font-weight:var(--az-font-weight-surtitre);font-variant-numeric:tabular-nums;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:0 calc(var(--az-space-1) * 1.5);line-height:1.6}
@@ -54,7 +84,7 @@
 /* Squelettes de chargement calqués sur la mise en page finale (SSR dégradé :
    premier polling en vol) — pulsation douce, coupée sous reduced-motion. */
 .resultats-squelette{display:grid;gap:var(--space-6)}
-.resultats-squelette-bloc{border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4);display:grid;gap:var(--space-3)}
+.resultats-squelette-bloc{border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-5);display:grid;gap:var(--space-3)}
 .resultats-squelette-ligne{height:14px;border-radius:9999px;background:var(--line);animation:resultats-squelette-pulse 1.6s ease-in-out infinite}
 @keyframes resultats-squelette-pulse{0%,100%{opacity:1}50%{opacity:.45}}
 
@@ -64,8 +94,15 @@
 }
 
 @media (max-width:640px){
-  /* Mobile : l'épreuve qualifie le dossard (anonymat) — elle reste VISIBLE,
-     compacte et tronquée proprement, jamais masquée (jamais un dossard nu). */
+  /* Mobile : recherche pleine largeur puis épreuve/catégorie en duo — les
+     trois contrôles restent visibles sans défilement. */
+  .resultats-recherche-champs{grid-template-columns:1fr 1fr}
+  .resultats-recherche-dossard{grid-column:1 / -1}
+  /* Podium : une carte par ligne (rang à gauche, dossard et temps à droite). */
+  .resultats-podium{grid-template-columns:1fr}
+  /* Mobile : l'épreuve des derniers arrivés qualifie le dossard (anonymat) —
+      elle reste VISIBLE, compacte et tronquée proprement, jamais masquée
+      (jamais un dossard nu). */
   .resultats-arrive{gap:var(--space-2)}
   .resultats-arrive-epreuve{flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
