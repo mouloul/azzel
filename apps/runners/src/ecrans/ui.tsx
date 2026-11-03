@@ -50,12 +50,17 @@ export function Bouton({
   theme: AppTheme;
   label: string;
   onPress: () => void;
-  variante?: 'principal' | 'contour';
+  /** 10.2 — « destructeur » : action irréversible (déconnexion) — pleine
+   * pastille danger, seule de cette forme dans sa pile : distincte des
+   * actions courantes par la FORME (pleine vs contour) et le libellé
+   * explicite, pas seulement par la couleur (UX-DR, story 10.2). */
+  variante?: 'principal' | 'contour' | 'destructeur';
   /** Requête en cours : onPress ignoré, opacité réduite (anti double-tap). */
   disabled?: boolean;
   accessibilityLabel?: string;
 }) {
   const principal = variante === 'principal';
+  const destructeur = variante === 'destructeur';
   return (
     <Pressable
       disabled={disabled}
@@ -71,21 +76,30 @@ export function Bouton({
           paddingHorizontal: theme.spacing[5],
           paddingVertical: theme.spacing[3],
           borderRadius: theme.radius.full,
-          backgroundColor: principal
-            ? pressed
-              ? theme.colors.ink
-              : theme.colors.action
-            : 'transparent',
-          borderWidth: principal ? 0 : 2,
+          backgroundColor: destructeur
+            ? theme.colors.danger
+            : principal
+              ? pressed
+                ? theme.colors.ink
+                : theme.colors.action
+              : 'transparent',
+          borderWidth: destructeur || principal ? 0 : 2,
           borderColor: theme.colors.action,
         },
+        destructeur && pressed ? { opacity: 0.8 } : null,
         disabled ? { opacity: 0.5 } : null,
       ]}
     >
       <Text
         style={[
           theme.fonts.surtitre,
-          { color: principal ? theme.colors.actionInk : theme.colors.action },
+          {
+            color: destructeur
+              ? theme.colors.dangerInk
+              : principal
+                ? theme.colors.actionInk
+                : theme.colors.action,
+          },
         ]}
       >
         {label}

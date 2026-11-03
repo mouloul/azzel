@@ -114,7 +114,7 @@ export function EcranDossier({
       </Carte>
       <Bouton theme={theme} label="Voir mon e-dossard" onPress={onVoirEdossard} />
       <Bouton theme={theme} label="Suivi GPS de ma course" variante="contour" onPress={onVoirSuivi} />
-      <Bouton theme={theme} label="Se déconnecter" variante="contour" onPress={onDeconnexion} />
+      <Bouton theme={theme} label="Se déconnecter" variante="destructeur" onPress={onDeconnexion} />
       <BoutonAssistance theme={theme} telephone={telephone} />
     </ScrollView>
   );

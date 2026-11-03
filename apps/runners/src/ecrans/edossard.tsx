@@ -1,6 +1,8 @@
 import { ScrollView, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
+import { tokens } from '@azzel/shared';
+
 import type { AppTheme } from '../theme';
 import type { EdossardCache } from '../offline-cache';
 import { BandeauHorsLigne, Bouton, BoutonAssistance, Carte, Surtitre } from './ui';
@@ -16,14 +18,17 @@ import { BandeauHorsLigne, Bouton, BoutonAssistance, Carte, Surtitre } from './u
 
 /** Couleurs fixes de la carte sombre (rôles *-sombre des tokens shared). */
 const CARTE_SOMBRE = {
-  fond: '#101A14',
-  encre: '#E8F0E9',
-  encre2: '#A9C0AE',
-  accent: '#8FD4A8',
-  encreAccent: '#0C2415',
+  fond: tokens.colors['bg-sombre'],
+  encre: tokens.colors['texte-sombre'],
+  encre2: tokens.colors['texte-2-sombre'],
+  accent: tokens.colors['action-sombre'],
+  encreAccent: tokens.colors['action-texte-sombre'],
 } as const;
 
-const QR_ENCRE = '#16281C';
+const QR_ENCRE = tokens.colors['texte'];
+// Blanc PUR du support du QR — exigence de lisibilité du scanner, pas une
+// couleur de charte : il ne suit ni le thème ni les tokens (exception
+// épinglée dans source-sans-litteraux.test.ts).
 const QR_BLANC = '#FFFFFF';
 
 interface PropsEdossard {
@@ -181,7 +186,7 @@ export function EcranEdossard({
           variante="contour"
           onPress={onVoirBatterie}
         />
-        <Bouton theme={theme} label="Se déconnecter" variante="contour" onPress={onDeconnexion} />
+        <Bouton theme={theme} label="Se déconnecter" variante="destructeur" onPress={onDeconnexion} />
         <BoutonAssistance theme={theme} telephone={telephone} />
       </Carte>
     </ScrollView>

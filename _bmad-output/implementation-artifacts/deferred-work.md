@@ -220,3 +220,12 @@
 - **`.volontaires-badge` hors socle** : pilule pleine « HORS-LIGNE PRÊT » ; `.socle-pastille` est point + libellé. Arbitrer si le socle doit offrir une variante pleine.
 - **`LogoutButton` / `AssistanceButton` (`.btn-contour`)** restent sur l'ancienne classe globale, partagée par 8+ surfaces : à migrer dans 10.3 ou une story transverse.
 - **Pas de `bmad-code-review`** sur cette story.
+
+## Deferred from: build de la story 10.2 — app coureurs refondue (2026-11-03)
+
+- **Rendu natif jamais vérifié** (contrastes plein soleil, Switch, QR, états pressed) : recette sur appareil requise.
+- **Mode sombre par défaut** : critère de la story non appliqué, contredit UX-DR-2 (suit le système). Décision produit à prendre.
+- **« Se déconnecter » en pleine pastille danger** : choix de design à valider ; une déconnexion est-elle assez destructrice pour dominer l'écran ? Alternative : contour + icône.
+- **Distinction destructeur/principal par la couleur seule** sur l'écran dossier faute d'icônes.
+- **Progression et position sur le tracé** : absentes de l'état de l'app ; à spécifier si voulues (dépend de l'épopée 11).
+- **Pas de `bmad-code-review`** sur cette story.

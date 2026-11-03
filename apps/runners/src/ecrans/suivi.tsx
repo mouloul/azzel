@@ -24,6 +24,29 @@ import { Bouton, BoutonAssistance, Carte, Surtitre, Titre } from './ui';
 /** Intervalle lisible par un humain (7 min — constante shared, jamais durcie ici). */
 const MINUTES_INTERVALLE = Math.round(INTERVALLE_POSITION_MS / 60_000);
 
+/**
+ * 10.2 — libellé d'état en tête d'écran : les quatre états vécus par le
+ * coureur, en toutes lettres (jamais la couleur seule). « En pause » =
+ * permission refusée (le suivi repart tout seul une fois autorisée) ;
+ * « interrompu » = piège iOS « Autoriser une fois ». Avant-plan seul :
+ * honnête sur ce qui est réellement capturé.
+ */
+export function libelleEtatSuivi(optIn: boolean, etatMoteur: EtatSuivi): string {
+  if (!optIn) {
+    return 'Suivi désactivé';
+  }
+  switch (etatMoteur) {
+    case 'interrompu':
+      return 'Suivi interrompu';
+    case 'permission-refusee':
+      return 'Suivi en pause';
+    case 'actif-avant-plan':
+      return 'Suivi activé (app ouverte)';
+    default:
+      return 'Suivi activé';
+  }
+}
+
 export interface PropsEcranSuivi {
   theme: AppTheme;
   telephone: string;
@@ -69,7 +92,11 @@ export function EcranSuivi({
     >
       <Carte theme={theme}>
         <Surtitre theme={theme}>Suivi de course</Surtitre>
-        <Titre theme={theme}>Ta famille te suit</Titre>
+        {/* 10.2 — l'état du suivi (activé / désactivé / en pause /
+            interrompu) est la PREMIÈRE information lisible de l'écran,
+            avant le titre : au soleil, sur le sentier, c'est la seule que
+            le coureur cherche. Aucune donnée de progression ni de position
+            n'existe dans l'état de l'app — on n'en affiche aucune. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: 48 }}>
           <Switch
             accessibilityLabel="Activer le suivi GPS de ma course"
@@ -79,10 +106,14 @@ export function EcranSuivi({
             trackColor={{ true: theme.colors.action, false: theme.colors.ink2 }}
             thumbColor={theme.colors.surface}
           />
-          <Text style={[theme.fonts.bodyLg, { color: theme.colors.ink, flex: 1 }]}>
-            {optIn ? 'Suivi activé' : 'Suivi désactivé'}
+          <Text
+            accessibilityRole="text"
+            style={[theme.fonts.bodyLg, { color: theme.colors.ink, flex: 1 }]}
+          >
+            {libelleEtatSuivi(optIn, etatMoteur)}
           </Text>
         </View>
+        <Titre theme={theme}>Ta famille te suit</Titre>
 
         {optIn ? (
           interrompu ? (

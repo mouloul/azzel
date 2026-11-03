@@ -41,4 +41,14 @@ describe('thème React Native dérivé des tokens', () => {
     expect(lightTheme.spacing.gutter).toBe(24);
     expect(lightTheme.spacing.marginMobile).toBe(20);
   });
+
+  // Story 10.2 — planchers UX-DR-9/FR-7 : numéro de dossard à 74 px (token
+  // dossard), badges « HORS-LIGNE PRÊT » et bandeau sync en monospace.
+  it('dossard 74 px et méta monospace dans les deux modes', () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      expect(theme.fonts.dossard.fontSize).toBe(74);
+      expect(theme.fonts.metaLg.fontFamily).toBe('Menlo');
+      expect(theme.fonts.meta.fontFamily).toBe('Menlo');
+    }
+  });
 });
