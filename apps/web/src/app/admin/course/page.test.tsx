@@ -301,6 +301,21 @@ describe('page /admin/course — bloc alertes hors-délais (story 5.2)', () => {
     const blocReduit = css.slice(css.indexOf('@media (prefers-reduced-motion'));
     expect(blocReduit).toMatch(/\.course-alertes\s*\{\s*animation:\s*none/);
   });
+
+  // Story 10.3 — renforcement : la mise à jour du board ne peut pas faire
+  // clignoter l'écran. Toute NOUVELLE animation dans course.css doit sortir
+  // du polling (ou passer par le socle) : ce garde échoue sinon.
+  it('CSS : la SEULE animation de la feuille est le clignotement du bloc alertes (aucun flash global)', () => {
+    const css = readFileSync(fileURLToPath(new URL('./course.css', import.meta.url)), 'utf8');
+    const sansKeyframes = css.replace(/@keyframes[^{]+\{[\s\S]*?\n\}/g, '');
+    const horsKeyframesEtMedia = sansKeyframes.slice(
+      0,
+      sansKeyframes.indexOf('@media (prefers-reduced-motion'),
+    );
+    const animations = horsKeyframesEtMedia.match(/animation:/g) ?? [];
+    expect(animations.length).toBe(1);
+    expect(horsKeyframesEtMedia).toMatch(/\.course-alertes\{[^}]*animation:/);
+  });
 });
 
 describe('page /admin/course — saisie des abandons (story 5.3)', () => {

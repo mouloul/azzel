@@ -870,17 +870,22 @@ function MissionLigne({
     <div className="mission-ligne">
       <div className="mission-entete">
         <span className="dossier-nom">{mission.titre}</span>
-        <span className="chip-meta">{mission.typeLabel}</span>
+        <span className="socle-chip">{mission.typeLabel}</span>
+        {/* Story 10.3 — couverture en pastille du socle : point coloré +
+            libellé, jamais la couleur seule. */}
         <span
           className={
-            mission.couverture === 'couverte' ? 'chip-statut chip-couverte' : 'chip-statut chip-vacante'
+            mission.couverture === 'couverte'
+              ? 'socle-pastille socle-pastille--succes'
+              : 'socle-pastille socle-pastille--attention'
           }
         >
+          <span className="socle-pastille-point" aria-hidden="true" />
           {mission.couvertureLabel}
         </span>
-        {mission.estArrivee ? <span className="chip-meta">— arrivée</span> : null}
+        {mission.estArrivee ? <span className="socle-chip">— arrivée</span> : null}
         {mission.barriereLe !== null ? (
-          <span className="chip-meta mission-barriere">— barrière {formatLocalHeure(mission.barriereLe)}</span>
+          <span className="socle-chip mission-barriere">— barrière {formatLocalHeure(mission.barriereLe)}</span>
         ) : null}
         <span className="meta mission-horaires">
           {formatLocalDateTime(mission.debutLe)} → {formatLocalDateTime(mission.finLe)}

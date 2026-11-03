@@ -181,6 +181,16 @@
   white-space: nowrap;
 }
 
+/* Story 10.3 — cellule numérique du gabarit commun (dossards, heures,
+   classements) : mono tabulaire, alignée à droite, sans wrap. Posée sur le
+   th ET le td de la colonne concernée. */
+.socle-table .socle-num {
+  font-family: var(--az-font-meta);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* --- Champ de formulaire + étiquette ------------------------------------------ */
 
 .socle-champ {

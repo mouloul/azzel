@@ -1,21 +1,20 @@
 /* Admin volontaires (story 3.1) — rapport d'import ligne par ligne, liste et
    renvoi d'invitation. Fichier propre à la page /admin/volontaires : hors du
-   chunk CSS partagé avec la vitrine (budget premier chargement). */
+   chunk CSS partagé avec la vitrine (budget premier chargement).
+   Story 10.3 — le gabarit des tableaux vit dans le socle (.socle-table,
+   chargé par le layout racine) : cette feuille ne porte plus que la mise en
+   forme propre à la page. En écran étroit (≤ 640 px), chaque ligne devient une
+   carte lisible : les sélecteurs sont préfixés `table.volontaires-table`
+   (spécificité 0-1-2) pour rester AU-DESSUS des règles du socle (0-1-1)
+   quel que soit l'ordre de concaténation des feuilles. */
 .volontaires-liste{display:grid;gap:var(--az-space-3)}
 .volontaires-rapport{display:grid;gap:var(--az-space-2);margin-top:var(--az-space-3)}
-.volontaires-resume{border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
-.volontaires-table{width:100%;border-collapse:collapse;font-size:var(--az-font-size-meta)}
-.volontaires-table th,.volontaires-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--az-filet);vertical-align:top}
-.volontaires-table thead th{font-family:var(--az-font-surtitre);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
-.chip-statut{display:inline-block;font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);font-weight:var(--az-font-weight-meta);letter-spacing:var(--az-letter-spacing-eyebrow);text-transform:uppercase;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:2px 8px}
-.chip-cree{color:var(--az-texte-1);border-color:currentColor}
-.chip-ignore{color:var(--az-texte-2)}
-.chip-rejete{color:var(--az-texte-2);border-color:currentColor}
+.volontaires-resume{border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3)}
 @media (max-width:640px){
-  .volontaires-table,.volontaires-table thead,.volontaires-table tbody,.volontaires-table tr,.volontaires-table th,.volontaires-table td{display:block}
-  .volontaires-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .volontaires-table tr{padding:var(--az-space-2) 0;border-bottom:1px solid var(--az-filet)}
-  .volontaires-table td{border-bottom:none;padding:2px 0}
-  .volontaires-table td::before{content:attr(data-libelle) " : ";font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
+  table.volontaires-table,table.volontaires-table thead,table.volontaires-table tbody,table.volontaires-table tr,table.volontaires-table th,table.volontaires-table td{display:block}
+  table.volontaires-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  table.volontaires-table tr{padding:var(--az-space-2) 0;border-bottom:1px solid var(--az-filet)}
+  table.volontaires-table td{border-bottom:none;padding:var(--az-space-1) 0}
+  table.volontaires-table td::before{content:attr(data-libelle) " : ";font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
 }
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

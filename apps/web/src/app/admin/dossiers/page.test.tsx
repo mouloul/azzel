@@ -40,6 +40,51 @@ const SESSION_ORGANISATEUR = {
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
 };
 
+const DOSSIERS = [
+  {
+    coureurId: 'coureur-1',
+    prenom: 'Amina',
+    nom: 'Belkacem',
+    email: 'amina@exemple.dz',
+    epreuveNom: 'La Longue',
+    dossard: 101,
+    status: 'validé',
+    refusalReason: null,
+    hasActivePreuve: true,
+    preuveDepositedAt: '2027-03-01T09:00:00.000Z',
+    acceptationsCompletes: true,
+    createdAt: '2027-02-20T10:00:00.000Z',
+  },
+  {
+    coureurId: 'coureur-2',
+    prenom: 'Yacine',
+    nom: 'Haddad',
+    email: 'yacine@exemple.dz',
+    epreuveNom: 'La Moyenne',
+    dossard: null,
+    status: 'refusé',
+    refusalReason: 'Preuve illisible',
+    hasActivePreuve: false,
+    preuveDepositedAt: null,
+    acceptationsCompletes: false,
+    createdAt: '2027-02-21T11:00:00.000Z',
+  },
+  {
+    coureurId: 'coureur-3',
+    prenom: 'Nina',
+    nom: 'Cherif',
+    email: 'nina@exemple.dz',
+    epreuveNom: 'La Longue',
+    dossard: 103,
+    status: 'en constitution',
+    refusalReason: null,
+    hasActivePreuve: false,
+    preuveDepositedAt: null,
+    acceptationsCompletes: false,
+    createdAt: '2027-02-22T12:00:00.000Z',
+  },
+];
+
 async function rendu(): Promise<string> {
   const flux = await renderToReadableStream(
     <AdminDossiersPage searchParams={Promise.resolve({})} />,
@@ -92,5 +137,106 @@ describe('page /admin/dossiers — rendu serveur', () => {
     const html = await rendu();
     expect(html).toContain('Connexion indisponible.');
     expect(html).not.toContain('/admin/rapports');
+  });
+});
+
+describe('page /admin/dossiers — gabarit tableau commun (story 10.3)', () => {
+  beforeEach(() => {
+    inscriptionsServiceMock.getDossiersState.mockResolvedValue({
+      edition: {
+        id: 'edition-1',
+        slug: '2027',
+        nom: 'Édition 2027',
+        dateCourse: '2027-03-26',
+        registrationClosesAt: '2027-03-16T22:59:59.000Z',
+        registrationOpen: false,
+      },
+      dossiers: DOSSIERS,
+      hasMore: false,
+    });
+  });
+
+  it('tableau sur .socle-table dans un conteneur .table-wrap (défilement horizontal)', async () => {
+    const html = await rendu();
+    expect(html).toContain('class="table-wrap"');
+    expect(html).toContain('class="socle-table table-dossiers"');
+  });
+
+  it('en-têtes associés : chaque colonne porte scope="col"', async () => {
+    const html = await rendu();
+    for (const colonne of ['Coureur', 'Épreuve', 'Dossard', 'Statut', 'Preuve', 'Acceptations', 'Inscrit le']) {
+      expect(html).toMatch(new RegExp(`<th[^>]*scope="col"[^>]*>\\s*${colonne}`));
+    }
+  });
+
+  it('statuts en pastille du socle : point + LIBELLÉ, jamais la couleur seule', async () => {
+    const html = await rendu();
+    expect(html).toContain('socle-pastille--succes');
+    expect(html).toContain('socle-pastille--danger');
+    expect(html).toContain('socle-pastille--attention');
+    expect(html.match(/socle-pastille-point/g)?.length).toBe(DOSSIERS.length);
+    // Le libellé textuel porte le sens dans tous les cas.
+    expect(html).toContain('Validé');
+    expect(html).toContain('Refusé');
+    expect(html).toContain('En constitution');
+    // Le motif de refus reste affiché sous la pastille.
+    expect(html).toContain('Preuve illisible');
+  });
+
+  it('dossards et heures en monospace aligné à droite (.socle-num sur th et td)', async () => {
+    const html = await rendu();
+    expect(html).toMatch(/<th[^>]*class="socle-num"[^>]*>\s*Dossard/);
+    expect(html).toMatch(/<th[^>]*class="socle-num"[^>]*>\s*Inscrit le/);
+    expect(html).toMatch(/<td[^>]*class="socle-num"[^>]*>.*dossard-numero/s);
+  });
+});
+
+describe('page /admin/dossiers — compteurs de tête de page (story 10.3)', () => {
+  beforeEach(() => {
+    inscriptionsServiceMock.getDossiersState.mockResolvedValue({
+      edition: {
+        id: 'edition-1',
+        slug: '2027',
+        nom: 'Édition 2027',
+        dateCourse: '2027-03-26',
+        registrationClosesAt: '2027-03-16T22:59:59.000Z',
+        registrationOpen: false,
+      },
+      dossiers: DOSSIERS,
+      hasMore: false,
+    });
+  });
+
+  it('quatre compteurs lisibles sans survol, chiffres exacts, libellés distincts', async () => {
+    const html = await rendu();
+    expect(html).toContain('dossiers-compteurs');
+    // 1 validé, 1 en constitution, 2 acceptations incomplètes, 2 dossards.
+    expect(html).toMatch(/Validés<\/dt><dd[^>]*>1</);
+    expect(html).toMatch(/En constitution<\/dt><dd[^>]*>1</);
+    expect(html).toMatch(/Acceptations manquantes<\/dt><dd[^>]*>2</);
+    expect(html).toMatch(/Dossards attribués<\/dt><dd[^>]*>2</);
+  });
+
+  it('aucun filtre de statut : les compteurs ne sont PAS des liens (pas de lien mort)', async () => {
+    const html = await rendu();
+    const compteurs = html.slice(html.indexOf('dossiers-compteurs'), html.indexOf('</dl>'));
+    expect(compteurs).not.toContain('<a ');
+    expect(compteurs).not.toContain('href');
+  });
+
+  it('liste complète : aucune réserve sur le périmètre compté', async () => {
+    const html = await rendu();
+    expect(html).not.toContain('Comptages sur la liste affichée');
+  });
+
+  it('liste tronquée : le périmètre compté est dit (hasMore)', async () => {
+    inscriptionsServiceMock.getDossiersState.mockResolvedValue({
+      edition: null,
+      dossiers: DOSSIERS,
+      hasMore: true,
+    });
+    const html = await rendu();
+    expect(html).toContain('Comptages sur la liste affichée');
+    expect(html).toContain('tronquée à 200');
   });
 });

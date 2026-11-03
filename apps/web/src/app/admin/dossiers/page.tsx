@@ -6,7 +6,6 @@ import { requireRolePage } from '@/modules/iam/session';
 
 import {
   COUREUR_STATUS_LABELS,
-  coureurStatusChipClass,
   type CoureurStatus,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
@@ -14,11 +13,20 @@ import { getDossiersState } from '@/modules/inscriptions/service';
 
 import { AdminIndisponible } from '../indisponible';
 import { AttributionDossards } from './attribution-dossards';
+import './dossiers.css';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Dossiers',
+};
+
+/* Story 10.3 — pastille d'état du gabarit tableau commun : le point porte la
+   couleur, le libellé porte le sens (jamais la couleur seule). */
+const PASTILLE_STATUT: Record<CoureurStatus, string> = {
+  'en constitution': 'socle-pastille--attention',
+  'validé': 'socle-pastille--succes',
+  'refusé': 'socle-pastille--danger',
 };
 
 export default async function AdminDossiersPage({
@@ -54,6 +62,17 @@ export default async function AdminDossiersPage({
     );
   }
 
+  // Story 10.3 — compteurs de tête de page, calculés UNIQUEMENT sur la liste
+  // déjà chargée (aucune requête supplémentaire). La page ne porte qu'un
+  // filtre de recherche texte : aucun filtre de statut n'existe, les
+  // compteurs ne sont donc PAS des liens (un compteur non cliquable vaut
+  // mieux qu'un lien mort). Les libellés comptent ce qui est affiché.
+  const valides = state.dossiers.filter((d) => d.status === 'validé').length;
+  const enConstitution = state.dossiers.filter((d) => d.status === 'en constitution').length;
+  const acceptationsManquantes = state.dossiers.filter((d) => !d.acceptationsCompletes)
+    .length;
+  const dossardsAttribues = state.dossiers.filter((d) => d.dossard !== null).length;
+
   return (
     <section className="admin">
       <article className="card">
@@ -63,6 +82,31 @@ export default async function AdminDossiersPage({
           Examine les dossiers de l’édition, télécharge les preuves, valide ou refuse avec un
           motif.
         </p>
+        <dl className="dossiers-compteurs">
+          <div className="dossiers-compteur">
+            <dt className="dossiers-compteur-libelle">Validés</dt>
+            <dd className="dossiers-compteur-nombre">{valides}</dd>
+          </div>
+          <div className="dossiers-compteur">
+            <dt className="dossiers-compteur-libelle">En constitution</dt>
+            <dd className="dossiers-compteur-nombre">{enConstitution}</dd>
+          </div>
+          <div className="dossiers-compteur">
+            <dt className="dossiers-compteur-libelle">Acceptations manquantes</dt>
+            <dd className="dossiers-compteur-nombre">{acceptationsManquantes}</dd>
+          </div>
+          <div className="dossiers-compteur">
+            <dt className="dossiers-compteur-libelle">Dossards attribués</dt>
+            <dd className="dossiers-compteur-nombre">{dossardsAttribues}</dd>
+          </div>
+        </dl>
+        {search.length > 0 || state.hasMore ? (
+          <p className="hint">
+            Comptages sur la liste affichée
+            {search.length > 0 ? ' (recherche active)' : ''}
+            {state.hasMore ? ' — tronquée à 200 dossiers' : ''}.
+          </p>
+        ) : null}
         <form className="search-form" action="/admin/dossiers" method="get" role="search">
           <label className="field" htmlFor="dossiers-q">
             <span className="search-label">Rechercher un coureur (nom ou email)</span>
@@ -89,16 +133,20 @@ export default async function AdminDossiersPage({
           </p>
         ) : (
           <div className="table-wrap">
-            <table className="table-dossiers">
+            <table className="socle-table table-dossiers">
               <thead>
                 <tr>
                   <th scope="col">Coureur</th>
                   <th scope="col">Épreuve</th>
-                  <th scope="col">Dossard</th>
+                  <th scope="col" className="socle-num">
+                    Dossard
+                  </th>
                   <th scope="col">Statut</th>
                   <th scope="col">Preuve</th>
                   <th scope="col">Acceptations</th>
-                  <th scope="col">Inscrit le</th>
+                  <th scope="col" className="socle-num">
+                    Inscrit le
+                  </th>
                   <th scope="col">
                     <span className="visually-hidden">Action</span>
                   </th>
@@ -114,7 +162,7 @@ export default async function AdminDossiersPage({
                       <span className="meta dossier-email">{dossier.email}</span>
                     </td>
                     <td>{dossier.epreuveNom}</td>
-                    <td>
+                    <td className="socle-num">
                       {dossier.dossard !== null ? (
                         <span className="dossard-numero">{dossier.dossard}</span>
                       ) : (
@@ -122,8 +170,14 @@ export default async function AdminDossiersPage({
                       )}
                     </td>
                     <td>
-                      <span className={coureurStatusChipClass(dossier.status)}>
-                        {COUREUR_STATUS_LABELS[dossier.status as CoureurStatus] ?? dossier.status}
+                      <span
+                        className={`socle-pastille ${
+                          PASTILLE_STATUT[dossier.status as CoureurStatus] ?? ''
+                        }`}
+                      >
+                        <span className="socle-pastille-point" aria-hidden="true" />
+                        {COUREUR_STATUS_LABELS[dossier.status as CoureurStatus] ??
+                          dossier.status}
                       </span>
                       {dossier.status === 'refusé' && dossier.refusalReason !== null ? (
                         <span className="meta dossier-motif">{dossier.refusalReason}</span>
@@ -143,7 +197,7 @@ export default async function AdminDossiersPage({
                         <span className="meta">À compléter</span>
                       )}
                     </td>
-                    <td>{formatLocalDateTime(dossier.createdAt)}</td>
+                    <td className="socle-num">{formatLocalDateTime(dossier.createdAt)}</td>
                     <td>
                       <Link className="btn-lien" href={`/admin/dossiers/${dossier.coureurId}`}>
                         Examiner

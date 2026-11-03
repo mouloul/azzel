@@ -311,7 +311,7 @@ export function ContenusManager({ blocs }: { blocs: ContenuBlocAdmin[] }) {
               <h2>{bloc.titre}</h2>
               <span className="contenu-meta">{LIBELLES_SLUGS[bloc.slug]}</span>
               {bloc.aConfirmer ? (
-                <span className="chip-meta">À confirmer par le comité</span>
+                <span className="socle-chip">À confirmer par le comité</span>
               ) : null}
             </span>
           </summary>

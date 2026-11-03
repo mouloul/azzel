@@ -690,28 +690,11 @@ main {
   overflow-x: auto;
 }
 
+/* Story 10.3 — le gabarit de base vit dans le socle (.socle-table) ; la
+   classe locale ne porte plus que la largeur minimale qui rend le défilement
+   horizontal du conteneur .table-wrap réel en écran étroit. */
 .table-dossiers {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--az-font-size-body);
-}
-
-.table-dossiers th,
-.table-dossiers td {
-  padding: var(--az-space-2) var(--az-space-3);
-  border-bottom: 1px solid var(--az-filet);
-  text-align: left;
-  vertical-align: top;
-}
-
-.table-dossiers th {
-  font-family: var(--az-font-surtitre);
-  font-size: var(--az-font-size-meta);
-  font-weight: var(--az-font-weight-meta);
-  letter-spacing: var(--az-letter-spacing-eyebrow);
-  text-transform: uppercase;
-  color: var(--az-texte-2);
-  white-space: nowrap;
+  min-width: 720px;
 }
 
 .dossier-nom {

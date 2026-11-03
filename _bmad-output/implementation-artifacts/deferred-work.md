@@ -229,3 +229,12 @@
 - **Distinction destructeur/principal par la couleur seule** sur l'écran dossier faute d'icônes.
 - **Progression et position sur le tracé** : absentes de l'état de l'app ; à spécifier si voulues (dépend de l'épopée 11).
 - **Pas de `bmad-code-review`** sur cette story.
+
+## Deferred from: build de la story 10.3 — back-office refondu (2026-11-03)
+
+- **Rendu admin jamais vu** : aucune base ni session en dev ; recette humaine (`dev-db.sh` + session organisateur) requise.
+- **Compteurs sur ≤ 200 dossiers** : ne reflètent pas l'édition entière au-delà. Un vrai « à valider » (preuve déposée, non traitée) et des liens de filtre exigent une requête d'agrégat et un filtre de statut : à spécifier.
+- **Chips sans base** : `.chip-statut` était définie dans une feuille non chargée par `/admin/missions` — signe que le CSS par route masque des dépendances ; couvert pour ces cas par le socle.
+- **Fraîcheur en en-tête** et non en pied (critère 5.1 historique).
+- **Artboard `AdminDossiers`** absent du dépôt.
+- **Pas de `bmad-code-review`** sur cette story.
