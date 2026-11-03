@@ -2,7 +2,7 @@
 
 import { formatLocalDateTime } from '@azzel/shared';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 
 import { AssistanceButton } from '@/components/assistance-button';
 
@@ -83,9 +83,11 @@ async function compressImage(file: File): Promise<Blob | null> {
 export function PreuveForm({
   state,
   assistancePhone,
+  children,
 }: {
   state: PreuveState;
   assistancePhone: string;
+  children?: ReactNode;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<PreuveDraft | null>(null);
@@ -279,9 +281,7 @@ export function PreuveForm({
           Photographie ou capture de ton reçu de virement CCP : elle est compressée sur ton
           téléphone puis déposée ({formatKiloBytes(MAX_PROOF_BYTES)} maximum).
         </p>
-        <p className="hint">
-          Formats acceptés : {ACCEPTED_PROOF_FORMATS_LABEL}. Aucun autre format n’est accepté.
-        </p>
+        {children}
         {deposited !== null && (
           <div className="recap" role="status" aria-live="polite">
             <p className="recap-titre">Preuve déposée</p>
@@ -315,8 +315,11 @@ export function PreuveForm({
             </p>
           </div>
         ) : (
-          <div className="field">
-            <label htmlFor="preuve-fichier">Ton reçu (photo ou PDF)</label>
+          <div className="socle-champ">
+            <label className="socle-etiquette" htmlFor="preuve-fichier">
+              Ton reçu (photo ou PDF)
+              <span className="champ-obligatoire"> (obligatoire)</span>
+            </label>
             <input
               id="preuve-fichier"
               name="fichier"
@@ -325,8 +328,20 @@ export function PreuveForm({
               onChange={onFileChange}
               disabled={busy !== null || pending}
               aria-invalid={fieldError !== null || undefined}
-              aria-describedby={fieldError !== null ? 'preuve-erreur-format' : undefined}
+              aria-describedby={
+                [
+                  'preuve-aide-formats',
+                  fieldError !== null ? 'preuve-erreur-format' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
             />
+            <p id="preuve-aide-formats" className="socle-champ-aide">
+              Formats acceptés : {ACCEPTED_PROOF_FORMATS_LABEL}. Aucun autre format n’est
+              accepté. Poids maximum {formatKiloBytes(MAX_PROOF_BYTES)} : les photos sont
+              compressées sur ton téléphone.
+            </p>
             {busy !== null && (
               <p className="hint" role="status" aria-live="polite">
                 {busy}

@@ -1,6 +1,10 @@
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
 
+import { AssistanceButton } from '@/components/assistance-button';
+import { FilEtapes, etapesInscription } from '@/components/fil-etapes';
+import { readAssistancePhone } from '@/lib/assistance-phone';
+
 import {
   COUREUR_STATUS_EN_CONSTITUTION,
   formatDateFrUtc,
@@ -9,6 +13,7 @@ import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/err
 import { getInscriptionState, type InscriptionState } from '@/modules/inscriptions/service';
 
 import { InscriptionForm } from './inscription-form';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +22,7 @@ export const metadata = {
 };
 
 export default async function InscriptionPage() {
+  const assistancePhone = readAssistancePhone();
   // Garde de RÔLE, pas seulement de session : un organisateur ou un
   // volontaire est renvoyé vers son espace au lieu de rester ici.
   const result = await requireRolePage('coureur');
@@ -30,6 +36,9 @@ export default async function InscriptionPage() {
           <div role="alert" aria-live="assertive" className="error-box">
             <p className="error-message">{envelope.error.message}</p>
             <p className="error-action">{envelope.error.action}</p>
+          </div>
+          <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
           </div>
         </article>
       </section>
@@ -52,6 +61,7 @@ export default async function InscriptionPage() {
             <p className="error-action">{envelope.error.action}</p>
           </div>
           <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
             <a className="btn-contour" href="/espace-coureur">
               Retour à mon espace
             </a>
@@ -117,5 +127,9 @@ export default async function InscriptionPage() {
     );
   }
 
-  return <InscriptionForm state={state} />;
+  return (
+    <InscriptionForm state={state} assistancePhone={assistancePhone}>
+      <FilEtapes etapes={etapesInscription(state.coureur)} />
+    </InscriptionForm>
+  );
 }

@@ -32,6 +32,10 @@ export interface PreuveState {
   coureurStatus: string | null;
   refusalReason: string | null;
   preuve: PreuveSummary | null;
+  /** Story 9.4 (fil d'étapes) : les DEUX documents (décharge + règlement)
+   *  sont acceptés — lu sur le même enregistrement coureur, aucune requête
+   *  supplémentaire. N'alimente que l'affichage. */
+  documentsAcceptes: boolean;
 }
 
 export interface PreuveServiceDeps {
@@ -75,7 +79,13 @@ export async function getPreuveState(
   const store = deps.store ?? getInscriptionsStore();
   const edition = await store.findCurrentEdition(session.organisationId);
   if (!edition) {
-    return { edition: null, coureurStatus: null, refusalReason: null, preuve: null };
+    return {
+      edition: null,
+      coureurStatus: null,
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: false,
+    };
   }
   const coureur = await store.findCoureurByAccount(
     session.accountId,
@@ -90,6 +100,10 @@ export async function getPreuveState(
     coureurStatus: coureur ? coureur.status : null,
     refusalReason: coureur ? coureur.refusalReason : null,
     preuve: preuve ? toPreuveSummary(preuve) : null,
+    documentsAcceptes:
+      coureur !== null &&
+      coureur.dechargeAcceptedAt !== null &&
+      coureur.reglementAcceptedAt !== null,
   };
 }
 

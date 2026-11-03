@@ -3,11 +3,16 @@ import { formatLocalDateTime } from '@azzel/shared';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
 
+import { AssistanceButton } from '@/components/assistance-button';
+import { FilEtapes, etapesAcceptations } from '@/components/fil-etapes';
+import { readAssistancePhone } from '@/lib/assistance-phone';
+
 import { COUREUR_STATUS_EN_CONSTITUTION, DOCUMENT_SLUGS } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getAcceptancesState, type AcceptancesState } from '@/modules/inscriptions/service';
 
 import { AcceptancesForm } from './acceptances-form';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +20,8 @@ export const metadata = {
   title: 'Décharge et règlement',
 };
 
-export default async function AcceptationsPage() {
+export default async function AcceptancesPage() {
+  const assistancePhone = readAssistancePhone();
   // Garde de RÔLE, pas seulement de session : un organisateur ou un
   // volontaire est renvoyé vers son espace au lieu de rester ici.
   const result = await requireRolePage('coureur');
@@ -29,6 +35,9 @@ export default async function AcceptationsPage() {
           <div role="alert" aria-live="assertive" className="error-box">
             <p className="error-message">{envelope.error.message}</p>
             <p className="error-action">{envelope.error.action}</p>
+          </div>
+          <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
           </div>
         </article>
       </section>
@@ -51,6 +60,7 @@ export default async function AcceptationsPage() {
             <p className="error-action">{envelope.error.action}</p>
           </div>
           <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
             <a className="btn-contour" href="/espace-coureur">
               Retour à mon espace
             </a>
@@ -148,5 +158,9 @@ export default async function AcceptationsPage() {
     );
   }
 
-  return <AcceptancesForm state={state} />;
+  return (
+    <AcceptancesForm state={state} assistancePhone={assistancePhone}>
+      <FilEtapes etapes={etapesAcceptations(state.coureurStatus)} />
+    </AcceptancesForm>
+  );
 }

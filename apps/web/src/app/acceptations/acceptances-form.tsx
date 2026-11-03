@@ -2,7 +2,9 @@
 
 import { formatLocalDateTime } from '@azzel/shared';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+
+import { AssistanceButton } from '@/components/assistance-button';
 
 import type { AcceptancesState, DocumentSummary } from '@/modules/inscriptions/service';
 
@@ -20,7 +22,15 @@ function documentNote(document: DocumentSummary | undefined): string {
   return `J’ai lu et j’accepte ${document ? document.titre.toLowerCase() : 'ce document'}`;
 }
 
-export function AcceptancesForm({ state }: { state: AcceptancesState }) {
+export function AcceptancesForm({
+  state,
+  assistancePhone,
+  children,
+}: {
+  state: AcceptancesState;
+  assistancePhone: string;
+  children?: ReactNode;
+}) {
   const router = useRouter();
   const [decharge, setDecharge] = useState(false);
   const [reglement, setReglement] = useState(false);
@@ -112,6 +122,7 @@ export function AcceptancesForm({ state }: { state: AcceptancesState }) {
             nouveau met à jour l’horodatage et la version.
           </p>
         )}
+        {children}
 
         <div className="documents">
           {state.documents.map((document) => (
@@ -127,7 +138,7 @@ export function AcceptancesForm({ state }: { state: AcceptancesState }) {
 
         <form onSubmit={onSubmit} noValidate>
           <fieldset className="fieldset">
-            <legend>Acceptations</legend>
+            <legend>Acceptations — les deux cases sont obligatoires</legend>
             <label className="option">
               <input
                 type="checkbox"
@@ -186,6 +197,9 @@ export function AcceptancesForm({ state }: { state: AcceptancesState }) {
                 </>
               )}
             </p>
+            <div className="auth-alt">
+              <AssistanceButton phone={assistancePhone} />
+            </div>
           </div>
         )}
       </article>

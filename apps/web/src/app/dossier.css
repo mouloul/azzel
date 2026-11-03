@@ -1,0 +1,197 @@
+/* Story 9.4 — habillage du parcours de dossier coureur (inscription,
+   acceptations, preuve) et de la checklist de l'espace coureur.
+   Feuille chargée UNIQUEMENT par ces routes : la page d'accueil (budget
+   2.1/9.6) ne la paie pas.
+   Contrat : aucune couleur littérale (garde css-sans-litteraux.test.ts),
+   cibles interactives ≥ 44 px jamais collées au bord, écarts ≥ 8 px
+   (--az-space-2), focus 2 px par la règle globale de globals.css, texte AA
+   (paires épinglées : ink/ink-muted sur surface, action/encre). */
+
+/* --- Fil d'étapes ------------------------------------------------------- */
+
+/* Marqueurs distincts PAR LA FORME : courante = disque plein à double filet,
+   fait = disque plein portant un glyphe ✓, a-faire et suite = disque creux
+   numéroté. Le texte porte l'état (« Étape N sur 4 — en cours », « Fait »,
+   « À faire ») : la couleur n'est jamais seule à porter l'information. */
+.fil-etapes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2);
+}
+
+.fil-etape {
+  display: flex;
+}
+
+.fil-etape-lien,
+.fil-etape-corps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-2);
+  min-height: 44px;
+  padding: var(--az-space-1) var(--az-space-2);
+  border-radius: var(--az-radius-full);
+}
+
+/* Cible de retour ≥ 44 px ; soulignement sur le libellé seul pour rester
+   sobre sur l'ensemble. */
+.fil-etape-lien {
+  text-decoration: none;
+}
+
+.fil-etape-lien .fil-etape-libelle {
+  color: var(--az-action);
+  text-decoration: underline;
+}
+
+.fil-etape-marqueur {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  background: var(--az-surface);
+  color: var(--az-texte-2);
+  font-family: var(--az-font-meta-lg);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fil-etape-textes {
+  display: grid;
+}
+
+.fil-etape-libelle {
+  font-weight: 600;
+  color: var(--az-texte);
+}
+
+.fil-etape-etat {
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}
+
+/* Courante : disque plein ocre + double filet (action/surface ≥ 3:1, paire
+   focus épinglée ; encre on-action/action AA épinglée). */
+.fil-etape--courante .fil-etape-marqueur {
+  border-color: var(--az-action);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  box-shadow: 0 0 0 2px var(--az-surface), 0 0 0 4px var(--az-action);
+}
+
+.fil-etape--courante .fil-etape-libelle {
+  font-weight: 800;
+}
+
+.fil-etape--courante .fil-etape-etat {
+  color: var(--az-texte);
+  font-weight: 700;
+}
+
+/* Faite : disque plein vert portant ✓ (succes-encre sur succes, les deux
+   thèmes ; renforce le texte « Fait », jamais seule). */
+.fil-etape--fait .fil-etape-marqueur {
+  border-color: var(--az-succes);
+  background: var(--az-succes);
+  color: var(--az-succes-encre);
+}
+
+/* --- Gabarit formulaire du socle, appoints parcours ---------------------- */
+
+/* Mentions « (obligatoire) » : texte, jamais un astérisque couleur seule. */
+.champ-obligatoire {
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  font-weight: 600;
+  color: var(--az-texte-2);
+}
+
+/* --- Parcours : formulaire + récapitulatif ------------------------------- */
+
+/* Une colonne par défaut (téléphone) : le récapitulatif, APRÈS le formulaire
+   dans le DOM, passe dessous. Largeur de lecture élargie à partir de 960 px
+   pour poser le récapitulatif en colonne latérale. */
+.dossier-edition {
+  display: grid;
+  gap: var(--az-space-4);
+}
+
+.dossier-recap {
+  display: grid;
+  gap: var(--az-space-3);
+  align-content: start;
+}
+
+.dossier-recap-vide {
+  margin: 0;
+  color: var(--az-texte-2);
+}
+
+@media (min-width: 960px) {
+  .dossier-section {
+    max-width: 60rem;
+  }
+
+  .dossier-edition {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    align-items: start;
+    gap: var(--az-space-5);
+  }
+}
+
+/* --- Checklist espace coureur (habillage 9.4) ---------------------------- */
+
+/* Actions nommées : cibles pleines ≥ 44 px, pilule, écart natif de la liste
+   (≥ 8 px). Le libellé d'action reste le texte exact de la story 1.7. */
+.checklist-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 1.5px solid var(--az-action);
+  border-radius: var(--az-radius-full);
+  background: transparent;
+  color: var(--az-action);
+  font-weight: 700;
+  text-decoration: none;
+  width: max-content;
+}
+
+.checklist-action:hover {
+  background: var(--az-action);
+  color: var(--az-action-texte);
+}
+
+/* Même gabarit, passive : la pièce est neutralisée (inscriptions fermées),
+   jamais présentée comme une action possible. */
+.checklist-action-inactive {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 1.5px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  color: var(--az-texte-2);
+  font-weight: 600;
+  width: max-content;
+}
+
+/* Puce : anneau creux à faire, disque plein fait — la forme change avec
+   l'état, pas seulement la couleur (le texte « Fait »/« À faire » reste
+   porteur de sens). */
+.checklist-puce {
+  background: transparent;
+  border: 2px solid var(--az-filet-controle);
+}
+
+.checklist-item--fait .checklist-puce {
+  background: var(--az-succes);
+  border-color: var(--az-succes);
+}

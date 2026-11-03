@@ -1,7 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+
+import { AssistanceButton } from '@/components/assistance-button';
 
 import {
   AGE_CATEGORY_LABELS,
@@ -34,12 +36,18 @@ const NETWORK_ERROR = {
   action: 'Vérifie ta connexion puis réessaie.',
 };
 
+const OBLIGATOIRE = <span className="champ-obligatoire"> (obligatoire)</span>;
+
 function fieldId(key: keyof InscriptionFormInput): string {
   return `inscription-${key}`;
 }
 
 function errorId(key: keyof InscriptionFormInput): string {
   return `inscription-erreur-${key}`;
+}
+
+function aideId(key: keyof InscriptionFormInput): string {
+  return `inscription-aide-${key}`;
 }
 
 function prefill(state: InscriptionState): InscriptionFormInput {
@@ -59,7 +67,15 @@ function prefill(state: InscriptionState): InscriptionFormInput {
   };
 }
 
-export function InscriptionForm({ state }: { state: InscriptionState }) {
+export function InscriptionForm({
+  state,
+  assistancePhone,
+  children,
+}: {
+  state: InscriptionState;
+  assistancePhone: string;
+  children?: ReactNode;
+}) {
   const router = useRouter();
   const edition = state.edition;
   const [values, setValues] = useState<InscriptionFormInput>(() => prefill(state));
@@ -157,10 +173,10 @@ export function InscriptionForm({ state }: { state: InscriptionState }) {
     } finally {
       setPending(false);
     }
-  }
+  };
 
   return (
-    <section className="auth auth-wide">
+    <section className="auth auth-wide dossier-section">
       <article className="card">
         <p className="surtitre">Inscription</p>
         <h1>{state.coureur ? 'Modifier mon inscription' : 'M’inscrire'}</h1>
@@ -176,220 +192,269 @@ export function InscriptionForm({ state }: { state: InscriptionState }) {
             Une inscription existe déjà à ton nom : un nouvel envoi met à jour ton dossier.
           </p>
         )}
-        <form onSubmit={onSubmit} noValidate>
-          <fieldset className="fieldset">
-            <legend>Ton identité</legend>
-            <div className="field">
-              <label htmlFor={fieldId('prenom')}>Prénom</label>
-              <input
-                id={fieldId('prenom')}
-                name="prenom"
-                type="text"
-                autoComplete="given-name"
-                required
-                value={values.prenom}
-                onChange={(event) => update('prenom', event.target.value)}
-                aria-invalid={errorFor('prenom') !== null || undefined}
-                aria-describedby={errorFor('prenom') !== null ? errorId('prenom') : undefined}
-              />
-              {errorFor('prenom') !== null && (
-                <p id={errorId('prenom')} className="field-error">
-                  {errorFor('prenom')}
-                </p>
-              )}
-            </div>
-            <div className="field">
-              <label htmlFor={fieldId('nom')}>Nom</label>
-              <input
-                id={fieldId('nom')}
-                name="nom"
-                type="text"
-                autoComplete="family-name"
-                required
-                value={values.nom}
-                onChange={(event) => update('nom', event.target.value)}
-                aria-invalid={errorFor('nom') !== null || undefined}
-                aria-describedby={errorFor('nom') !== null ? errorId('nom') : undefined}
-              />
-              {errorFor('nom') !== null && (
-                <p id={errorId('nom')} className="field-error">
-                  {errorFor('nom')}
-                </p>
-              )}
-            </div>
-            <div className="field">
-              <label htmlFor={fieldId('dateNaissance')}>Date de naissance</label>
-              <input
-                id={fieldId('dateNaissance')}
-                name="dateNaissance"
-                type="date"
-                autoComplete="bday"
-                required
-                value={values.dateNaissance}
-                onChange={(event) => update('dateNaissance', event.target.value)}
-                aria-invalid={errorFor('dateNaissance') !== null || undefined}
-                aria-describedby={
-                  errorFor('dateNaissance') !== null ? errorId('dateNaissance') : undefined
-                }
-              />
-              {errorFor('dateNaissance') !== null && (
-                <p id={errorId('dateNaissance')} className="field-error">
-                  {errorFor('dateNaissance')}
-                </p>
-              )}
-            </div>
-            <div className="field">
-              <label htmlFor={fieldId('telephone')}>Téléphone</label>
-              <input
-                id={fieldId('telephone')}
-                name="telephone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                required
-                value={values.telephone}
-                onChange={(event) => update('telephone', event.target.value)}
-                aria-invalid={errorFor('telephone') !== null || undefined}
-                aria-describedby={errorFor('telephone') !== null ? errorId('telephone') : undefined}
-              />
-              {errorFor('telephone') !== null && (
-                <p id={errorId('telephone')} className="field-error">
-                  {errorFor('telephone')}
-                </p>
-              )}
-            </div>
-          </fieldset>
-
-          <fieldset className="fieldset">
-            <legend>Ton épreuve</legend>
-            <div className="option-group" role="radiogroup" aria-label="Épreuve">
-              {state.epreuves.map((epreuve, index) => (
-                <label key={epreuve.slug} className="option">
-                  <input
-                    type="radio"
-                    name="epreuve"
-                    id={index === 0 ? fieldId('epreuve') : fieldId('epreuve') + '-' + epreuve.slug}
-                    value={epreuve.slug}
-                    checked={values.epreuve === epreuve.slug}
-                    onChange={() => update('epreuve', epreuve.slug)}
-                    aria-invalid={errorFor('epreuve') !== null || undefined}
-                    aria-describedby={errorFor('epreuve') !== null ? errorId('epreuve') : undefined}
-                  />
-                  <span className="option-label">{epreuve.nom}</span>
-                  <span className="meta">{epreuve.distanceKm} km</span>
+        {children}
+        <div className="dossier-edition">
+          <form onSubmit={onSubmit} noValidate>
+            <fieldset className="fieldset">
+              <legend>Ton identité</legend>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('prenom')}>
+                  Prénom{OBLIGATOIRE}
                 </label>
-              ))}
-            </div>
-            {errorFor('epreuve') !== null && (
-              <p id={errorId('epreuve')} className="field-error" role="alert">
-                {errorFor('epreuve')}
+                <input
+                  id={fieldId('prenom')}
+                  name="prenom"
+                  type="text"
+                  autoComplete="given-name"
+                  required
+                  value={values.prenom}
+                  onChange={(event) => update('prenom', event.target.value)}
+                  aria-invalid={errorFor('prenom') !== null || undefined}
+                  aria-describedby={
+                    errorFor('prenom') !== null
+                      ? errorId('prenom')
+                      : undefined
+                  }
+                />
+                {errorFor('prenom') !== null && (
+                  <p id={errorId('prenom')} className="field-error">
+                    {errorFor('prenom')}
+                  </p>
+                )}
+              </div>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('nom')}>
+                  Nom{OBLIGATOIRE}
+                </label>
+                <input
+                  id={fieldId('nom')}
+                  name="nom"
+                  type="text"
+                  autoComplete="family-name"
+                  required
+                  value={values.nom}
+                  onChange={(event) => update('nom', event.target.value)}
+                  aria-invalid={errorFor('nom') !== null || undefined}
+                  aria-describedby={errorFor('nom') !== null ? errorId('nom') : undefined}
+                />
+                {errorFor('nom') !== null && (
+                  <p id={errorId('nom')} className="field-error">
+                    {errorFor('nom')}
+                  </p>
+                )}
+              </div>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('dateNaissance')}>
+                  Date de naissance{OBLIGATOIRE}
+                </label>
+                <input
+                  id={fieldId('dateNaissance')}
+                  name="dateNaissance"
+                  type="date"
+                  autoComplete="bday"
+                  required
+                  value={values.dateNaissance}
+                  onChange={(event) => update('dateNaissance', event.target.value)}
+                  aria-invalid={errorFor('dateNaissance') !== null || undefined}
+                  aria-describedby={
+                    [aideId('dateNaissance'), errorFor('dateNaissance') !== null ? errorId('dateNaissance') : null]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                />
+                <p id={aideId('dateNaissance')} className="socle-champ-aide">
+                  Ta catégorie d’âge est calculée à la date de la course.
+                </p>
+                {errorFor('dateNaissance') !== null && (
+                  <p id={errorId('dateNaissance')} className="field-error">
+                    {errorFor('dateNaissance')}
+                  </p>
+                )}
+              </div>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('telephone')}>
+                  Téléphone{OBLIGATOIRE}
+                </label>
+                <input
+                  id={fieldId('telephone')}
+                  name="telephone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  value={values.telephone}
+                  onChange={(event) => update('telephone', event.target.value)}
+                  aria-invalid={errorFor('telephone') !== null || undefined}
+                  aria-describedby={
+                    [aideId('telephone'), errorFor('telephone') !== null ? errorId('telephone') : null]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                />
+                <p id={aideId('telephone')} className="socle-champ-aide">
+                  Format local (05…) ou international (+213…).
+                </p>
+                {errorFor('telephone') !== null && (
+                  <p id={errorId('telephone')} className="field-error">
+                    {errorFor('telephone')}
+                  </p>
+                )}
+              </div>
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend>Ton épreuve</legend>
+              <div className="option-group" role="radiogroup" aria-label="Épreuve">
+                {state.epreuves.map((epreuve, index) => (
+                  <label key={epreuve.slug} className="option">
+                    <input
+                      type="radio"
+                      name="epreuve"
+                      id={index === 0 ? fieldId('epreuve') : fieldId('epreuve') + '-' + epreuve.slug}
+                      value={epreuve.slug}
+                      checked={values.epreuve === epreuve.slug}
+                      onChange={() => update('epreuve', epreuve.slug)}
+                      aria-invalid={errorFor('epreuve') !== null || undefined}
+                      aria-describedby={
+                        [aideId('epreuve'), errorFor('epreuve') !== null ? errorId('epreuve') : null]
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
+                    />
+                    <span className="option-label">{epreuve.nom}</span>
+                    <span className="meta">{epreuve.distanceKm} km</span>
+                  </label>
+                ))}
+              </div>
+              <p id={aideId('epreuve')} className="socle-champ-aide">
+                Une seule épreuve{OBLIGATOIRE}.
+              </p>
+              {errorFor('epreuve') !== null && (
+                <p id={errorId('epreuve')} className="field-error" role="alert">
+                  {errorFor('epreuve')}
+                </p>
+              )}
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend>Contact d’urgence</legend>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('contactUrgenceNom')}>
+                  Nom du contact d’urgence{OBLIGATOIRE}
+                </label>
+                <input
+                  id={fieldId('contactUrgenceNom')}
+                  name="contactUrgenceNom"
+                  type="text"
+                  required
+                  value={values.contactUrgenceNom}
+                  onChange={(event) => update('contactUrgenceNom', event.target.value)}
+                  aria-invalid={errorFor('contactUrgenceNom') !== null || undefined}
+                  aria-describedby={
+                    [aideId('contactUrgenceNom'), errorFor('contactUrgenceNom') !== null ? errorId('contactUrgenceNom') : null]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                />
+                <p id={aideId('contactUrgenceNom')} className="socle-champ-aide">
+                  Personne joignée le jour de la course en cas de besoin.
+                </p>
+                {errorFor('contactUrgenceNom') !== null && (
+                  <p id={errorId('contactUrgenceNom')} className="field-error">
+                    {errorFor('contactUrgenceNom')}
+                  </p>
+                )}
+              </div>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('contactUrgenceTelephone')}>
+                  Téléphone du contact d’urgence{OBLIGATOIRE}
+                </label>
+                <input
+                  id={fieldId('contactUrgenceTelephone')}
+                  name="contactUrgenceTelephone"
+                  type="tel"
+                  inputMode="tel"
+                  required
+                  value={values.contactUrgenceTelephone}
+                  onChange={(event) => update('contactUrgenceTelephone', event.target.value)}
+                  aria-invalid={errorFor('contactUrgenceTelephone') !== null || undefined}
+                  aria-describedby={
+                    errorFor('contactUrgenceTelephone') !== null
+                      ? errorId('contactUrgenceTelephone')
+                      : undefined
+                  }
+                />
+                {errorFor('contactUrgenceTelephone') !== null && (
+                  <p id={errorId('contactUrgenceTelephone')} className="field-error">
+                    {errorFor('contactUrgenceTelephone')}
+                  </p>
+                )}
+              </div>
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend>T-shirt</legend>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('tailleTshirt')}>
+                  Taille de t-shirt{OBLIGATOIRE}
+                </label>
+                <select
+                  id={fieldId('tailleTshirt')}
+                  name="tailleTshirt"
+                  required
+                  value={values.tailleTshirt}
+                  onChange={(event) => update('tailleTshirt', event.target.value)}
+                  aria-invalid={errorFor('tailleTshirt') !== null || undefined}
+                  aria-describedby={
+                    errorFor('tailleTshirt') !== null ? errorId('tailleTshirt') : undefined
+                  }
+                >
+                  <option value="">Choisir une taille</option>
+                  {TSHIRT_SIZES.map((size: TshirtSize) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+                {errorFor('tailleTshirt') !== null && (
+                  <p id={errorId('tailleTshirt')} className="field-error">
+                    {errorFor('tailleTshirt')}
+                  </p>
+                )}
+              </div>
+            </fieldset>
+
+            <button type="submit" className="btn-action" disabled={pending}>
+              {pending ? 'Envoi…' : state.coureur ? 'Enregistrer les modifications' : 'Valider mon inscription'}
+            </button>
+          </form>
+
+          <aside className="dossier-recap" aria-label="Récapitulatif de ton inscription">
+            {complete && derived !== null ? (
+              <div className="recap" role="status" aria-live="polite">
+                <p className="recap-titre">Récapitulatif avant envoi</p>
+                <p>
+                  <strong>
+                    {values.prenom} {values.nom}
+                  </strong>{' '}
+                  — {chosenEpreuve?.nom ?? values.epreuve} ({chosenEpreuve?.distanceKm ?? '?'} km)
+                </p>
+                <p>
+                  Catégorie le jour de la course : {AGE_CATEGORY_LABELS[derived.category]} ({derived.age}{' '}
+                  ans)
+                </p>
+                <p>
+                  Contact d’urgence : {values.contactUrgenceNom} · {values.contactUrgenceTelephone}
+                </p>
+                <p>T-shirt : {values.tailleTshirt}</p>
+              </div>
+            ) : (
+              <p className="dossier-recap-vide hint">
+                Le récapitulatif apparaît quand tous les champs obligatoires sont remplis.
               </p>
             )}
-          </fieldset>
-
-          <fieldset className="fieldset">
-            <legend>Contact d’urgence</legend>
-            <div className="field">
-              <label htmlFor={fieldId('contactUrgenceNom')}>Nom du contact d’urgence</label>
-              <input
-                id={fieldId('contactUrgenceNom')}
-                name="contactUrgenceNom"
-                type="text"
-                required
-                value={values.contactUrgenceNom}
-                onChange={(event) => update('contactUrgenceNom', event.target.value)}
-                aria-invalid={errorFor('contactUrgenceNom') !== null || undefined}
-                aria-describedby={
-                  errorFor('contactUrgenceNom') !== null ? errorId('contactUrgenceNom') : undefined
-                }
-              />
-              {errorFor('contactUrgenceNom') !== null && (
-                <p id={errorId('contactUrgenceNom')} className="field-error">
-                  {errorFor('contactUrgenceNom')}
-                </p>
-              )}
-            </div>
-            <div className="field">
-              <label htmlFor={fieldId('contactUrgenceTelephone')}>
-                Téléphone du contact d’urgence
-              </label>
-              <input
-                id={fieldId('contactUrgenceTelephone')}
-                name="contactUrgenceTelephone"
-                type="tel"
-                inputMode="tel"
-                required
-                value={values.contactUrgenceTelephone}
-                onChange={(event) => update('contactUrgenceTelephone', event.target.value)}
-                aria-invalid={errorFor('contactUrgenceTelephone') !== null || undefined}
-                aria-describedby={
-                  errorFor('contactUrgenceTelephone') !== null
-                    ? errorId('contactUrgenceTelephone')
-                    : undefined
-                }
-              />
-              {errorFor('contactUrgenceTelephone') !== null && (
-                <p id={errorId('contactUrgenceTelephone')} className="field-error">
-                  {errorFor('contactUrgenceTelephone')}
-                </p>
-              )}
-            </div>
-          </fieldset>
-
-          <fieldset className="fieldset">
-            <legend>T-shirt</legend>
-            <div className="field">
-              <label htmlFor={fieldId('tailleTshirt')}>Taille de t-shirt</label>
-              <select
-                id={fieldId('tailleTshirt')}
-                name="tailleTshirt"
-                required
-                value={values.tailleTshirt}
-                onChange={(event) => update('tailleTshirt', event.target.value)}
-                aria-invalid={errorFor('tailleTshirt') !== null || undefined}
-                aria-describedby={
-                  errorFor('tailleTshirt') !== null ? errorId('tailleTshirt') : undefined
-                }
-              >
-                <option value="">Choisir une taille</option>
-                {TSHIRT_SIZES.map((size: TshirtSize) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-              {errorFor('tailleTshirt') !== null && (
-                <p id={errorId('tailleTshirt')} className="field-error">
-                  {errorFor('tailleTshirt')}
-                </p>
-              )}
-            </div>
-          </fieldset>
-
-          {complete && derived !== null && (
-            <div className="recap" role="status" aria-live="polite">
-              <p className="recap-titre">Récapitulatif avant envoi</p>
-              <p>
-                <strong>
-                  {values.prenom} {values.nom}
-                </strong>{' '}
-                — {chosenEpreuve?.nom ?? values.epreuve} ({chosenEpreuve?.distanceKm ?? '?'} km)
-              </p>
-              <p>
-                Catégorie le jour de la course : {AGE_CATEGORY_LABELS[derived.category]} ({derived.age}{' '}
-                ans)
-              </p>
-              <p>
-                Contact d’urgence : {values.contactUrgenceNom} · {values.contactUrgenceTelephone}
-              </p>
-              <p>T-shirt : {values.tailleTshirt}</p>
-            </div>
-          )}
-
-          <button type="submit" className="btn-action" disabled={pending}>
-            {pending ? 'Envoi…' : state.coureur ? 'Enregistrer les modifications' : 'Valider mon inscription'}
-          </button>
-        </form>
+          </aside>
+        </div>
         {serverError !== null && (
           <div role="alert" aria-live="assertive" className="error-box">
             <p className="error-message">{serverError.message}</p>
@@ -404,6 +469,9 @@ export function InscriptionForm({ state }: { state: InscriptionState }) {
                 </>
               )}
             </p>
+            <div className="auth-alt">
+              <AssistanceButton phone={assistancePhone} />
+            </div>
           </div>
         )}
       </article>

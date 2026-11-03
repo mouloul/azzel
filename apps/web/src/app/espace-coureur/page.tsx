@@ -20,6 +20,7 @@ import {
   estComplet,
   etatPiece,
 } from './checklist-view';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 

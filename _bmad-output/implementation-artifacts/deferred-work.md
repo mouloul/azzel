@@ -176,3 +176,18 @@
 - source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
   summary: Un champ de recherche par nom est exclu par NFR-7 (canaux publics anonymes). La story avait été rédigée à tort avec « par nom ou dossard » ; texte corrigé dans `epics.md`. Si le comité veut chercher un coureur par nom, il faut une surface authentifiée, pas la page publique.
   evidence: NFR-7 et AD-7 dans `epics.md`.
+
+## Deferred from: build de la story 9.4 — inscription et checklist refondues (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: Le fil d'étapes n'affiche aucune mention sur les étapes suivantes, ni « À venir » ni état : un coureur qui a sauté une étape via la checklist ne serait pas « à venir » et le fil mentirait. Seules les étapes franchies sont des liens de retour. Le résultat est plus sobre que la maquette ; arbitrage visuel à faire en recette.
+  evidence: `apps/web/src/components/fil-etapes.tsx`, 13 tests dans `fil-etapes.test.tsx`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: Couvert par construction seulement, faute de DOM dans vitest : la compression canvas et le réessai sans re-sélection du dépôt de preuve (JavaScript de navigation, jamais exécuté en rendu serveur), la gestion du focus sur le premier champ en erreur (`document.getElementById`), et le rendu visuel réel du fil et de la colonne latérale. Le garde `dossier-css.test.ts` lit la feuille, pas le pixel.
+  evidence: même limite d'environnement que les stories 9.5 et « Mon trail » ; décision jsdom, happy-dom ou Playwright déjà consignée.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: Le groupe de boutons radio « épreuve » porte sa mention « obligatoire » dans le texte d'aide du groupe, pas dans un label par bouton. Le compte de huit mentions « (obligatoire) » est épinglé par un test.
+  evidence: `apps/web/src/app/inscription/inscription-form.tsx`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: `proof-service.ts` expose maintenant `documentsAcceptes` dans son read-model pour que le fil d'étapes de `/preuve` sache si les documents sont acceptés. Seul fichier de service modifié par la story, ajout pur dérivé de champs déjà chargés.
+  evidence: `apps/web/src/modules/inscriptions/proof-service.ts`, un test ajouté dans `preuve.test.ts`.

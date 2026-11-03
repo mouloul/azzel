@@ -102,4 +102,14 @@ describe('page /espace-coureur — lien e-dossard (story 4.1)', () => {
     expect(html).not.toContain('href="/espace-coureur/e-dossard"');
     expect(html).not.toContain('Ton e-dossard');
   });
+
+  // Story 9.4 — le bouton d’assistance « Appeler l’équipe » reste visible
+  // sur la checklist, dossier complet ou non (SM-C1, UX-DR-11, story 1.7).
+  it('checklist rendue : « Appeler l’équipe » toujours visible avec le numéro', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(checklistState(2));
+    const html = await rendu();
+    expect(html).toContain('Appeler l’équipe');
+    expect(html).toContain('href="tel:+213555010200"');
+    expect(html).toContain('2 pièces sur 6');
+  });
 });

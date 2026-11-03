@@ -1,6 +1,7 @@
 import { formatLocalDateTime } from '@azzel/shared';
 
 import { AssistanceButton } from '@/components/assistance-button';
+import { FilEtapes, etapesPreuve } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
@@ -10,6 +11,7 @@ import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/err
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
 
 import { PreuveForm } from './preuve-form';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,7 +155,11 @@ export default async function PreuvePage() {
           </article>
         </section>
       ) : null}
-      <PreuveForm state={state} assistancePhone={assistancePhone} />
+      <PreuveForm state={state} assistancePhone={assistancePhone}>
+        <FilEtapes
+          etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)}
+        />
+      </PreuveForm>
     </>
   );
 }

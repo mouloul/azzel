@@ -477,4 +477,40 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
     expect(sans.refusalReason).toBeNull();
     expect(sans.preuve).toBeNull();
   });
+
+  // Story 9.4 — le fil d'étapes de /preuve marque l'étape Documents depuis
+  // l'enregistrement coureur déjà lu : vrai seulement avec les DEUX
+  // acceptations horodatées (décharge ET règlement, story 1.4).
+  it('documentsAcceptes : vrai seulement avec les deux acceptations, faux sinon (fil 9.4)', async () => {
+    const storeComplet = buildStore();
+    storeComplet.findCoureurByAccount.mockResolvedValue({
+      id: 'coureur-1',
+      status: 'en constitution',
+      refusalReason: null,
+      dechargeAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+      dechargeVersion: 'v1',
+      reglementAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+      reglementVersion: 'v1',
+    });
+    const complet = await getPreuveState(session, { store: storeComplet, proofStore });
+    expect(complet.documentsAcceptes).toBe(true);
+
+    const storePartiel = buildStore();
+    storePartiel.findCoureurByAccount.mockResolvedValue({
+      id: 'coureur-1',
+      status: 'en constitution',
+      refusalReason: null,
+      dechargeAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+      dechargeVersion: 'v1',
+      reglementAcceptedAt: null,
+      reglementVersion: null,
+    });
+    const partiel = await getPreuveState(session, { store: storePartiel, proofStore });
+    expect(partiel.documentsAcceptes).toBe(false);
+
+    const storeSansCoureur = buildStore();
+    storeSansCoureur.findCoureurByAccount.mockResolvedValue(null);
+    const sansCoureur = await getPreuveState(session, { store: storeSansCoureur, proofStore });
+    expect(sansCoureur.documentsAcceptes).toBe(false);
+  });
 });
