@@ -20,6 +20,16 @@ export const colorTokens = {
   'sync-attente-encre': '#FFFFFF',
   'sync-envoye': '#2E6570',
   'sync-envoye-encre': '#FFFFFF',
+  // Story 11.4 — graphe de technicité du profil altimétrique (UX-DR-36) :
+  // 4 paliers verrouillés (< 5 % roulant · 5–12 soutenu · 12–20 raide ·
+  // ≥ 20 très raide). Teintes différenciées AUSSI en clarté (niveaux de gris,
+  // daltonisme) : clair du plus clair (roulant) au plus sombre (très raide),
+  // sombre en sens inverse. Contrastes AA non textuels 3:1 vs surface testés
+  // dans apps/web/src/app/contrastes.test.ts (clair ET sombre).
+  'pente-roulant': '#6E8F6B',
+  'pente-soutenu': '#47825F',
+  'pente-raide': '#9E5418',
+  'pente-tres-raide': '#7A2E1B',
   'bg-sombre': '#101A14',
   'surface-sombre': '#1B281F',
   'texte-sombre': '#E8F0E9',
@@ -36,6 +46,11 @@ export const colorTokens = {
   'sync-attente-encre-sombre': '#291D04',
   'sync-envoye-sombre': '#74C7D6',
   'sync-envoye-encre-sombre': '#06262C',
+  // Story 11.4 — pendants sombres des paliers de pente (même mécanique az-*).
+  'pente-roulant-sombre': '#4E7A58',
+  'pente-soutenu-sombre': '#6FA97E',
+  'pente-raide-sombre': '#E39A5B',
+  'pente-tres-raide-sombre': '#FFB4A0',
 } as const;
 
 export type ColorRole = keyof typeof colorTokens;

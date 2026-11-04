@@ -255,3 +255,16 @@
 - **Porte de qualité** : constantes (pas médian ≤ 2 s, ≤ 5 % de la distance en segments > 30 s, ≤ 1 % de points > 12,5 m/s) calibrées sur DEUX relevés seulement ; elles refusent le second sur trois défauts à la fois.
 - **Postgres de dev** arrêté par la session GLM ; relancé par l'architecte (`scripts/dev-db.sh up`). Les tests d'intégration échouent base arrêtée (25 fichiers) : piège pour toute session suivante.
 - **Pas de `bmad-code-review`** sur cette story.
+- source_spec: `_bmad-output/implementation-artifacts/spec-11-4-profil-altimetrique-et-graphe-de-technicite.md`
+  summary: Épingler par test le CustomEvent `az-parcours-curseur` (detail `{epreuve, sM}`) et les interactions réelles du curseur (pointeur, flèches, aria-live) — aucun harnais DOM (jsdom/testing-library) dans le repo, tests actuels node/SSR-only.
+  evidence: Recherche vérification-gap (story 11.4) : supprimer le dispatch du useEffect ou casser un handler ne fait échouer AUCUN test ; à rouvrir à la 11.5 (premier consommateur du bus `s`) en décidant alors du harnais DOM.
+
+## Deferred from: build de la story 11.4 — profil altimétrique (2026-11-04, architecte)
+
+- **Contradiction de distance dans la base** : la longue est « 35 km » dans `inscriptions/migrations/0002_inscriptions.sql:70` (`'La Longue — 35 km', 35.0`, affiché par `app/parcours/page.tsx:59`) et `contenus/migrations/0014_contenus_vitrine.sql:55` (`'Trail long — 35 km'`), alors que la section d'accueil affiche désormais 28 km (relevé d'essai, décision du 2026-11-04). La page `/parcours` et l'accueil peuvent se contredire. À aligner quand le tracé officiel existe (migration éditoriale).
+- **Mention « tracé provisoire »** : constante `MENTION_TRACE_PROVISOIRE` (`components/section-parcours.tsx`) ; à retirer en une ligne quand le tracé sera officiel.
+- **Profil limité à la longue** : la moyenne n'a aucune donnée, donc aucune visualisation.
+- **Interactions du curseur non testées à l'exécution** (pointeur, clavier, événement) faute de harnais DOM ; garanties par des fonctions pures et le rendu SSR. À rouvrir en 11.5.
+- **Poids** : HTML de l'accueil 43 → 77 Ko bruts (8 → 16 Ko gzip) ; budget 288/300 Kio, marge 11,9 Kio, à surveiller pour les stories 11.3 et 11.5.
+- **Rendu réel non vérifié** (couleurs perçues, tap, annonce vocale) : recette humaine.
+- **Pas de `bmad-code-review` humain/architecte** ; GLM a fait une auto-revue en 3 couches (journal dans la spec).

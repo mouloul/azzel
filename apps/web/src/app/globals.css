@@ -1124,6 +1124,9 @@ a.aa-partenaire__nom{color:inherit}
 .aa-parcours-accueil__ligne dt{margin:0;font-size:13px;color:var(--ink-muted)}
 .aa-parcours-accueil__ligne dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;font-weight:600;color:var(--heading);text-align:right}
 .aa-parcours-accueil__gpx{display:inline-block;margin-top:var(--az-space-4)}
+/* Décision produit 2026-11-04 : mention « tracé provisoire » (relevé d’essai)
+   sous la synthèse — sobre, encre atténuée, jamais présentée comme officielle. */
+.aa-parcours-accueil__provisoire{margin:var(--az-space-4) 0 0;font-size:13px;line-height:1.5;color:var(--ink-muted)}
 .aa-parcours-accueil__passages{margin:var(--az-space-5) 0 0;border-top:1px solid var(--line);padding-top:var(--az-space-4)}
 .aa-parcours-accueil__passages-titre{margin:0 0 var(--az-space-2);font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--heading)}
 .aa-parcours-accueil__passages ul{list-style:none;display:grid;gap:var(--az-space-2);margin:0;padding:0}
@@ -1136,9 +1139,44 @@ a.aa-partenaire__nom{color:inherit}
 .aa-parcours-accueil__viz-surtitre{margin:0;font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-muted)}
 .aa-parcours-accueil__viz-titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--heading)}
 .aa-parcours-accueil__viz-texte{margin:0;font-size:15px;line-height:1.55;color:var(--ink)}
-/* Filet de sécurité : sans :has(), les panneaux se ploient en pile lisible
+/* Story 11.4 — profil altimétrique & graphe de technicité dans l’aside viz :
+   blocs [data-viz] par épreuve, masqués par défaut, montrés par les règles
+   :has() générées (même mécanique que les panneaux). Couleurs UNIQUEMENT par
+   tokens --az-pente-* (4 teintes différenciées aussi en clarté, AA non
+   textuel 3:1 clair + sombre — contrastes.test.ts) ; aucun littéral hex. */
+.aa-parcours-accueil [data-viz]{display:none}
+.aa-parcours-accueil__annonce{display:grid;gap:var(--az-space-2)}
+.aa-profil{margin:0;display:grid;gap:var(--az-space-3)}
+.aa-profil__corps{position:relative}
+.aa-profil__graphique svg{display:block;width:100%;height:auto}
+.aa-profil__aire--roulant{fill:var(--az-pente-roulant)}
+.aa-profil__aire--soutenu{fill:var(--az-pente-soutenu)}
+.aa-profil__aire--raide{fill:var(--az-pente-raide)}
+.aa-profil__aire--tres-raide{fill:var(--az-pente-tres-raide)}
+.aa-profil__arete{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linejoin:round}
+.aa-profil__grille{stroke:var(--line);stroke-width:1}
+.aa-profil__axe{fill:var(--ink-muted);font-size:11px}
+.aa-profil__marqueur{stroke:var(--line-strong);stroke-dasharray:3 3;stroke-width:1}
+.aa-profil__marqueur-point{fill:var(--ink)}
+.aa-profil__marqueur-libelle{fill:var(--ink);font-size:11px;font-weight:600}
+.aa-profil__synthese{margin:0;font-size:13px;line-height:1.5;color:var(--ink)}
+.aa-profil__legende{list-style:none;display:flex;flex-wrap:wrap;gap:var(--az-space-2) var(--az-space-4);margin:0;padding:0}
+.aa-profil__legende li{display:flex;align-items:center;gap:var(--az-space-2);font-size:13px;color:var(--ink)}
+.aa-profil__trait{display:inline-block;width:18px;height:4px;border-radius:2px;flex:none}
+.aa-profil__trait--roulant{background:var(--az-pente-roulant)}
+.aa-profil__trait--soutenu{background:var(--az-pente-soutenu)}
+.aa-profil__trait--raide{background:var(--az-pente-raide)}
+.aa-profil__trait--tres-raide{background:var(--az-pente-tres-raide)}
+.aa-profil__note{margin:0;font-size:13px;color:var(--ink-muted)}
+/* pan-y : le glisser horizontal pilote le curseur, le glisser vertical
+   continue de faire défiler la page (le profil ne capture jamais le doigt). */
+.aa-profil__interaction{position:absolute;inset:0;cursor:ew-resize;touch-action:pan-y}
+.aa-profil__interaction:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:var(--az-rayon-sm)}
+.aa-profil__ligne{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink)}
+.aa-profil__lecture{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink)}
+/* Filet de sécurité : sans :has(), les panneaux SE PLOIENT en pile lisible
    (dégradation progressive — la section ne perd jamais son contenu). */
-@supports not selector(:has(*)){.aa-parcours-accueil [data-panneau]{display:block}}
+@supports not selector(:has(*)){.aa-parcours-accueil [data-panneau]{display:block}.aa-parcours-accueil [data-viz]{display:block}}
 
 /* Thème sombre — voile hero assombri */
 [data-theme='dark'] .aa-hero__veil {

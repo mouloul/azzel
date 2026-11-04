@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { siteTokens } from '@azzel/shared';
+import { siteTokens, colorTokens } from '@azzel/shared';
 
 import {
   GLYPHE_LECTURE,
@@ -69,7 +69,8 @@ function ratioContraste(texte: string, fond: string): number {
 
 type NomRole =
   | keyof (typeof siteTokens.themes)['light']
-  | keyof (typeof siteTokens.colors);
+  | keyof (typeof siteTokens.colors)
+  | keyof typeof colorTokens;
 
 function couleur(theme: 'light' | 'dark', role: NomRole): string {
   const rolesTheme = Object.keys(siteTokens.themes[theme]);
@@ -81,6 +82,22 @@ function couleur(theme: 'light' | 'dark', role: NomRole): string {
     role in siteTokens.themes.light || role in siteTokens.themes.dark;
   if (!roleDunTheme && rolesPalette.includes(role)) {
     return siteTokens.colors[role as keyof typeof siteTokens.colors];
+  }
+  // Story 11.4 — rôles opérationnels (colorTokens, ex. paliers de pente) :
+  // le thème lit sa paire claire (`pente-raide`) ou sombre (`pente-raide-sombre`).
+  // En thème clair, un rôle suffixé `-sombre` ne se résout JAMAIS : une paire
+  // mal écrite doit tomber dans le throw nommé, pas rendre la valeur sombre.
+  if (role in colorTokens) {
+    const paire =
+      theme === 'light' && !String(role).endsWith('-sombre')
+        ? colorTokens[role as keyof typeof colorTokens]
+        : undefined;
+    const pendant = `${role}-sombre` as keyof typeof colorTokens;
+    const sombre = theme === 'dark' && pendant in colorTokens ? colorTokens[pendant] : undefined;
+    const valeur = paire ?? sombre;
+    if (valeur !== undefined) {
+      return valeur;
+    }
   }
   throw new Error(
     `rôle absent du thème ${theme} et interdit de repli palette : ${String(role)}`,
@@ -239,6 +256,38 @@ const PAIRES: readonly Paire[] = [
     seuil: SEUIL_NON_TEXTUEL,
     usage: 'bordure des champs dans les cartes (non textuel)',
   },
+  /* Story 11.4 — aires du graphe de technicité (UX-DR-36) : les 4 paliers de
+   * pente sont des aires pleines posées sur la bande de page (surface) —
+   * WCAG 1.4.11 non textuel 3:1, clair ET sombre. Les teintes diffèrent aussi
+   * en clarté (niveaux de gris, daltonisme) : garde dédié ci-dessous. */
+  {
+    nom: 'pente-roulant / surface',
+    texte: 'pente-roulant',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « roulant » (< 5 %) du profil altimétrique',
+  },
+  {
+    nom: 'pente-soutenu / surface',
+    texte: 'pente-soutenu',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « soutenu » (5 à 12 %) du profil altimétrique',
+  },
+  {
+    nom: 'pente-raide / surface',
+    texte: 'pente-raide',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « raide » (12 à 20 %) du profil altimétrique',
+  },
+  {
+    nom: 'pente-tres-raide / surface',
+    texte: 'pente-tres-raide',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « très raide » (≥ 20 %) du profil altimétrique',
+  },
 ];
 
 describe('ratioContraste — fonction pure WCAG', () => {
@@ -286,6 +335,34 @@ describe('contrastes WCAG — paire interdite (jamais rendue)', () => {
       couleur('light', 'forest-surface'),
     );
     expect(ratio).toBeLessThan(SEUIL_COURANT);
+  });
+});
+
+/* Story 11.4 — palette de technicité : en plus du 3:1 non textuel (PAIRES),
+ * les 4 paliers doivent être différenciés AUSSI en clarté (lisible en niveaux
+ * de gris et pour un daltonien) : ordre monotone strict, du roulant (le plus
+ * clair en thème clair) au très raide, sens inversé en thème sombre. */
+describe('contrastes WCAG — paliers de pente différenciés en clarté (story 11.4)', () => {
+  const clarte = (hex: string) => luminanceRelative(hex);
+
+  it('thème clair : roulant > soutenu > raide > très raide (du plus clair au plus sombre)', () => {
+    const roulant = clarte(couleur('light', 'pente-roulant'));
+    const soutenu = clarte(couleur('light', 'pente-soutenu'));
+    const raide = clarte(couleur('light', 'pente-raide'));
+    const tresRaide = clarte(couleur('light', 'pente-tres-raide'));
+    expect(roulant).toBeGreaterThan(soutenu);
+    expect(soutenu).toBeGreaterThan(raide);
+    expect(raide).toBeGreaterThan(tresRaide);
+  });
+
+  it('thème sombre : roulant < soutenu < raide < très raide (du plus discret au plus vif)', () => {
+    const roulant = clarte(couleur('dark', 'pente-roulant'));
+    const soutenu = clarte(couleur('dark', 'pente-soutenu'));
+    const raide = clarte(couleur('dark', 'pente-raide'));
+    const tresRaide = clarte(couleur('dark', 'pente-tres-raide'));
+    expect(roulant).toBeLessThan(soutenu);
+    expect(soutenu).toBeLessThan(raide);
+    expect(raide).toBeLessThan(tresRaide);
   });
 });
 

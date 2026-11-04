@@ -19,6 +19,7 @@
 
 import { getParcoursPage, type ContenusServiceDeps, type EpreuveView } from './service';
 import { getParcoursDoc } from './parcours/lecture';
+import { construireProfilEpreuve, type ProfilEpreuve } from './parcours/profil';
 import type { EpreuveDoc, ParcoursDoc } from './parcours/construire';
 
 /**
@@ -55,12 +56,21 @@ export interface PointDePassageEpreuve {
   services: readonly string[] | null;
 }
 
-/** Une épreuve de la section : la fiche `EpreuveView` + les champs épopée 11. */
+/** Une épreuve de la section : la fiche `EpreuveView` + les champs épopée 11.
+ *  Décision produit 2026-11-04 : `distanceKm` est écrasé par la distance du
+ *  relevé (`distanceM / 1000`) quand l’épreuve est présente dans
+ *  parcours.json — les chiffres affichés restent cohérents avec le profil. */
 export interface EpreuveSectionParcours extends EpreuveView {
   /** `null` tant que `parcours.json` n’existe pas (épopée 11). */
   metriques: MetriquesEpreuve | null;
   /** `null` tant que `parcours.json` n’existe pas (épopée 11). */
   pointsDePassage: readonly PointDePassageEpreuve[] | null;
+  /**
+   * Story 11.4 — profil altimétrique/technicité, OPTIONNEL dans le contrat
+   * pour ne pas casser les vues mockées sans profil (9.3) : absent/`null`
+   * tant que l’épreuve n’a pas de tracé publié (l’annonce texte reste).
+   */
+  profil?: ProfilEpreuve | null;
 }
 
 export interface SectionParcoursView {
@@ -74,12 +84,16 @@ export const SECTION_PARCOURS_VIDE: SectionParcoursView = { epreuves: [] };
  * Story 11.1 — fusion d’une épreuve avec sa vue parcours.json.
  *
  * Les métriques viennent du D+/D− PUBLIÉ (hystérésis, constante unique du
- * pipeline) : carte, profil et vitrine lisent le même chiffre. L’heure de
- * départ et la barrière horaire restent `null` tant que l’organisation ne
- * les a pas fournies — aucun chiffre inventé. Les services inconnus restent
- * `null`. Une épreuve ABSENTE du JSON (ex. la moyenne, tracé non fourni)
- * garde `metriques: null` / `pointsDePassage: null` : sa fiche n’affiche
- * aucun chiffre.
+ * pipeline) : carte, profil et vitrine lisent le même chiffre. Décision
+ * produit 2026-11-04 : pour une épreuve PRÉSENTE dans parcours.json, la
+ * distance affichée vient AUSSI du relevé (`distanceM / 1000`) et non de la
+ * base éditoriale — les chiffres du panneau restent cohérents entre eux
+ * (fiche = profil = relevé d’essai). Une épreuve ABSENTE du JSON garde la
+ * distance de la base. L’heure de départ et la barrière horaire restent
+ * `null` tant que l’organisation ne les a pas fournies — aucun chiffre
+ * inventé. Les services inconnus restent `null`. Une épreuve ABSENTE du
+ * JSON (ex. la moyenne, tracé non fourni) garde `metriques: null` /
+ * `pointsDePassage: null` / `profil: null` : sa fiche n’affiche aucun chiffre.
  */
 function fusionnerEpreuve(
   epreuve: EpreuveView,
@@ -87,13 +101,16 @@ function fusionnerEpreuve(
 ): EpreuveSectionParcours {
   const vue: EpreuveDoc | undefined = doc?.epreuves[epreuve.slug];
   if (doc === null || vue === undefined) {
-    return { ...epreuve, metriques: null, pointsDePassage: null };
+    return { ...epreuve, metriques: null, pointsDePassage: null, profil: null };
   }
   const nomParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.nom]));
   const altitudeParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.altitudeM]));
   const servicesParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.services]));
   return {
     ...epreuve,
+    // Décision produit 2026-11-04 : distance du RELEVÉ d’essai (ici 28,0 km),
+    // pas la base (35) — le nom « La Longue — 35 km » reste éditorial.
+    distanceKm: vue.distanceM / 1000,
     metriques: {
       denivelePositifM: vue.dplusM,
       deniveleNegatifM: vue.dmoinsM,
@@ -111,6 +128,9 @@ function fusionnerEpreuve(
       // FR-39 : services inconnus ⇒ null (jamais inventés).
       services: servicesParId.get(point.id) ?? null,
     })),
+    // Story 11.4 — profil décimé (serveur) ; géométrie exploitée par le SVG
+    // de l’aside et l’île curseur, jamais par le HTML de base.
+    profil: construireProfilEpreuve(doc, epreuve.slug),
   };
 }
 

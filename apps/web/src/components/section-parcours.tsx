@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { isHttpsUrl } from '@/modules/contenus/domain';
+import { ProfilAltimetrique } from '@/components/profil-altimetrique';
 import type {
   EpreuveSectionParcours,
   MetriquesEpreuve,
@@ -13,8 +14,8 @@ import type {
  * variable d’état, possédée par le navigateur) + des règles `:has()` générées
  * côté serveur — cocher un radio affiche le panneau de SON épreuve et lui
  * seul. Le clavier (tabulation + flèches) est natif, les labels sont les
- * cibles (≥ 44 px via .socle-action). La visualisation (carte 3D + profil)
- * relève de l’épopée 11 : son emplacement est annoncé, jamais vide.
+ * cibles (≥ 44 px via .socle-action). Story 11.4 : l’aside viz suit la même
+ * bascule ([data-viz]) — profil altimétrique si données, annonce sinon.
  *
  * Champs disponibles seuls (règle « aucun chiffre inventé ») : nom, distance,
  * lien GPX. Métriques et points de passage ne sont rendus QUE s’ils sont
@@ -25,6 +26,16 @@ import type {
  * un navigateur sans :has(), la section reste lisible, simplement non pliée. */
 
 const NBSP = '\u202f';
+
+/**
+ * Décision produit 2026-11-04 : le relevé GPX publié est un relevé D’ESSAI
+ * (« essai trail ait ainsi 2027 ») — le tracé définitif n’existe pas. Toute
+ * épreuve affichant des chiffres issus de ce relevé porte cette mention,
+ * sobre et factuelle, JAMAIS présentée comme officielle. Une seule source :
+ * la retirer ici (une ligne) le jour du tracé officiel.
+ */
+export const MENTION_TRACE_PROVISOIRE =
+  'Tracé provisoire, issu d’un relevé d’essai : distance, dénivelé et profil pourront évoluer.';
 
 const formatKm = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 const formatM = new Intl.NumberFormat('fr-FR');
@@ -49,10 +60,13 @@ function lignesSynthese(epreuve: EpreuveSectionParcours): [label: string, valeur
   return lignes;
 }
 
-/** Règles de bascule générées par épreuve (clé = rang, pas le slug : rien à échapper). */
+/** Règles de bascule générées par épreuve (clé = rang, pas le slug : rien à échapper).
+ *  Story 11.4 : la bascule pilote AUSSI le bloc viz ([data-viz]) de l’aside —
+ *  profil SVG pour l’épreuve active si elle a des données, annonce sinon. */
 function reglesBascule(nombre: number): string {
   return Array.from({ length: nombre }, (_, i) =>
     `.aa-parcours-accueil:has([data-bascule="${i}"]:checked) [data-panneau="${i}"]{display:block}` +
+    `.aa-parcours-accueil:has([data-bascule="${i}"]:checked) [data-viz="${i}"]{display:block}` +
     `.aa-parcours-accueil:has([data-bascule="${i}"]:checked) [data-libelle="${i}"]{background:var(--az-action);border-color:transparent;color:var(--az-action-texte)}`,
   ).join('');
 }
@@ -63,6 +77,9 @@ function PanneauEpreuve({ epreuve, rang }: { epreuve: EpreuveSectionParcours; ra
   const gpxUrl =
     epreuve.gpxUrl !== null && isHttpsUrl(epreuve.gpxUrl) ? epreuve.gpxUrl : null;
   const points = epreuve.pointsDePassage;
+  // Données issues du relevé d’essai (parcours.json) : métriques ou profil.
+  // La moyenne (aucun tracé fourni) ne porte JAMAIS la mention.
+  const duReleve = epreuve.metriques !== null || (epreuve.profil ?? null) !== null;
   return (
     <article className="socle-carte aa-parcours-accueil__panneau" data-panneau={rang}>
       <h3 className="aa-card__title">{epreuve.nom}</h3>
@@ -74,6 +91,11 @@ function PanneauEpreuve({ epreuve, rang }: { epreuve: EpreuveSectionParcours; ra
           </div>
         ))}
       </dl>
+      {/* Servi SANS JavaScript : la mention fait partie du markup de base
+          (décision produit 2026-11-04, texte en constante unique). */}
+      {duReleve ? (
+        <p className="aa-parcours-accueil__provisoire">{MENTION_TRACE_PROVISOIRE}</p>
+      ) : null}
       {gpxUrl !== null ? (
         <a className="aa-lien-texte aa-parcours-accueil__gpx" href={gpxUrl} rel="noopener noreferrer">
           Télécharger le tracé GPX
@@ -161,32 +183,49 @@ export function SectionParcours({ view }: { view: SectionParcoursView }) {
               ))}
             </div>
             <aside className="aa-parcours-accueil__viz" aria-labelledby="titre-viz-parcours">
-              {/* Annonce de la visualisation (épopée 11) : un bloc utile
-                  aujourd’hui, jamais un cadre vide ni une erreur. */}
-              <svg
-                aria-hidden="true"
-                data-parcours-viz=""
-                focusable="false"
-                viewBox="0 0 120 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                width="120"
-                height="24"
-              >
-                <path d="M0 20 L18 8 L30 14 L44 4 L60 13 L76 6 L90 15 L104 9 L120 20" />
-              </svg>
+              {/* Story 11.4 — la visualisation suit l’épreuve active (mêmes
+                  règles :has() que les panneaux) : profil SVG complet si
+                  l’épreuve a un tracé publié, annonce utile sinon — jamais un
+                  cadre vide ni une erreur. */}
               <p className="aa-parcours-accueil__viz-surtitre">Visualisation</p>
               <h3 className="aa-parcours-accueil__viz-titre" id="titre-viz-parcours">
-                Le relief de chaque épreuve, prochainement ici
+                Le relief de l’épreuve
               </h3>
-              <p className="aa-parcours-accueil__viz-texte">
-                La carte en relief et le profil altimétrique seront publiés avec
-                le tracé officiel. En attendant, comparez les fiches ci-dessus et
-                téléchargez les tracés GPX.
-              </p>
+              {epreuves.map((epreuve, rang) => {
+                const profil = epreuve.profil ?? null;
+                return profil === null ? (
+                  <div className="aa-parcours-accueil__annonce" data-viz={rang} key={epreuve.slug}>
+                    <svg
+                      aria-hidden="true"
+                      data-parcours-viz=""
+                      focusable="false"
+                      viewBox="0 0 120 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      width="120"
+                      height="24"
+                    >
+                      <path d="M0 20 L18 8 L30 14 L44 4 L60 13 L76 6 L90 15 L104 9 L120 20" />
+                    </svg>
+                    <p className="aa-parcours-accueil__viz-texte">
+                      La carte en relief et le profil altimétrique seront publiés avec
+                      le tracé officiel. En attendant, comparez les fiches ci-dessus et
+                      téléchargez les tracés GPX.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="aa-parcours-accueil__profil" data-viz={rang} key={epreuve.slug}>
+                    <ProfilAltimetrique
+                      nomEpreuve={epreuve.nom}
+                      profil={profil}
+                      slugEpreuve={epreuve.slug}
+                    />
+                  </div>
+                );
+              })}
             </aside>
           </>
         )}

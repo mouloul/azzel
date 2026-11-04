@@ -92,9 +92,42 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     const moyenne = vue.epreuves[1];
     expect(moyenne?.metriques).toBeNull();
     expect(moyenne?.pointsDePassage).toBeNull();
+    // Story 11.4 : pas de profil non plus — annonce texte de la coquille 9.3.
+    expect(moyenne?.profil).toBeNull();
     // La fiche de base (nom, distance, GPX) reste intacte.
     expect(moyenne?.nom).toBe('La Moyenne — 12 km');
     expect(moyenne?.distanceKm).toBe(12);
+  });
+
+  it('décision produit 2026-11-04 : distance affichée du RELEVÉ pour la longue, de la base pour la moyenne', async () => {
+    const vue = await getSectionParcours({ store: fakeStoreParcours() });
+    // Présente dans parcours.json : distance du relevé (28 006,4 m → 28,0 km),
+    // PAS la distance éditoriale de la base (35) — le panneau reste cohérent
+    // avec le profil et les métriques issus du même relevé.
+    expect(vue.epreuves[0]?.distanceKm).toBe(
+      (PARCOURS_DOC?.epreuves.longue?.distanceM ?? NaN) / 1000,
+    );
+    expect(vue.epreuves[0]?.distanceKm).toBeCloseTo(28.0, 1);
+    // Absente du JSON : la distance de la base (la moyenne) fait foi.
+    expect(vue.epreuves[1]?.distanceKm).toBe(12);
+  });
+
+  it('story 11.4 : la longue porte un profil décimé complet, la moyenne aucun', async () => {
+    const vue = await getSectionParcours({ store: fakeStoreParcours() });
+    const longue = vue.epreuves[0];
+    // Profil décimé (140 points mesurés sur le relevé réel) avec pente signée.
+    expect(longue?.profil).not.toBeNull();
+    expect(longue?.profil?.points.length).toBe(140);
+    expect(longue?.profil?.parts.map((p) => p.palier)).toEqual([
+      'roulant',
+      'soutenu',
+      'raide',
+      'tres-raide',
+    ]);
+    // D+ du profil = chiffre PUBLIÉ 11.1 (même source que les métriques).
+    expect(longue?.profil?.dplusM).toBe(longue?.metriques?.denivelePositifM);
+    // Marqueurs Départ/Arrivée au référentiel de l’épreuve.
+    expect(longue?.profil?.marqueurs.map((m) => m.id)).toEqual(['depart', 'arrivee']);
   });
 
   it('store indisponible : dégradation en section vide (convention 9.3 inchangée)', async () => {

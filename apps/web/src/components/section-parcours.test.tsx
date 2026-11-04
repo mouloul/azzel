@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { SectionParcours } from '@/components/section-parcours';
+import { MENTION_TRACE_PROVISOIRE, SectionParcours } from '@/components/section-parcours';
 import type {
   EpreuveSectionParcours,
   SectionParcoursView,
@@ -159,6 +159,9 @@ describe('section parcours accueil — sélecteur sans JavaScript (story 9.3)', 
     ]) {
       expect(html).not.toContain(interdit);
     }
+    // Décision produit 2026-11-04 : sans données du relevé, pas de mention
+    // « tracé provisoire » non plus.
+    expect(html).not.toContain(MENTION_TRACE_PROVISOIRE);
   });
 
   it('emplacement de la visualisation annoncé, utile tel quel — jamais un cadre vide', () => {
@@ -199,6 +202,13 @@ describe('section parcours accueil — vue épopée 11 (données non nulles)', (
     expect(panneau(html, 1)).not.toContain(`km${NBSP_ETROIT}7`);
     // Services en toutes lettres, jamais en icône seule.
     expect(panneau(html, 0)).toContain('Ravitaillement · Point d’eau');
+  });
+
+  it('décision produit 2026-11-04 : mention « tracé provisoire » servie dans CHAQUE panneau à données', () => {
+    // Markup serveur (visible sans JS) ; la constante unique fait foi du
+    // texte — retrait en une ligne le jour du tracé officiel.
+    expect(panneau(html, 0)).toContain(MENTION_TRACE_PROVISOIRE);
+    expect(panneau(html, 1)).toContain(MENTION_TRACE_PROVISOIRE);
   });
 });
 

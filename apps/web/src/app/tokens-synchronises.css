@@ -86,6 +86,10 @@
   --az-sync-attente-encre: #FFFFFF;
   --az-sync-envoye: #2E6570;
   --az-sync-envoye-encre: #FFFFFF;
+  --az-pente-roulant: #6E8F6B;
+  --az-pente-soutenu: #47825F;
+  --az-pente-raide: #9E5418;
+  --az-pente-tres-raide: #7A2E1B;
   --az-bg-sombre: #101A14;
   --az-surface-sombre: #1B281F;
   --az-texte-sombre: #E8F0E9;
@@ -102,6 +106,10 @@
   --az-sync-attente-encre-sombre: #291D04;
   --az-sync-envoye-sombre: #74C7D6;
   --az-sync-envoye-encre-sombre: #06262C;
+  --az-pente-roulant-sombre: #4E7A58;
+  --az-pente-soutenu-sombre: #6FA97E;
+  --az-pente-raide-sombre: #E39A5B;
+  --az-pente-tres-raide-sombre: #FFB4A0;
   --az-font-display: var(--font-display);
   --az-font-size-display: 62px;
   --az-font-weight-display: 800;
@@ -178,5 +186,9 @@
   --az-sync-attente-encre: #291D04;
   --az-sync-envoye: #74C7D6;
   --az-sync-envoye-encre: #06262C;
+  --az-pente-roulant: #4E7A58;
+  --az-pente-soutenu: #6FA97E;
+  --az-pente-raide: #E39A5B;
+  --az-pente-tres-raide: #FFB4A0;
 }
 
