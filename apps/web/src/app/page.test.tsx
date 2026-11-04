@@ -76,7 +76,7 @@ describe('accueil vitrine — rendu statique', () => {
     expect(HTML_ACCUEIL).not.toContain('égide');
   });
 
-  it('hero : bandeau date, titre, lieu, CTA S’inscrire vers /connexion?parcours=inscription', () => {
+  it('hero : bandeau date, titre, lieu, CTA Participer vers /connexion?parcours=inscription', () => {
     const html = HTML_ACCUEIL;
     expect(html).toContain('2ᵉ édition');
     expect(html).toContain('Printemps 2027');
@@ -85,7 +85,7 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('stade Agni Lhoudh');
     expect(html).toContain('Yakouren');
     expect(html).toContain('href="/connexion?parcours=inscription"');
-    expect(html).toContain('S’inscrire');
+    expect(html).toContain('Participer');
   });
 
   it('hero : la date exacte reste masquee tant que le comite ne l’a pas annoncee', () => {

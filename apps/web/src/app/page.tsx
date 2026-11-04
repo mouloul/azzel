@@ -140,8 +140,10 @@ export default async function HomePage() {
             n’oublie pas. Le trail d’Aït Aïssi revient au printemps 2027.
           </p>
           <div className="aa-hero__actions">
+            {/* Recette du 04/11/2026 : « Participer » plutôt que « S'inscrire » —
+                le parcours derrière (connexion puis inscription) est inchangé. */}
             <Link className="socle-action" href="/connexion?parcours=inscription">
-              S’inscrire
+              Participer
             </Link>
             <a
               className="socle-action socle-action--contour"
