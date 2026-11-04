@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { renderToReadableStream } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { BandeauEgide, EGIDE_TEXTE } from '@/components/bandeau-egide';
 
 // L’accueil lit la section partenaires en base (dynamique, story 2.3) : le
 // composant est asynchrone — rendu via renderToReadableStream (l’API statique
@@ -67,20 +66,14 @@ beforeAll(async () => {
 
 async function renduAccueil(): Promise<string> {
   const flux = await renderToReadableStream(
-    <>
-      <BandeauEgide />
-      <HomePage />
-    </>,
+    <HomePage />,
   );
   return await new Response(flux).text();
 }
 
 describe('accueil vitrine — rendu statique', () => {
-  it('affiche le bandeau égide (texte exact, capitales espacées)', () => {
-    const html = HTML_ACCUEIL;
-    expect(html).toContain(EGIDE_TEXTE);
-    expect(EGIDE_TEXTE).toBe('Sous l’égide de la Fédération et du ministère des Sports');
-    expect(html).toContain('class="egide"');
+  it('plus de mention d’égide sur l’accueil (retirée en recette le 04/11/2026)', () => {
+    expect(HTML_ACCUEIL).not.toContain('égide');
   });
 
   it('hero : bandeau date, titre, lieu, CTA S’inscrire vers /connexion?parcours=inscription', () => {
@@ -237,7 +230,7 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
 
   it('CSS : hero à hauteur d’écran moins l’égide, titre à gauche / rail à droite sur socle, rail sous le titre en mobile', () => {
     const plein = regle('.aa-hero--plein');
-    expect(plein).toMatch(/min-height:\s*calc\(100svh - var\(--egide-hauteur\)/);
+    expect(plein).toMatch(/min-height:\s*calc\(100svh - var\(--frise-hauteur\)/);
     const corps = regle('.aa-hero--plein .aa-hero__body');
     // Composition 9.2 : grille deux colonnes (titre à gauche, rail à droite),
     // texte à gauche — plus de contenu centré.

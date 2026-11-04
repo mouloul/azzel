@@ -156,12 +156,12 @@ export default async function HomePage() {
       {/* Bilan 2026 — recette du 04/11/2026 : le teaser porte la section. Gros
           encart vidéo pleine largeur, les quatre chiffres officiels en rangée
           juste dessous. Rien n'est chargé avant le clic sur le poster. */}
-      {/* Recette du 04/11/2026 : surtitre et titre retirés — la vidéo et les
-          chiffres disent la première édition mieux qu'un intertitre. La section
-          garde un nom accessible (plus de h2 à référencer). */}
+      {/* Recette du 04/11/2026 : plus de surtitre ni d'intertitre au-dessus de la
+          vidéo — elle ouvre la section seule. Le titre revient juste avant les
+          chiffres, qu'il introduit littéralement. */}
       <section
         className="vitrine-bande vitrine-bande--foret aa-bilan"
-        aria-label="Bilan de l’édition 2026"
+        aria-labelledby="titre-bilan-2026"
       >
         <div className="aa-section">
           {teaser !== null ? (
@@ -170,6 +170,9 @@ export default async function HomePage() {
             </div>
           ) : null}
 
+          <h2 className="aa-h2 aa-bilan__titre" id="titre-bilan-2026">
+            La première édition, c’est
+          </h2>
           <dl className="aa-bilan__rail">
             <div className="aa-bilan__stat">
               <dt>Inscrits</dt>

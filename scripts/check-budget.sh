@@ -35,7 +35,7 @@
 #     le voile sur DPR ≥ 2).
 # Sortie : détail par ressource, totaux, verdicts. Exit 1 si l'un des deux
 # seuils est dépassé, si une ressource est inaccessible ou si le contenu
-# attendu est absent (égide, CTA /connexion, chiffres officiels 2026).
+# attendu est absent (CTA /connexion, chiffres officiels 2026).
 #
 # Story 7.3 — mesure AUSSI /resultats (pare-chemin-critique de la carte) : le
 # HTML servi ne doit référencer NI leaflet NI une URL de tuile (la lib et son
@@ -212,7 +212,6 @@ verifier_contenu() {
     CONTENU_OK=0
   fi
 }
-verifier_contenu "Sous l’égide de la Fédération et du ministère des Sports"
 # Lien « Me connecter » de l'onglet Mon trail (encart fermé, rendu en SSR par
 # le layout) — ce n'est plus le CTA du hero, vérifié juste en dessous.
 verifier_contenu 'href="/connexion"'
@@ -247,5 +246,5 @@ if [ "$DEPASSE" != "0" ] || [ "$CONTENU_OK" != "1" ] || [ "$CARTE_OK" != "1" ]; 
 fi
 
 echo "OK : poids réel et chemin critique sous leurs seuils respectifs."
-echo "OK : contenu attendu présent (égide, CTA /connexion, chiffres officiels 2026)."
+echo "OK : contenu attendu présent (CTA /connexion, chiffres officiels 2026)."
 echo "OK : /resultats sans chunk carto dans le HTML initial (carte différée au clic)."

@@ -160,7 +160,7 @@ const PAIRES: readonly Paire[] = [
     texte: 'on-forest',
     fond: 'forest-surface',
     seuil: SEUIL_COURANT,
-    usage: 'bande contact + égide',
+    usage: 'bande contact',
   },
   {
     nom: 'on-forest / forest',

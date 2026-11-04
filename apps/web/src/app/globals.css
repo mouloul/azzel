@@ -831,27 +831,6 @@ main {
 .aa-hero__meta{font-size:16px;margin:16px 0 24px}
 @media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-hero__body{padding:32px 16px}}
 
-/* Bandeau égide — toujours visible, toutes pages (layout) */
-.egide {
-  margin: 0;
-  padding: 10px var(--az-space-gutter);
-  background: var(--forest-surface);
-  color: var(--on-forest);
-  text-align: center;
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-@media (max-width: 640px) {
-  .egide {
-    font-size: 11px;
-    letter-spacing: 0.12em;
-  }
-}
-
 /* Vitrine — sections pleine largeur + conteneur */
 .vitrine-bande--foret {
   background: var(--forest-surface);
@@ -944,13 +923,19 @@ main {
 
 /* Deux colonnes : l'éditorial chiffré, puis le teaser. Sous 900 px, l'un sous
    l'autre — les chiffres d'abord, ils portent le propos. */
+/* Titre d'introduction des chiffres : il ouvre la rangée, pas la section —
+   d'où l'espace au-dessus (après la vidéo) plus grand qu'en dessous. */
+.aa-bilan__titre {
+  margin: var(--space-12) 0 0;
+}
+
 /* Les quatre chiffres en rangée sous la vidéo ; ils se replient d'eux-mêmes
    en deux puis une colonne sur les petits écrans. */
 .aa-bilan__rail {
   display: grid;
   gap: var(--space-6) var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  margin: var(--space-8) 0 0;
+  margin: var(--space-6) 0 0;
 }
 
 .aa-bilan__stat {
@@ -1281,18 +1266,11 @@ a.aa-partenaire__nom{color:inherit}
    Sans JS : body:has(.aa-hero--plein) — le layout reste statique (ISR intact).
    Hauteurs d'égide/frise approchées (l'égide passe sur deux lignes en mobile). */
 :root {
-  --egide-hauteur: 40px;
   --frise-hauteur: 16px;
   --mon-trail-largeur: 44px;
   /* Cloison décorative du rail de chiffres du hero — seule .aa-hero__rail
      l'utilise (la bande bilan est une grille sans cloisons). */
   --cloison: color-mix(in srgb, var(--on-forest) 40%, transparent);
-}
-
-@media (max-width: 640px) {
-  :root {
-    --egide-hauteur: 58px;
-  }
 }
 
 body:has(.aa-hero--plein) {
@@ -1357,8 +1335,8 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
 }
 
 .aa-hero--plein {
-  min-height: calc(100vh - var(--egide-hauteur) - var(--frise-hauteur));
-  min-height: calc(100svh - var(--egide-hauteur) - var(--frise-hauteur));
+  min-height: calc(100vh - var(--frise-hauteur));
+  min-height: calc(100svh - var(--frise-hauteur));
   align-items: stretch;
   justify-content: center;
 }
@@ -1524,7 +1502,7 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
    descend d'un cran pour ne pas repousser les actions hors de l'écran. */
 @media (max-width: 640px) {
   .aa-hero--plein .aa-hero__meta {
-    margin: var(--space-3) 0 var(--space-5);
+    margin: var(--space-3) 0 var(--space-6);
     font-size: 15px;
   }
 }

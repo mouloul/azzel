@@ -20,11 +20,11 @@ describe('accueil vitrine — HTML servi (intégration opt-in)', () => {
     html = await reponse.text();
   });
 
-  it('contient le bandeau égide', (contexte) => {
+  it('ne contient plus le bandeau égide (retiré en recette le 04/11/2026)', (contexte) => {
     if (html === null) {
       contexte.skip();
     }
-    expect(html).toContain('Sous l’égide de la Fédération et du ministère des Sports');
+    expect(html).not.toContain('Sous l’égide de la Fédération et du ministère des Sports');
   });
 
   it('contient le CTA S’inscrire vers /connexion?parcours=inscription', (contexte) => {
