@@ -4,9 +4,12 @@ import { CODE_TTL_MINUTES } from '@/modules/iam/constants';
  * Recette du 04/11/2026 — « Participer » tombait sur un champ email nu : rien
  * ne disait qu'un code allait arriver par mail, ni ce qui viendrait après.
  *
- * Guide du parcours d'inscription, affiché à côté du formulaire. Les cinq
- * étapes décrivent le parcours RÉEL : email, code, formulaire d'inscription,
- * décharge + règlement, preuve de paiement puis validation par l'équipe.
+ * Guide du parcours, affiché à côté du formulaire. Il ne numérote QUE les deux
+ * étapes de cet écran (email, code) : au-delà, on change de page et c'est le fil
+ * d'étapes du dossier qui prend le relais (Inscription, Documents, Paiement,
+ * Validation). Numéroter ici des étapes que cet écran ne suit pas donnerait un
+ * compteur fantôme, abandonné à l'étape 2 sur 5. La suite est annoncée en
+ * une phrase, sans numéro.
  *
  * Contrat repris du fil d'étapes du dossier (UX-DR-21) : l'étape courante se
  * lit PAR LE TEXTE (« en cours ») autant que par la forme, jamais par la
@@ -27,20 +30,6 @@ const ETAPES: readonly { titre: string; texte: string }[] = [
     titre: 'Le code reçu par email',
     texte:
       'Ouvrez votre boîte et recopiez le code. S’il n’arrive pas, regardez les indésirables ou demandez-en un autre.',
-  },
-  {
-    titre: 'Votre inscription',
-    texte:
-      'Identité, épreuve choisie et contact. Vous pourrez la modifier tant que le dossier n’est pas validé.',
-  },
-  {
-    titre: 'Décharge et règlement',
-    texte: 'Deux documents à lire, puis à accepter.',
-  },
-  {
-    titre: 'Preuve de paiement',
-    texte:
-      'La photo de votre reçu CCP. L’équipe la vérifie, puis votre dossard est validé.',
   },
 ];
 
@@ -90,6 +79,11 @@ export function GuideInscription({ etape }: { etape: EtapeGuide }) {
           );
         })}
       </ol>
+      <p className="guide-inscription__suite">
+        Vous compléterez ensuite votre inscription sur l’écran suivant — identité et
+        épreuve, décharge et règlement, puis preuve de paiement. Un fil d’étapes vous
+        y accompagne jusqu’à la validation de votre dossard.
+      </p>
     </aside>
   );
 }

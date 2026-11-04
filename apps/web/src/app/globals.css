@@ -363,6 +363,17 @@ main {
   color: var(--az-texte-2);
 }
 
+/* Relais vers la suite du parcours : volontairement SANS numéro — cet écran ne
+   suit pas ces étapes-là, le fil du dossier s'en charge. */
+.guide-inscription__suite {
+  margin: var(--az-space-5) 0 0;
+  padding-top: var(--az-space-4);
+  border-top: 1px solid var(--az-filet-controle);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte-2);
+}
+
 /* Étapes à venir : même texte, moins d'appui — jamais la couleur seule,
    l'état est écrit. */
 .guide-etape:not(.guide-etape--courante):not(.guide-etape--faite) .guide-etape__titre {
