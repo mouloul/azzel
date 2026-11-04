@@ -97,8 +97,14 @@ export default async function HomePage() {
             <dt>Cadre</dt>
             <dd>Forêt de Yakouren</dd>
           </dl>
+          {/* Accroche (recette 04/11/2026) : la phrase descriptive ne disait rien
+              que le rail ne dise déjà. Elle s’appuie désormais sur la première
+              édition — sans chiffre ici, le bilan 2026 plus bas porte les chiffres
+              officiels. */}
           <p className="aa-hero__meta">
-            Deux trails au village d’Aït Aïssi, commune de Yakouren.
+            Une première édition qui a dépassé toutes les attentes : le village
+            mobilisé, les sentiers de Yakouren pris d’assaut, une ambiance qu’on
+            n’oublie pas. Le trail d’Aït Aïssi revient le 26 mars 2027.
           </p>
           <div className="aa-hero__actions">
             <Link className="socle-action" href="/connexion?parcours=inscription">

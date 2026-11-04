@@ -1416,10 +1416,19 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
 
 .aa-hero--plein .aa-hero__meta {
   grid-area: meta;
-  max-width: 46ch;
+  max-width: 52ch;
   margin: var(--space-4) 0 var(--space-6);
   font-size: 17px;
   line-height: 1.5;
+}
+
+/* Accroche plus longue depuis la recette du 04/11/2026 : en mobile, elle
+   descend d'un cran pour ne pas repousser les actions hors de l'écran. */
+@media (max-width: 640px) {
+  .aa-hero--plein .aa-hero__meta {
+    margin: var(--space-3) 0 var(--space-5);
+    font-size: 15px;
+  }
 }
 
 .aa-hero--plein .aa-hero__actions {
