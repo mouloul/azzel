@@ -280,7 +280,7 @@ describe.skipIf(testUrls === null)(
       // Coureurs : catégories d'âge VARIÉES (servies dans les lignes).
       await creerCoureur(JETON_L1, 201, 'longue', 'Senior');
       await creerCoureur(JETON_L2, 202, 'longue', 'V1');
-      await creerCoureur(JETON_L3, 203, 'longue', 'U20');
+      await creerCoureur(JETON_L3, 203, 'longue', 'V2');
       await creerCoureur(JETON_L4, 204, 'longue', 'Senior');
       await creerCoureur(JETON_L5, 205, 'longue', 'V2');
       await creerCoureur(JETON_L6, 206, 'longue', 'Senior');
@@ -475,7 +475,7 @@ describe.skipIf(testUrls === null)(
       ]);
       // Catégories d'âge servies sans recalcul serveur (filtrables client).
       const categories = longue.lignes.map((l) => l.categorieAge);
-      for (const attendue of ['Senior', 'V1', 'U20', 'V3']) {
+      for (const attendue of ['Senior', 'V1', 'V2', 'V3']) {
         expect(categories).toContain(attendue);
       }
     });

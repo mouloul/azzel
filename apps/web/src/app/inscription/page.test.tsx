@@ -95,14 +95,14 @@ describe('/inscription — formulaire refondu (story 9.4)', () => {
     expect(html).not.toContain('À venir');
   });
 
-  it('champs obligatoires annoncés EN TEXTE : huit mentions « (obligatoire) », zéro astérisque', async () => {
+  it('champs obligatoires annoncés EN TEXTE : neuf mentions « (obligatoire) », zéro astérisque', async () => {
     inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
       edition: EDITION,
       epreuves: EPREUVES,
       coureur: null,
     });
     const html = await rendu();
-    expect((html.match(/\(obligatoire\)/g) ?? []).length).toBe(8);
+    expect((html.match(/\(obligatoire\)/g) ?? []).length).toBe(9);
     // Revue 9 (M9) : assertion ciblée sur les LABELS — l’obligation se lit
     // en texte dans l’étiquette, jamais par un astérisque (où qu’il soit
     // dans le label, y compris dans son span de mention).

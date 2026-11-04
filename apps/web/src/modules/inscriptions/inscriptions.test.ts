@@ -9,6 +9,7 @@ import { processOutbox } from '@/modules/notifications/worker';
 
 import {
   AGE_CATEGORY_LABELS,
+  FIELD_ORDER,
   MAX_AGE_AT_RACE,
   MAX_REFUSAL_REASON_LENGTH,
   MIN_AGE_AT_RACE,
@@ -60,6 +61,7 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     contactUrgenceTelephone: '0555010204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
     ...overrides,
   };
 }
@@ -72,8 +74,18 @@ describe('deriveAgeAndCategory — bornes à la date de course', () => {
     });
   });
 
-  it('la veille de ses 20 ans : U20', () => {
-    expect(deriveAgeAndCategory('2007-03-27', RACE_DATE)).toEqual({ age: 19, category: 'U20' });
+  it('19 ans : Senior — U20 n’existe plus, la course est réservée aux majeurs', () => {
+    expect(deriveAgeAndCategory('2007-03-27', RACE_DATE)).toEqual({
+      age: 19,
+      category: 'Senior',
+    });
+  });
+
+  it('18 ans tout juste le jour de la course : admis, Senior', () => {
+    expect(deriveAgeAndCategory('2009-03-26', RACE_DATE)).toEqual({
+      age: 18,
+      category: 'Senior',
+    });
   });
 
   it('bornes Senior / V1 / V2 / V3', () => {
@@ -129,6 +141,7 @@ describe('normalizeInscriptionInput', () => {
         contactUrgenceTelephone: '0555-010-204',
         dateNaissance: '1990-05-12',
         tailleTshirt: 'M ',
+        genre: ' h ',
         junk: 42,
       }),
     ).toEqual(validInput({ telephone: '+213555010203', contactUrgenceTelephone: '0555010204' }));
@@ -158,7 +171,7 @@ describe('validateInscriptionInput — champ par champ', () => {
     }
   });
 
-  it('formulaire vide : les huit champs sont signalés', () => {
+  it('formulaire vide : les neuf champs sont signalés', () => {
     const errors = validateInscriptionInput(
       {
         epreuve: '',
@@ -169,6 +182,7 @@ describe('validateInscriptionInput — champ par champ', () => {
         contactUrgenceTelephone: '',
         dateNaissance: '',
         tailleTshirt: '',
+        genre: '',
       },
       slugs,
       RACE_DATE,
@@ -183,6 +197,7 @@ describe('validateInscriptionInput — champ par champ', () => {
         'contactUrgenceTelephone',
         'dateNaissance',
         'tailleTshirt',
+        'genre',
       ].sort(),
     );
   });
@@ -197,7 +212,7 @@ describe('validateInscriptionInput — champ par champ', () => {
     expect(errors.tailleTshirt).toBeDefined();
   });
 
-  it('âge imbroglio : moins de 10 ans ou plus de 100 ans à la course', () => {
+  it('âge imbroglio : moins de 18 ans ou plus de 100 ans à la course', () => {
     expect(
       validateInscriptionInput(validInput({ dateNaissance: '2020-01-01' }), slugs, RACE_DATE)
         .dateNaissance,
@@ -303,6 +318,7 @@ describe('submitInscription — service avec store stubbé', () => {
       contactUrgenceTelephone: '0555010204',
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
+      genre: 'H',
       age: input.age,
       categorieAge: input.categorieAge,
       status: 'en constitution',
@@ -389,6 +405,7 @@ describe('submitInscription — service avec store stubbé', () => {
         'contactUrgenceTelephone',
         'dateNaissance',
         'tailleTshirt',
+        'genre',
       ].sort(),
     );
     expect(store.upsertCoureur).not.toHaveBeenCalled();
@@ -404,8 +421,81 @@ describe('submitInscription — service avec store stubbé', () => {
   });
 
   it('labels de catégorie complets pour l’affichage', () => {
-    expect(AGE_CATEGORY_LABELS.U20).toContain('U20');
+    expect(AGE_CATEGORY_LABELS.Senior).toContain('18');
     expect(AGE_CATEGORY_LABELS.V3).toContain('60');
+    expect(Object.keys(AGE_CATEGORY_LABELS)).toEqual(['Senior', 'V1', 'V2', 'V3']);
+  });
+});
+
+describe('majorité obligatoire à la date de la course', () => {
+  const slugs = ['longue', 'moyenne'];
+
+  it('17 ans la veille de ses 18 ans : refusé', () => {
+    const errors = validateInscriptionInput(
+      validInput({ dateNaissance: '2009-03-27' }),
+      slugs,
+      RACE_DATE,
+    );
+    expect(errors.dateNaissance).toBeDefined();
+  });
+
+  it('18 ans le jour de la course : accepté', () => {
+    const errors = validateInscriptionInput(
+      validInput({ dateNaissance: '2009-03-26' }),
+      slugs,
+      RACE_DATE,
+    );
+    expect(errors.dateNaissance).toBeUndefined();
+  });
+
+  it('le message dit la règle, pas seulement un intervalle', () => {
+    const message = validateInscriptionInput(
+      validInput({ dateNaissance: '2015-01-01' }),
+      slugs,
+      RACE_DATE,
+    ).dateNaissance;
+    expect(message).toContain('18');
+    expect(message).toMatch(/majeur|18 ans/i);
+  });
+});
+
+describe('genre du coureur', () => {
+  const slugs = ['longue', 'moyenne'];
+
+  it('obligatoire : absent, erreur nommée sur le champ', () => {
+    const errors = validateInscriptionInput(
+      validInput({ genre: '' }),
+      slugs,
+      RACE_DATE,
+    );
+    expect(errors.genre).toBeDefined();
+  });
+
+  it('refuse une valeur hors liste', () => {
+    expect(
+      validateInscriptionInput(validInput({ genre: 'X' }), slugs, RACE_DATE).genre,
+    ).toBeDefined();
+  });
+
+  it('accepte F et H', () => {
+    for (const genre of ['F', 'H']) {
+      expect(
+        validateInscriptionInput(validInput({ genre }), slugs, RACE_DATE).genre,
+      ).toBeUndefined();
+    }
+  });
+
+  it('normalise la saisie brute : espaces et minuscules', () => {
+    expect(normalizeInscriptionInput({ genre: ' f ' }).genre).toBe('F');
+    expect(normalizeInscriptionInput({ genre: 'h' }).genre).toBe('H');
+  });
+
+  it('valeur inconnue : conservée telle quelle pour que la validation la refuse', () => {
+    expect(normalizeInscriptionInput({ genre: 'autre' }).genre).toBe('AUTRE');
+  });
+
+  it('fait partie de l’ordre des champs — sinon le focus d’erreur l’ignore', () => {
+    expect(FIELD_ORDER).toContain('genre');
   });
 });
 
@@ -655,6 +745,7 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       contactUrgenceTelephone: '0555010204',
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
+      genre: 'H',
       age: 36,
       categorieAge: 'Senior',
       status: 'en constitution',

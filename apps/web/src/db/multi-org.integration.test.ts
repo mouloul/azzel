@@ -78,6 +78,7 @@ function validInput(epreuve: string): InscriptionFormInput {
     contactUrgenceTelephone: '0555 010 204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
   };
 }
 

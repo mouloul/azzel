@@ -1,4 +1,4 @@
-import type { TshirtSize } from '@/modules/inscriptions/domain';
+import type { Genre, TshirtSize } from '@/modules/inscriptions/domain';
 import type { MissionType } from '@/modules/missions/domain';
 
 /**
@@ -39,6 +39,7 @@ export interface CoureurFictif {
   dateNaissance: string;
   epreuve: 'longue' | 'moyenne';
   tailleTshirt: TshirtSize;
+  genre: Genre;
   stade: StadeDossier;
   /** Obligatoire si et seulement si `stade === 'refusé'`. */
   motifRefus: string | null;
@@ -58,60 +59,61 @@ type Ligne = readonly [
   dateNaissance: string,
   epreuve: 'longue' | 'moyenne',
   tailleTshirt: TshirtSize,
+  genre: Genre,
   stade: StadeDossier,
   motifRefus?: string,
 ];
 
 const LIGNES: readonly Ligne[] = [
   // ——— 22 dossiers validés (dossard + e-dossard) ———
-  ['Yani', 'Ulahianne', '1990-05-12', 'longue', 'M', 'validé'],
-  ['Tilelli', 'Bouzegrane', '1994-11-03', 'longue', 'S', 'validé'],
-  ['Massinissa', 'Ikhervane', '1986-02-27', 'longue', 'L', 'validé'],
-  ['Dihya', 'Amezzour', '1999-07-19', 'moyenne', 'XS', 'validé'],
-  ['Idir', 'Tazerout', '1978-09-08', 'longue', 'XL', 'validé'],
-  ['Lyes', 'Boufarik-Nath', '2001-03-14', 'moyenne', 'M', 'validé'],
-  ['Kahina', 'Imzizwa', '1992-12-30', 'longue', 'S', 'validé'],
-  ['Mokrane', 'Sedkaoui', '1968-04-05', 'moyenne', 'L', 'validé'],
-  ['Thiziri', 'Ahgoun', '1997-06-22', 'longue', 'XS', 'validé'],
-  ['Ferhat', 'Ouzellague', '1983-01-17', 'longue', 'M', 'validé'],
-  ['Sabrina', 'Mendjeli', '1995-08-11', 'moyenne', 'S', 'validé'],
-  ['Arezki', 'Tiferdoud', '1974-10-29', 'longue', 'XL', 'validé'],
-  ['Numidia', 'Bekhouche', '2004-05-02', 'moyenne', 'XS', 'validé'],
-  ['Hocine', 'Larmandi', '1988-03-23', 'longue', 'L', 'validé'],
-  ['Melaz', 'Ifrikhen', '1991-09-15', 'longue', 'M', 'validé'],
-  ['Katia', 'Semmoudi', '1996-02-06', 'moyenne', 'S', 'validé'],
-  ['Juba', 'Azrarak', '1980-12-09', 'longue', 'L', 'validé'],
-  ['Lounis', 'Berkoukas', '1963-07-28', 'moyenne', 'XXL', 'validé'],
-  ['Silya', 'Mehdaoui-Tazi', '2000-04-16', 'moyenne', 'XS', 'validé'],
-  ['Rayane', 'Ouchemoum', '1993-11-21', 'longue', 'M', 'validé'],
-  ['Damya', 'Zelmati', '1987-05-30', 'longue', 'S', 'validé'],
-  ['Akli', 'Ghebrit-Nath', '1971-08-04', 'moyenne', 'L', 'validé'],
+  ['Yani', 'Ulahianne', '1990-05-12', 'longue', 'M', 'H', 'validé'],
+  ['Tilelli', 'Bouzegrane', '1994-11-03', 'longue', 'S', 'F', 'validé'],
+  ['Massinissa', 'Ikhervane', '1986-02-27', 'longue', 'L', 'H', 'validé'],
+  ['Dihya', 'Amezzour', '1999-07-19', 'moyenne', 'XS', 'F', 'validé'],
+  ['Idir', 'Tazerout', '1978-09-08', 'longue', 'XL', 'H', 'validé'],
+  ['Lyes', 'Boufarik-Nath', '2001-03-14', 'moyenne', 'M', 'H', 'validé'],
+  ['Kahina', 'Imzizwa', '1992-12-30', 'longue', 'S', 'F', 'validé'],
+  ['Mokrane', 'Sedkaoui', '1968-04-05', 'moyenne', 'L', 'H', 'validé'],
+  ['Thiziri', 'Ahgoun', '1997-06-22', 'longue', 'XS', 'F', 'validé'],
+  ['Ferhat', 'Ouzellague', '1983-01-17', 'longue', 'M', 'H', 'validé'],
+  ['Sabrina', 'Mendjeli', '1995-08-11', 'moyenne', 'S', 'F', 'validé'],
+  ['Arezki', 'Tiferdoud', '1974-10-29', 'longue', 'XL', 'H', 'validé'],
+  ['Numidia', 'Bekhouche', '2004-05-02', 'moyenne', 'XS', 'F', 'validé'],
+  ['Hocine', 'Larmandi', '1988-03-23', 'longue', 'L', 'H', 'validé'],
+  ['Melaz', 'Ifrikhen', '1991-09-15', 'longue', 'M', 'H', 'validé'],
+  ['Katia', 'Semmoudi', '1996-02-06', 'moyenne', 'S', 'F', 'validé'],
+  ['Juba', 'Azrarak', '1980-12-09', 'longue', 'L', 'H', 'validé'],
+  ['Lounis', 'Berkoukas', '1963-07-28', 'moyenne', 'XXL', 'H', 'validé'],
+  ['Silya', 'Mehdaoui-Tazi', '2000-04-16', 'moyenne', 'XS', 'F', 'validé'],
+  ['Rayane', 'Ouchemoum', '1993-11-21', 'longue', 'M', 'H', 'validé'],
+  ['Damya', 'Zelmati', '1987-05-30', 'longue', 'S', 'F', 'validé'],
+  ['Akli', 'Ghebrit-Nath', '1971-08-04', 'moyenne', 'L', 'H', 'validé'],
 
   // ——— 10 dossiers complets, en attente de décision ———
-  ['Siham', 'Boudjellal', '1998-01-25', 'longue', 'S', 'dossier complet'],
-  ['Mehdi', 'Tabouche', '1985-10-13', 'moyenne', 'M', 'dossier complet'],
-  ['Lydia', 'Aït-Ferroudj', '2002-06-07', 'moyenne', 'XS', 'dossier complet'],
-  ['Sofiane', 'Hemdani', '1979-03-31', 'longue', 'XL', 'dossier complet'],
-  ['Nawel', 'Chettouane', '1990-09-18', 'longue', 'S', 'dossier complet'],
-  ['Belaid', 'Oussedik-Nath', '1966-12-02', 'moyenne', 'L', 'dossier complet'],
-  ['Amayas', 'Ferkioui', '1995-07-26', 'longue', 'M', 'dossier complet'],
-  ['Tinhinane', 'Begriche', '2003-02-11', 'moyenne', 'XS', 'dossier complet'],
-  ['Ghilas', 'Merabtine', '1982-04-20', 'longue', 'L', 'dossier complet'],
-  ['Ourida', 'Slimanoud', '1976-11-14', 'moyenne', 'M', 'dossier complet'],
+  ['Siham', 'Boudjellal', '1998-01-25', 'longue', 'S', 'F', 'dossier complet'],
+  ['Mehdi', 'Tabouche', '1985-10-13', 'moyenne', 'M', 'H', 'dossier complet'],
+  ['Lydia', 'Aït-Ferroudj', '2002-06-07', 'moyenne', 'XS', 'F', 'dossier complet'],
+  ['Sofiane', 'Hemdani', '1979-03-31', 'longue', 'XL', 'H', 'dossier complet'],
+  ['Nawel', 'Chettouane', '1990-09-18', 'longue', 'S', 'F', 'dossier complet'],
+  ['Belaid', 'Oussedik-Nath', '1966-12-02', 'moyenne', 'L', 'H', 'dossier complet'],
+  ['Amayas', 'Ferkioui', '1995-07-26', 'longue', 'M', 'H', 'dossier complet'],
+  ['Tinhinane', 'Begriche', '2003-02-11', 'moyenne', 'XS', 'F', 'dossier complet'],
+  ['Ghilas', 'Merabtine', '1982-04-20', 'longue', 'L', 'H', 'dossier complet'],
+  ['Ourida', 'Slimanoud', '1976-11-14', 'moyenne', 'M', 'F', 'dossier complet'],
 
   // ——— 12 inscriptions nues (ni preuve ni acceptations) ———
-  ['Anis', 'Khelloufi-Nath', '1992-08-03', 'longue', 'M', 'inscription seule'],
-  ['Louiza', 'Benhamouche', '1989-05-27', 'moyenne', 'S', 'inscription seule'],
-  ['Zinedine', 'Aroumane', '2005-01-09', 'moyenne', 'XS', 'inscription seule'],
-  ['Feriel', 'Draoudi', '1997-10-22', 'longue', 'S', 'inscription seule'],
-  ['Koceila', 'Benzerga', '1984-06-15', 'longue', 'L', 'inscription seule'],
-  ['Hayet', 'Oulmane', '1972-02-28', 'moyenne', 'M', 'inscription seule'],
-  ['Mourad', 'Tighilt', '1991-12-06', 'longue', 'XL', 'inscription seule'],
-  ['Célina', 'Rabahi-Nath', '2006-03-19', 'moyenne', 'XS', 'inscription seule'],
-  ['Djamel', 'Aissaoudi', '1981-09-01', 'longue', 'L', 'inscription seule'],
-  ['Wissam', 'Belkacemine', '1999-04-24', 'moyenne', 'S', 'inscription seule'],
-  ['Samir', 'Hamouche-Nath', '1975-07-12', 'longue', 'XXL', 'inscription seule'],
-  ['Meriem', 'Zerrouki', '1993-01-05', 'moyenne', 'M', 'inscription seule'],
+  ['Anis', 'Khelloufi-Nath', '1992-08-03', 'longue', 'M', 'H', 'inscription seule'],
+  ['Louiza', 'Benhamouche', '1989-05-27', 'moyenne', 'S', 'F', 'inscription seule'],
+  ['Zinedine', 'Aroumane', '2005-01-09', 'moyenne', 'XS', 'H', 'inscription seule'],
+  ['Feriel', 'Draoudi', '1997-10-22', 'longue', 'S', 'F', 'inscription seule'],
+  ['Koceila', 'Benzerga', '1984-06-15', 'longue', 'L', 'H', 'inscription seule'],
+  ['Hayet', 'Oulmane', '1972-02-28', 'moyenne', 'M', 'F', 'inscription seule'],
+  ['Mourad', 'Tighilt', '1991-12-06', 'longue', 'XL', 'H', 'inscription seule'],
+  ['Célina', 'Rabahi-Nath', '2006-03-19', 'moyenne', 'XS', 'F', 'inscription seule'],
+  ['Djamel', 'Aissaoudi', '1981-09-01', 'longue', 'L', 'H', 'inscription seule'],
+  ['Wissam', 'Belkacemine', '1999-04-24', 'moyenne', 'S', 'F', 'inscription seule'],
+  ['Samir', 'Hamouche-Nath', '1975-07-12', 'longue', 'XXL', 'H', 'inscription seule'],
+  ['Meriem', 'Zerrouki', '1993-01-05', 'moyenne', 'M', 'F', 'inscription seule'],
 
   // ——— 6 dossiers refusés, motif obligatoire ———
   [
@@ -120,6 +122,7 @@ const LIGNES: readonly Ligne[] = [
     '1988-11-17',
     'longue',
     'M',
+    'H',
     'refusé',
     'Preuve de paiement illisible : le montant et la date du versement CCP n’apparaissent pas.',
   ],
@@ -129,6 +132,7 @@ const LIGNES: readonly Ligne[] = [
     '1994-03-08',
     'moyenne',
     'S',
+    'F',
     'refusé',
     'Le versement CCP correspond à une autre épreuve : redéposer une preuve au tarif de La Moyenne.',
   ],
@@ -138,6 +142,7 @@ const LIGNES: readonly Ligne[] = [
     '1970-06-21',
     'moyenne',
     'L',
+    'H',
     'refusé',
     'Montant incomplet : il manque les frais de dossier. Déposer une nouvelle preuve après régularisation.',
   ],
@@ -147,6 +152,7 @@ const LIGNES: readonly Ligne[] = [
     '2001-08-29',
     'longue',
     'XS',
+    'F',
     'refusé',
     'Preuve déposée au nom d’une autre personne : le titulaire du versement doit être le coureur inscrit.',
   ],
@@ -156,6 +162,7 @@ const LIGNES: readonly Ligne[] = [
     '1965-02-13',
     'moyenne',
     'XL',
+    'H',
     'refusé',
     'Document hors sujet : la pièce déposée est une carte d’identité, pas un reçu de versement CCP.',
   ],
@@ -165,6 +172,7 @@ const LIGNES: readonly Ligne[] = [
     '1986-12-25',
     'longue',
     'M',
+    'F',
     'refusé',
     'Versement daté après la clôture des inscriptions : le dossier ne peut pas être validé en l’état.',
   ],
@@ -187,7 +195,8 @@ function cleCoureur(index: number): string {
 }
 
 export const COUREURS_FICTIFS: readonly CoureurFictif[] = LIGNES.map((ligne, index) => {
-  const [prenom, nom, dateNaissance, epreuve, tailleTshirt, stade, motifRefus] = ligne;
+  const [prenom, nom, dateNaissance, epreuve, tailleTshirt, genre, stade, motifRefus] =
+    ligne;
   return {
     cle: cleCoureur(index),
     prenom,
@@ -195,6 +204,7 @@ export const COUREURS_FICTIFS: readonly CoureurFictif[] = LIGNES.map((ligne, ind
     dateNaissance,
     epreuve,
     tailleTshirt,
+    genre,
     stade,
     motifRefus: motifRefus ?? null,
   };

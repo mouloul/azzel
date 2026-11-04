@@ -42,6 +42,7 @@ function validInput(): InscriptionFormInput {
     contactUrgenceTelephone: '0555 010 204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
   };
 }
 
@@ -159,7 +160,7 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     expect(avant.recap).toMatchObject({
       epreuve: 'La Longue — 35 km',
       distanceKm: 35,
-      categorieAge: 'Senior (20–39 ans)',
+      categorieAge: 'Senior (18–39 ans)',
       tshirt: 'M',
       contactUrgenceNom: 'Lounis Ulahianne',
       dateCourse: RACE_DATE,

@@ -440,6 +440,7 @@ async function peupler(deps: PeuplementDeps): Promise<void> {
           contactUrgenceTelephone: urgence.telephone,
           dateNaissance: coureur.dateNaissance,
           tailleTshirt: coureur.tailleTshirt,
+          genre: coureur.genre,
         },
         sansOutbox,
       );

@@ -2,17 +2,30 @@ export const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'] as const;
 
 export type TshirtSize = (typeof TSHIRT_SIZES)[number];
 
-export type AgeCategory = 'U20' | 'Senior' | 'V1' | 'V2' | 'V3';
+export type AgeCategory = 'Senior' | 'V1' | 'V2' | 'V3';
 
 export const AGE_CATEGORY_LABELS: Record<AgeCategory, string> = {
-  U20: 'Moins de 20 ans (U20)',
-  Senior: 'Senior (20–39 ans)',
+  Senior: 'Senior (18–39 ans)',
   V1: 'Vétéran 1 (40–49 ans)',
   V2: 'Vétéran 2 (50–59 ans)',
   V3: 'Vétéran 3 (60 ans et plus)',
 };
 
-export const MIN_AGE_AT_RACE = 10;
+export const GENRES = ['F', 'H'] as const;
+
+export type Genre = (typeof GENRES)[number];
+
+export const GENRE_LABELS: Record<Genre, string> = {
+  F: 'Femme',
+  H: 'Homme',
+};
+
+/**
+ * Majorité exigée, appréciée à la date de la course : un coureur qui atteint
+ * 18 ans entre son inscription et le départ est admis, un coureur qui les
+ * atteint le lendemain ne l'est pas. Même référence que les catégories d'âge.
+ */
+export const MIN_AGE_AT_RACE = 18;
 
 export const MAX_AGE_AT_RACE = 100;
 
@@ -91,6 +104,7 @@ export interface InscriptionFormInput {
   contactUrgenceTelephone: string;
   dateNaissance: string;
   tailleTshirt: string;
+  genre: string;
 }
 
 export type FieldErrors = Partial<Record<keyof InscriptionFormInput, string>>;
@@ -104,6 +118,7 @@ export const FIELD_ORDER: readonly (keyof InscriptionFormInput)[] = [
   'contactUrgenceNom',
   'contactUrgenceTelephone',
   'tailleTshirt',
+  'genre',
 ];
 
 export function parseIsoDate(value: string): string | null {
@@ -143,9 +158,6 @@ export function completedYearsAt(birthDate: string, onDate: string): number | nu
 }
 
 export function ageCategoryFor(age: number): AgeCategory {
-  if (age < 20) {
-    return 'U20';
-  }
   if (age < 40) {
     return 'Senior';
   }
@@ -205,6 +217,10 @@ export function normalizeInscriptionInput(raw: unknown): InscriptionFormInput {
     contactUrgenceTelephone: normalizePhone(text('contactUrgenceTelephone')),
     dateNaissance: text('dateNaissance'),
     tailleTshirt: text('tailleTshirt'),
+    // Majusculeé sans être filtré : une valeur hors liste doit arriver
+    // jusqu'à la validation, qui la nomme, plutôt que d'être effacée ici et
+    // de ressortir en « champ obligatoire » trompeur.
+    genre: text('genre').toUpperCase(),
   };
 }
 
@@ -272,13 +288,19 @@ export function validateInscriptionInput(
     const age = completedYearsAt(input.dateNaissance, raceDate);
     if (age === null) {
       errors.dateNaissance = 'Date de naissance invalide.';
-    } else if (age < MIN_AGE_AT_RACE || age > MAX_AGE_AT_RACE) {
+    } else if (age < MIN_AGE_AT_RACE) {
+      errors.dateNaissance = `Les épreuves sont réservées aux majeurs : tu dois avoir ${MIN_AGE_AT_RACE} ans révolus le jour de la course.`;
+    } else if (age > MAX_AGE_AT_RACE) {
       errors.dateNaissance = `Tu dois avoir entre ${MIN_AGE_AT_RACE} et ${MAX_AGE_AT_RACE} ans à la date de la course.`;
     }
   }
 
   if (!(TSHIRT_SIZES as readonly string[]).includes(input.tailleTshirt)) {
     errors.tailleTshirt = 'Choisis ta taille de t-shirt.';
+  }
+
+  if (!(GENRES as readonly string[]).includes(input.genre)) {
+    errors.genre = 'Indique si tu cours en femme ou en homme.';
   }
 
   return errors;

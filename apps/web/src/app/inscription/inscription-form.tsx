@@ -13,6 +13,8 @@ import {
   formatDateFrUtc,
   hasFieldErrors,
   validateInscriptionInput,
+  GENRES,
+  GENRE_LABELS,
   type FieldErrors,
   type InscriptionFormInput,
   type TshirtSize,
@@ -29,6 +31,7 @@ const EMPTY_INPUT: InscriptionFormInput = {
   contactUrgenceTelephone: '',
   dateNaissance: '',
   tailleTshirt: '',
+  genre: '',
 };
 
 const NETWORK_ERROR = {
@@ -64,6 +67,7 @@ function prefill(state: InscriptionState): InscriptionFormInput {
     contactUrgenceTelephone: coureur.contactUrgenceTelephone,
     dateNaissance: coureur.dateNaissance,
     tailleTshirt: coureur.tailleTshirt,
+    genre: coureur.genre ?? '',
   };
 }
 
@@ -263,11 +267,43 @@ export function InscriptionForm({
                   }
                 />
                 <p id={aideId('dateNaissance')} className="socle-champ-aide">
-                  Ta catégorie d’âge est calculée à la date de la course.
+                  Les épreuves sont réservées aux majeurs. Ta catégorie d’âge est
+                  calculée à la date de la course.
                 </p>
                 {errorFor('dateNaissance') !== null && (
                   <p id={errorId('dateNaissance')} className="field-error">
                     {errorFor('dateNaissance')}
+                  </p>
+                )}
+              </div>
+              <div className="socle-champ">
+                <span className="socle-etiquette" id={aideId('genre')}>
+                  Genre{OBLIGATOIRE}
+                </span>
+                <div
+                  className="option-group"
+                  role="radiogroup"
+                  aria-labelledby={aideId('genre')}
+                  aria-describedby={errorFor('genre') !== null ? errorId('genre') : undefined}
+                >
+                  {GENRES.map((genre, index) => (
+                    <label key={genre} className="option">
+                      <input
+                        type="radio"
+                        name="genre"
+                        id={index === 0 ? fieldId('genre') : `${fieldId('genre')}-${genre}`}
+                        value={genre}
+                        checked={values.genre === genre}
+                        onChange={() => update('genre', genre)}
+                        aria-invalid={errorFor('genre') !== null || undefined}
+                      />
+                      <span className="option-label">{GENRE_LABELS[genre]}</span>
+                    </label>
+                  ))}
+                </div>
+                {errorFor('genre') !== null && (
+                  <p id={errorId('genre')} className="field-error" role="alert">
+                    {errorFor('genre')}
                   </p>
                 )}
               </div>

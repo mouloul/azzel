@@ -75,6 +75,8 @@ export interface CoureurRecord {
   contactUrgenceTelephone: string;
   dateNaissance: string;
   tailleTshirt: string;
+  /** Nullable : les inscriptions anterieures a la demande du genre n'en portent pas. */
+  genre: string | null;
   age: number;
   categorieAge: string;
   status: string;
@@ -121,6 +123,7 @@ export interface UpsertCoureurInput {
   contactUrgenceTelephone: string;
   dateNaissance: string;
   tailleTshirt: string;
+  genre: string;
   age: number;
   categorieAge: string;
 }
@@ -346,6 +349,7 @@ interface CoureurRow {
   emergency_contact_phone: string;
   birth_date: string;
   tshirt_size: string;
+  genre: string | null;
   age: number;
   age_category: string;
   status: string;
@@ -416,6 +420,7 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     contactUrgenceTelephone: row.emergency_contact_phone,
     dateNaissance: row.birth_date,
     tailleTshirt: row.tshirt_size,
+    genre: row.genre,
     age: row.age,
     categorieAge: row.age_category,
     status: row.status,
@@ -437,7 +442,7 @@ const COUREUR_COLUMNS = `
   c.id, c.organisation_id, c.account_id, c.edition_id, c.epreuve_id,
   c.first_name, c.last_name, c.phone,
   c.emergency_contact_name, c.emergency_contact_phone,
-  c.birth_date::text AS birth_date, c.tshirt_size, c.age, c.age_category, c.status,
+  c.birth_date::text AS birth_date, c.tshirt_size, c.genre, c.age, c.age_category, c.status,
   c.dossard, c.jeton_edossard, c.refusal_reason, c.decided_by, c.decided_at,
   c.decharge_accepted_at, c.decharge_version,
   c.reglement_accepted_at, c.reglement_version,
@@ -585,13 +590,13 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               organisation_id, account_id, edition_id, epreuve_id,
               first_name, last_name, phone,
               emergency_contact_name, emergency_contact_phone,
-              birth_date, tshirt_size, age, age_category
+              birth_date, tshirt_size, genre, age, age_category
             )
             VALUES (
               ${input.organisationId}, ${input.accountId}, ${input.editionId}, ${input.epreuveId},
               ${input.prenom}, ${input.nom}, ${input.telephone},
               ${input.contactUrgenceNom}, ${input.contactUrgenceTelephone},
-              ${input.dateNaissance}, ${input.tailleTshirt}, ${input.age}, ${input.categorieAge}
+              ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre}, ${input.age}, ${input.categorieAge}
             )
             ON CONFLICT (account_id, edition_id)
             DO UPDATE SET
@@ -603,6 +608,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               emergency_contact_phone = EXCLUDED.emergency_contact_phone,
               birth_date = EXCLUDED.birth_date,
               tshirt_size = EXCLUDED.tshirt_size,
+              genre = EXCLUDED.genre,
               age = EXCLUDED.age,
               age_category = EXCLUDED.age_category,
               updated_at = now()

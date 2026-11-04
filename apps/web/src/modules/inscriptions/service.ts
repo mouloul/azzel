@@ -59,6 +59,7 @@ export interface CoureurSummary {
   contactUrgenceTelephone: string;
   dateNaissance: string;
   tailleTshirt: string;
+  genre: string | null;
   age: number;
   categorie: AgeCategory;
   status: string;
@@ -132,6 +133,7 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
     contactUrgenceTelephone: record.contactUrgenceTelephone,
     dateNaissance: record.dateNaissance,
     tailleTshirt: record.tailleTshirt,
+    genre: record.genre,
     age: record.age,
     categorie: record.categorieAge as AgeCategory,
     status: record.status,
@@ -229,6 +231,7 @@ export async function submitInscription(
     contactUrgenceTelephone: input.contactUrgenceTelephone,
     dateNaissance: input.dateNaissance,
     tailleTshirt: input.tailleTshirt,
+    genre: input.genre,
     age: derived.age,
     categorieAge: derived.category,
   });

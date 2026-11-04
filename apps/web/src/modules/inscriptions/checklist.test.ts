@@ -77,6 +77,7 @@ function buildChecklistStore(scenario: ChecklistScenario = {}): InscriptionsStor
           contactUrgenceTelephone: '0555010204',
           dateNaissance: '1990-05-12',
           tailleTshirt: 'M',
+          genre: 'H',
           age: 36,
           categorieAge: 'Senior',
           status: 'en constitution',
@@ -184,7 +185,7 @@ describe('getChecklistState — consolidation des six pièces', () => {
     expect(state.recap).toEqual({
       epreuve: 'La Longue — 35 km',
       distanceKm: 35,
-      categorieAge: 'Senior (20–39 ans)',
+      categorieAge: 'Senior (18–39 ans)',
       tshirt: 'M',
       contactUrgenceNom: 'Lounis Ulahianne',
       contactUrgenceTelephone: '0555010204',

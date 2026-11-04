@@ -58,6 +58,7 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     contactUrgenceTelephone: '0555 010 204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
     ...overrides,
   };
 }
@@ -192,13 +193,13 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     );
     expect(error).toBeInstanceOf(InvalidFieldsError);
     expect(Object.keys((error as InvalidFieldsError).fields).sort()).toEqual(
-      ['epreuve', 'nom', 'telephone', 'contactUrgenceNom', 'contactUrgenceTelephone', 'dateNaissance', 'tailleTshirt'].sort(),
+      ['epreuve', 'nom', 'telephone', 'contactUrgenceNom', 'contactUrgenceTelephone', 'dateNaissance', 'tailleTshirt', 'genre'].sort(),
     );
     const rows = await sql`SELECT count(*)::int AS count FROM coureur WHERE account_id = ${session.accountId}`;
     expect(rows[0]?.count).toBe(0);
   });
 
-  it('date de naissance absurde : moins de 10 ans ou plus de 100 ans refusés', async () => {
+  it('date de naissance absurde : moins de 18 ans ou plus de 100 ans refusés', async () => {
     const jeune = await createSession();
     await expect(
       submitInscription(jeune, validInput({ dateNaissance: '2020-06-01' }), { store }),
