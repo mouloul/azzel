@@ -11,13 +11,6 @@ import {
 /** Part visible à partir de laquelle le teaser se lance tout seul. */
 const SEUIL_VISIBILITE = 0.5;
 
-function mouvementReduit(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
 /**
  * Bloc trailer public : poster dégradé forêt en pur CSS (zéro octet d'image) +
  * pastille de lecture. Le lecteur (natif <video> ou iframe selon l'URL) n'est
@@ -29,7 +22,11 @@ function mouvementReduit(): boolean {
  * `auto` (teaser de l'accueil) ouvre une seconde porte : le lecteur se monte
  * aussi quand le bloc arrive à l'écran, et démarre alors SANS LE SON. Le
  * chargement reste différé — rien ne part tant qu'on n'a pas scrollé jusque-là.
- * Respecte « mouvement réduit » : dans ce cas, le poster attend le clic.
+ *
+ * Arbitrage du 04/11/2026 : le démarrage ne regarde PAS « mouvement réduit ».
+ * La garde avait été posée par prudence, elle rendait le teaser inerte pour
+ * tous ceux qui ont ce réglage. Ce qui tient les critères reste en place : son
+ * coupé (1.4.2) et commandes du lecteur pour mettre en pause (2.2.2).
  */
 export function TrailerBloc({
   player,
@@ -52,7 +49,7 @@ export function TrailerBloc({
 
   useEffect(() => {
     const bloc = blocRef.current;
-    if (!auto || lance || bloc === null || mouvementReduit()) {
+    if (!auto || lance || bloc === null) {
       return;
     }
     // Pas d'IntersectionObserver (vieux navigateur) : on garde le poster,
