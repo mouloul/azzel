@@ -346,18 +346,31 @@ describe('scan-client.tsx — émission immédiate, append arrière-plan (NFR-1,
     'utf8',
   );
 
-  it('voyant + bip partent AVANT l’attente de l’append outbox dans surPayload (les DEUX modes)', () => {
-    // Le contrat « le bip et le voyant SONT la confirmation (< 1 s) » tient
-    // au câblage : setVoyant + emettreRetourAudio précèdent void termine.then.
-    // Les orchestrateurs purs sont couverts dans etats-scan.test.ts ; ce garde
-    // empêche de déplacer l’émission derrière l’écriture IndexedDB.
-    for (const mode of ['traiterScanRetrait', 'traiterScanPassage']) {
-      const bloc = sourceClient.slice(sourceClient.indexOf(mode));
-      const emission = bloc.indexOf('emettreRetourAudio');
-      const append = bloc.indexOf('termine.then');
-      expect(emission).toBeGreaterThan(-1);
-      expect(append).toBeGreaterThan(emission);
-    }
+  // I7 (revue épopée 10) — une garde PAR SITE D'APPEL : la tranche part du
+  // site d'usage `traiterScan…(` (l'import, sans parenthèse, ne peut plus
+  // faire démarrer la tranche sur le mauvais mode — l'ancienne garde
+  // `indexOf(mode)` tombait sur la ligne d'import et validait deux fois le
+  // bloc retrait, jamais spécifiquement le site passage).
+  function gardeEmissionAvantAppend(source: string, site: 'traiterScanRetrait(' | 'traiterScanPassage('): void {
+    const debut = source.indexOf(site);
+    expect(debut, `site d’appel ${site} introuvable dans scan-client.tsx`).toBeGreaterThan(-1);
+    const bloc = source.slice(debut);
+    const emission = bloc.indexOf('emettreRetourAudio');
+    const append = bloc.indexOf('termine.then');
+    expect(emission, `${site} : l’émission (voyant + bip) est introuvable après le site d’appel`).toBeGreaterThan(-1);
+    expect(append, `${site} : l’append outbox (termine.then) est introuvable après le site d’appel`).toBeGreaterThan(-1);
+    expect(
+      append,
+      `${site} : l’émission doit partir AVANT l’attente de l’append outbox (bip < 1 s)`,
+    ).toBeGreaterThan(emission);
+  }
+
+  it('mode RETRAIT : voyant + bip partent AVANT l’attente de l’append outbox', () => {
+    gardeEmissionAvantAppend(sourceClient, 'traiterScanRetrait(');
+  });
+
+  it('mode PASSAGE : voyant + bip partent AVANT l’attente de l’append outbox', () => {
+    gardeEmissionAvantAppend(sourceClient, 'traiterScanPassage(');
   });
 });
 

@@ -68,7 +68,10 @@
 /* Bandeaux succès (role="status") — abandon 5.3 et dialogue annulation 5.4
    partagent la même règle, classes distinctes par surface. */
 .course-abandon-succes,.course-dialogue-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-2) var(--az-space-3)}
-.course-ligne-annuler{opacity:0;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);background:transparent;color:var(--az-texte-2);font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);line-height:1.4;padding:0 calc(var(--az-space-1) * 1.5);cursor:pointer;transition:opacity 120ms ease}
+/* I6 (revue épopée 10) — cible tactile ≥ 44 px de HAUT (mesurée ≈ 21-23 px
+   avant : padding vertical nul + line-height 1,4) ; le libellé « … » n'est
+   jamais collé au bord : centré, avec un padding horizontal. */
+.course-ligne-annuler{opacity:0;display:inline-flex;align-items:center;min-height:44px;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);background:transparent;color:var(--az-texte-2);font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);line-height:1.4;padding:0 calc(var(--az-space-1) * 1.5);cursor:pointer;transition:opacity 120ms ease}
 .course-board-ligne:hover .course-ligne-annuler,
 .course-board-ligne:focus-within .course-ligne-annuler{opacity:1}
 .course-ligne-annuler:hover,

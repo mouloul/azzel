@@ -15,8 +15,12 @@
   list-style: none;
 }
 
+/* I6 (revue épopée 10) — cible tactile ≥ 44 px (mesurée ≈ 43,2 px avant) :
+   même approche que .aa-lien-texte — inline-flex centré + min-height. */
 .admin-nav__lien {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: var(--az-space-2) 0;
   font-family: var(--az-font-display);
   font-size: 16px;

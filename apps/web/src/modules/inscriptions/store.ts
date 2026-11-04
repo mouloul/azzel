@@ -15,6 +15,7 @@ import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 import {
   COUREUR_STATUS_EN_CONSTITUTION,
   COUREUR_STATUS_VALIDE,
+  LIST_COUREURS_LIMIT,
   canDepositPreuve,
   isRegistrationOpen,
 } from './domain';
@@ -243,8 +244,6 @@ export interface ListCoureursResult {
   items: DossierListItem[];
   hasMore: boolean;
 }
-
-export const LIST_COUREURS_LIMIT = 200;
 
 export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;

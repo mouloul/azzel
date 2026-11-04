@@ -16,5 +16,10 @@
   table.volontaires-table tr{padding:var(--az-space-2) 0;border-bottom:1px solid var(--az-filet)}
   table.volontaires-table td{border-bottom:none;padding:var(--az-space-1) 0}
   table.volontaires-table td::before{content:attr(data-libelle) " : ";font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
+  /* M8 (revue épopée 10) — la règle socle .socle-table .socle-num (0-2-0,
+     aligné à droite + sans retour) dominait l'empilement mobile : le numéro
+     restait calé à droite sous une étiquette ::before alignée à gauche.
+     Ce reset (0-2-2) ne vaut QUE dans la vue empilée — le bureau est intact. */
+  table.volontaires-table td.socle-num{text-align:left;white-space:normal}
 }
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

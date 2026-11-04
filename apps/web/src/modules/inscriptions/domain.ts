@@ -36,15 +36,20 @@ export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_REFUSE]: 'Refusé',
 };
 
-export function coureurStatusChipClass(status: string): string {
-  if (status === COUREUR_STATUS_VALIDE) {
-    return 'aa-chip aa-chip--phare';
-  }
-  if (status === COUREUR_STATUS_REFUSE) {
-    return 'aa-chip aa-chip--refuse';
-  }
-  return 'aa-chip aa-chip--tbc';
-}
+/** M2 (revue épopée 10) — limite de la liste admin, vit ICI (domaine pur)
+ *  pour que la page et les messages qui l'énoncent importent la CONSTANTE,
+ *  jamais un littéral « 200 » qui dériverait. */
+export const LIST_COUREURS_LIMIT = 200;
+
+/** Story 10.3 / I9 (revue épopée 10) — pastille d'état du gabarit socle :
+ *  le point porte la couleur, le libellé porte le sens (jamais la couleur
+ *  seule). Partagée par la liste ET la page détail — un seul langage visuel
+ *  par statut (remplace l'ancien vocabulaire aa-chip). */
+export const PASTILLE_STATUT: Record<CoureurStatus, string> = {
+  [COUREUR_STATUS_EN_CONSTITUTION]: 'socle-pastille--attention',
+  [COUREUR_STATUS_VALIDE]: 'socle-pastille--succes',
+  [COUREUR_STATUS_REFUSE]: 'socle-pastille--danger',
+};
 
 export function canDepositPreuve(status: string): boolean {
   return (

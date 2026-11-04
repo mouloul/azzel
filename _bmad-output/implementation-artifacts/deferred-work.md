@@ -268,3 +268,14 @@
 - **Poids** : HTML de l'accueil 43 → 77 Ko bruts (8 → 16 Ko gzip) ; budget 288/300 Kio, marge 11,9 Kio, à surveiller pour les stories 11.3 et 11.5.
 - **Rendu réel non vérifié** (couleurs perçues, tap, annonce vocale) : recette humaine.
 - **Pas de `bmad-code-review` humain/architecte** ; GLM a fait une auto-revue en 3 couches (journal dans la spec).
+
+## Deferred from: revues indépendantes des épopées 9 et 10 (2026-11-04)
+
+Rapports : `revue-epopee-9.md`, `revue-epopee-10.md` (aucun bloquant sur l'épopée 9 ; un bloquant sur l'épopée 10, « Suivi activé » affiché moteur non démarré, corrigé et testé). Corrigés sur `fix/revue-epopee-9` et `fix/revue-epopee-10`. Restent :
+
+- **NFR-2 en octets transférés** (321 Kio sur `/`) : décision PO en attente, redéfinir en budget de chemin critique ou réduire (Barlow, ~23 Ko). Amendement d'AC écrit dans `epics.md`.
+- **Rayons hérités à 6 px** (`.aa-btn`, `.carte-course`, `vitrine-textes.css`) et vocabulaire mixte `--az-radius-full` / `--az-rayon-*` dans `volontaires.css` : story de finition de la vitrine.
+- **Utilitaire WCAG dupliqué** dans 4 fichiers de test (`contrastes*.test.ts`, `socle.test.ts`, runners) : à extraire.
+- **`.btn-lien` global passé à `min-height: 44px` (37 usages, 19 fichiers)** : le rendu n'a été vérifié que par lecture CSS ; relire à l'œil les écrans qui l'utilisent (missions, scan, volontaires, sponsors, retour-images, dossiers, course, preuve).
+- **Destructeur de l'app coureurs** : pastille pleine à l'état pressé (inversion) au lieu de l'opacité 80 % (sous AA, 4,18–4,48:1). Rendu natif jamais vu.
+- **Aucune vérification visuelle réelle** des épopées 9 et 10 : recettes `scenarios-recette-epic-9.md` et `-10.md` listent ce qu'un humain doit juger à l'œil.

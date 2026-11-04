@@ -267,6 +267,37 @@ describe('MissionsManager — marqueur « — arrivée » dans la liste', () => 
   });
 });
 
+describe('MissionsManager — adoption du socle : chips + pastille de couverture (M12)', () => {
+  it('type en chip socle, couverture en PASTILLE socle (point + libellé), par mission', async () => {
+    const html = await rendu(
+      <MissionsManager
+        edition={{ id: 'edition-1', nom: 'Édition 2027' }}
+        secteurs={[
+          {
+            ...SECTEUR,
+            missions: [
+              mission({ id: 'mission-vacante', couverture: 'vacante', couvertureLabel: 'Vacante' }),
+              mission({
+                id: 'mission-couverte',
+                couverture: 'couverte',
+                couvertureLabel: 'Couverte',
+              }),
+            ],
+          },
+        ]}
+        volontaires={[]}
+      />,
+    );
+    // Chip de type + pastille de couverture : un point + le LIBELLÉ porté.
+    expect(html).toContain('socle-chip');
+    expect(html.match(/socle-pastille socle-pastille--attention/g)).toHaveLength(1);
+    expect(html.match(/socle-pastille socle-pastille--succes/g)).toHaveLength(1);
+    expect(html.match(/socle-pastille-point/g)).toHaveLength(2);
+    expect(html).toContain('Vacante');
+    expect(html).toContain('Couverte');
+  });
+});
+
 // Revue 3.2 — annonces de succès role="status", doublon d'affectation,
 // bandeau de chevauchement après modification (D2, jamais bloquant).
 

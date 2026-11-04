@@ -1,4 +1,6 @@
 import { renderToReadableStream } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 // Story 10.3 — gabarit tableau commun sur /admin/volontaires : les deux
@@ -82,6 +84,17 @@ describe('VolontairesManager — liste sur le gabarit commun (story 10.3)', () =
       expect(html).toContain(`data-libelle="${libelle}"`);
     }
     expect(html).toContain('sr-only');
+  });
+
+  it('M8 : la cellule numérotée est réalignée dans la vue empilée (volontaires.css)', () => {
+    // .socle-table .socle-num (0-2-0, droite + sans retour) dominait
+    // l'empilement ≤ 640 px : le media query reset le calage, bureau intact.
+    const css = readFileSync(
+      fileURLToPath(new URL('./volontaires.css', import.meta.url)),
+      'utf8',
+    );
+    const media = css.slice(css.indexOf('@media (max-width:640px)'));
+    expect(media).toMatch(/table\.volontaires-table td\.socle-num\{text-align:left;white-space:normal\}/);
   });
 });
 

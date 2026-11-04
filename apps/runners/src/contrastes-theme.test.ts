@@ -22,17 +22,20 @@ import { darkTheme, lightTheme, type AppTheme } from './theme';
  * - texte/texte-2 sur bg (ScrollView) et surface (Carte) — dossier, suivi ;
  * - action sur surface — boutons contour + surtitres ;
  * - action-texte sur action (principal) et sur ink (principal pressé) ;
- * - danger-encre sur danger — bouton destructeur « Se déconnecter » (10.2) +
- *   ErreurEnveloppe ;
- * - danger sur surface — message d’erreur de l’écran Suivi ;
+ * - danger sur bg ET surface — bouton destructeur en CONTOUR épais 3 px sur
+ *   fond transparent (I2, revue épopée 10 : posé sur le fond d'écran dans
+ *   dossier.tsx, sur une carte dans edossard.tsx) + message d'erreur du
+ *   suivi + bordure non textuelle ≥ 3:1 (1.4.11) ;
+ * - danger-encre sur danger — destructeur À L'ÉTAT PRESSÉ (inversion
+ *   contour → pastille pleine, I2) + ErreurEnveloppe ;
  * - attention-encre sur attention — bandeau « ◷ HORS-LIGNE » ;
  * - sync-attente/sync-envoye + encres — bandeau de file du suivi (10.2 :
- *   l’état du suivi remonte en tête, la file reste visible) ;
+ *   l'état du suivi remonte en tête, la file reste visible) ;
  * - texte-sombre/texte-2-sombre sur bg-sombre — carte sombre FIXE de
- *   l’e-dossard (10.2 : littéraux remplacés par les tokens, rendu identique). */
+ *   l'e-dossard (10.2 : littéraux remplacés par les tokens, rendu identique). */
 
 const SEUIL_COURANT = 4.5;
-const SEUIL_GRAND_TEXTE = 3;
+const SEUIL_NON_TEXTUEL = 3;
 
 function canalLineaire(canal: number): number {
   const s = canal / 255;
@@ -113,18 +116,42 @@ function pairesDuTheme(theme: AppTheme, mode: 'clair' | 'sombre'): readonly Pair
       usage: 'bouton principal à l’état pressé (fond ink)',
     },
     {
-      nom: `danger-encre / danger (${mode})`,
-      texte: theme.colors.dangerInk,
-      fond: theme.colors.danger,
+      nom: `danger / bg (${mode})`,
+      texte: theme.colors.danger,
+      fond: theme.colors.bg,
       seuil: SEUIL_COURANT,
-      usage: '« Se déconnecter » destructeur (10.2) + ErreurEnveloppe',
+      usage:
+        'bouton destructeur en CONTOUR (fond transparent, I2) posé sur le fond d’écran — « Se déconnecter » de dossier.tsx',
     },
     {
       nom: `danger / surface (${mode})`,
       texte: theme.colors.danger,
       fond: theme.colors.surface,
       seuil: SEUIL_COURANT,
-      usage: 'message d’erreur de l’écran Suivi (sur carte)',
+      usage:
+        'bouton destructeur en CONTOUR dans une carte (edossard.tsx) + message d’erreur de l’écran Suivi',
+    },
+    {
+      nom: `bordure danger / bg (${mode}) — non textuel 1.4.11`,
+      texte: theme.colors.danger,
+      fond: theme.colors.bg,
+      seuil: SEUIL_NON_TEXTUEL,
+      usage: 'contour épais 3 px du bouton destructeur sur le fond d’écran',
+    },
+    {
+      nom: `bordure danger / surface (${mode}) — non textuel 1.4.11`,
+      texte: theme.colors.danger,
+      fond: theme.colors.surface,
+      seuil: SEUIL_NON_TEXTUEL,
+      usage: 'contour épais 3 px du bouton destructeur dans une carte',
+    },
+    {
+      nom: `danger-encre / danger (${mode})`,
+      texte: theme.colors.dangerInk,
+      fond: theme.colors.danger,
+      seuil: SEUIL_COURANT,
+      usage:
+        'destructeur À L’ÉTAT PRESSÉ (inversion contour → pastille pleine, I2) + ErreurEnveloppe',
     },
     {
       nom: `attention-encre / attention (${mode})`,
@@ -170,7 +197,10 @@ describe('app coureurs — paires du thème (les deux modes)', () => {
 describe('app coureurs — e-dossard : carte sombre FIXE (indépendante du thème)', () => {
   // 10.2 — les littéraux de l’e-dossard ont été remplacés par les tokens ;
   // la carte reste sombre dans les deux modes : paires fixes *-sombre.
-  it('texte-sombre et texte-2-sombre sur bg-sombre ≥ 4,5:1, numéro 74 px ≥ 3:1', () => {
+  // (Revue M5 : l'ancienne assertion « numéro 74 px ≥ 3:1 » recalculait
+  // exactement la paire texte-sombre/bg-sombre ci-dessus, déjà exigée
+  // ≥ 4,5:1 — aucune paire distincte ; supprimée.)
+  it('texte-sombre, texte-2-sombre et action-texte-sombre sur bg-sombre ≥ 4,5:1', () => {
     const fixes: readonly Paire[] = [
       {
         nom: 'texte-sombre / bg-sombre',
@@ -200,8 +230,6 @@ describe('app coureurs — e-dossard : carte sombre FIXE (indépendante du thèm
         paire.seuil,
       );
     }
-    const numero = ratioContraste(tokens.colors['texte-sombre'], tokens.colors['bg-sombre']);
-    expect(numero).toBeGreaterThanOrEqual(SEUIL_GRAND_TEXTE);
   });
 
   it('QR : encre texte sur blanc pur ≥ 4,5:1 (contrainte scanner, blanc littéral documenté)', () => {

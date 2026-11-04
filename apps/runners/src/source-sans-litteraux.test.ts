@@ -5,14 +5,18 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /* Story 10.2 — garde-fou anti-littéraux de l'app coureurs, modèle du
- * css-sans-litteraux.test.ts du web : aucune couleur hexadécimale dans les
- * sources .ts/.tsx hors tests — tout passe par les tokens de @azzel/shared
- * (theme.ts, ou référence directe tokens.colors pour les couleurs FIXES de
- * la carte e-dossard, indépendantes du mode clair/sombre).
+ * css-sans-litteraux.test.ts du web : aucune couleur en littéral de
+ * chaîne dans les sources .ts/.tsx hors tests — tout passe par les tokens
+ * de @azzel/shared (theme.ts, ou référence directe tokens.colors pour les
+ * couleurs FIXES de la carte e-dossard, indépendantes du mode clair/
+ * sombre).
  *
- * Les couleurs apparaissent en littéraux de chaîne ('#FFFFFF') : la recherche
- * cible les hex ENTRE GUILLEMETS, ce qui ignore commentaires et URL sans
- * parsing de source.
+ * M7 (revue épopée 10) — la recherche couvre les hex ET les notations
+ * FONCTIONNELLES entre guillemets (rgb(), rgba(), hsl(), hsl() à
+ * pourcentages) : un `rgba(12, 22, 16, 0.96)` en littéral serait aussi
+ * coupable qu'un '#0C1610'. Les couleurs apparaissent en littéraux de
+ * chaîne : la recherche cible ces notations ENTRE GUILLEMETS, ce qui
+ * ignore commentaires et URL sans parsing de source.
  *
  * Exceptions : liste explicite ci-dessous, avec raison et NOMBRE ÉPINGLÉ.
  * - un nouveau littéral quelque part → échec ;
@@ -56,17 +60,21 @@ function fichiersSources(racine: string): string[] {
   return fichiers;
 }
 
+/** M7 — hex ET notations fonctionnelles, entre guillemets. */
+const MOTIF_COULEUR =
+  /['"`](#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\(\s*[\d.]+%?(?:\s*,\s*[\d.]+%?){2,3}\s*(?:,\s*[\d.]+%?)?\))['"`]/g;
+
 function littérauxParFichier(): Map<string, Map<string, number>> {
   const compte = new Map<string, Map<string, number>>();
   for (const chemin of fichiersSources(RACINE_SRC)) {
     const relatif = relative(RACINE_SRC, chemin).split(sep).join('/');
     const contenu = readFileSync(chemin, 'utf8');
-    const trouves = contenu.match(/['"`](#[0-9a-fA-F]{3,8})['"`]/g) ?? [];
+    const trouves = contenu.match(MOTIF_COULEUR) ?? [];
     if (trouves.length === 0) continue;
     const parLittéral = new Map<string, number>();
     for (const citation of trouves) {
-      const hex = citation.slice(1, -1).toLowerCase();
-      parLittéral.set(hex, (parLittéral.get(hex) ?? 0) + 1);
+      const couleur = citation.slice(1, -1).toLowerCase().replace(/\s+/g, ' ');
+      parLittéral.set(couleur, (parLittéral.get(couleur) ?? 0) + 1);
     }
     compte.set(relatif, parLittéral);
   }

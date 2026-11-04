@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, SafeAreaView, ScrollView, Text, useColorScheme, View } from 'react-native';
+import { Alert, AppState, SafeAreaView, ScrollView, Text, useColorScheme, View } from 'react-native';
 
 import { creerClientApi } from './src/api-client';
 import { ecranApresBasculeOptin, ecranApresReprise, type Ecran } from './src/app-state';
+import { alerteDeconnexion } from './src/deconnexion';
 import {
   chargerDossier as chargerDossierOrchestre,
   connecter as connecterOrchestre,
@@ -402,7 +403,11 @@ export default function App() {
     appliquer({ ecran: 'batterie' });
   }, [appliquer]);
 
-  const onDeconnexion = useCallback(async () => {
+  // I10 (revue épopée 10) — la déconnexion purge token, session, cache
+  // e-dossard ET file des positions (NFR-6) : confirmation native AVANT.
+  // Les libellés (ce qui est réellement perdu) vivent dans la fonction pure
+  // alerteDeconnexion (testée) ; l'effet de la déconnexion est inchangé.
+  const effectuerDeconnexion = useCallback(async () => {
     if (tokenRef.current) {
       // Révocation serveur best effort : même sans réseau, le logout local
       // purge token ET caches (l'e-dossard ne doit plus vivre sur l'appareil).
@@ -424,6 +429,26 @@ export default function App() {
       depuisCache: false,
     });
   }, [appliquer, appliquerSuivi, portsSuivi]);
+
+  const onDeconnexion = useCallback(() => {
+    const alerte = alerteDeconnexion({
+      aEdossard: etat.edossard !== null,
+      positionsEnAttente: etatSuivi.enAttente,
+    });
+    Alert.alert(
+      alerte.titre,
+      alerte.message,
+      alerte.boutons.map((bouton) => ({
+        text: bouton.texte,
+        style: bouton.style,
+        onPress: () => {
+          if (bouton.confirme) {
+            void effectuerDeconnexion();
+          }
+        },
+      })),
+    );
+  }, [effectuerDeconnexion, etat.edossard, etatSuivi.enAttente]);
 
   const onReessayer = useCallback(() => {
     appliquer({ ecran: 'chargement' });
@@ -480,9 +505,7 @@ export default function App() {
           onActualiser={() => {
             void onActualiser();
           }}
-          onDeconnexion={() => {
-            void onDeconnexion();
-          }}
+          onDeconnexion={onDeconnexion}
         />
       ) : null}
       {ecran === 'edossard' && edossard ? (
@@ -496,9 +519,7 @@ export default function App() {
           }}
           onVoirSuivi={onVoirSuivi}
           onVoirBatterie={onVoirBatterie}
-          onDeconnexion={() => {
-            void onDeconnexion();
-          }}
+          onDeconnexion={onDeconnexion}
         />
       ) : null}
       {ecran === 'suivi' ? (

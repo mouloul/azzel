@@ -1144,6 +1144,18 @@ So that personne ne découvre un défaut au km 18 avec un coureur devant lui.
 **And** les documents `scenarios-recette-epic-3.md`, `-4.md` et `-5.md` sont réalignés sur les écrans refondus.
 
 
+### Amendements d'acceptation de l'épopée 10 (2026-11-04, suite à la revue indépendante)
+
+Arbitrages du PO ; les critères ci-dessus sont lus avec ces réserves :
+
+- **10.1** : la prémisse « l'écran de scan déroge à UX-DR-7 » était fausse (le voyant était déjà conforme) ; le critère se lit « les garanties du voyant sont verrouillées par des tests ».
+- **10.2 — mode sombre** : le thème de l'app coureurs suit la préférence du système (UX-DR-2). Seul l'écran e-dossard est toujours sombre. « Mode sombre par défaut » est retiré.
+- **10.2 — progression et position sur le tracé** : retirées du critère. Ces données n'existent pas dans l'état de l'application ; elles relèvent d'une story future liée à l'épopée 11. L'écran hiérarchise l'état du suivi, puis le journal de synchronisation.
+- **10.2 — actions destructrices** : le critère est restreint à la **déconnexion** (l'abandon se saisit au PC, l'arrêt du suivi est un interrupteur réversible). La déconnexion exige une confirmation et se distingue des autres actions par la forme.
+- **10.3 — compteurs** : les compteurs de tête de `/admin/dossiers` ne sont **pas** des liens. Aucun filtre de statut n'existe ; en créer un est une story à part. Ils comptent la liste affichée (200 dossiers au plus), ce que la page indique.
+- **10.3 — fraîcheur du tableau live** : elle reste en **en-tête** (disposition validée en 5.3), non « en pied ».
+- **10.4** : l'ensemble des vérifications visuelles réelles (rendu, tap, latence iOS, annonce vocale) reste hors de portée sans appareil : recette humaine.
+
 ## Epic 11: Le parcours en 3D
 
 Le visiteur voit la course avant de la courir : pipeline build-time GPX → `parcours.json` avec porte de qualité, carte MapLibre à relief terrarium reprenant les motifs de `poc/index.html`, profil altimétrique coloré par pente, curseur partagé carte ↔ profil par l'abscisse curviligne `s`, attributions permanentes, fond cartographique arbitré, deux épreuves sur géométrie partagée.

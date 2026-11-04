@@ -486,7 +486,12 @@ main {
   gap: var(--az-space-3);
 }
 
+/* I6 (revue épopée 10) — cible tactile ≥ 44 px (mesurée ≈ 41,5 px avant) :
+   même approche que .aa-lien-texte — inline-flex centré + min-height. */
 .btn-lien {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: var(--az-space-2) 0;
   background: none;
   border: none;
@@ -756,8 +761,9 @@ main {
 .aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 12px;border-radius:var(--az-radius-full);line-height:1.2}
 .aa-chip--phare{background:var(--action);color:var(--on-action)}
 .aa-chip--nouveau{background:var(--forest-surface);color:var(--on-forest)}
-.aa-chip--tbc{border:1.5px dashed var(--accent);color:var(--accent)}
-.aa-chip--refuse{border:1.5px dashed var(--az-danger);color:var(--az-danger)}
+/* I9 (revue épopée 10) — .aa-chip--tbc et .aa-chip--refuse retirés : seuls
+   consommateurs = coureurStatusChipClass, supprimée (les statuts inscriptions
+   passent aux pastilles socle, liste comme détail). */
 .aa-hero{position:relative;min-height:440px;display:flex;align-items:flex-end;color:var(--on-forest);background:var(--forest);overflow:hidden}
 .aa-hero__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .aa-hero__veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,36,26,.85) 0%,rgba(15,36,26,.7) 40%,rgba(15,36,26,.1) 75%)}

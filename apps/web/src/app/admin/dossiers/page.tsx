@@ -6,6 +6,8 @@ import { requireRolePage } from '@/modules/iam/session';
 
 import {
   COUREUR_STATUS_LABELS,
+  LIST_COUREURS_LIMIT,
+  PASTILLE_STATUT,
   type CoureurStatus,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
@@ -19,14 +21,6 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Dossiers',
-};
-
-/* Story 10.3 — pastille d'état du gabarit tableau commun : le point porte la
-   couleur, le libellé porte le sens (jamais la couleur seule). */
-const PASTILLE_STATUT: Record<CoureurStatus, string> = {
-  'en constitution': 'socle-pastille--attention',
-  'validé': 'socle-pastille--succes',
-  'refusé': 'socle-pastille--danger',
 };
 
 export default async function AdminDossiersPage({
@@ -69,8 +63,12 @@ export default async function AdminDossiersPage({
   // mieux qu'un lien mort). Les libellés comptent ce qui est affiché.
   const valides = state.dossiers.filter((d) => d.status === 'validé').length;
   const enConstitution = state.dossiers.filter((d) => d.status === 'en constitution').length;
-  const acceptationsManquantes = state.dossiers.filter((d) => !d.acceptationsCompletes)
-    .length;
+  // M1 (revue épopée 10) — un dossier REFUSÉ n'est jamais complétable : il
+  // sort du compteur d'acceptations manquantes (le comité n'agit que sur
+  // les dossiers encore ouverts).
+  const acceptationsManquantes = state.dossiers.filter(
+    (d) => !d.acceptationsCompletes && d.status !== 'refusé',
+  ).length;
   const dossardsAttribues = state.dossiers.filter((d) => d.dossard !== null).length;
 
   return (
@@ -104,7 +102,7 @@ export default async function AdminDossiersPage({
           <p className="hint">
             Comptages sur la liste affichée
             {search.length > 0 ? ' (recherche active)' : ''}
-            {state.hasMore ? ' — tronquée à 200 dossiers' : ''}.
+            {state.hasMore ? ` — tronquée à ${LIST_COUREURS_LIMIT} dossiers` : ''}.
           </p>
         ) : null}
         <form className="search-form" action="/admin/dossiers" method="get" role="search">
@@ -210,7 +208,7 @@ export default async function AdminDossiersPage({
           </div>
         )}
         <p className="meta">
-          {state.dossiers.length} dossier(s) affiché(s) — 200 maximum.
+          {state.dossiers.length} dossier(s) affiché(s) — {LIST_COUREURS_LIMIT} maximum.
           {state.hasMore ? ' Liste tronquée — affinez la recherche.' : ''}
         </p>
         <p className="hint">

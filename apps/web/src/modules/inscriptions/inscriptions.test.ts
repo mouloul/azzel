@@ -12,8 +12,8 @@ import {
   MAX_AGE_AT_RACE,
   MAX_REFUSAL_REASON_LENGTH,
   MIN_AGE_AT_RACE,
+  PASTILLE_STATUT,
   canDepositPreuve,
-  coureurStatusChipClass,
   deriveAgeAndCategory,
   isRegistrationOpen,
   isValidPhone,
@@ -604,10 +604,15 @@ describe('cycle de statut — helpers domaine', () => {
     expect(normalizeRefusalReason(undefined)).toBe('');
   });
 
-  it('coureurStatusChipClass : une variante charte par statut', () => {
-    expect(coureurStatusChipClass('validé')).toBe('aa-chip aa-chip--phare');
-    expect(coureurStatusChipClass('refusé')).toBe('aa-chip aa-chip--refuse');
-    expect(coureurStatusChipClass('en constitution')).toBe('aa-chip aa-chip--tbc');
+  // I9 (revue épopée 10) — l'ancien test épingle coureurStatusChipClass (un
+  // variant aa-chip par statut) : la fonction est supprimée, la page détail
+  // affiche désormais la MÊME pastille socle que la liste. La correspondance
+  // statut → variante socle reste épinglée ici (PASTILLE_STATUT), et le
+  // rendu réel est couvert par admin/dossiers/[id]/page.test.tsx.
+  it('PASTILLE_STATUT : une variante socle par statut (liste ET détail)', () => {
+    expect(PASTILLE_STATUT['validé']).toBe('socle-pastille--succes');
+    expect(PASTILLE_STATUT['refusé']).toBe('socle-pastille--danger');
+    expect(PASTILLE_STATUT['en constitution']).toBe('socle-pastille--attention');
   });
 });
 

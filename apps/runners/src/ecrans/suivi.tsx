@@ -25,25 +25,34 @@ import { Bouton, BoutonAssistance, Carte, Surtitre, Titre } from './ui';
 const MINUTES_INTERVALLE = Math.round(INTERVALLE_POSITION_MS / 60_000);
 
 /**
- * 10.2 — libellé d'état en tête d'écran : les quatre états vécus par le
- * coureur, en toutes lettres (jamais la couleur seule). « En pause » =
- * permission refusée (le suivi repart tout seul une fois autorisée) ;
- * « interrompu » = piège iOS « Autoriser une fois ». Avant-plan seul :
- * honnête sur ce qui est réellement capturé.
+ * 10.2 — libellé d'état en tête d'écran : les états vécus par le coureur,
+ * en toutes lettres (jamais la couleur seule). « En pause » = permission
+ * refusée (le suivi repart tout seul une fois autorisée) ; « interrompu » =
+ * piège iOS « Autoriser une fois ». Avant-plan seul : honnête sur ce qui est
+ * réellement capturé.
+ *
+ * B1 (revue épopée 10) — switch EXHAUSTIF, sans default qui absorbe :
+ * `(optIn: true, etatMoteur: 'inactif')` est atteignable (services de
+ * localisation coupés à l'OS, erreur capteur → demarrerSansEchec retourne
+ * 'inactif', au démarrage comme au toggle). Cet état n'affirme JAMAIS un
+ * suivi actif : le coureur et ses proches ne doivent pas croire que la
+ * position est partagée.
  */
 export function libelleEtatSuivi(optIn: boolean, etatMoteur: EtatSuivi): string {
   if (!optIn) {
     return 'Suivi désactivé';
   }
   switch (etatMoteur) {
+    case 'actif':
+      return 'Suivi activé';
+    case 'actif-avant-plan':
+      return 'Suivi activé (app ouverte)';
     case 'interrompu':
       return 'Suivi interrompu';
     case 'permission-refusee':
       return 'Suivi en pause';
-    case 'actif-avant-plan':
-      return 'Suivi activé (app ouverte)';
-    default:
-      return 'Suivi activé';
+    case 'inactif':
+      return 'Suivi demandé, pas démarré';
   }
 }
 
@@ -80,6 +89,7 @@ export function EcranSuivi({
   const interrompu = optIn && etatMoteur === 'interrompu';
   const permissionRefusee = optIn && etatMoteur === 'permission-refusee';
   const avantPlanSeul = optIn && etatMoteur === 'actif-avant-plan';
+  const pasDemarre = optIn && etatMoteur === 'inactif';
 
   return (
     <ScrollView
@@ -135,6 +145,12 @@ export function EcranSuivi({
                 choisis « Toujours » — le suivi repartra tout seul.
               </Text>
             </>
+          ) : pasDemarre ? (
+            <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
+              Le suivi n’a pas pu démarrer : ta position n’est pas partagée. Vérifie que
+              les services de localisation du téléphone sont activés, puis éteins et
+              rallume l’interrupteur pour réessayer.
+            </Text>
           ) : (
             <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
               Ta position est partagée toutes les {MINUTES_INTERVALLE} minutes avec une précision
@@ -150,7 +166,7 @@ export function EcranSuivi({
             Désactivé : rien n’est enregistré.
           </Text>
         )}
-        {optIn && !interrompu && !permissionRefusee && !avantPlanSeul ? (
+        {optIn && !interrompu && !permissionRefusee && !avantPlanSeul && !pasDemarre ? (
           <Text style={[theme.fonts.meta, { color: theme.colors.ink2 }]}>
             Aucune position n’est capturée hors de cet intervalle — jamais plus souvent, la
             fréquence est fixe.

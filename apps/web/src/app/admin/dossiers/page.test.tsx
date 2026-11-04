@@ -30,6 +30,8 @@ vi.mock('./attribution-dossards', () => ({
   AttributionDossards: () => null,
 }));
 
+import { LIST_COUREURS_LIMIT } from '@/modules/inscriptions/domain';
+
 import AdminDossiersPage, { dynamic as DOSSIERS_DYNAMIC } from './page';
 
 const SESSION_ORGANISATEUR = {
@@ -210,10 +212,11 @@ describe('page /admin/dossiers — compteurs de tête de page (story 10.3)', () 
   it('quatre compteurs lisibles sans survol, chiffres exacts, libellés distincts', async () => {
     const html = await rendu();
     expect(html).toContain('dossiers-compteurs');
-    // 1 validé, 1 en constitution, 2 acceptations incomplètes, 2 dossards.
+    // 1 validé, 1 en constitution, 1 acceptation manquante (M1 : le refusé
+    // incomplet de la fixture SORT du compteur — jamais complétable), 2 dossards.
     expect(html).toMatch(/Validés<\/dt><dd[^>]*>1</);
     expect(html).toMatch(/En constitution<\/dt><dd[^>]*>1</);
-    expect(html).toMatch(/Acceptations manquantes<\/dt><dd[^>]*>2</);
+    expect(html).toMatch(/Acceptations manquantes<\/dt><dd[^>]*>1</);
     expect(html).toMatch(/Dossards attribués<\/dt><dd[^>]*>2</);
   });
 
@@ -229,7 +232,7 @@ describe('page /admin/dossiers — compteurs de tête de page (story 10.3)', () 
     expect(html).not.toContain('Comptages sur la liste affichée');
   });
 
-  it('liste tronquée : le périmètre compté est dit (hasMore)', async () => {
+  it('liste tronquée : le périmètre compté est dit (hasMore) — limite lue depuis la constante (M2)', async () => {
     inscriptionsServiceMock.getDossiersState.mockResolvedValue({
       edition: null,
       dossiers: DOSSIERS,
@@ -237,6 +240,8 @@ describe('page /admin/dossiers — compteurs de tête de page (story 10.3)', () 
     });
     const html = await rendu();
     expect(html).toContain('Comptages sur la liste affichée');
-    expect(html).toContain('tronquée à 200');
+    expect(html).toContain(`tronquée à ${LIST_COUREURS_LIMIT} dossiers`);
+    // React coupe les segments du texte composé par des commentaires.
+    expect(html).toMatch(new RegExp(`${LIST_COUREURS_LIMIT}(<!-- -->)? maximum`));
   });
 });

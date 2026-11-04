@@ -8,7 +8,7 @@ import { requireRolePage } from '@/modules/iam/session';
 import {
   AGE_CATEGORY_LABELS,
   COUREUR_STATUS_LABELS,
-  coureurStatusChipClass,
+  PASTILLE_STATUT,
   type AgeCategory,
   type CoureurStatus,
 } from '@/modules/inscriptions/domain';
@@ -74,7 +74,13 @@ export default async function AdminDossierDetailPage({
         <p className="meta">{detail.email}</p>
         <p>
           Statut :{' '}
-          <span className={coureurStatusChipClass(coureur.status)}>
+          {/* I9 (revue épopée 10) — même pastille socle que la liste : un seul
+              langage visuel par statut (point + libellé, jamais la couleur
+              seule) ; l'ancien vocabulaire aa-chip est retiré. */}
+          <span
+            className={`socle-pastille ${PASTILLE_STATUT[coureur.status as CoureurStatus] ?? ''}`}
+          >
+            <span className="socle-pastille-point" aria-hidden="true" />
             {COUREUR_STATUS_LABELS[coureur.status as CoureurStatus] ?? coureur.status}
           </span>
         </p>
