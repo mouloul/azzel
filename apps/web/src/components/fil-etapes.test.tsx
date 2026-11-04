@@ -94,6 +94,25 @@ describe('etapesInscription — /inscription ne marque que ce qu’elle sait', (
     expect(etapes[1]).toMatchObject({ libelle: 'Documents', etat: 'fait' });
   });
 
+  // Revue épopée 9 (M2) : étape franchie = lien de retour (matrice 9.4) —
+  // un coureur existant a déjà validé ses documents, /acceptations est
+  // atteignable pour lui.
+  it('Documents « fait » : lien de retour /acceptations rendu (revue 9, M2)', async () => {
+    const accepte = { acceptedAt: '2026-10-21T09:30:00.000Z', version: 'v1' };
+    const etapes = etapesInscription({
+      dechargeAccepte: accepte,
+      reglementAccepte: accepte,
+    });
+    expect(etapes[1]).toEqual({
+      libelle: 'Documents',
+      etat: 'fait',
+      href: '/acceptations',
+    });
+    const html = await rendu(etapes);
+    expect(html).toContain('href="/acceptations"');
+    expect(html).toContain('fil-etape-lien');
+  });
+
   it('une seule acceptation : Documents reste sans mention — jamais de « fait » approximatif', () => {
     const accepte = { acceptedAt: '2026-10-21T09:30:00.000Z', version: 'v1' };
     const etapes = etapesInscription({

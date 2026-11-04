@@ -155,7 +155,7 @@ export function SectionParcours({ view }: { view: SectionParcoursView }) {
               <legend className="aa-parcours-accueil__legende">Épreuve affichée</legend>
               <div className="aa-parcours-accueil__choix">
                 {epreuves.map((epreuve, rang) => (
-                  <div className="aa-parcours-accueil__bascule" key={epreuve.slug}>
+                  <div key={epreuve.slug}>
                     <input
                       className="aa-parcours-accueil__radio"
                       data-bascule={rang}

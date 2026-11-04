@@ -27,13 +27,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         {/* Préchargements du chemin critique : Barlow 800 (titre du hero, LCP)
             et Inter 400 (texte courant). Barlow Condensed 700 (libellés de
-            boutons, rail, nav) n'est plus préchargé : son @font-face reste dans
+            boutons, rail, nav) n'est pas préchargé : son @font-face reste dans
             tokens-synchronises.css avec font-display swap, et le repli
             métriquement calibré « Barlow Condensed Fallback » (ascent/descent
             overrides + size-adjust) garantit des hauteurs de ligne identiques —
             mesure CDP : aucun déplacement vertical, seules les pilules et la nav
-            se recalent horizontalement (CLS ≈ 0,002, seuil 0,1). Budget 2.1 :
-            retrait de 22 444 o du premier chargement. */}
+            se recalent horizontalement (CLS ≈ 0,002, seuil 0,1). Spec 9.6 : ce
+            retrait n'enlève AUCUN octet de la page (la police reste servie via
+            @font-face) — il sort la police du décompte du chemin critique du
+            script de budget et débloque le premier rendu, qui n'attend plus ce
+            fichier. */}
         <link
           rel="preload"
           href="/charte/fonts/barlow-condensed-latin-800-normal.woff2"

@@ -59,6 +59,17 @@ function fakeStoreParcours(): ContenusStore {
   } as unknown as ContenusStore;
 }
 
+/** Store paramétrable (revue 9, I3) : ordre des contenus et épreuves servies
+ * contrôlés par le test — getSectionParcours est exécutée pour de vrai. */
+function fakeStoreParcoursParametrable(contenus: ContenuRecord[], epreuvesServies: EpreuveParcoursRecord[]): ContenusStore {
+  return {
+    readDefaultOrgPageParcours: vi.fn().mockResolvedValue({
+      contenus,
+      epreuves: epreuvesServies,
+    }),
+  } as unknown as ContenusStore;
+}
+
 describe('section parcours — fusion parcours.json (story 11.1)', () => {
   it('le parcours.json commis est valide et ne déclare QUE la longue', () => {
     expect(PARCOURS_DOC).not.toBeNull();
@@ -136,6 +147,27 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     } as unknown as ContenusStore;
     const vue = await getSectionParcours({ store });
     expect(vue.epreuves).toEqual([]);
+  });
+
+  // Revue épopée 9 (I3) — les deux garanties de getSectionParcours que la
+  // fusion seule ne couvrait pas : l'ordre vient de PARCOURS_SLUGS (pas du
+  // store) et un bloc sans épreuve associée est filtré.
+  it('ordre PARCOURS_SLUGS (la longue d’abord) même si le store sert les contenus en sens inverse', async () => {
+    const [blocLongue, blocMoyenne] = contenusParcours();
+    const vue = await getSectionParcours({
+      store: fakeStoreParcoursParametrable([blocMoyenne!, blocLongue!], epreuves()),
+    });
+    expect(vue.epreuves.map((e) => e.slug)).toEqual(['longue', 'moyenne']);
+  });
+
+  it('bloc sans épreuve associée (épreuve absente de la base) : filtré — la section n’affiche jamais un contenu orphelin', async () => {
+    const [, blocMoyenne] = contenusParcours();
+    const moyenneSeule = epreuves().filter((epreuve) => epreuve.slug === 'moyenne');
+    const vue = await getSectionParcours({
+      store: fakeStoreParcoursParametrable(contenusParcours(), moyenneSeule),
+    });
+    // Le bloc longue existe mais son épreuve n’est pas servie : rien n’est rendu.
+    expect(vue.epreuves.map((e) => e.slug)).toEqual(['moyenne']);
   });
 });
 

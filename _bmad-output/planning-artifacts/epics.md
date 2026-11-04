@@ -1032,6 +1032,16 @@ So that la vitrine reste utilisable sur un téléphone d'entrée de gamme en 3G.
 **And** le document `_bmad-output/implementation-artifacts/scenarios-recette-epic-2.md` est réaligné sur les écrans refondus — les étapes qui désignent un élément disparu sont corrigées, pas supprimées.
 
 
+### Amendements d'acceptation de l'épopée 9 (2026-11-04, suite à la revue indépendante)
+
+Arbitrages d'implémentation actés par le PO ; les critères ci-dessus sont lus avec ces réserves :
+
+- **9.1** : 28 des 33 valeurs littérales passent en `var()` ; 5 restent en exceptions épinglées et justifiées (`scan.css` `#0C1610` ×1 et `#FFD9D6` ×1, `e-dossard.css` `#FFFFFF` ×3 : écrans toujours sombres ou blanc du QR). Le décompte autorisé ne peut que décroître.
+- **9.2** : le rail de chiffres du hero n'affiche que ce qui a une source (date, épreuves, départ, cadre) — le D+ maximal, la plage d'altitude et les places n'y figurent pas tant que la donnée n'est pas publiée (règle « aucun chiffre inventé » ; le D+ vient du relevé d'essai de la story 11.1). La photo d'accueil est conservée (décision d'architecture, spec 9.2) ; la crête est une ligne unique, non deux plans.
+- **9.6 / UX-DR-23** : trois écarts antérieurs à l'épopée sont consignés au différé et non corrigés par la refonte (skip-link 43,5 px, liens de pied de page 25,5 px, débordement horizontal à 200 % hors `/resultats`).
+- **NFR-2 (< 300 Ko)** : tenu au sens du budget de chemin critique (`pnpm budget`), **non tenu en octets transférés** (321 Kio mesurés sur `/`, polices `@font-face` comprises). Décision en attente : redéfinir NFR-2 comme budget de chemin critique, ou réduire réellement (sous-ensemble de caractères Barlow, ~23 Ko).
+- **Rayons** : cartes de la surface publique à 16 px ; les rayons hérités de 6 px (`.aa-btn`, `.carte-course`, blocs de `vitrine-textes.css`) subsistent jusqu'à une story de finition de la vitrine.
+
 ## Epic 10: Refonte des surfaces d'exploitation
 
 Les trois outils du jour J — PWA volontaires, app coureurs, back-office — passent sur le vocabulaire visuel posé par la story 9.1, et les écarts aux spécifications UX déjà validées sont corrigés au passage. Ces surfaces ne sont pas publiques : la priorité y est la lisibilité en plein soleil, au bout du bras, avec des gants, et non l'effet.

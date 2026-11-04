@@ -10,6 +10,7 @@ import {
   ResultatsLive,
   VueResultats,
   appliquerResultatPollingResultats,
+  chiffresDossard,
   interpreterResultatPolling,
   type FiltresInitial,
 } from './resultats-live';
@@ -498,17 +499,69 @@ describe('VueResultats — recherche, filtres et podium (story 9.5)', () => {
     expect(html).not.toContain('id="resultats-filtre-categorie"');
   });
 
-  // CARACTÉRISATION — comportement CONNU à arbitrer, PAS une garantie voulue :
-  // une saisie qui ne matche que des dossards d’une épreuve SANS heure
-  // configurée (le Sprint ici) affiche « Aucun dossard ne correspond » dans
-  // les classements alors que le dossard apparaît dans « Derniers arrivés ».
-  // Le filtre des classements écarte les épreuves non configurées, celui des
-  // derniers arrivés non — incohérence documentée, à trancher plus tard.
-  it('CARACTÉRISATION (à arbitrer) : saisie ne matchant que des dossards d’une épreuve non configurée — « Aucun dossard » côté classements, dossard visible côté derniers arrivés', async () => {
+  // Décision d’architecture (revue épopée 9, I5a) — comportement CONSERVÉ :
+  // une épreuve sans heure de départ n’expose rien au classement ; le message
+  // de recherche vide s’applique à la liste filtrée. Le dossard d’une telle
+  // épreuve reste visible dans « Derniers arrivés » (cette liste n’est pas
+  // un classement).
+  it('épreuve sans heure de départ : rien au classement filtré, dossard visible dans « Derniers arrivés » (comportement conservé)', async () => {
     const html = await rendu(RESULTATS, false, null, { saisieDossard: '21' });
     expect(html).toContain('Aucun dossard ne correspond à cette recherche.');
     expect(html).toContain('Derniers arrivés');
     expect(html).toContain(dossardDerniers(221));
+  });
+
+  // Revue épopée 9 (I5b) : une catégorie portée uniquement par une épreuve
+  // NON configurée ne peut rien afficher sous filtre — elle ne doit pas être
+  // proposée dans le select (jamais une option sans effet).
+  it('catégories proposées : uniquement celles des épreuves CONFIGURÉES (une catégorie d’une épreuve sans heure n’est pas une option)', async () => {
+    const avecCategorieNonConfiguree: ResultatsPublic = {
+      classements: {
+        ...RESULTATS_FILTRES.classements,
+        epreuves: [
+          {
+            ...RESULTATS_FILTRES.classements.epreuves[0]!,
+            // La longue configurée ne porte NI V2 NI la catégorie témoin :
+            // Senior et V1 seulement.
+            lignes: [
+              { dossard: 201, rang: 1, tempsMs: 100 * 60_000, statut: 'arrivé', categorieAge: 'Senior' },
+              { dossard: 204, rang: null, tempsMs: null, statut: 'en-course', categorieAge: 'V1' },
+            ],
+            abandons: [],
+          },
+          {
+            epreuveSlug: 'sprint',
+            epreuveNom: 'Le Sprint — 5 km',
+            distanceKm: 5,
+            heureDepart: null,
+            configure: false,
+            lignes: [
+              { dossard: 321, rang: null, tempsMs: null, statut: 'en-course', categorieAge: 'V2' },
+            ],
+            abandons: [],
+          },
+        ],
+      },
+      derniersArrives: [],
+    };
+    const html = await rendu(avecCategorieNonConfiguree);
+    // Senior et V1 viennent des épreuves configurées ; V2 ne vit que dans
+    // l’épreuve non configurée : absente du select.
+    expect(html).toContain('<option value="Senior"');
+    expect(html).toContain('<option value="V1"');
+    expect(html).not.toContain('<option value="V2"');
+  });
+
+  // Revue épopée 9 (M4) : le champ contrôlé ne retient que les chiffres.
+  it('chiffresDossard (pure) : retire tout non-chiffre — la saisie « 2a1b » filtre comme « 21 »', () => {
+    expect(chiffresDossard('2a1b')).toBe('21');
+    expect(chiffresDossard('abc')).toBe('');
+    expect(chiffresDossard(' 204 ')).toBe('204');
+    expect(chiffresDossard('20-4')).toBe('204');
+    // Le onChange du champ passe par cette fonction (épinglé à la source :
+    // node sans DOM, la frappe n’est pas simulable).
+    const source = readFileSync(fileURLToPath(new URL('./resultats-live.tsx', import.meta.url)), 'utf8');
+    expect(source).toMatch(/onSaisieDossard\(\s*chiffresDossard\(evenement\.target\.value\)\s*\)/);
   });
 });
 
@@ -628,5 +681,15 @@ describe('CSS /resultats — témoin live et squelettes accessibles', () => {
     expect(blocMobile).toMatch(/\.resultats-arrive-epreuve\s*\{/);
     // Jamais masquée : display:none interdit sur le qualificatif du dossard.
     expect(css).not.toMatch(/resultats-arrive-epreuve[^}]*display:\s*none/);
+  });
+
+  it('cartes de la story 9.5 au rayon carte du socle --az-rayon-md (revue 9, I6)', () => {
+    const aucun = css.match(/\.resultats-aucun\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(aucun).toContain('border-radius:var(--az-rayon-md)');
+    const podiumCarte = css.match(/\.resultats-podium-carte\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(podiumCarte).toContain('border-radius:var(--az-rayon-md)');
+    // Le rayon sm (8 px) ne subsiste sur aucune des deux cartes.
+    expect(aucun).not.toContain('az-rayon-sm');
+    expect(podiumCarte).not.toContain('az-rayon-sm');
   });
 });

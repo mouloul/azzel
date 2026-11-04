@@ -84,3 +84,77 @@ describe('dossier.css — checklist : la forme porte l’état, pas la couleur s
     );
   });
 });
+
+/* Revue épopée 9 (I4) — fin du conflit de feuilles : les classes checklist
+ * entièrement redéfinies par dossier.css (action, action-inactive, état
+ * fait de la puce) ne sont plus posées dans globals.css, et AUCUNE
+ * propriété d'un sélecteur checklist n'est déclarée dans les deux feuilles
+ * à la fois — le rendu ne dépend plus de l'ordre d'import. */
+describe('checklist — dossier.css porte tout ce qui reste nécessaire, ordre d’import sans effet (revue 9, I4)', () => {
+  const cssGlobals = readFileSync(
+    fileURLToPath(new URL('./globals.css', import.meta.url)),
+    'utf8',
+  );
+
+  /** Sélecteurs `.checklist-*` → propriétés déclarées, hors commentaires
+   * (règles simples de premier niveau : la checklist n'a pas de règle
+   * en media query). */
+  function proprietesParSelecteur(source: string): Map<string, Set<string>> {
+    const parSelecteur = new Map<string, Set<string>>();
+    for (const regleCss of source.replace(/\/\*[\s\S]*?\*\//g, '').split('}')) {
+      const morceaux = regleCss.split('{');
+      if (morceaux.length !== 2) continue;
+      const declarations = morceaux[1] ?? '';
+      for (const selecteur of (morceaux[0] ?? '').split(',')) {
+        const nom = selecteur.trim();
+        if (!nom.startsWith('.checklist')) continue;
+        const props =
+          parSelecteur.get(nom) ?? new Set<string>();
+        for (const declaration of declarations.split(';')) {
+          const prop = declaration.split(':')[0]?.trim();
+          if (prop) props.add(prop);
+        }
+        parSelecteur.set(nom, props);
+      }
+    }
+    return parSelecteur;
+  }
+
+  it('globals.css ne redéfinit plus les classes habillées par dossier.css', () => {
+    expect(cssGlobals).not.toMatch(/\.checklist-action\b[^-]/);
+    expect(cssGlobals).not.toMatch(/\.checklist-action-inactive/);
+    expect(cssGlobals).not.toMatch(/\.checklist-item--fait\s+\.checklist-puce/);
+    // Le fond de la puce (transparent) et sa bordure ne vivent que dans dossier.css.
+    expect(proprietesParSelecteur(cssGlobals).get('.checklist-puce')).not.toContain(
+      'background',
+    );
+  });
+
+  it('aucune propriété checklist déclarée dans les DEUX feuilles — l’ordre d’import est sans effet', () => {
+    const globals = proprietesParSelecteur(cssGlobals);
+    const dossier = proprietesParSelecteur(css);
+    const partages: string[] = [];
+    for (const [selecteur, props] of globals) {
+      const propsDossier = dossier.get(selecteur);
+      if (!propsDossier) continue;
+      for (const prop of props) {
+        if (propsDossier.has(prop)) partages.push(`${selecteur} : ${prop}`);
+      }
+    }
+    expect(
+      partages,
+      'propriétés posées dans globals.css ET dossier.css (l’ordre d’import déciderait) :\n' +
+        partages.join('\n'),
+    ).toEqual([]);
+  });
+
+  it('dossier.css définit seule les classes qu’elle habille, complètes (action et puce)', () => {
+    expect(regle('.checklist-action')).toContain('text-decoration: none');
+    expect(regle('.checklist-action')).toContain('color: var(--az-action)');
+    expect(regle('.checklist-action-inactive')).toContain('color: var(--az-texte-2)');
+    // La puce : dossier.css porte la FORME selon l’état (anneau/disque) ; la
+    // géométrie (dimensions, border-radius) reste dans globals.css — sans
+    // chevauchement, vérifié par le test précédent.
+    expect(regle('.checklist-puce')).toContain('border: 2px solid var(--az-filet-controle)');
+  });
+});

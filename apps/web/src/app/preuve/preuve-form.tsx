@@ -338,9 +338,8 @@ export function PreuveForm({
               }
             />
             <p id="preuve-aide-formats" className="socle-champ-aide">
-              Formats acceptés : {ACCEPTED_PROOF_FORMATS_LABEL}. Aucun autre format n’est
-              accepté. Poids maximum {formatKiloBytes(MAX_PROOF_BYTES)} : les photos sont
-              compressées sur ton téléphone.
+              Formats acceptés : {ACCEPTED_PROOF_FORMATS_LABEL}. Aucun autre format
+              n’est accepté.
             </p>
             {busy !== null && (
               <p className="hint" role="status" aria-live="polite">

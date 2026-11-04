@@ -68,12 +68,12 @@
 .resultats-epreuve-meta{margin:0;font-size:14px;font-variant-numeric:tabular-nums;color:var(--ink-muted)}
 .resultats-epreuve-vide{margin:0;font-size:14px;color:var(--ink-muted)}
 .resultats-abandons{margin:0;font-size:14px;color:var(--ink-muted)}
-.resultats-aucun{margin:0;padding:var(--az-space-4);border:1.5px dashed var(--az-filet-controle);border-radius:var(--az-rayon-sm);font-size:15px;line-height:1.6;color:var(--ink)}
+.resultats-aucun{margin:0;padding:var(--az-space-4);border:1.5px dashed var(--az-filet-controle);border-radius:var(--az-rayon-md);font-size:15px;line-height:1.6;color:var(--ink)}
 
 /* Podium (story 9.5) : mise en avant des PREMIERS servis (rang ex æquo lu
    tel quel, aucun recalcul). Rang en display, dossard en badge, temps mono. */
 .resultats-podium{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:var(--az-space-3)}
-.resultats-podium-carte{display:flex;align-items:center;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-rayon-sm);padding:var(--az-space-3) var(--az-space-4)}
+.resultats-podium-carte{display:flex;align-items:center;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3) var(--az-space-4)}
 .resultats-podium-rang{margin:0;font-family:var(--font-display);font-weight:800;font-size:30px;line-height:1;color:var(--heading)}
 .resultats-podium-infos{margin:0;margin-left:auto;display:grid;gap:var(--az-space-1);justify-items:end}
 .resultats-podium-temps{font-size:14px;color:var(--ink)}

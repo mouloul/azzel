@@ -103,7 +103,12 @@ describe('/inscription — formulaire refondu (story 9.4)', () => {
     });
     const html = await rendu();
     expect((html.match(/\(obligatoire\)/g) ?? []).length).toBe(8);
-    expect(html).not.toContain('*');
+    // Revue 9 (M9) : assertion ciblée sur les LABELS — l’obligation se lit
+    // en texte dans l’étiquette, jamais par un astérisque (où qu’il soit
+    // dans le label, y compris dans son span de mention).
+    const etiquettes = html.match(/<label class="socle-etiquette"[^>]*>[\s\S]*?<\/label>/g) ?? [];
+    expect(etiquettes.length).toBeGreaterThan(0);
+    expect(etiquettes.every((etiquette) => !etiquette.includes('*'))).toBe(true);
   });
 
   it('gabarit du socle : étiquettes associées par htmlFor/id, aides liées par aria-describedby', async () => {

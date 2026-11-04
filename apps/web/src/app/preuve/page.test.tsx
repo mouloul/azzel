@@ -119,7 +119,11 @@ describe('/preuve — dépôt refondu (story 9.4)', () => {
     expect(html).toMatch(
       /Formats acceptés : (<!-- -->)?JPEG, PNG, WebP ou PDF(<!-- -->)?\. Aucun autre format n’est accepté\./,
     );
+    // Le plafond est annoncé UNE FOIS, dans l’intro (revue 9, M3) : l’aide du
+    // champ ne le répète plus (formats seuls).
     expect(html).toContain('300 Ko');
+    const aide = html.slice(html.indexOf('preuve-aide-formats'), html.indexOf('</p>', html.indexOf('preuve-aide-formats')));
+    expect(aide).not.toContain('300 Ko');
     expect(html).toContain('aria-describedby="preuve-aide-formats"');
   });
 

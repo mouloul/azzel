@@ -85,22 +85,23 @@ function acceptationsCompletes(decharge: unknown, reglement: unknown): boolean {
 }
 
 /** /inscription : étape 1 courante ; Documents marqué Fait seulement si le
- *  coureur existant a déjà les deux acceptations (vers l'avant, jamais de
- *  lien ni de promesse sur Paiement/Validation). */
+ *  coureur existant a déjà les deux acceptations — franchie, l'étape devient
+ *  retournable (matrice 9.4 : href '/acceptations', revue 9 M2) ; jamais de
+ *  lien ni de promesse sur Paiement/Validation. */
 export function etapesInscription(coureur: {
   dechargeAccepte: { acceptedAt: string; version: string } | null;
   reglementAccepte: { acceptedAt: string; version: string } | null;
 } | null): EtapeFil[] {
+  const documentsFaits = acceptationsCompletes(
+    coureur?.dechargeAccepte,
+    coureur?.reglementAccepte,
+  );
   return [
     { libelle: LIBELLES_ETAPE.inscription, etat: 'courante' },
     {
       libelle: LIBELLES_ETAPE.documents,
-      etat: acceptationsCompletes(
-        coureur?.dechargeAccepte,
-        coureur?.reglementAccepte,
-      )
-        ? 'fait'
-        : 'suite',
+      etat: documentsFaits ? 'fait' : 'suite',
+      ...(documentsFaits ? { href: '/acceptations' } : {}),
     },
     { libelle: LIBELLES_ETAPE.paiement, etat: 'suite' },
     { libelle: LIBELLES_ETAPE.validation, etat: 'suite' },

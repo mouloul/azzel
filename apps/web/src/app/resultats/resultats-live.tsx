@@ -57,8 +57,10 @@ function nomCourtEpreuve(nom: string): string {
   return nom.split(' — ')[0] ?? nom;
 }
 
-/** Chiffres d'une saisie : la recherche porte sur le numéro de dossard. */
-function chiffresDossard(saisie: string): string {
+/** Chiffres d'une saisie : la recherche porte sur le numéro de dossard.
+ *  Exportée pour test (revue 9, M4) : le champ contrôlé ne retient QUE
+ *  les chiffres, la saisie ne peut jamais rester sans effet. */
+export function chiffresDossard(saisie: string): string {
   return saisie.replace(/\D+/g, '');
 }
 
@@ -276,7 +278,7 @@ function BarreRecherche({
               autoComplete="off"
               placeholder="ex. 204"
               value={saisieDossard}
-              onChange={(evenement) => onSaisieDossard(evenement.target.value)}
+              onChange={(evenement) => onSaisieDossard(chiffresDossard(evenement.target.value))}
             />
           </div>
           <div className="socle-champ">
@@ -358,7 +360,12 @@ export function VueResultats({
 }) {
   // Recherche + filtres (story 9.5) : l'état vit côté client, indépendant du
   // polling — un rafraîchissement ne vide jamais la recherche en cours.
-  const [saisieDossard, setSaisieDossard] = useState(filtresInitial?.saisieDossard ?? '');
+  // Revue 9 (M4) : champ contrôlé — l'état ne retient que les chiffres, une
+  // saisie non numérique (« abc ») n'entre jamais dans l'état (pas de filtrage
+  // silencieux sans bouton « Effacer »).
+  const [saisieDossard, setSaisieDossard] = useState(
+    chiffresDossard(filtresInitial?.saisieDossard ?? ''),
+  );
   const [epreuveFiltre, setEpreuveFiltre] = useState<string>(
     filtresInitial?.epreuveFiltre ?? FILTRE_TOUTES,
   );
@@ -427,13 +434,20 @@ export function VueResultats({
     epreuveFiltre !== FILTRE_TOUTES && slugsConnus.has(epreuveFiltre)
       ? epreuveFiltre
       : FILTRE_TOUTES;
-  const categoriesPresentes = CATEGORIES_AGE_CLASSEMENT.filter((categorie) =>
-    classements.epreuves.some((epreuve) =>
-      epreuve.lignes.some((ligne) => ligne.categorieAge === categorie),
-    ),
+  // Revue 9 (I5b) : seules les catégories présentes dans une épreuve
+  // CONFIGURÉE sont proposées — une catégorie portée uniquement par une
+  // épreuve sans heure de départ ne peut rien afficher sous filtre (jamais
+  // une option sans effet).
+  const categoriesPresentes: readonly string[] = CATEGORIES_AGE_CLASSEMENT.filter(
+    (categorie) =>
+      classements.epreuves.some(
+        (epreuve) =>
+          epreuve.configure &&
+          epreuve.lignes.some((ligne) => ligne.categorieAge === categorie),
+      ),
   );
   const categorieEffective =
-    categorieFiltre !== FILTRE_TOUTES && categoriesPresentes.includes(categorieFiltre as never)
+    categorieFiltre !== FILTRE_TOUTES && categoriesPresentes.includes(categorieFiltre)
       ? categorieFiltre
       : FILTRE_TOUTES;
   const filtreActif =
@@ -467,7 +481,6 @@ export function VueResultats({
           (dossardRecherche === '' || String(arrive.dossard).includes(dossardRecherche)),
       )
     : derniersArrives;
-  const derniersAAfficher = filtreActif ? derniersFiltres : derniersArrives;
 
   return (
     <div className="resultats-live">
@@ -528,11 +541,11 @@ export function VueResultats({
               Derniers arrivés
             </h2>
           </header>
-          {derniersAAfficher.length === 0 ? (
+          {derniersFiltres.length === 0 ? (
             <p className="resultats-derniers-vide">Aucune arrivée pour le moment.</p>
           ) : (
             <ul className="resultats-derniers-liste">
-              {derniersAAfficher.map((arrive) => (
+              {derniersFiltres.map((arrive) => (
                 <li className="resultats-arrive" key={`${arrive.epreuveSlug}-${arrive.dossard}`}>
                   <span className="resultats-dossard">{arrive.dossard}</span>
                   <span className="resultats-arrive-epreuve">{arrive.epreuveNom}</span>
