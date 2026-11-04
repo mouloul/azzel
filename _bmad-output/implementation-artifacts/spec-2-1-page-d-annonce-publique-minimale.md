@@ -30,7 +30,7 @@ deferred: []
 **Always:**
 - **< 300 Ko** de premier chargement (HTML + CSS + JS + polices + hero) mesuré par un script (`scripts/check-budget.sh` : démarre `next start` sur un build frais, curl la page, somme les poids des ressources locales référencées) ; **premier rendu lisible sans la photo** (hero = fond forêt + voile dès le CSS, photo en lazy/swap par-dessus, jamais bloquante).
 - Chiffres 2026 officiels de la charte uniquement (279 inscrits, 222 dossards, 214 finishers dont 36 femmes, 116 enfants Course Kids) — jamais additionnés, jamais inventés ; 2027 écrit comme objectif (« Objectif : 600 inscrits » si chiffre utilisé — n'en mettre aucun tant que le comité n'a pas confirmé).
-- Dates : « 26 mars 2027 » (seed édition) ; lieu : stade Agni Lhoudh, Aït Aïssi (Yakouren). Mentions « à confirmer » nowhere on the page — seuls les faits sûrs.
+- Dates : « printemps 2027 » en vitrine — la date exacte du seed édition (26/03/2027) reste interne tant que le comité ne l’a pas annoncée (recette 04/11/2026) ; lieu : stade Agni Lhoudh, Aït Aïssi (Yakouren). Mentions « à confirmer » nowhere on the page — seuls les faits sûrs.
 - Bandeau égide « Sous l'égide de la Fédération et du ministère des Sports » toujours visible (forêt + on-forest, capitales espacées).
 - CTA « S'inscrire » → /connexion (parcours épopée 1) ; bouton « Appeler l'équipe » (ASSISTANCE_PHONE) visible dans la section contact/infos.
 - **Vouvoiement** intégral (page publique) ; composants aa- (hero, stat, card, section header avec eyebrow) ; thème clair par défaut, sombre fonctionnel ; photos 2026 en WebP 640/1280 + srcset générées dans public/ (sips ou équivalent), objet cover, voile 60–85 % côté texte, alt descriptifs.
@@ -67,7 +67,7 @@ deferred: []
 
 **Execution:**
 - `apps/web/public/charte/photos-2026/` -- générer WebP 640/1280 (qualité ~80) de 3 photos max (hero conseillé : aitaissi-2026-celebration-montagne) + alts descriptifs français.
-- `apps/web/src/app/page.tsx` -- vitrine d'annonce : hero (eyebrow « 2ᵉ édition — 26 mars 2027 », titre, lieu, CTA S'inscrire + Appeler l'équipe), section chiffres 2026 (3–4 stats officielles, labels exacts), section épreuves (Longue 35 km / Moyenne 12 km, cartes aa-), égide, footer existant.
+- `apps/web/src/app/page.tsx` -- vitrine d'annonce : hero (eyebrow « 2ᵉ édition — printemps 2027 », titre, lieu, CTA S'inscrire + Appeler l'équipe), section chiffres 2026 (3–4 stats officielles, labels exacts), section épreuves (Longue 35 km / Moyenne 12 km, cartes aa-), égide, footer existant.
 - `apps/web/src/app/layout.tsx` + `globals.css` -- bandeau égide toujours visible (toutes pages) ; squelettes image (aspect-ratio + fond neutre, aria-busy) ; hero photo lazy/non bloquante par-dessus fond forêt.
 - `scripts/check-budget.sh` -- mesure déterministe : build, start, curl / (+ assets locaux référencés, décompression gzip), seuil 300 Ko, sortie détaillée ; documenté dans README.
 - Tests -- poids des assets générés (WebP ≤ 100 Ko l'unité en 640), présence des sections (rendu statique : le HTML servi contient égide, CTA /connexion, stats officielles, alts), check-budget en test d'intégration opt-in (skip si serveur injoignable).

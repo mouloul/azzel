@@ -45,7 +45,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | # | Action | Résultat attendu |
 |---|--------|------------------|
 | 2.1 | Regarder le hero | Photo de la ligne de départ 2026 conservée (coureurs rassemblés), voile sombre assurant la lisibilité, titre « Week-end Sportif **Aït Aïssi** » à très grande échelle (accent ocre sur « Aït Aïssi »), crête ocre sous le titre |
-| 2.2 | Lire le rail de chiffres clés (à droite en desktop) | Exactement 4 entrées : **Date** « 2ᵉ édition — 26 mars 2027 » · **Épreuves** « 35 km · 12 km » · **Départ** « Stade Agni Lhoudh » · **Cadre** « Forêt de Yakouren ». AUCUN D+, altitude ni nombre de places (chiffres non confirmés par le comité) |
+| 2.2 | Lire le rail de chiffres clés (à droite en desktop) | Exactement 4 entrées : **Date** « 2ᵉ édition — printemps 2027 » (date exacte non publique) · **Épreuves** « 35 km · 12 km » · **Départ** « Stade Agni Lhoudh » · **Cadre** « Forêt de Yakouren ». AUCUN D+, altitude ni nombre de places (chiffres non confirmés par le comité) |
 | 2.3 | Chercher l'ancien bandeau de date et le badge d'épreuves | Absents — fondus dans le rail, pas de doublon d'information |
 | 2.4 | Cliquer « S'inscrire » (hero) | Arrive sur `/connexion?parcours=inscription` |
 | 2.5 | Survoler/activer « Appeler l'équipe » (hero) | Numéro de l'assistance (lien tel:), présent aussi dans la section contact plus bas |

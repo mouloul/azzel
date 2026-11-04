@@ -85,13 +85,19 @@ describe('accueil vitrine — rendu statique', () => {
 
   it('hero : bandeau date, titre, lieu, CTA S’inscrire vers /connexion?parcours=inscription', () => {
     const html = HTML_ACCUEIL;
-    expect(html).toContain('2ᵉ édition — 26 mars 2027');
+    expect(html).toContain('2ᵉ édition — printemps 2027');
     expect(html).toContain('Week-end Sportif');
     expect(html).toContain('Aït Aïssi');
     expect(html).toContain('stade Agni Lhoudh');
     expect(html).toContain('Yakouren');
     expect(html).toContain('href="/connexion?parcours=inscription"');
     expect(html).toContain('S’inscrire');
+  });
+
+  it('hero : la date exacte reste masquee tant que le comite ne l’a pas annoncee', () => {
+    const html = HTML_ACCUEIL;
+    expect(html).not.toContain('26 mars');
+    expect(html).toContain('printemps 2027');
   });
 
   it('hero : photo eager + fetchpriority high (LCP), dimensions alignées sur la variante 640', () => {
@@ -199,7 +205,7 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
     const titre = html.indexOf('aa-hero__title');
     const crete = html.indexOf('data-crete');
     const rail = html.indexOf('class="aa-hero__rail"');
-    const date = html.indexOf('2ᵉ édition — 26 mars 2027');
+    const date = html.indexOf('2ᵉ édition — printemps 2027');
     const epreuves = html.indexOf('35 km · 12 km');
     const meta = html.indexOf('class="aa-hero__meta"');
     const actions = html.indexOf('class="aa-hero__actions"');

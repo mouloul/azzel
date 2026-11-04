@@ -70,7 +70,10 @@ export default async function HomePage() {
           chiffres clés cloisonné à droite (sous le titre en mobile). Le bandeau
           de date et le badge des épreuves se fondent dans le rail. Les chiffres
           du rail sont les seuls officiels : date, épreuves, départ, cadre —
-          D+ et tracés 2027 attendent la confirmation du comité (page /parcours). */}
+          D+ et tracés 2027 attendent la confirmation du comité (page /parcours).
+          Recette du 04/11/2026 : la date exacte n'est pas encore publique — la
+          vitrine ne dit que « printemps 2027 », ici comme dans l'accroche et la
+          section des épreuves. */}
       <section className="aa-hero aa-hero--plein" aria-labelledby="titre-accueil">
         <AaPhoto
           variant="couverture"
@@ -89,7 +92,7 @@ export default async function HomePage() {
           <Crete />
           <dl className="aa-hero__rail">
             <dt>Date</dt>
-            <dd>2ᵉ édition — 26 mars 2027</dd>
+            <dd>2ᵉ édition — printemps 2027</dd>
             <dt>Épreuves</dt>
             <dd>35 km · 12 km</dd>
             <dt>Départ</dt>
@@ -104,7 +107,7 @@ export default async function HomePage() {
           <p className="aa-hero__meta">
             Une première édition qui a dépassé toutes les attentes : le village
             mobilisé, les sentiers de Yakouren pris d’assaut, une ambiance qu’on
-            n’oublie pas. Le trail d’Aït Aïssi revient le 26 mars 2027.
+            n’oublie pas. Le trail d’Aït Aïssi revient au printemps 2027.
           </p>
           <div className="aa-hero__actions">
             <Link className="socle-action" href="/connexion?parcours=inscription">
@@ -159,7 +162,7 @@ export default async function HomePage() {
             Deux trails au départ du stade
           </h2>
           <p className="aa-lead">
-            Le 26 mars 2027, deux courses de trail partent du stade Agni Lhoudh, sur les
+            Au printemps 2027, deux courses de trail partent du stade Agni Lhoudh, sur les
             sentiers de la forêt de Yakouren.
           </p>
           <div className="aa-cards">
