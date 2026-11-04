@@ -947,8 +947,10 @@ main {
    l'autre — les chiffres d'abord, ils portent le propos. */
 .aa-bilan__grille {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: var(--space-12);
+  /* La vidéo prend la plus grande part : à parts égales, le poster tombait
+     sous 550 px de large et ne pesait plus rien face aux chiffres. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  column-gap: var(--space-10);
   row-gap: var(--space-10);
   align-items: start;
 }
