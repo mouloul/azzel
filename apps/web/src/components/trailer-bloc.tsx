@@ -131,11 +131,15 @@ export function TrailerBloc({
         </span>
         <span className="aa-trailer__libelle">Voir la vidéo de l’édition 2026</span>
       </button>
-      <p className="aa-note">
-        {auto
-          ? 'La vidéo se charge quand elle arrive à l’écran, et démarre sans le son.'
-          : 'La vidéo se charge uniquement quand vous cliquez : rien n’est téléchargé avant.'}
-      </p>
+      {/* Lancement automatique : le poster ne reste affiché qu'un instant, une
+          mention sous lui n'aurait pas le temps d'être lue. La page qui attend
+          le clic, elle, garde sa promesse écrite. */}
+      {auto ? null : (
+        <p className="aa-note">
+          La vidéo se charge uniquement quand vous cliquez : rien n’est téléchargé
+          avant.
+        </p>
+      )}
     </div>
   );
 }

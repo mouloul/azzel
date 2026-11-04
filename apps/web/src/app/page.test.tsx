@@ -131,7 +131,6 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('>214<');
     expect(html).toContain('>116<');
     expect(html).toContain('dont 36 femmes');
-    expect(html).toContain('Chiffres officiels de l’édition 2026');
   });
 
   it('épreuves 2027 : trail long 35 km et trail moyen 12 km', () => {

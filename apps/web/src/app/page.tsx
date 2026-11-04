@@ -189,7 +189,6 @@ export default async function HomePage() {
               <dd>116</dd>
             </div>
           </dl>
-          <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
         </div>
       </section>
 
