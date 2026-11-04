@@ -217,7 +217,7 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
     expect(rail).toBeLessThan(epreuves);
     expect(rail).toBeLessThan(meta);
     expect(meta).toBeLessThan(actions);
-    expect(actions).toBeLessThan(html.indexOf('titre-bilan-2026'));
+    expect(actions).toBeLessThan(html.indexOf('aa-bilan'));
     // Story 9.2 : le bandeau de date et le badge des épreuves se fondent
     // dans le rail — plus d'éléments flottants autonomes.
     expect(html).not.toContain('aa-hero__badge');

@@ -900,7 +900,6 @@ main {
 .aa-bilan__teaser {
   min-width: 0;
   max-width: 980px;
-  margin-top: var(--space-8);
 }
 
 .vitrine-bande--foret .aa-trailer__poster {

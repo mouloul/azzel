@@ -6,6 +6,7 @@ import {
   MAX_PRENOM_LENGTH,
   MAX_TEMOIGNAGE_ORDRE,
   MIN_TEMOIGNAGE_ORDRE,
+  avecLectureAutomatiqueMuette,
   avecLectureImmediate,
   initiales,
   isHttpsUrl,
@@ -186,6 +187,20 @@ describe('retour-images — domaine', () => {
     expect(
       validateTemoignageInput({ ...base, ordre: MAX_TEMOIGNAGE_ORDRE + 1 }).ordre,
     ).toContain('entre 1 et 9999');
+  });
+
+  it('avecLectureAutomatiqueMuette : autoplay SANS le son à l’arrivée à l’écran', () => {
+    const url = avecLectureAutomatiqueMuette('https://www.youtube.com/embed/AbCdEf12345');
+    expect(url).toContain('autoplay=1');
+    // Sans mute, le navigateur refuse le démarrage ET un son partirait sans
+    // geste (WCAG 1.4.2) : les deux paramètres sont indissociables.
+    expect(url).toContain('mute=1');
+    expect(url).toContain('playsinline=1');
+    expect(url.startsWith('https://www.youtube.com/embed/AbCdEf12345?')).toBe(true);
+    // Query déjà présente : on enchaîne avec & et on ne perd rien.
+    expect(avecLectureAutomatiqueMuette('https://player.vimeo.com/video/123?title=0')).toContain(
+      'title=0&autoplay=1',
+    );
   });
 
   it('avecLectureImmediate : autoplay=1 au premier clic (geste utilisateur), query préservée', () => {

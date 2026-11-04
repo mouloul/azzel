@@ -1,8 +1,22 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { avecLectureImmediate, type TrailerPlayer } from '@/modules/retour-images/domain';
+import {
+  avecLectureAutomatiqueMuette,
+  avecLectureImmediate,
+  type TrailerPlayer,
+} from '@/modules/retour-images/domain';
+
+/** Part visible à partir de laquelle le teaser se lance tout seul. */
+const SEUIL_VISIBILITE = 0.5;
+
+function mouvementReduit(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 /**
  * Bloc trailer public : poster dégradé forêt en pur CSS (zéro octet d'image) +
@@ -11,27 +25,71 @@ import { avecLectureImmediate, type TrailerPlayer } from '@/modules/retour-image
  * de page, jamais de son sans geste. Au CONTRAIRE du chargement, la lecture
  * elle-même démarre dès le premier clic (geste de l'utilisateur) : autoplay=1
  * sur l'embed monté, play() après montage pour la vidéo native.
+ *
+ * `auto` (teaser de l'accueil) ouvre une seconde porte : le lecteur se monte
+ * aussi quand le bloc arrive à l'écran, et démarre alors SANS LE SON. Le
+ * chargement reste différé — rien ne part tant qu'on n'a pas scrollé jusque-là.
+ * Respecte « mouvement réduit » : dans ce cas, le poster attend le clic.
  */
-export function TrailerBloc({ player }: { player: TrailerPlayer }) {
+export function TrailerBloc({
+  player,
+  auto = false,
+}: {
+  player: TrailerPlayer;
+  auto?: boolean;
+}) {
   const [lance, setLance] = useState(false);
+  const [muet, setMuet] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const blocRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (lance && player.kind === 'video') {
       videoRef.current?.play().catch(() => {
-        // Lecture automatique refusée par le navigateur : les contrôles natifs
-        // restent là, l'utilisateur appuie sur lecture.
       });
     }
   }, [lance, player.kind]);
 
+  useEffect(() => {
+    const bloc = blocRef.current;
+    if (!auto || lance || bloc === null || mouvementReduit()) {
+      return;
+    }
+    // Pas d'IntersectionObserver (vieux navigateur) : on garde le poster,
+    // le clic reste le chemin normal.
+    if (typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+    const observateur = new IntersectionObserver(
+      (entrees) => {
+        if (entrees.some((entree) => entree.isIntersecting)) {
+          observateur.disconnect();
+          setMuet(true);
+          setLance(true);
+        }
+      },
+      { threshold: SEUIL_VISIBILITE },
+    );
+    observateur.observe(bloc);
+    return () => observateur.disconnect();
+  }, [auto, lance]);
+
+  const lancerAuClic = useCallback(() => {
+    setMuet(false);
+    setLance(true);
+  }, []);
+
   if (lance) {
     return (
-      <div className="aa-trailer">
+      <div className="aa-trailer" ref={blocRef}>
         {player.kind === 'iframe' ? (
           <iframe
             className="aa-trailer__lecteur"
-            src={avecLectureImmediate(player.url)}
+            src={
+              muet
+                ? avecLectureAutomatiqueMuette(player.url)
+                : avecLectureImmediate(player.url)
+            }
             title="Vidéo du trailer — première édition du Week-end Sportif Aït Aïssi"
             allow="fullscreen; picture-in-picture; encrypted-media; autoplay"
             referrerPolicy="strict-origin-when-cross-origin"
@@ -41,6 +99,8 @@ export function TrailerBloc({ player }: { player: TrailerPlayer }) {
             ref={videoRef}
             className="aa-trailer__lecteur"
             controls
+            muted={muet}
+            playsInline
             preload="none"
             src={player.url}
           >
@@ -48,16 +108,21 @@ export function TrailerBloc({ player }: { player: TrailerPlayer }) {
             site du Week-end Sportif Aït Aïssi.
           </video>
         )}
+        {muet ? (
+          <p className="aa-note">
+            La vidéo démarre sans le son : activez-le avec les commandes du lecteur.
+          </p>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div className="aa-trailer">
+    <div className="aa-trailer" ref={blocRef}>
       <button
         type="button"
         className="aa-trailer__poster"
-        onClick={() => setLance(true)}
+        onClick={lancerAuClic}
       >
         <span className="aa-trailer__play" aria-hidden="true">
           <svg width="26" height="30" viewBox="0 0 26 30" fill="none" role="presentation">
@@ -67,7 +132,9 @@ export function TrailerBloc({ player }: { player: TrailerPlayer }) {
         <span className="aa-trailer__libelle">Voir la vidéo de l’édition 2026</span>
       </button>
       <p className="aa-note">
-        La vidéo se charge uniquement quand vous cliquez : rien n’est téléchargé avant.
+        {auto
+          ? 'La vidéo se charge quand elle arrive à l’écran, et démarre sans le son.'
+          : 'La vidéo se charge uniquement quand vous cliquez : rien n’est téléchargé avant.'}
       </p>
     </div>
   );
