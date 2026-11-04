@@ -895,11 +895,11 @@ main {
 
 /* Teaser de la bande bilan : le poster est lui aussi forêt — un filet le
    détache du fond, et sa largeur reste celle d'une vidéo lisible. */
-/* Le teaser porte la section : pleine largeur de la bande, plafonné pour que
-   le 16/9 ne dépasse pas la hauteur d'écran sur les très larges moniteurs. */
+/* Le teaser porte la section : toute la largeur de la bande, calé sur le corps
+   du hero (même --container-max, mêmes gouttières) — les deux blocs s'arrêtent
+   sur les mêmes verticales. */
 .aa-bilan__teaser {
   min-width: 0;
-  max-width: 980px;
 }
 
 .vitrine-bande--foret .aa-trailer__poster {
@@ -945,10 +945,8 @@ main {
 /* Deux colonnes : l'éditorial chiffré, puis le teaser. Sous 900 px, l'un sous
    l'autre — les chiffres d'abord, ils portent le propos. */
 /* Les quatre chiffres en rangée sous la vidéo ; ils se replient d'eux-mêmes
-   en deux puis une colonne sur les petits écrans. Même largeur que le teaser :
-   les deux blocs s'arrêtent sur la même verticale à droite. */
+   en deux puis une colonne sur les petits écrans. */
 .aa-bilan__rail {
-  max-width: 980px;
   display: grid;
   gap: var(--space-6) var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
