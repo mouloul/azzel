@@ -895,12 +895,12 @@ main {
 
 /* Teaser de la bande bilan : le poster est lui aussi forêt — un filet le
    détache du fond, et sa largeur reste celle d'une vidéo lisible. */
+/* Le teaser porte la section : pleine largeur de la bande, plafonné pour que
+   le 16/9 ne dépasse pas la hauteur d'écran sur les très larges moniteurs. */
 .aa-bilan__teaser {
   min-width: 0;
-}
-
-.aa-bilan__teaser .aa-h3 {
-  margin-bottom: var(--space-4);
+  max-width: 980px;
+  margin-top: var(--space-8);
 }
 
 .vitrine-bande--foret .aa-trailer__poster {
@@ -945,32 +945,14 @@ main {
 
 /* Deux colonnes : l'éditorial chiffré, puis le teaser. Sous 900 px, l'un sous
    l'autre — les chiffres d'abord, ils portent le propos. */
-.aa-bilan__grille {
-  display: grid;
-  /* La vidéo prend la plus grande part : à parts égales, le poster tombait
-     sous 550 px de large et ne pesait plus rien face aux chiffres. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
-  column-gap: var(--space-10);
-  row-gap: var(--space-10);
-  align-items: start;
-}
-
-@media (max-width: 899.98px) {
-  .aa-bilan__grille {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.aa-bilan__texte {
-  min-width: 0;
-}
-
-/* Deux par deux plutôt qu'en rang unique : la colonne est deux fois plus
-   étroite, et quatre chiffres à la file y seraient illisibles. */
+/* Les quatre chiffres en rangée sous la vidéo ; ils se replient d'eux-mêmes
+   en deux puis une colonne sur les petits écrans. Même largeur que le teaser :
+   les deux blocs s'arrêtent sur la même verticale à droite. */
 .aa-bilan__rail {
+  max-width: 980px;
   display: grid;
   gap: var(--space-6) var(--space-4);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   margin: var(--space-8) 0 0;
 }
 
@@ -990,7 +972,7 @@ main {
   grid-row: 1;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(30px, 3.4vw, 40px);
+  font-size: clamp(32px, 4.5vw, 44px);
   line-height: 1;
   color: var(--ochre-300);
 }

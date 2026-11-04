@@ -153,53 +153,45 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Bilan 2026 — recomposition (recette du 04/11/2026) : les quatre chiffres
-          s'étalaient sur toute la largeur en laissant un vide à droite, et le teaser
-          tombait dessous en pleine largeur. Deux colonnes maintenant : l'éditorial
-          chiffré à gauche, le teaser à droite, dans la même respiration. */}
+      {/* Bilan 2026 — recette du 04/11/2026 : le teaser porte la section. Gros
+          encart vidéo pleine largeur, les quatre chiffres officiels en rangée
+          juste dessous. Rien n'est chargé avant le clic sur le poster. */}
       <section
         className="vitrine-bande vitrine-bande--foret aa-bilan"
         aria-labelledby="titre-bilan-2026"
       >
-        <div className="aa-section aa-bilan__grille">
-          <div className="aa-bilan__texte">
-            <p className="aa-eyebrow">Bilan 2026</p>
-            <h2 className="aa-h2" id="titre-bilan-2026">
-              Une première édition réussie
-            </h2>
-            <dl className="aa-bilan__rail">
-              <div className="aa-bilan__stat">
-                <dt>Inscrits</dt>
-                <dd>279</dd>
-              </div>
-              <div className="aa-bilan__stat">
-                <dt>Dossards distribués</dt>
-                <dd>222</dd>
-              </div>
-              <div className="aa-bilan__stat">
-                <dt>Finishers au trail</dt>
-                <dd>214</dd>
-                <dd>dont 36 femmes</dd>
-              </div>
-              <div className="aa-bilan__stat">
-                <dt>Enfants à la Course Kids</dt>
-                <dd>116</dd>
-              </div>
-            </dl>
-            <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
-          </div>
+        <div className="aa-section">
+          <p className="aa-eyebrow">Bilan 2026</p>
+          <h2 className="aa-h2" id="titre-bilan-2026">
+            Une première édition réussie
+          </h2>
 
-          {/* Teaser 2026 : images de la première édition, à côté des chiffres
-              qu'elles illustrent. Même bloc que /retour-en-images — rien n'est
-              chargé avant le clic. */}
           {teaser !== null ? (
             <div className="aa-bilan__teaser">
-              <h3 className="aa-h3" id="titre-teaser-2026">
-                Le teaser de la première édition
-              </h3>
               <TrailerBloc player={teaser} />
             </div>
           ) : null}
+
+          <dl className="aa-bilan__rail">
+            <div className="aa-bilan__stat">
+              <dt>Inscrits</dt>
+              <dd>279</dd>
+            </div>
+            <div className="aa-bilan__stat">
+              <dt>Dossards distribués</dt>
+              <dd>222</dd>
+            </div>
+            <div className="aa-bilan__stat">
+              <dt>Finishers au trail</dt>
+              <dd>214</dd>
+              <dd>dont 36 femmes</dd>
+            </div>
+            <div className="aa-bilan__stat">
+              <dt>Enfants à la Course Kids</dt>
+              <dd>116</dd>
+            </div>
+          </dl>
+          <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
         </div>
       </section>
 
