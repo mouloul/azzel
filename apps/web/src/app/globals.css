@@ -631,6 +631,64 @@ main {
   color: var(--az-surface);
 }
 
+/* Revue visuelle du 04/11/2026 (B3 + M4) — la bascule de thème était un bouton
+   à libellé plein (« Passer en thème sombre ») : plus large que le logo en
+   390 px, coupée par le bord droit sur /admin/dossiers. Remplacée par deux
+   boutons radio icôniques de largeur fixe (88 px au total), cibles tactiles
+   44 × 44 px conservées. */
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  overflow: hidden;
+  color: var(--heading);
+}
+
+.theme-switch__option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+
+.theme-switch__option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+.theme-switch__icone {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* État courant : fond plein ET contour, jamais la seule couleur. */
+.theme-switch__option:has(input:checked) {
+  background: var(--heading);
+  color: var(--az-surface);
+}
+
+.theme-switch__option:hover:not(:has(input:checked)) {
+  background: var(--az-filet-controle);
+}
+
+.theme-switch__option:has(input:focus-visible) {
+  outline: 3px solid var(--az-focus);
+  outline-offset: -3px;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -1225,9 +1283,20 @@ body:has(.aa-hero--plein) .header-logo {
   }
 }
 
-body:has(.aa-hero--plein) .site-header :is(.btn-contour, .admin-link) {
+body:has(.aa-hero--plein) .site-header :is(.btn-contour, .admin-link, .theme-switch) {
   color: var(--on-forest);
   border-color: var(--on-forest);
+}
+
+body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:checked) {
+  background: var(--on-forest);
+  color: var(--forest);
+}
+
+body:has(.aa-hero--plein)
+  .site-header
+  .theme-switch__option:hover:not(:has(input:checked)) {
+  background: var(--forest-surface);
 }
 
 body:has(.aa-hero--plein) .site-header .btn-contour:hover:not(:disabled),
@@ -1243,6 +1312,10 @@ body:has(.aa-hero--plein) .header-nav a {
 body:has(.aa-hero--plein) .site-header :is(a, button):focus-visible {
   outline-color: var(--on-forest);
   box-shadow: 0 0 0 4px var(--forest-surface);
+}
+
+body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-visible) {
+  outline-color: var(--on-forest);
 }
 
 .aa-hero--plein {

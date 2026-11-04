@@ -35,7 +35,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | # | Action | Résultat attendu |
 |---|--------|------------------|
 | 1.1 | Ouvrir l'accueil | Thème clair par défaut, aucun flash au rechargement |
-| 1.2 | Cliquer la bascule « Passer en thème sombre » (en-tête) | Fond vert-noir forêt, logo passe en négatif |
+| 1.2 | Cliquer l’icône croissant de lune de la bascule de thème (en-tête, deux boutons radio soleil/lune) | Fond vert-noir forêt, logo passe en négatif |
 | 1.3 | Recharger la page | Le thème sombre est mémorisé (pas de flash) |
 | 1.4 | Vider le localStorage (DevTools → Application → azzel-theme) puis recharger | Retour au thème clair |
 | 1.5 | Rétrécir la fenêtre sous 480 px | Symbole seul dans l'en-tête, aucune déformation |
