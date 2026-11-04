@@ -265,6 +265,111 @@ main {
   max-width: 42rem;
 }
 
+/* Parcours d'inscription (recette du 04/11/2026) : le formulaire garde sa
+   largeur de lecture, le guide s'installe à côté dès qu'il y a la place.
+   Sous ce seuil, il passe SOUS le formulaire — on vient pour saisir son
+   adresse, pas pour lire cinq étapes d'abord. */
+.auth--guide {
+  max-width: 58rem;
+}
+
+@media (min-width: 900px) {
+  .auth--guide {
+    display: grid;
+    grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+    gap: var(--az-space-6);
+    align-items: start;
+  }
+}
+
+.guide-inscription {
+  margin-top: var(--az-space-5);
+}
+
+@media (min-width: 900px) {
+  .guide-inscription {
+    margin-top: 0;
+  }
+}
+
+.guide-inscription h2 {
+  margin: 0 0 var(--az-space-4);
+  font-family: var(--az-font-display-sm);
+  font-size: 20px;
+  font-weight: var(--az-font-weight-display-sm);
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+.guide-inscription__etapes {
+  display: grid;
+  gap: var(--az-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.guide-etape {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--az-space-3);
+  align-items: start;
+}
+
+/* Marqueur : contour pour ce qui reste à venir, plein pour l'étape en cours
+   et pour ce qui est fait — la forme double le texte d'état. */
+.guide-etape__marqueur {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  font-family: var(--az-font-display);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--az-texte-2);
+}
+
+.guide-etape--courante .guide-etape__marqueur,
+.guide-etape--faite .guide-etape__marqueur {
+  border-color: var(--az-action);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+}
+
+.guide-etape__textes {
+  display: grid;
+  gap: var(--az-space-1);
+}
+
+.guide-etape__titre {
+  font-weight: 700;
+  color: var(--az-texte);
+}
+
+.guide-etape__etat {
+  font-weight: 400;
+  color: var(--az-texte-2);
+}
+
+.guide-etape__texte {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte-2);
+}
+
+/* Étapes à venir : même texte, moins d'appui — jamais la couleur seule,
+   l'état est écrit. */
+.guide-etape:not(.guide-etape--courante):not(.guide-etape--faite) .guide-etape__titre {
+  font-weight: 600;
+  color: var(--az-texte-2);
+}
+
 .auth .card + .card {
   margin-top: var(--az-space-5);
 }

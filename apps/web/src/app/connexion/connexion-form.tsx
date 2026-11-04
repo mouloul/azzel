@@ -10,6 +10,7 @@ import {
   RESEND_COOLDOWN_SEC,
 } from '@/modules/iam/constants';
 
+import { GuideInscription } from './guide-inscription';
 import type { Parcours } from './parcours';
 
 /** Destination renvoyée par /api/auth/verify — jamais une URL absolue. */
@@ -184,8 +185,12 @@ export function ConnexionForm({
     }
   }
 
+  // Parcours « inscription » : le guide accompagne le formulaire (recette du
+  // 04/11/2026). Le parcours « connexion » reste nu — on y revient, on sait.
+  const guide = parcours === 'inscription';
+
   return (
-    <section className="auth">
+    <section className={guide ? 'auth auth--guide' : 'auth'}>
       <article className="card">
         {step === 'email' ? (
           <>
@@ -286,6 +291,7 @@ export function ConnexionForm({
           <AssistanceButton phone={assistancePhone} />
         </div>
       </article>
+      {guide ? <GuideInscription etape={step} /> : null}
     </section>
   );
 }
