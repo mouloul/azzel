@@ -13,6 +13,8 @@
     "test": "vitest run",
     "test:db": "bash scripts/dev-db.sh up && pnpm test",
     "budget": "pnpm build && bash scripts/check-budget.sh",
+    "budget:reel": "node scripts/mesure-chargement.mjs",
+    "polices:elaguer": "bash scripts/sous-ensemble-polices.sh",
     "dev:web": "pnpm --filter @azzel/web dev",
     "dev:runners": "pnpm --filter @azzel/runners start"
   },

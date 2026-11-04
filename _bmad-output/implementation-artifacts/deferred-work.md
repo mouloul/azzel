@@ -273,7 +273,7 @@
 
 Rapports : `revue-epopee-9.md`, `revue-epopee-10.md` (aucun bloquant sur l'épopée 9 ; un bloquant sur l'épopée 10, « Suivi activé » affiché moteur non démarré, corrigé et testé). Corrigés sur `fix/revue-epopee-9` et `fix/revue-epopee-10`. Restent :
 
-- **NFR-2 en octets transférés** (321 Kio sur `/`) : décision PO en attente, redéfinir en budget de chemin critique ou réduire (Barlow, ~23 Ko). Amendement d'AC écrit dans `epics.md`.
+- ~~**NFR-2 en octets transférés**~~ — **tranché le 2026-11-04**, voir l'amendement dans `epics.md`. Mesure honnête par Chrome : 344 776 o (336,7 Kio) sur `/`, dont 181,4 Kio de socle incompressible. NFR-2 porte maintenant deux seuils bloquants en CI (poids réel ≤ 350 Kio, chemin critique ≤ 300 Kio) ; les polices servies sont élaguées sans perdre un caractère. État : 326 Kio réels, 283 Kio critiques. Reste ouvert, sans échéance : les 145 Ko de runtime d'App Router, seul vrai poste de réduction restant, et le fait que `/resultats` (334,7 Kio avant élagage) n'est pas mesuré par le budget.
 - **Rayons hérités à 6 px** (`.aa-btn`, `.carte-course`, `vitrine-textes.css`) et vocabulaire mixte `--az-radius-full` / `--az-rayon-*` dans `volontaires.css` : story de finition de la vitrine.
 - **Utilitaire WCAG dupliqué** dans 4 fichiers de test (`contrastes*.test.ts`, `socle.test.ts`, runners) : à extraire.
 - **`.btn-lien` global passé à `min-height: 44px` (37 usages, 19 fichiers)** : le rendu n'a été vérifié que par lecture CSS ; relire à l'œil les écrans qui l'utilisent (missions, scan, volontaires, sponsors, retour-images, dossiers, course, preuve).

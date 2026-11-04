@@ -1,7 +1,26 @@
 #!/usr/bin/env bash
-# Story 2.1 — budget de premier chargement de la page d'accueil (< 300 Kio).
-# Unité : KIBIoctet (1 Kio = 1024 octets), soit 307 200 octets. Les marges
-# annoncées dans les rapports de story se lisent avec cette unité.
+# Budget de premier chargement de la page d'accueil. Unité : KIBIoctet
+# (1 Kio = 1024 octets). Le script rend DEUX verdicts, tous deux bloquants :
+#
+#   1. POIDS RÉEL (≤ 350 Kio) — tout ce que le navigateur télécharge
+#      vraiment, mesuré par Chrome via scripts/mesure-chargement.mjs.
+#   2. CHEMIN CRITIQUE (≤ 300 Kio) — ce que le HTML référence, donc ce qui
+#      bloque le premier rendu. C'est la mesure historique des stories 2.1
+#      et 2.4, conservée telle quelle.
+#
+# Pourquoi deux mesures (arbitrage du 2026-11-04) : le décompte du chemin
+# critique ne voit pas les polices tirées par @font-face depuis la feuille de
+# style. Une police pouvait donc sortir du budget par le simple retrait de son
+# <link rel="preload">, sans qu'un octet quitte la page — c'est arrivé à Barlow
+# Condensed 700 en story 9.6. Le poids réel ferme cette porte : les octets
+# comptent où qu'ils se cachent.
+#
+# Pourquoi 350 Kio et plus 300 : la mesure honnête a montré un socle
+# incompressible de 181 Kio (runtime d'App Router, HTML, RSC, CSS) sur lequel
+# le projet n'a aucune prise. Tenir 300 Kio en octets réels laissait moins de
+# 2 Kio de marge et aurait poussé à retoucher la charte typographique pour
+# gagner des miettes. Le seuil réel est donc fixé à 350 Kio, avec le chemin
+# critique maintenu à 300 Kio.
 #
 # Mesure déterministe sur un build frais (`pnpm build`, ou `pnpm budget`)
 # servi par `next start` :
@@ -14,14 +33,17 @@
 #     et les photos différées loading="lazy" sous la ligne de flottaison —
 #     le budget mesure le chemin mobile (640 ; léger upscale accepté sous
 #     le voile sur DPR ≥ 2).
-# Sortie : détail par ressource, total, verdict. Exit 1 si le seuil de 300 Kio
-# est dépassé, si une ressource est inaccessible ou si le contenu attendu est
-# absent (égide, CTA /connexion, chiffres officiels 2026).
+# Sortie : détail par ressource, totaux, verdicts. Exit 1 si l'un des deux
+# seuils est dépassé, si une ressource est inaccessible ou si le contenu
+# attendu est absent (égide, CTA /connexion, chiffres officiels 2026).
 #
 # Story 7.3 — mesure AUSSI /resultats (pare-chemin-critique de la carte) : le
 # HTML servi ne doit référencer NI leaflet NI une URL de tuile (la lib et son
 # CSS ne vivent que dans des chunks asynchrones chargés au clic « Afficher la
 # carte », qui doit être présent).
+#
+# Prérequis : Chrome ou Chromium pour le poids réel (présent sur les runners
+# ubuntu-latest ; sinon renseigner CHROME_BIN).
 #
 # Usage :
 #   pnpm budget                                      # build + mesure
@@ -32,7 +54,8 @@ set -euo pipefail
 
 PORT="${BUDGET_PORT:-3123}"
 BASE_URL="http://127.0.0.1:${PORT}"
-LIMIT_BYTES=$((300 * 1024)) # 300 Kio = 307 200 octets
+LIMIT_BYTES=$((300 * 1024))      # chemin critique : 300 Kio = 307 200 octets
+LIMIT_REEL_BYTES=$((350 * 1024)) # poids réel     : 350 Kio = 358 400 octets
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 SERVER_PID=""
@@ -135,13 +158,52 @@ while IFS= read -r chemin; do
 done < "${WORK}/assets.txt"
 
 echo "---------------------------------------------"
-printf 'Total : %s octets (%s Kio) — seuil %s Kio\n' "$TOTAL" "$((TOTAL / 1024))" "300"
+printf 'Chemin critique : %s octets (%s Kio) — seuil %s Kio\n' \
+  "$TOTAL" "$((TOTAL / 1024))" "300"
 
 DEPASSE=0
 if [ "$TOTAL" -gt "$LIMIT_BYTES" ]; then
-  echo "ÉCHEC : budget de premier chargement dépassé de $((TOTAL - LIMIT_BYTES)) octets."
+  echo "ÉCHEC : chemin critique dépassé de $((TOTAL - LIMIT_BYTES)) octets."
   DEPASSE=1
 fi
+
+# --- Poids réel : ce que le navigateur télécharge, polices @font-face comprises.
+echo
+echo "Page d'accueil — poids réel du premier chargement (Chrome, mobile 390 px)"
+echo "-------------------------------------------------------------------------"
+
+if ! node "${ROOT}/scripts/mesure-chargement.mjs" "${BASE_URL}/" > "${WORK}/reel.txt"; then
+  echo "Erreur : la mesure du poids réel a échoué (Chrome absent ? voir CHROME_BIN)." >&2
+  exit 1
+fi
+
+TOTAL_REEL=$(awk -F'\t' '$1 == "TOTAL" { print $2 }' "${WORK}/reel.txt")
+if [ -z "${TOTAL_REEL:-}" ]; then
+  echo "Erreur : la mesure du poids réel n'a rendu aucun total." >&2
+  exit 1
+fi
+
+# Détail lisible : les dix ressources les plus lourdes, déjà triées par la
+# mesure, puis le cumul par famille pour situer d'où vient le poids.
+printf '%9s  %-12s %s\n' "octets" "type" "ressource"
+grep -v '^TOTAL' "${WORK}/reel.txt" | head -10 | while IFS=$'\t' read -r octets type url; do
+  printf '%9s  %-12s %s\n' "$octets" "$type" "${url#"$BASE_URL"}"
+done
+
+echo "        —  cumul par type —"
+grep -v '^TOTAL' "${WORK}/reel.txt" \
+  | awk -F'\t' '{ somme[$2] += $1 } END { for (type in somme) printf "%9d  %s\n", somme[type], type }' \
+  | sort -rn
+
+echo "-------------------------------------------------------------------------"
+printf 'Poids réel : %s octets (%s Kio) — seuil %s Kio\n' \
+  "$TOTAL_REEL" "$((TOTAL_REEL / 1024))" "350"
+
+if [ "$TOTAL_REEL" -gt "$LIMIT_REEL_BYTES" ]; then
+  echo "ÉCHEC : poids réel dépassé de $((TOTAL_REEL - LIMIT_REEL_BYTES)) octets."
+  DEPASSE=1
+fi
+echo
 
 CONTENU_OK=1
 verifier_contenu() {
@@ -184,5 +246,6 @@ if [ "$DEPASSE" != "0" ] || [ "$CONTENU_OK" != "1" ] || [ "$CARTE_OK" != "1" ]; 
   exit 1
 fi
 
+echo "OK : poids réel et chemin critique sous leurs seuils respectifs."
 echo "OK : contenu attendu présent (égide, CTA /connexion, chiffres officiels 2026)."
 echo "OK : /resultats sans chunk carto dans le HTML initial (carte différée au clic)."
