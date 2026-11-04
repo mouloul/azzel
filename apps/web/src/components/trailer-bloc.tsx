@@ -105,11 +105,6 @@ export function TrailerBloc({
             site du Week-end Sportif Aït Aïssi.
           </video>
         )}
-        {muet ? (
-          <p className="aa-note">
-            La vidéo démarre sans le son : activez-le avec les commandes du lecteur.
-          </p>
-        ) : null}
       </div>
     );
   }
