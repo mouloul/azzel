@@ -874,6 +874,39 @@ main {
   color: var(--on-forest);
 }
 
+/* Recette du 04/11/2026 — .aa-h3 et le bloc trailer servaient à la seule page
+   /retour-en-images ; le teaser de l'accueil les partage désormais. Déplacés
+   ici VERBATIM depuis vitrine-textes.css (rendu inchangé, pas de duplication). */
+.aa-h3{font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading);margin:0 0 var(--space-3)}
+.aa-trailer{margin:0}
+.aa-trailer__poster{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-4);width:100%;min-height:72px;padding:var(--space-12) var(--space-6);aspect-ratio:16/9;border:2px solid transparent;border-radius:var(--radius-md);cursor:pointer;background:linear-gradient(160deg,var(--forest-600) 0%,var(--forest) 55%,var(--forest-800) 100%);color:var(--on-forest);font:inherit}
+.aa-trailer__poster:hover .aa-trailer__play{transform:scale(1.06)}
+/* WCAG 1.4.11 : var(--focus) ≈ 2,2:1 sur fond forêt — outline on-forest (pattern hero). */
+.aa-trailer__poster:focus-visible{outline:2px solid var(--on-forest);outline-offset:2px;box-shadow:0 0 0 4px var(--forest)}
+.aa-trailer__play{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:9999px;background:var(--vert-altitude);color:var(--forest);transition:transform .2s ease}
+.aa-trailer__play svg{display:block;margin-left:4px}
+.aa-trailer__libelle{margin:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--on-forest)}
+.aa-trailer__lecteur{display:block;width:100%;aspect-ratio:16/9;border:none;border-radius:var(--radius-md);background:var(--forest-800)}
+
+/* Sur la bande forêt, le titre suit le h2/lead (encre claire). */
+.vitrine-bande--foret .aa-h3 {
+  color: var(--on-forest);
+}
+
+/* Teaser de la bande bilan : le poster est lui aussi forêt — un filet le
+   détache du fond, et sa largeur reste celle d'une vidéo lisible. */
+.aa-bilan__teaser {
+  min-width: 0;
+}
+
+.aa-bilan__teaser .aa-h3 {
+  margin-bottom: var(--space-4);
+}
+
+.vitrine-bande--foret .aa-trailer__poster {
+  border-color: color-mix(in srgb, var(--on-forest) 35%, transparent);
+}
+
 /* ochre-300 sur forest-surface ne tient pas AA en sombre (≈3,35:1 à 14 px) :
    l'eyebrow de la bande forêt suit le h2/lead (on-forest). L'ochre du hero
    reste charte verbatim (proxy uni forest ≥ 4,5:1, voir contrastes.test.ts). */
@@ -910,10 +943,32 @@ main {
   padding-block: var(--space-12);
 }
 
+/* Deux colonnes : l'éditorial chiffré, puis le teaser. Sous 900 px, l'un sous
+   l'autre — les chiffres d'abord, ils portent le propos. */
+.aa-bilan__grille {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--space-12);
+  row-gap: var(--space-10);
+  align-items: start;
+}
+
+@media (max-width: 899.98px) {
+  .aa-bilan__grille {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.aa-bilan__texte {
+  min-width: 0;
+}
+
+/* Deux par deux plutôt qu'en rang unique : la colonne est deux fois plus
+   étroite, et quatre chiffres à la file y seraient illisibles. */
 .aa-bilan__rail {
   display: grid;
-  gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-6) var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: var(--space-8) 0 0;
 }
 
@@ -933,7 +988,7 @@ main {
   grid-row: 1;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(32px, 4.5vw, 44px);
+  font-size: clamp(30px, 3.4vw, 40px);
   line-height: 1;
   color: var(--ochre-300);
 }
@@ -949,6 +1004,8 @@ main {
 .aa-bilan__stat > dd + dd {
   grid-row: 3;
   margin-top: 2px;
+  font-family: var(--font-body);
+  font-weight: 400;
   font-size: 13px;
   color: var(--on-forest);
 }
@@ -1350,7 +1407,7 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
     "crete rail"
     "meta rail"
     "actions rail";
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
   column-gap: var(--space-8);
   align-content: center;
   width: 100%;
@@ -1380,11 +1437,27 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
    de date et le badge des épreuves. Paires dt/dd directes (une paire = une
    cellule) ; les cloisons, décoratives, n'ont aucun seuil 1.4.11. Textes
    on-forest sur le socle du bloc (≥ 8,39:1, mesuré story 9.2). */
+/* Recette du 04/11/2026 — le rail était un tableau à quatre cases cloisonnées,
+   toutes de même poids. Fiche vitrée à la place : fond forêt translucide flouté,
+   date en vedette avec crête ocre, les trois autres clés sur une rangée. Aucune
+   cloison interne. Le fond est plus sombre que --forest : la paire tenue en test
+   (ochre-300 / forest, on-forest / forest) reste un proxy pessimiste. */
 .aa-hero__rail {
   grid-area: rail;
   align-self: center;
   margin: 0;
+  padding: var(--az-space-5);
   border: 1px solid var(--cloison);
+  border-radius: var(--az-rayon-md);
+  background: color-mix(in srgb, var(--forest-800) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+/* Repli sans backdrop-filter (Firefox ancien, économie d'énergie) : fond plein. */
+@supports not (backdrop-filter: blur(10px)) {
+  .aa-hero__rail {
+    background: var(--forest-800);
+  }
 }
 
 .aa-hero__rail dt,
@@ -1392,26 +1465,70 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
   margin: 0;
 }
 
-.aa-hero__rail dd + dt {
-  border-top: 1px solid var(--cloison);
-}
-
 .aa-hero__rail dt {
-  padding: var(--az-space-4) var(--az-space-5) 0;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--on-forest);
+  color: var(--ochre-300);
 }
 
 .aa-hero__rail dd {
-  padding: 0 var(--az-space-5) var(--az-space-4);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 22px;
   line-height: 1.15;
   color: var(--on-forest);
+}
+
+.aa-hero__rail-vedette dd {
+  margin-top: var(--az-space-2);
+  font-size: clamp(26px, 2.6vw, 32px);
+}
+
+/* Rang de l'édition : au-dessus de la date, en corps de texte — la date
+   porte seule le poids d'affiche. */
+.aa-hero__rang {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--on-forest);
+}
+
+/* Crête : rappel du trait sous le titre, non textuel (3:1 suffit). */
+.aa-hero__rail-vedette::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 3px;
+  margin-top: var(--az-space-4);
+  background: var(--ochre-300);
+}
+
+.aa-hero__rail-cles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--az-space-5) var(--az-space-4);
+  margin-top: var(--az-space-5);
+}
+
+/* Sous 560 px, trois colonnes couperaient « Stade Agni Lhoudh » en bouillie :
+   les clés se replient d'elles-mêmes. */
+@media (max-width: 560px) {
+  .aa-hero__rail-cles {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  }
+}
+
+.aa-hero__cle dt {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.aa-hero__cle dd {
+  margin-top: var(--az-space-1);
+  font-size: 16px;
 }
 
 .aa-hero--plein .aa-hero__meta {

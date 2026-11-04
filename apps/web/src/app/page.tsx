@@ -11,12 +11,22 @@ import {
 } from '@/components/glyphes-piliers';
 import { SectionPartenaires } from '@/components/section-partenaires';
 import { SectionParcours } from '@/components/section-parcours';
+import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { getSectionParcours } from '@/modules/contenus/section-parcours';
+import { resolveTrailerPlayer } from '@/modules/retour-images/domain';
+import { getRetourImagesPage } from '@/modules/retour-images/service';
 import { getPartenairesSection } from '@/modules/sponsors/service';
 
 
 const PHOTOS = '/charte/photos-2026';
+
+/**
+ * Teaser de l'accueil : lien PROVISOIRE, posé en recette du 04/11/2026 en
+ * attendant le montage définitif. Dès qu'une adresse est enregistrée dans
+ * /admin/retour-images, c'est elle qui l'emporte — ce lien n'est qu'un repli.
+ */
+const TEASER_PROVISOIRE = 'https://youtu.be/ZLqzyLtao7A';
 
 const PILIERS = [
   {
@@ -55,11 +65,15 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [telephone, partenaires, parcours] = await Promise.all([
+  const [telephone, partenaires, parcours, retourImages] = await Promise.all([
     readAssistancePhone(),
     getPartenairesSection(),
     getSectionParcours(),
+    getRetourImagesPage(),
   ]);
+  // La vidéo de l'admin prime ; sans elle, le teaser provisoire. Le bloc ne
+  // charge rien avant le clic : le budget de premier chargement est intact.
+  const teaser = retourImages.trailer ?? resolveTrailerPlayer(TEASER_PROVISOIRE);
 
   return (
     <>
@@ -90,15 +104,31 @@ export default async function HomePage() {
             Week-end Sportif <em>Aït Aïssi</em>
           </h1>
           <Crete />
+          {/* Recette du 04/11/2026 : les quatre clés formaient un tableau cloisonné
+              sans hiérarchie. La date passe en vedette (crête ocre dessous), les trois
+              autres clés suivent sur une rangée — mêmes faits, même ordre. */}
           <dl className="aa-hero__rail">
-            <dt>Date</dt>
-            <dd>2ᵉ édition — printemps 2027</dd>
-            <dt>Épreuves</dt>
-            <dd>35 km · 12 km</dd>
-            <dt>Départ</dt>
-            <dd>Stade Agni Lhoudh</dd>
-            <dt>Cadre</dt>
-            <dd>Forêt de Yakouren</dd>
+            <div className="aa-hero__rail-vedette">
+              <dt>Date</dt>
+              <dd>
+                <span className="aa-hero__rang">2ᵉ édition</span>
+                Printemps 2027
+              </dd>
+            </div>
+            <div className="aa-hero__rail-cles">
+              <div className="aa-hero__cle">
+                <dt>Épreuves</dt>
+                <dd>35 km · 12 km</dd>
+              </div>
+              <div className="aa-hero__cle">
+                <dt>Départ</dt>
+                <dd>Stade Agni Lhoudh</dd>
+              </div>
+              <div className="aa-hero__cle">
+                <dt>Cadre</dt>
+                <dd>Forêt de Yakouren</dd>
+              </div>
+            </div>
           </dl>
           {/* Accroche (recette 04/11/2026) : la phrase descriptive ne disait rien
               que le rail ne dise déjà. Elle s’appuie désormais sur la première
@@ -123,35 +153,53 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Bilan 2026 — recomposition (recette du 04/11/2026) : les quatre chiffres
+          s'étalaient sur toute la largeur en laissant un vide à droite, et le teaser
+          tombait dessous en pleine largeur. Deux colonnes maintenant : l'éditorial
+          chiffré à gauche, le teaser à droite, dans la même respiration. */}
       <section
         className="vitrine-bande vitrine-bande--foret aa-bilan"
         aria-labelledby="titre-bilan-2026"
       >
-        <div className="aa-section">
-          <p className="aa-eyebrow">Bilan 2026</p>
-          <h2 className="aa-h2" id="titre-bilan-2026">
-            Une première édition réussie
-          </h2>
-          <dl className="aa-bilan__rail">
-            <div className="aa-bilan__stat">
-              <dt>Inscrits</dt>
-              <dd>279</dd>
+        <div className="aa-section aa-bilan__grille">
+          <div className="aa-bilan__texte">
+            <p className="aa-eyebrow">Bilan 2026</p>
+            <h2 className="aa-h2" id="titre-bilan-2026">
+              Une première édition réussie
+            </h2>
+            <dl className="aa-bilan__rail">
+              <div className="aa-bilan__stat">
+                <dt>Inscrits</dt>
+                <dd>279</dd>
+              </div>
+              <div className="aa-bilan__stat">
+                <dt>Dossards distribués</dt>
+                <dd>222</dd>
+              </div>
+              <div className="aa-bilan__stat">
+                <dt>Finishers au trail</dt>
+                <dd>214</dd>
+                <dd>dont 36 femmes</dd>
+              </div>
+              <div className="aa-bilan__stat">
+                <dt>Enfants à la Course Kids</dt>
+                <dd>116</dd>
+              </div>
+            </dl>
+            <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
+          </div>
+
+          {/* Teaser 2026 : images de la première édition, à côté des chiffres
+              qu'elles illustrent. Même bloc que /retour-en-images — rien n'est
+              chargé avant le clic. */}
+          {teaser !== null ? (
+            <div className="aa-bilan__teaser">
+              <h3 className="aa-h3" id="titre-teaser-2026">
+                Le teaser de la première édition
+              </h3>
+              <TrailerBloc player={teaser} />
             </div>
-            <div className="aa-bilan__stat">
-              <dt>Dossards distribués</dt>
-              <dd>222</dd>
-            </div>
-            <div className="aa-bilan__stat">
-              <dt>Finishers au trail</dt>
-              <dd>214</dd>
-              <dd>dont 36 femmes</dd>
-            </div>
-            <div className="aa-bilan__stat">
-              <dt>Enfants à la Course Kids</dt>
-              <dd>116</dd>
-            </div>
-          </dl>
-          <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
+          ) : null}
         </div>
       </section>
 

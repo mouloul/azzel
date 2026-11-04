@@ -412,9 +412,12 @@ describe('contrastes WCAG — poster trailer (story 2.5)', () => {
     ).toBeGreaterThanOrEqual(SEUIL_NON_TEXTUEL);
   });
 
-  it('vitrine-textes.css sert exactement les variables charte du poster (story 9.1)', () => {
+  // Recette du 04/11/2026 : le bloc trailer a quitté vitrine-textes.css pour
+  // globals.css — l'accueil le partage avec /retour-en-images. Règles déplacées
+  // verbatim, mêmes variables exigées, même garde.
+  it('globals.css sert exactement les variables charte du poster (story 9.1)', () => {
     const css = readFileSync(
-      fileURLToPath(new URL('./vitrine-textes.css', import.meta.url)),
+      fileURLToPath(new URL('./globals.css', import.meta.url)),
       'utf8',
     );
     const poster = extraireRegle(css, '.aa-trailer__poster');

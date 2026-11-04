@@ -19,7 +19,8 @@
 | 1.5 | CTA « S'inscrire » | Mène à /connexion?parcours=inscription (écran « Créer mon compte ») ; bouton « Appeler l'équipe » visible avec numéro |
 | 1.6 | JS désactivé | Contenu complet lisible (page serveur) |
 | 1.7 | 360 px | Une colonne, symbole seul dans l'en-tête, aucun scroll horizontal |
-| 1.8 | Lire le rail de chiffres du hero | Exactement quatre entrées : Date « 2ᵉ édition — printemps 2027 » (la date exacte n’est pas publique), Épreuves « 35 km · 12 km », Départ « Stade Agni Lhoudh », Cadre « Forêt de Yakouren » — ni dénivelé, ni altitude, ni horaires : les tracés 2027 ne sont pas confirmés |
+| 1.8 | Lire la fiche de clés du hero (carte vitrée) | Quatre clés, la date en vedette : **Date** — « 2ᵉ édition » en petit puis « Printemps 2027 » en grand, crête ocre dessous ; puis sur une rangée Épreuves « 35 km · 12 km », Départ « Stade Agni Lhoudh », Cadre « Forêt de Yakouren ». Aucune date exacte, ni dénivelé, ni altitude, ni horaires |
+| 1.8bis | Descendre à « Bilan 2026 » | Sous les chiffres, un bloc « Le teaser de la première édition » : poster vert avec pastille de lecture et la mention « La vidéo se charge uniquement quand vous cliquez ». Cliquer : la vidéo YouTube se monte et démarre. Avant le clic, aucune requête vers YouTube (onglet Réseau) |
 | 1.9 | Descendre à la section « Les parcours » (titre « Comparer les deux trails ») | Section placée après les photos de la section épreuves : deux boutons d'épreuve (« La Longue », « La Moyenne ») ; « La Longue » affichée par défaut, sa fiche montre la Distance (35 km) et le lien « Télécharger le tracé GPX » |
 | 1.10 | Cliquer le bouton « La Moyenne » | La fiche devient celle de La Moyenne (Distance 12 km, son propre lien GPX) sans rechargement de page ; recliquer « La Longue » réaffiche la première fiche |
 | 1.11 | Désactiver JavaScript puis recharger `/` | Le sélecteur fonctionne toujours : cocher une épreuve affiche sa fiche (mécanisme natif sans script), la section reste lisible |
