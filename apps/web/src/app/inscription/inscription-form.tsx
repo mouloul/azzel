@@ -175,7 +175,23 @@ export function InscriptionForm({
         }
         return;
       }
-      router.replace('/espace-coureur');
+      // Le serveur dit où aller : la première pièce non faite du dossier.
+      // Chemin interne uniquement — une valeur inattendue ne doit pas servir
+      // de redirection.
+      let suite = '/espace-coureur';
+      try {
+        const charge = (await response.json()) as { prochaineEtape?: unknown };
+        if (
+          typeof charge.prochaineEtape === 'string' &&
+          charge.prochaineEtape.startsWith('/') &&
+          !charge.prochaineEtape.startsWith('//')
+        ) {
+          suite = charge.prochaineEtape;
+        }
+      } catch {
+        // Réponse illisible : le dossier est enregistré, on retombe sur l'espace.
+      }
+      router.replace(suite);
     } catch {
       setServerError(NETWORK_ERROR);
     } finally {
@@ -502,8 +518,17 @@ export function InscriptionForm({
             {/* Barre d'envoi collante : le formulaire fait plus d'un écran,
                 et le bouton ne doit pas obliger à redescendre tout en bas. */}
             <div className="dossier-envoi">
+              <p className="dossier-envoi__suite">
+                {state.coureur
+                  ? 'Tes modifications sont enregistrées ; tu retrouves ensuite ton dossier là où il en est.'
+                  : 'Étape suivante : la décharge et le règlement à accepter.'}
+              </p>
               <button type="submit" className="btn-action" disabled={pending}>
-                {pending ? 'Envoi…' : state.coureur ? 'Enregistrer les modifications' : 'Valider mon inscription'}
+                {pending
+                  ? 'Envoi…'
+                  : state.coureur
+                    ? 'Enregistrer les modifications'
+                    : 'Valider et continuer'}
               </button>
             </div>
           </form>

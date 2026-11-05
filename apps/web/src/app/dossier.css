@@ -390,3 +390,13 @@
   border-radius: var(--az-radius-full);
   background: var(--surface-raised);
 }
+
+/* Ce qui attend après l'envoi, écrit au-dessus du bouton : sans cela,
+   « Valider » se lit comme une fin de parcours alors qu'il reste trois
+   étapes. */
+.dossier-envoi__suite {
+  margin: 0 0 var(--az-space-3);
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}

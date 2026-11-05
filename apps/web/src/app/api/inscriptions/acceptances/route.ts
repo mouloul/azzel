@@ -16,7 +16,12 @@ import {
   toAcceptancesApiError,
   type ApiError,
 } from '@/modules/inscriptions/errors';
-import { acceptDocuments, getAcceptancesState } from '@/modules/inscriptions/service';
+import { prochaineEtapeCoureur } from '@/modules/inscriptions/prochaine-etape';
+import {
+  acceptDocuments,
+  getAcceptancesState,
+  getChecklistState,
+} from '@/modules/inscriptions/service';
 
 const MAX_BODY_BYTES = 32_768;
 
@@ -86,10 +91,24 @@ export async function POST(request: NextRequest) {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     return errorResponse(toAcceptancesApiError(new InvalidBodyError()));
   }
+  let acceptances: Awaited<ReturnType<typeof acceptDocuments>>;
   try {
-    const acceptances = await acceptDocuments(authenticated.session, body);
-    return NextResponse.json({ ok: true, acceptances });
+    acceptances = await acceptDocuments(authenticated.session, body);
   } catch (error) {
     return errorResponse(toAcceptancesApiError(error));
   }
+  // Même logique qu'après l'inscription : on mène à la pièce suivante plutôt
+  // que de renvoyer au tableau de bord. Les acceptations sont déjà écrites,
+  // une panne de lecture ne doit pas faire croire à un échec.
+  let prochaineEtape = '/espace-coureur';
+  try {
+    const etat = await getChecklistState(authenticated.session);
+    prochaineEtape = prochaineEtapeCoureur(etat?.pieces ?? []);
+  } catch (error) {
+    console.warn(
+      '[inscriptions] étape suivante indéterminée après acceptation :',
+      error instanceof Error ? error.message : error,
+    );
+  }
+  return NextResponse.json({ ok: true, acceptances, prochaineEtape });
 }

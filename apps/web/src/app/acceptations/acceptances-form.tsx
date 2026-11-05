@@ -94,7 +94,21 @@ export function AcceptancesForm({
         }
         return;
       }
-      router.replace('/espace-coureur');
+      // Le serveur indique la pièce suivante ; chemin interne uniquement.
+      let suite = '/espace-coureur';
+      try {
+        const charge = (await response.json()) as { prochaineEtape?: unknown };
+        if (
+          typeof charge.prochaineEtape === 'string' &&
+          charge.prochaineEtape.startsWith('/') &&
+          !charge.prochaineEtape.startsWith('//')
+        ) {
+          suite = charge.prochaineEtape;
+        }
+      } catch {
+        // Réponse illisible : les acceptations sont enregistrées.
+      }
+      router.replace(suite);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
         setServerError(TIMEOUT_ERROR);
