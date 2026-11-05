@@ -82,6 +82,13 @@ const CONNECTION_ERROR_CODES = new Set([
   'ENOTFOUND',
   'ETIMEDOUT',
   'EAI_AGAIN',
+  // SQLSTATE côté serveur : délai dépassé (57014), arrêt (57P01), démarrage
+  // (57P03), connexions saturées (53300). La base ne répond pas : la vitrine
+  // se dégrade au lieu de faire échouer le prérendu de l'accueil au build.
+  '57014',
+  '57P01',
+  '57P03',
+  '53300',
 ]);
 
 const CONNECTION_ERROR_PATTERN =
