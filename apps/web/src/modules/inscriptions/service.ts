@@ -62,6 +62,8 @@ export interface CoureurSummary {
   dateNaissance: string;
   tailleTshirt: string;
   genre: string | null;
+  /** ISO, ou null si aucune échéance (liste d'attente). */
+  preuveDueAt: string | null;
   age: number;
   categorie: AgeCategory;
   status: string;
@@ -136,6 +138,7 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
     dateNaissance: record.dateNaissance,
     tailleTshirt: record.tailleTshirt,
     genre: record.genre,
+    preuveDueAt: record.preuveDueAt?.toISOString() ?? null,
     age: record.age,
     categorie: record.categorieAge as AgeCategory,
     status: record.status,

@@ -7,6 +7,7 @@ import { readAssistancePhone } from '@/lib/assistance-phone';
 
 import {
   COUREUR_STATUS_LISTE_ATTENTE,
+  FUSEAU_COURSE,
   STATUTS_MODIFIABLES,
   formatDateFrUtc,
 } from '@/modules/inscriptions/domain';
@@ -135,11 +136,28 @@ export default async function InscriptionPage() {
 
   const places = await getPlacesState(result.session.organisationId);
   const enAttente = state.coureur?.status === COUREUR_STATUS_LISTE_ATTENTE;
+  // Échéance rendue à l'heure de la course : l'instant est stocké en UTC,
+  // mais le coureur vit à Alger — lui afficher 22h59 le ferait rater d'une heure.
+  const echeance =
+    state.coureur?.preuveDueAt != null
+      ? new Intl.DateTimeFormat('fr-FR', {
+          dateStyle: 'full',
+          timeStyle: 'short',
+          timeZone: FUSEAU_COURSE,
+        }).format(new Date(state.coureur.preuveDueAt))
+      : null;
 
   return (
     <InscriptionForm state={state} assistancePhone={assistancePhone}>
       <FilEtapes etapes={etapesInscription(state.coureur)} />
       <CompteurPlaces places={places} />
+      {echeance !== null ? (
+        <p className="encart-echeance" role="status">
+          Ta place est réservée. Dépose ta preuve de paiement avant le
+          <strong> {echeance}</strong> : passé ce délai, l’inscription expire et
+          la place repart aux autres coureurs.
+        </p>
+      ) : null}
       {enAttente ? (
         <p className="encart-attente" role="status">
           Les dossards sont tous pris : ton inscription est enregistrée en

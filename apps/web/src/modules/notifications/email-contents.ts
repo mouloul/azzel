@@ -7,6 +7,8 @@ export const NOTIFICATION_TYPES = [
   'dossier_refuse',
   'invitation_volontaire',
   'rappel_j7',
+  'rappel_preuve',
+  'inscription_expiree',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -45,7 +47,22 @@ export type NotificationPayload =
   | DossierValidePayload
   | DossierRefusePayload
   | InvitationVolontairePayload
-  | RappelJ7Payload;
+  | RappelJ7Payload
+  | RappelPreuvePayload
+  | InscriptionExpireePayload;
+
+/** Rappel de la veille : la limite est un instant ISO, rendu à l'heure d'Alger. */
+export interface RappelPreuvePayload {
+  coureurId: string;
+  prenom: string;
+  limite: string;
+}
+
+export interface InscriptionExpireePayload {
+  coureurId: string;
+  prenom: string;
+  edition: string;
+}
 
 export const DEFAULT_APP_URL = 'http://localhost:3000';
 
@@ -120,6 +137,31 @@ export const INVITATION_VOLONTAIRE_SUBJECT = 'Azzel — ton accès volontaire';
 
 export const RAPPEL_J7_SUBJECT = 'Ta course approche — prépare ta batterie';
 
+export const RAPPEL_PREUVE_SUBJECT = 'Azzel — ta place t’attend encore jusqu’à demain';
+
+export const INSCRIPTION_EXPIREE_SUBJECT = 'Azzel — ton inscription a expiré';
+
+/**
+ * Échéance rendue à l'heure d'Alger : l'instant est stocké en UTC, mais le
+ * coureur vit à l'heure de la course. Lui écrire « 22h59 » le ferait rater
+ * d'une heure.
+ */
+function formaterEcheanceAlger(iso: string): string | null {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) {
+    return null;
+  }
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Africa/Algiers',
+    }).format(instant);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Story 6.4 — date de course `YYYY-MM-DD` en français lisible, ou NULL si la
  * date est invalide/inexistante (aller-retour : 2027-02-31 est rejeté, pas
@@ -145,6 +187,52 @@ export function buildNotificationEmail(
   payload: NotificationPayload,
   options: NotificationEmailOptions,
 ): BuiltNotificationEmail {
+  if (type === 'rappel_preuve') {
+    const rappel = payload as RappelPreuvePayload;
+    const echeance = formaterEcheanceAlger(rappel.limite);
+    return {
+      subject: RAPPEL_PREUVE_SUBJECT,
+      text: [
+        `Salut ${rappel.prenom},`,
+        '',
+        'Ta place est réservée, mais ta preuve de paiement manque encore.',
+        // Limite illisible en base : phrase de repli honnête plutôt qu'une
+        // date vide qui ferait douter de l'échéance elle-même.
+        echeance === null
+          ? 'Elle doit être déposée avant la fin de ton délai, sinon ta place repart.'
+          : `Dépose-la avant le ${echeance}, sinon ta place repart aux autres coureurs.`,
+        '',
+        'Déposer ma preuve :',
+        options.espaceCoureurUrl,
+        '',
+        `Une question ? Appelle l’équipe : ${options.assistancePhone}`,
+        '',
+        'À bientôt,',
+        'L’équipe Azzel',
+      ].join('\n'),
+    };
+  }
+
+  if (type === 'inscription_expiree') {
+    const expiree = payload as InscriptionExpireePayload;
+    return {
+      subject: INSCRIPTION_EXPIREE_SUBJECT,
+      text: [
+        `Salut ${expiree.prenom},`,
+        '',
+        `Faute de preuve de paiement dans le délai, ton inscription à ${expiree.edition} a expiré et ta place a été rendue.`,
+        '',
+        'Rien n’est perdu : s’il reste des places, tu peux t’inscrire de nouveau.',
+        options.connexionUrl,
+        '',
+        `Si tu as versé à temps, appelle l’équipe : ${options.assistancePhone}`,
+        '',
+        'À bientôt,',
+        'L’équipe Azzel',
+      ].join('\n'),
+    };
+  }
+
   if (type === 'rappel_j7') {
     const rappel = payload as RappelJ7Payload;
     const dateLisible = formaterDateCourseFr(rappel.dateCourse);

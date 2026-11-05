@@ -37,11 +37,14 @@ export const COUREUR_STATUS_REFUSE = 'refusé';
 
 export const COUREUR_STATUS_LISTE_ATTENTE = 'liste d’attente';
 
+export const COUREUR_STATUS_EXPIREE = 'expirée';
+
 export const COUREUR_STATUSES = [
   COUREUR_STATUS_EN_CONSTITUTION,
   COUREUR_STATUS_VALIDE,
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_LISTE_ATTENTE,
+  COUREUR_STATUS_EXPIREE,
 ] as const;
 
 /**
@@ -94,6 +97,114 @@ export function statutInitial(restantes: number): string {
   return restantes > 0 ? COUREUR_STATUS_EN_CONSTITUTION : COUREUR_STATUS_LISTE_ATTENTE;
 }
 
+/** Fuseau de la course : toutes les échéances se lisent à l'heure d'Alger. */
+export const FUSEAU_COURSE = 'Africa/Algiers';
+
+/**
+ * Décalage du fuseau de la course, en minutes, à un instant donné.
+ *
+ * Calculé via Intl plutôt qu'en dur (+1) : l'Algérie n'applique pas l'heure
+ * d'été aujourd'hui, mais une règle écrite en dur deviendrait fausse en
+ * silence si cela changeait, et l'erreur ne se verrait qu'un jour de bascule.
+ */
+function decalageFuseauMinutes(instant: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: FUSEAU_COURSE,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const lire = (type: string): number =>
+    Number(parts.find((part) => part.type === type)?.value ?? '0');
+  // `hour` vaut 24 à minuit dans certaines implémentations hour12: false.
+  const heure = lire('hour') % 24;
+  const mural = Date.UTC(
+    lire('year'),
+    lire('month') - 1,
+    lire('day'),
+    heure,
+    lire('minute'),
+    lire('second'),
+  );
+  // L'heure murale lue n'a qu'une précision à la seconde : comparer à
+  // l'instant SANS ses millisecondes, sinon le décalage traîne une erreur de
+  // presque une seconde qui ressort dans chaque échéance calculée.
+  const instantSecondes = Math.floor(instant.getTime() / 1000) * 1000;
+  return (mural - instantSecondes) / 60_000;
+}
+
+/** Instant correspondant à une heure murale d'Alger (an, mois, jour, h, min…). */
+function instantAlger(
+  annee: number,
+  mois: number,
+  jour: number,
+  heures: number,
+  minutes: number,
+  secondes: number,
+  millisecondes: number,
+): Date {
+  const mural = Date.UTC(annee, mois - 1, jour, heures, minutes, secondes, millisecondes);
+  // Première estimation avec le décalage du moment, puis correction : si
+  // l'estimation tombe de l'autre côté d'un changement d'heure, le décalage
+  // lu à cet instant-là est le bon.
+  const approx = new Date(mural - decalageFuseauMinutes(new Date(mural)) * 60_000);
+  return new Date(mural - decalageFuseauMinutes(approx) * 60_000);
+}
+
+/** Date civile (année, mois, jour) d'un instant, lue à l'heure d'Alger. */
+function dateCivileAlger(instant: Date): [number, number, number] {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSEAU_COURSE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant);
+  const lire = (type: string): number =>
+    Number(parts.find((part) => part.type === type)?.value ?? '0');
+  return [lire('year'), lire('month'), lire('day')];
+}
+
+/**
+ * Date limite de dépôt de la preuve : fin du jour J+`delaiJours`, à l'heure
+ * d'Alger. Inscrit mercredi 13h avec un délai de 2 jours → vendredi 23:59:59.
+ *
+ * Le jour de référence est le jour CIVIL LOCAL de l'inscription, pas le jour
+ * UTC : une inscription à 00:30 heure d'Alger tombe la veille en UTC, et
+ * compter en UTC lui volerait un jour.
+ *
+ * Cette limite est figée à l'inscription et jamais recalculée : une échéance
+ * qui bouge parce qu'on a corrigé son numéro de téléphone serait injuste et
+ * intestable.
+ */
+export function limitePreuve(inscritLe: Date, delaiJours: number): Date {
+  const [annee, mois, jour] = dateCivileAlger(inscritLe);
+  // Arithmétique civile en UTC : Date.UTC gère les fins de mois, les années
+  // bissextiles et les passages d'année sans cas particulier.
+  const cible = new Date(Date.UTC(annee, mois - 1, jour + delaiJours));
+  return instantAlger(
+    cible.getUTCFullYear(),
+    cible.getUTCMonth() + 1,
+    cible.getUTCDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+}
+
+/**
+ * La limite est INCLUSE : à 23:59:59.999 pile, le dossier est encore dans les
+ * temps. Une limite absente ne fait jamais expirer — on ne libère pas une
+ * place sur une donnée manquante.
+ */
+export function estExpiree(limite: Date | null, maintenant: Date): boolean {
+  return limite !== null && maintenant.getTime() > limite.getTime();
+}
+
 export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
 
 export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
@@ -101,6 +212,7 @@ export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_VALIDE]: 'Validé',
   [COUREUR_STATUS_REFUSE]: 'Refusé',
   [COUREUR_STATUS_LISTE_ATTENTE]: 'Liste d’attente',
+  [COUREUR_STATUS_EXPIREE]: 'Expirée',
 };
 
 /** M2 (revue épopée 10) — limite de la liste admin, vit ICI (domaine pur)
@@ -119,6 +231,9 @@ export const PASTILLE_STATUT: Record<CoureurStatus, string> = {
   // En attente d'une place : ni acquis, ni refusé — le même langage visuel que
   // l'attente de synchronisation, pas celui d'un problème à corriger.
   [COUREUR_STATUS_LISTE_ATTENTE]: 'socle-pastille--sync-attente',
+  // Expirée faute de preuve : un fait, pas une faute de l'organisation ni un
+  // refus motivé — le même registre neutre que l'attente.
+  [COUREUR_STATUS_EXPIREE]: 'socle-pastille--sync-attente',
 };
 
 export function canDepositPreuve(status: string): boolean {

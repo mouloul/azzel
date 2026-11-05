@@ -208,3 +208,15 @@
   line-height: 1.5;
   color: var(--az-texte);
 }
+
+/* Échéance de dépôt : même traitement que l'encart d'attente, filet d'accent —
+   c'est une information datée à ne pas manquer, pas une alerte. */
+.encart-echeance {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-action);
+  background: var(--az-surface);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}

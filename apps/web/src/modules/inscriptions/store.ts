@@ -17,6 +17,8 @@ import {
   COUREUR_STATUS_EN_CONSTITUTION,
   COUREUR_STATUS_VALIDE,
   STATUTS_MODIFIABLES,
+  COUREUR_STATUS_EXPIREE,
+  limitePreuve,
   STATUTS_OCCUPANT_UNE_PLACE,
   placesRestantes,
   statutInitial,
@@ -37,6 +39,13 @@ import {
   RefusalReasonRequiredError,
   type PieceDossier,
 } from './errors';
+
+export interface BilanExpiration {
+  /** Dossiers passés en « expirée » par CE passage, jamais les précédents. */
+  expirees: number;
+  /** Emails d'expiration réellement enfilés (les doublons sont absorbés). */
+  emailsEnfiles: number;
+}
 
 export interface EditionRecord {
   id: string;
@@ -88,6 +97,9 @@ export interface CoureurRecord {
   tailleTshirt: string;
   /** Nullable : les inscriptions anterieures a la demande du genre n'en portent pas. */
   genre: string | null;
+  /** Échéance de dépôt de la preuve, figée à l'inscription. Null en liste d'attente. */
+  preuveDueAt: Date | null;
+  expiredAt: Date | null;
   age: number;
   categorieAge: string;
   status: string;
@@ -263,6 +275,8 @@ export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;
   countPlacesOccupees(editionId: string, organisationId: string): Promise<number>;
   readDefaultOrgPlaces(): Promise<{ capacite: number; seuil: number; occupees: number } | null>;
+  expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration>;
+  enfilerRappelsPreuve(maintenant: Date): Promise<number>;
   listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]>;
   findDocuments(organisationId: string): Promise<DocumentRecord[]>;
   findCoureurByAccount(
@@ -363,6 +377,8 @@ interface CoureurRow {
   birth_date: string;
   tshirt_size: string;
   genre: string | null;
+  preuve_due_at: Date | null;
+  expired_at: Date | null;
   age: number;
   age_category: string;
   status: string;
@@ -434,6 +450,8 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     dateNaissance: row.birth_date,
     tailleTshirt: row.tshirt_size,
     genre: row.genre,
+    preuveDueAt: row.preuve_due_at,
+    expiredAt: row.expired_at,
     age: row.age,
     categorieAge: row.age_category,
     status: row.status,
@@ -456,6 +474,7 @@ const COUREUR_COLUMNS = `
   c.first_name, c.last_name, c.phone,
   c.emergency_contact_name, c.emergency_contact_phone,
   c.birth_date::text AS birth_date, c.tshirt_size, c.genre, c.age, c.age_category, c.status,
+  c.preuve_due_at, c.expired_at,
   c.dossard, c.jeton_edossard, c.refusal_reason, c.decided_by, c.decided_at,
   c.decharge_accepted_at, c.decharge_version,
   c.reglement_accepted_at, c.reglement_version,
@@ -592,6 +611,131 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       });
     },
 
+    /**
+     * Passe en « expirée » tout dossier qui tient une place sans avoir déposé
+     * sa preuve avant son échéance, et rend la place.
+     *
+     * La règle porte sur le DÉPÔT de la preuve, pas sur sa validation : un
+     * dossier déposé à temps ne saute pas parce que personne ne l'a encore
+     * regardé. Un dossier sans échéance (liste d'attente, inscription
+     * antérieure à la règle) n'expire jamais — on ne libère pas une place sur
+     * une donnée manquante.
+     *
+     * Idempotent : le filtre sur `status = 'en constitution'` fait qu'un
+     * second passage ne retrouve plus les lignes du premier, et l'index unique
+     * partiel absorbe un éventuel doublon d'email.
+     */
+    async expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration> {
+      return withDb(async () => {
+        const organisationIds = await sql<{ id: string }[]>`SELECT id FROM organisation`;
+        let expirees = 0;
+        let emailsEnfiles = 0;
+        for (const { id: organisationId } of organisationIds) {
+          const bilan = await withOrg(sql, organisationId, async (tx) => {
+            const lignes = await tx<
+              { id: string; email: string; first_name: string; edition_nom: string }[]
+            >`
+              UPDATE coureur AS c
+              SET status = ${COUREUR_STATUS_EXPIREE},
+                  expired_at = ${maintenant},
+                  updated_at = now()
+              FROM account AS a, edition AS e
+              WHERE c.account_id = a.id
+                AND c.edition_id = e.id
+                AND c.organisation_id = ${organisationId}
+                AND c.status = ${COUREUR_STATUS_EN_CONSTITUTION}
+                AND c.preuve_due_at IS NOT NULL
+                AND c.preuve_due_at < ${maintenant}
+                AND NOT EXISTS (
+                  SELECT 1 FROM preuve AS p
+                  WHERE p.coureur_id = c.id AND p.status = 'active'
+                )
+              RETURNING c.id, a.email, c.first_name, e.name AS edition_nom
+            `;
+            let enfiles = 0;
+            for (const ligne of lignes) {
+              const inseres = await tx<{ id: string }[]>`
+                INSERT INTO email_outbox (organisation_id, destinataire, type, payload)
+                VALUES (
+                  ${organisationId}, ${ligne.email}, 'inscription_expiree',
+                  ${tx.json({
+                    coureurId: ligne.id,
+                    prenom: ligne.first_name,
+                    edition: ligne.edition_nom,
+                  } as unknown as postgres.JSONValue)}
+                )
+                ON CONFLICT (organisation_id, (payload->>'coureurId'))
+                  WHERE (type = 'inscription_expiree')
+                DO NOTHING
+                RETURNING id
+              `;
+              enfiles += inseres.length;
+            }
+            return { expirees: lignes.length, emailsEnfiles: enfiles };
+          });
+          expirees += bilan.expirees;
+          emailsEnfiles += bilan.emailsEnfiles;
+        }
+        return { expirees, emailsEnfiles };
+      });
+    },
+
+    /**
+     * Rappel unique, la veille de l'échéance : les dossiers dont la limite
+     * tombe dans les 24 heures et dont la preuve manque encore.
+     *
+     * Un seul rappel par dossier, garanti par l'index unique partiel : un cron
+     * qui tourne toutes les heures ne doit pas envoyer vingt-quatre emails.
+     */
+    async enfilerRappelsPreuve(maintenant: Date): Promise<number> {
+      return withDb(async () => {
+        const fenetre = new Date(maintenant.getTime() + 24 * 60 * 60 * 1000);
+        const organisationIds = await sql<{ id: string }[]>`SELECT id FROM organisation`;
+        let enfiles = 0;
+        for (const { id: organisationId } of organisationIds) {
+          enfiles += await withOrg(sql, organisationId, async (tx) => {
+            const lignes = await tx<
+              { id: string; email: string; first_name: string; preuve_due_at: Date }[]
+            >`
+              SELECT c.id, a.email, c.first_name, c.preuve_due_at
+              FROM coureur AS c
+              JOIN account AS a ON a.id = c.account_id
+              WHERE c.organisation_id = ${organisationId}
+                AND c.status = ${COUREUR_STATUS_EN_CONSTITUTION}
+                AND c.preuve_due_at IS NOT NULL
+                AND c.preuve_due_at > ${maintenant}
+                AND c.preuve_due_at <= ${fenetre}
+                AND NOT EXISTS (
+                  SELECT 1 FROM preuve AS p
+                  WHERE p.coureur_id = c.id AND p.status = 'active'
+                )
+            `;
+            let total = 0;
+            for (const ligne of lignes) {
+              const inseres = await tx<{ id: string }[]>`
+                INSERT INTO email_outbox (organisation_id, destinataire, type, payload)
+                VALUES (
+                  ${organisationId}, ${ligne.email}, 'rappel_preuve',
+                  ${tx.json({
+                    coureurId: ligne.id,
+                    prenom: ligne.first_name,
+                    limite: ligne.preuve_due_at.toISOString(),
+                  } as unknown as postgres.JSONValue)}
+                )
+                ON CONFLICT (organisation_id, (payload->>'coureurId'))
+                  WHERE (type = 'rappel_preuve')
+                DO NOTHING
+                RETURNING id
+              `;
+              total += inseres.length;
+            }
+            return total;
+          });
+        }
+        return enfiles;
+      });
+    },
+
     async listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]> {
       return withDb(async () =>
         withOrg(sql, organisationId, async (tx) => {
@@ -662,8 +806,10 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           // FOR UPDATE : le verrou sérialise les candidats à la dernière place.
           // Sans lui, dix formulaires envoyés dans la même seconde lisent tous
           // « zéro place occupée » et se croient tous admis — mesuré.
-          const editionRows = await tx<{ registration_closes_at: Date; capacite: number }[]>`
-            SELECT registration_closes_at, capacite
+          const editionRows = await tx<
+            { registration_closes_at: Date; capacite: number; delai_preuve_jours: number }[]
+          >`
+            SELECT registration_closes_at, capacite, delai_preuve_jours
             FROM edition WHERE id = ${input.editionId}
             FOR UPDATE
           `;
@@ -686,19 +832,26 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           const statutSiNouveau = statutInitial(
             placesRestantes(edition.capacite, occupeesRows[0]?.occupees ?? 0),
           );
+          // Échéance posée UNIQUEMENT pour qui tient une place : un coureur en
+          // liste d'attente n'a rien à verser, lui donner un délai reviendrait
+          // à lui réclamer un paiement pour une place qu'il n'a pas.
+          const echeanceSiNouveau =
+            statutSiNouveau === COUREUR_STATUS_EN_CONSTITUTION
+              ? limitePreuve(new Date(), edition.delai_preuve_jours)
+              : null;
           const rows = await tx<{ id: string }[]>`
             INSERT INTO coureur (
               organisation_id, account_id, edition_id, epreuve_id,
               first_name, last_name, phone,
               emergency_contact_name, emergency_contact_phone,
-              birth_date, tshirt_size, genre, age, age_category, status
+              birth_date, tshirt_size, genre, age, age_category, status, preuve_due_at
             )
             VALUES (
               ${input.organisationId}, ${input.accountId}, ${input.editionId}, ${input.epreuveId},
               ${input.prenom}, ${input.nom}, ${input.telephone},
               ${input.contactUrgenceNom}, ${input.contactUrgenceTelephone},
               ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre}, ${input.age},
-              ${input.categorieAge}, ${statutSiNouveau}
+              ${input.categorieAge}, ${statutSiNouveau}, ${echeanceSiNouveau}
             )
             ON CONFLICT (account_id, edition_id)
             DO UPDATE SET
@@ -1317,6 +1470,8 @@ function createUnavailableStore(): InscriptionsStore {
     findCurrentEdition: unavailable,
     countPlacesOccupees: unavailable,
     readDefaultOrgPlaces: unavailable,
+    expirerInscriptionsEchues: unavailable,
+    enfilerRappelsPreuve: unavailable,
     listEpreuves: unavailable,
     findDocuments: unavailable,
     findCoureurByAccount: unavailable,
