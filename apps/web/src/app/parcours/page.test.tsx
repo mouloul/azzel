@@ -19,23 +19,23 @@ import ParcoursPage, { dynamic as PARCOURS_DYNAMIC } from './page';
 const BLOCS = [
   {
     slug: 'parcours-longue',
-    titre: 'Trail long — 35 km',
+    titre: 'Trail long',
     corps:
       'L’épreuve phare, au départ du stade Agni Lhoudh.\n\nDénivelé positif : à confirmer par le comité.\nRavitaillements : à confirmer par le comité.',
     epreuve: {
       slug: 'longue',
-      nom: 'La Longue — 35 km',
-      distanceKm: 35,
+      nom: 'La Longue',
+      distanceKm: 28,
       gpxUrl: 'https://files.exemple.dz/longue.gpx',
     },
   },
   {
     slug: 'parcours-moyenne',
-    titre: 'Trail moyen — 12 km',
+    titre: 'Trail moyen',
     corps: 'Une distance plus courte, le même jour.<script>alert("xss")</script>',
     epreuve: {
       slug: 'moyenne',
-      nom: 'La Moyenne — 12 km',
+      nom: 'La Moyenne',
       distanceKm: 12,
       gpxUrl: 'javascript:alert(document.domain)',
     },
@@ -64,10 +64,14 @@ describe('page /parcours — rendu public', () => {
   it('titre de page, eyebrow, et un bloc par épreuve avec distance', () => {
     expect(html).toContain('id="titre-parcours"');
     expect(html).toContain('Les parcours');
-    expect(html).toContain('Trail long — 35 km');
-    expect(html).toContain('Trail moyen — 12 km');
-    expect(html).toContain('>35 km<');
-    expect(html).toContain('>12 km<');
+    expect(html).toContain('Trail long');
+    expect(html).toContain('Trail moyen');
+    /* La distance affichée est celle du RELEVÉ dès qu'il existe — même règle
+     * que l'accueil. Les deux épreuves portent aujourd'hui le même relevé
+     * (duplication provisoire décidée le 2026-11-05), d'où 28 km des deux
+     * côtés. Le jour où le tracé court arrive, cette égalité tombe. */
+    expect(html).toContain('>28 km<');
+    expect(html).not.toContain('>35 km<');
   });
 
   it('corps : paragraphes séparés par lignes vides, sauts de ligne conservés', () => {
@@ -101,10 +105,10 @@ describe('page /parcours — rendu public', () => {
     expect(html).not.toContain('maplibre');
   });
 
-  it('sans GPX (ou URL non https échappée en base) : pas de lien mort, « Tracé à venir »', () => {
+  it('sans GPX (ou URL non https échappée en base) : pas de lien mort, « Fichier GPX à venir »', () => {
     // La Moyenne porte une URL javascript: (stockée hors application) : la
     // garde isHttpsUrl du rendu la refuse — défense en profondeur anti-XSS.
-    expect(html).toContain('Tracé à venir');
+    expect(html).toContain('Fichier GPX à venir');
     expect(html).not.toContain('href="javascript:');
     expect(html).not.toContain('alert(document.domain)');
     expect((html.match(/<details/g) ?? []).length).toBe(1);
@@ -128,7 +132,7 @@ describe('page /parcours — sans contenu (seed absent ou base indisponible)', (
     expect(vide).not.toContain('aa-card');
     expect(vide).not.toContain('aa-parcours');
     expect(vide).not.toContain('Aman d laman');
-    expect(vide).not.toContain('Tracé à venir');
+    expect(vide).not.toContain('Fichier GPX à venir');
     // État vide explicite (pas de conteneur vide, pas de promesse « ici »).
     expect(vide).toContain('seront publiés après');
   });

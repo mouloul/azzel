@@ -241,10 +241,32 @@ if ! grep -q "Afficher la carte" "${WORK}/resultats.html"; then
   CARTE_OK=0
 fi
 
-if [ "$DEPASSE" != "0" ] || [ "$CONTENU_OK" != "1" ] || [ "$CARTE_OK" != "1" ]; then
+# Story 11.3 — même pare-chemin-critique pour la carte 3D du parcours : le
+# HTML servi de /parcours ne doit référencer NI le moteur MapLibre NI une URL
+# de tuiles. Les deux n'arrivent qu'après le clic « Afficher la carte du
+# relief » (NFR-13). Le bouton doit être là, sinon la carte est inatteignable.
+if ! curl -sf --compressed --max-time 10 "${BASE_URL}/parcours" -o "${WORK}/parcours.html"; then
+  echo "Erreur : page /parcours inaccessible sur ${BASE_URL}/parcours." >&2
+  exit 1
+fi
+
+CARTE_3D_OK=1
+# On cherche des URL, pas des mots : le bloc d'attributions cite légitimement
+# « OpenTopoMap » et « MapLibre » en toutes lettres dans le HTML servi.
+if grep -qiE 'tile\.opentopomap\.org|elevation-tiles-prod|maplibre-gl' "${WORK}/parcours.html"; then
+  echo "ÉCHEC carte 3D : /parcours référence le moteur ou des tuiles dans le HTML initial." >&2
+  CARTE_3D_OK=0
+fi
+if ! grep -q "Afficher la carte du relief" "${WORK}/parcours.html"; then
+  echo "ÉCHEC carte 3D : le bouton « Afficher la carte du relief » est absent de /parcours." >&2
+  CARTE_3D_OK=0
+fi
+
+if [ "$DEPASSE" != "0" ] || [ "$CONTENU_OK" != "1" ] || [ "$CARTE_OK" != "1" ] || [ "$CARTE_3D_OK" != "1" ]; then
   exit 1
 fi
 
 echo "OK : poids réel et chemin critique sous leurs seuils respectifs."
 echo "OK : contenu attendu présent (CTA /connexion, chiffres officiels 2026)."
 echo "OK : /resultats sans chunk carto dans le HTML initial (carte différée au clic)."
+echo "OK : /parcours sans moteur ni tuiles dans le HTML initial (carte 3D différée au clic)." 

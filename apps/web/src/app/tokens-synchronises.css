@@ -86,6 +86,10 @@
   --az-sync-attente-encre: #FFFFFF;
   --az-sync-envoye: #2E6570;
   --az-sync-envoye-encre: #FFFFFF;
+  --az-carte-trace: #A3400C;
+  --az-carte-halo: #FFFFFF;
+  --az-carte-ciel-haut: #86B4E0;
+  --az-carte-ciel-horizon: #CFE0EF;
   --az-pente-roulant: #6E8F6B;
   --az-pente-soutenu: #47825F;
   --az-pente-raide: #9E5418;
@@ -106,6 +110,10 @@
   --az-sync-attente-encre-sombre: #291D04;
   --az-sync-envoye-sombre: #74C7D6;
   --az-sync-envoye-encre-sombre: #06262C;
+  --az-carte-trace-sombre: #FF8A4C;
+  --az-carte-halo-sombre: #10241A;
+  --az-carte-ciel-haut-sombre: #16314A;
+  --az-carte-ciel-horizon-sombre: #2F4F66;
   --az-pente-roulant-sombre: #4E7A58;
   --az-pente-soutenu-sombre: #6FA97E;
   --az-pente-raide-sombre: #E39A5B;
@@ -186,6 +194,10 @@
   --az-sync-attente-encre: #291D04;
   --az-sync-envoye: #74C7D6;
   --az-sync-envoye-encre: #06262C;
+  --az-carte-trace: #FF8A4C;
+  --az-carte-halo: #10241A;
+  --az-carte-ciel-haut: #16314A;
+  --az-carte-ciel-horizon: #2F4F66;
   --az-pente-roulant: #4E7A58;
   --az-pente-soutenu: #6FA97E;
   --az-pente-raide: #E39A5B;

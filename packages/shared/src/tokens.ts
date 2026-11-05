@@ -26,6 +26,14 @@ export const colorTokens = {
   // daltonisme) : clair du plus clair (roulant) au plus sombre (très raide),
   // sombre en sens inverse. Contrastes AA non textuels 3:1 vs surface testés
   // dans apps/web/src/app/contrastes.test.ts (clair ET sombre).
+  // Story 11.3 — carte 3D du parcours. Le tracé doit se détacher d'un fond
+  // topographique déjà saturé de courbes de niveau ocre et de vert : d'où une
+  // trace très soutenue, doublée d'un halo qui l'isole du fond. Le ciel n'est
+  // pas décoratif, il donne la profondeur à la vue inclinée.
+  'carte-trace': '#A3400C',
+  'carte-halo': '#FFFFFF',
+  'carte-ciel-haut': '#86B4E0',
+  'carte-ciel-horizon': '#CFE0EF',
   'pente-roulant': '#6E8F6B',
   'pente-soutenu': '#47825F',
   'pente-raide': '#9E5418',
@@ -46,6 +54,15 @@ export const colorTokens = {
   'sync-attente-encre-sombre': '#291D04',
   'sync-envoye-sombre': '#74C7D6',
   'sync-envoye-encre-sombre': '#06262C',
+  // Story 11.3 — pendants sombres de la carte. Le fond topographique, lui,
+  // reste clair (les tuiles d'OpenTopoMap ne se déclinent pas) : le halo
+  // reste donc sombre en thème sombre, pour continuer à détacher la trace
+  // d'un fond qui, lui, n'a pas changé. Le ciel s'assombrit, lui, puisqu'il
+  // est rendu par le moteur et non par les tuiles.
+  'carte-trace-sombre': '#FF8A4C',
+  'carte-halo-sombre': '#10241A',
+  'carte-ciel-haut-sombre': '#16314A',
+  'carte-ciel-horizon-sombre': '#2F4F66',
   // Story 11.4 — pendants sombres des paliers de pente (même mécanique az-*).
   'pente-roulant-sombre': '#4E7A58',
   'pente-soutenu-sombre': '#6FA97E',
