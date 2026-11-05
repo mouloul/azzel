@@ -306,14 +306,18 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
     // Très grande échelle dégressive : plafond 136 px (UX-DR-33), plancher
     // mobile 44 px (paliers dans les media queries ci-dessous).
     expect(titre).toMatch(/font-size:\s*clamp\(72px, 10\.5vw, 136px\)/);
-    // Mobile/tablette : une colonne — le rail passe SOUS le titre au lieu de
-    // le comprimer (ordre vertical titre, crête, rail, méta, actions). Le bloc
+    // Mobile/tablette : une colonne — le rail passe SOUS le texte au lieu de
+    // le comprimer (ordre vertical titre, crête, méta, actions, rail). Le bloc
     // media capture sa première règle : celle du corps, qui porte la bascule.
     const mobile = CSS.match(/@media \(max-width: 959\.98px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(mobile).toContain('.aa-hero--plein .aa-hero__body');
     expect(mobile).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
-    expect(mobile.indexOf('"titre"')).toBeLessThan(mobile.indexOf('"rail"'));
-    expect(mobile.indexOf('"rail"')).toBeLessThan(mobile.indexOf('"actions"'));
+    // Recette 05/11/2026 : la fiche passe après l'accroche, AVANT le compteur
+    // de places, lui-même avant les actions.
+    expect(mobile.indexOf('"titre"')).toBeLessThan(mobile.indexOf('"meta"'));
+    expect(mobile.indexOf('"meta"')).toBeLessThan(mobile.indexOf('"rail"'));
+    expect(mobile.indexOf('"rail"')).toBeLessThan(mobile.indexOf('"compteur"'));
+    expect(mobile.indexOf('"compteur"')).toBeLessThan(mobile.indexOf('"actions"'));
     // Paliers du titre : 44 px plancher téléphone, 40 px très petit écran.
     expect(CSS).toMatch(/clamp\(44px, 12\.5vw, 72px\)/);
     expect(CSS).toMatch(/clamp\(40px, 11vw, 44px\)/);

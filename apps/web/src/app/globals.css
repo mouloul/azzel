@@ -1680,8 +1680,8 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
   grid-template-areas:
     "titre"
     "crete"
-    "rail"
     "meta"
+    "rail"
     "compteur"
     "actions";
   grid-template-columns: minmax(0, 1fr);
@@ -1696,6 +1696,35 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
 @media (max-width: 640px) {
 .aa-hero--plein .aa-hero__body {
   padding: calc(var(--header-height) + 32px) var(--az-space-margin-mobile) var(--space-8);
+}
+
+/* Recette du 05/11/2026 : sur petit écran la fiche passait avant l'accroche et
+   mangeait la hauteur. Elle descend sous l'accroche, avant le compteur de places (grille ci-dessus) et se
+   compacte : marges serrées, date et rang sur une ligne, clés sur trois colonnes. */
+.aa-hero__rail {
+  align-self: start;
+  margin-top: var(--space-6);
+  padding: var(--az-space-4);
+}
+
+.aa-hero__rail-vedette dd {
+  margin-top: var(--az-space-1);
+  font-size: 22px;
+}
+
+.aa-hero__rang {
+  display: inline;
+  margin-right: 0.4em;
+  font-size: 14px;
+}
+
+.aa-hero__rail-vedette::after {
+  margin-top: var(--az-space-3);
+}
+
+.aa-hero__rail-cles {
+  margin-top: var(--az-space-3);
+  gap: var(--az-space-3);
 }
 
 .aa-hero--plein .aa-hero__title {
