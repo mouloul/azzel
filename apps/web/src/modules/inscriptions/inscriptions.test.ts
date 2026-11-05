@@ -62,6 +62,7 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    hebergement: '',
     ...overrides,
   };
 }
@@ -142,6 +143,7 @@ describe('normalizeInscriptionInput', () => {
         dateNaissance: '1990-05-12',
         tailleTshirt: 'M ',
         genre: ' h ',
+        hebergement: '',
         junk: 42,
       }),
     ).toEqual(validInput({ telephone: '+213555010203', contactUrgenceTelephone: '0555010204' }));
@@ -162,8 +164,12 @@ describe('validateInscriptionInput — champ par champ', () => {
     expect(Object.keys(errors)).toEqual([]);
   });
 
-  it('chaque champ manquant est nommé individuellement', () => {
-    const keys = Object.keys(validInput()) as (keyof InscriptionFormInput)[];
+  it('chaque champ OBLIGATOIRE manquant est nommé individuellement', () => {
+    // L'hébergement est la seule option du formulaire : son absence est un
+    // choix, pas une erreur. Tout le reste est exigé.
+    const keys = (Object.keys(validInput()) as (keyof InscriptionFormInput)[]).filter(
+      (key) => key !== 'hebergement',
+    );
     for (const key of keys) {
       const input = validInput({ [key]: '' });
       const errors = validateInscriptionInput(input, slugs, RACE_DATE);
@@ -171,7 +177,7 @@ describe('validateInscriptionInput — champ par champ', () => {
     }
   });
 
-  it('formulaire vide : les neuf champs sont signalés', () => {
+  it('formulaire vide : les neuf champs obligatoires sont signalés', () => {
     const errors = validateInscriptionInput(
       {
         epreuve: '',
@@ -183,6 +189,7 @@ describe('validateInscriptionInput — champ par champ', () => {
         dateNaissance: '',
         tailleTshirt: '',
         genre: '',
+        hebergement: '',
       },
       slugs,
       RACE_DATE,
@@ -325,6 +332,7 @@ describe('submitInscription — service avec store stubbé', () => {
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
       genre: 'H',
+      hebergement: false,
       preuveDueAt: null,
       expiredAt: null,
       age: input.age,
@@ -504,6 +512,10 @@ describe('genre du coureur', () => {
 
   it('fait partie de l’ordre des champs — sinon le focus d’erreur l’ignore', () => {
     expect(FIELD_ORDER).toContain('genre');
+  });
+
+  it('l’hébergement, facultatif, reste HORS de cet ordre : il ne peut pas produire d’erreur', () => {
+    expect(FIELD_ORDER).not.toContain('hebergement');
   });
 });
 
@@ -766,6 +778,7 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
       genre: 'H',
+      hebergement: false,
       preuveDueAt: null,
       expiredAt: null,
       age: 36,

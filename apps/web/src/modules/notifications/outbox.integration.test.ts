@@ -114,6 +114,7 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    hebergement: '',
     ...overrides,
   };
 }

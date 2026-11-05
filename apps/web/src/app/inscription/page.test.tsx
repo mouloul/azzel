@@ -27,6 +27,12 @@ const inscriptionsServiceMock = vi.hoisted(() => ({
     afficher: false,
     complet: false,
   }),
+  getHebergementState: vi.fn().mockResolvedValue({
+    restantes: 200,
+    capacite: 200,
+    complet: false,
+    prixDa: 1500,
+  }),
 }));
 
 vi.mock(

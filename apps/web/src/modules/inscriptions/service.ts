@@ -18,6 +18,7 @@ import {
   COUREUR_STATUS_VALIDE,
   canDepositPreuve,
   doitAfficherPlaces,
+  montantDuDa,
   placesRestantes,
   deriveAgeAndCategory,
   documentTitle,
@@ -64,6 +65,7 @@ export interface CoureurSummary {
   genre: string | null;
   /** ISO, ou null si aucune échéance (liste d'attente). */
   preuveDueAt: string | null;
+  hebergement: boolean;
   age: number;
   categorie: AgeCategory;
   status: string;
@@ -139,6 +141,7 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
     tailleTshirt: record.tailleTshirt,
     genre: record.genre,
     preuveDueAt: record.preuveDueAt?.toISOString() ?? null,
+    hebergement: record.hebergement,
     age: record.age,
     categorie: record.categorieAge as AgeCategory,
     status: record.status,
@@ -220,6 +223,108 @@ export async function getPlacesVitrine(
       error instanceof Error ? error.message : error,
     );
     return PLACES_MUETTES;
+  }
+}
+
+/**
+ * Contingent d'hébergement, pour le formulaire.
+ *
+ * Contrairement au compteur de dossards, celui-ci s'affiche TOUJOURS : deux
+ * cents lits se remplissent vite, et le coureur doit pouvoir décider en
+ * sachant combien il en reste.
+ */
+export interface HebergementState {
+  restantes: number;
+  capacite: number;
+  complet: boolean;
+  prixDa: number;
+}
+
+export const HEBERGEMENT_INDISPONIBLE: HebergementState = {
+  restantes: 0,
+  capacite: 0,
+  complet: true,
+  prixDa: 0,
+};
+
+/**
+ * Ce que le coureur doit verser : dossard, plus hébergement s'il l'a obtenu.
+ * Un seul montant, un seul versement, une seule preuve.
+ *
+ * Null quand le montant ne peut pas être établi (pas d'édition, pas de
+ * dossier, base muette) : mieux vaut ne rien annoncer qu'un chiffre faux, sur
+ * lequel quelqu'un ferait un virement.
+ */
+export interface MontantDuState {
+  totalDa: number;
+  prixDossardDa: number;
+  prixHebergementDa: number;
+  avecHebergement: boolean;
+}
+
+export async function getMontantDu(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<MontantDuState | null> {
+  const store = deps.store ?? getInscriptionsStore();
+  try {
+    const edition = await store.findCurrentEdition(session.organisationId);
+    if (!edition) {
+      return null;
+    }
+    const coureur = await store.findCoureurByAccount(
+      session.accountId,
+      edition.id,
+      session.organisationId,
+    );
+    if (!coureur) {
+      return null;
+    }
+    return {
+      totalDa: montantDuDa(
+        edition.prixDossardDa,
+        edition.prixHebergementDa,
+        coureur.hebergement,
+      ),
+      prixDossardDa: edition.prixDossardDa,
+      prixHebergementDa: edition.prixHebergementDa,
+      avecHebergement: coureur.hebergement,
+    };
+  } catch (error) {
+    console.warn(
+      '[inscriptions] montant dû indisponible :',
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+export async function getHebergementState(
+  organisationId: string,
+  deps: InscriptionsServiceDeps = {},
+): Promise<HebergementState> {
+  const store = deps.store ?? getInscriptionsStore();
+  try {
+    const edition = await store.findCurrentEdition(organisationId);
+    if (!edition) {
+      return HEBERGEMENT_INDISPONIBLE;
+    }
+    const occupes = await store.countHebergementsOccupes(edition.id, organisationId);
+    const restantes = placesRestantes(edition.capaciteHebergement, occupes);
+    return {
+      restantes,
+      capacite: edition.capaciteHebergement,
+      complet: restantes === 0,
+      prixDa: edition.prixHebergementDa,
+    };
+  } catch (error) {
+    // Panne : l'option est presentee comme indisponible plutot que proposee a
+    // tort — promettre un lit qu'on ne peut pas compter serait pire.
+    console.warn(
+      '[inscriptions] contingent d’hébergement indisponible :',
+      error instanceof Error ? error.message : error,
+    );
+    return HEBERGEMENT_INDISPONIBLE;
   }
 }
 
@@ -316,6 +421,7 @@ export async function submitInscription(
     dateNaissance: input.dateNaissance,
     tailleTshirt: input.tailleTshirt,
     genre: input.genre,
+    hebergement: input.hebergement === 'oui',
     age: derived.age,
     categorieAge: derived.category,
   });

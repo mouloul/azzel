@@ -18,6 +18,7 @@ import {
   COUREUR_STATUS_VALIDE,
   STATUTS_MODIFIABLES,
   COUREUR_STATUS_EXPIREE,
+  hebergementAccorde,
   limitePreuve,
   STATUTS_OCCUPANT_UNE_PLACE,
   placesRestantes,
@@ -100,6 +101,7 @@ export interface CoureurRecord {
   /** Échéance de dépôt de la preuve, figée à l'inscription. Null en liste d'attente. */
   preuveDueAt: Date | null;
   expiredAt: Date | null;
+  hebergement: boolean;
   age: number;
   categorieAge: string;
   status: string;
@@ -147,6 +149,7 @@ export interface UpsertCoureurInput {
   dateNaissance: string;
   tailleTshirt: string;
   genre: string;
+  hebergement: boolean;
   age: number;
   categorieAge: string;
 }
@@ -274,6 +277,7 @@ export interface ListCoureursResult {
 export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;
   countPlacesOccupees(editionId: string, organisationId: string): Promise<number>;
+  countHebergementsOccupes(editionId: string, organisationId: string): Promise<number>;
   readDefaultOrgPlaces(): Promise<{ capacite: number; seuil: number; occupees: number } | null>;
   expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration>;
   enfilerRappelsPreuve(maintenant: Date): Promise<number>;
@@ -377,6 +381,7 @@ interface CoureurRow {
   birth_date: string;
   tshirt_size: string;
   genre: string | null;
+  hebergement: boolean;
   preuve_due_at: Date | null;
   expired_at: Date | null;
   age: number;
@@ -450,6 +455,7 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     dateNaissance: row.birth_date,
     tailleTshirt: row.tshirt_size,
     genre: row.genre,
+    hebergement: row.hebergement,
     preuveDueAt: row.preuve_due_at,
     expiredAt: row.expired_at,
     age: row.age,
@@ -474,7 +480,7 @@ const COUREUR_COLUMNS = `
   c.first_name, c.last_name, c.phone,
   c.emergency_contact_name, c.emergency_contact_phone,
   c.birth_date::text AS birth_date, c.tshirt_size, c.genre, c.age, c.age_category, c.status,
-  c.preuve_due_at, c.expired_at,
+  c.preuve_due_at, c.expired_at, c.hebergement,
   c.dossard, c.jeton_edossard, c.refusal_reason, c.decided_by, c.decided_at,
   c.decharge_accepted_at, c.decharge_version,
   c.reglement_accepted_at, c.reglement_version,
@@ -565,6 +571,24 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
           `;
           return rows[0]?.occupees ?? 0;
+        }),
+      );
+    },
+
+    async countHebergementsOccupes(
+      editionId: string,
+      organisationId: string,
+    ): Promise<number> {
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<{ occupes: number }[]>`
+            SELECT count(*)::int AS occupes
+            FROM coureur
+            WHERE edition_id = ${editionId}
+              AND hebergement
+              AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
+          `;
+          return rows[0]?.occupes ?? 0;
         }),
       );
     },
@@ -807,9 +831,15 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           // Sans lui, dix formulaires envoyés dans la même seconde lisent tous
           // « zéro place occupée » et se croient tous admis — mesuré.
           const editionRows = await tx<
-            { registration_closes_at: Date; capacite: number; delai_preuve_jours: number }[]
+            {
+              registration_closes_at: Date;
+              capacite: number;
+              delai_preuve_jours: number;
+              capacite_hebergement: number;
+            }[]
           >`
-            SELECT registration_closes_at, capacite, delai_preuve_jours
+            SELECT registration_closes_at, capacite, delai_preuve_jours,
+                   capacite_hebergement
             FROM edition WHERE id = ${input.editionId}
             FOR UPDATE
           `;
@@ -832,6 +862,20 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           const statutSiNouveau = statutInitial(
             placesRestantes(edition.capacite, occupeesRows[0]?.occupees ?? 0),
           );
+          // Même verrou, même exclusion de soi : renoncer puis redemander
+          // l'hébergement ne doit pas compter deux lits.
+          const litsRows = await tx<{ occupes: number }[]>`
+            SELECT count(*)::int AS occupes
+            FROM coureur
+            WHERE edition_id = ${input.editionId}
+              AND account_id <> ${input.accountId}
+              AND hebergement
+              AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
+          `;
+          const hebergement = hebergementAccorde(
+            input.hebergement,
+            placesRestantes(edition.capacite_hebergement, litsRows[0]?.occupes ?? 0),
+          );
           // Échéance posée UNIQUEMENT pour qui tient une place : un coureur en
           // liste d'attente n'a rien à verser, lui donner un délai reviendrait
           // à lui réclamer un paiement pour une place qu'il n'a pas.
@@ -844,14 +888,16 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               organisation_id, account_id, edition_id, epreuve_id,
               first_name, last_name, phone,
               emergency_contact_name, emergency_contact_phone,
-              birth_date, tshirt_size, genre, age, age_category, status, preuve_due_at
+              birth_date, tshirt_size, genre, age, age_category, status, preuve_due_at,
+              hebergement
             )
             VALUES (
               ${input.organisationId}, ${input.accountId}, ${input.editionId}, ${input.epreuveId},
               ${input.prenom}, ${input.nom}, ${input.telephone},
               ${input.contactUrgenceNom}, ${input.contactUrgenceTelephone},
               ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre}, ${input.age},
-              ${input.categorieAge}, ${statutSiNouveau}, ${echeanceSiNouveau}
+              ${input.categorieAge}, ${statutSiNouveau}, ${echeanceSiNouveau},
+              ${hebergement}
             )
             ON CONFLICT (account_id, edition_id)
             DO UPDATE SET
@@ -864,6 +910,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               birth_date = EXCLUDED.birth_date,
               tshirt_size = EXCLUDED.tshirt_size,
               genre = EXCLUDED.genre,
+              hebergement = EXCLUDED.hebergement,
               age = EXCLUDED.age,
               age_category = EXCLUDED.age_category,
               updated_at = now()
@@ -1469,6 +1516,7 @@ function createUnavailableStore(): InscriptionsStore {
   return {
     findCurrentEdition: unavailable,
     countPlacesOccupees: unavailable,
+    countHebergementsOccupes: unavailable,
     readDefaultOrgPlaces: unavailable,
     expirerInscriptionsEchues: unavailable,
     enfilerRappelsPreuve: unavailable,

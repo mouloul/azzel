@@ -220,3 +220,15 @@
   line-height: 1.5;
   color: var(--az-texte);
 }
+
+/* Montant à verser : un chiffre qu'on recopie sur un bordereau — il doit se
+   lire sans ambiguïté, d'où le filet et le corps plein. */
+.encart-montant {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-succes);
+  background: var(--az-surface);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}

@@ -9,6 +9,7 @@ import { requireRolePage } from '@/modules/iam/session';
 import { canDepositPreuve } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
+import { getMontantDu } from '@/modules/inscriptions/service';
 
 import { PreuveForm } from './preuve-form';
 import '../dossier.css';
@@ -40,6 +41,10 @@ export default async function PreuvePage() {
     );
   }
   const session = result.session;
+
+  // Le montant ne fait jamais tomber la page : getMontantDu rend null plutôt
+  // que de lever, et l'encart disparaît.
+  const montant = await getMontantDu(session);
 
   let state: PreuveState;
   try {
@@ -159,6 +164,15 @@ export default async function PreuvePage() {
         <FilEtapes
           etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)}
         />
+        {montant !== null ? (
+          <p className="encart-montant" role="status">
+            Montant à verser :{' '}
+            <strong>{`${montant.totalDa} DA`}</strong>
+            {montant.avecHebergement
+              ? ` — dossard ${montant.prixDossardDa} DA et hébergement ${montant.prixHebergementDa} DA, en un seul versement.`
+              : ` — le dossard seul.`}
+          </p>
+        ) : null}
       </PreuveForm>
     </>
   );

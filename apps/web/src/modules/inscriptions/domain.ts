@@ -205,6 +205,31 @@ export function estExpiree(limite: Date | null, maintenant: Date): boolean {
   return limite !== null && maintenant.getTime() > limite.getTime();
 }
 
+/**
+ * L'hébergement est une OPTION contingentée : souhaité mais complet, il est
+ * simplement refusé — l'inscription, elle, passe. Refuser la course entière
+ * pour un lit indisponible ferait perdre au coureur sa place de départ.
+ */
+export function hebergementAccorde(souhaite: boolean, restantes: number): boolean {
+  return souhaite && restantes > 0;
+}
+
+/**
+ * Montant total à verser, en dinars : le dossard, plus l'hébergement s'il est
+ * accordé. Un seul versement, une seule preuve — deux justificatifs à suivre
+ * doubleraient le travail de dépôt et de vérification.
+ *
+ * Les deux prix viennent de l'édition : ils sont provisoires et révisables en
+ * administration, jamais écrits en dur.
+ */
+export function montantDuDa(
+  prixDossardDa: number,
+  prixHebergementDa: number,
+  avecHebergement: boolean,
+): number {
+  return prixDossardDa + (avecHebergement ? prixHebergementDa : 0);
+}
+
 export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
 
 export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
@@ -277,6 +302,8 @@ export interface InscriptionFormInput {
   dateNaissance: string;
   tailleTshirt: string;
   genre: string;
+  /** « oui » si le coureur demande un hébergement ; toute autre valeur = non. */
+  hebergement: string;
 }
 
 export type FieldErrors = Partial<Record<keyof InscriptionFormInput, string>>;
@@ -393,6 +420,9 @@ export function normalizeInscriptionInput(raw: unknown): InscriptionFormInput {
     // jusqu'à la validation, qui la nomme, plutôt que d'être effacée ici et
     // de ressortir en « champ obligatoire » trompeur.
     genre: text('genre').toUpperCase(),
+    // Case à cocher : seule « oui » vaut demande. Rien à valider — une valeur
+    // inattendue signifie simplement que la case n'était pas cochée.
+    hebergement: text('hebergement').toLowerCase() === 'oui' ? 'oui' : '',
   };
 }
 

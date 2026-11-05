@@ -13,6 +13,7 @@ import {
 } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import {
+  getHebergementState,
   getInscriptionState,
   getPlacesState,
   type InscriptionState,
@@ -134,7 +135,10 @@ export default async function InscriptionPage() {
     );
   }
 
-  const places = await getPlacesState(result.session.organisationId);
+  const [places, hebergement] = await Promise.all([
+    getPlacesState(result.session.organisationId),
+    getHebergementState(result.session.organisationId),
+  ]);
   const enAttente = state.coureur?.status === COUREUR_STATUS_LISTE_ATTENTE;
   // Échéance rendue à l'heure de la course : l'instant est stocké en UTC,
   // mais le coureur vit à Alger — lui afficher 22h59 le ferait rater d'une heure.
@@ -148,7 +152,7 @@ export default async function InscriptionPage() {
       : null;
 
   return (
-    <InscriptionForm state={state} assistancePhone={assistancePhone}>
+    <InscriptionForm state={state} assistancePhone={assistancePhone} hebergement={hebergement}>
       <FilEtapes etapes={etapesInscription(state.coureur)} />
       <CompteurPlaces places={places} />
       {echeance !== null ? (

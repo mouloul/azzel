@@ -79,6 +79,7 @@ function validInput(epreuve: string): InscriptionFormInput {
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    hebergement: '',
   };
 }
 

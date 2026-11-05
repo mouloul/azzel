@@ -20,7 +20,7 @@ import {
   type TshirtSize,
 } from '@/modules/inscriptions/domain';
 
-import type { InscriptionState } from '@/modules/inscriptions/service';
+import type { HebergementState, InscriptionState } from '@/modules/inscriptions/service';
 
 const EMPTY_INPUT: InscriptionFormInput = {
   epreuve: '',
@@ -32,6 +32,7 @@ const EMPTY_INPUT: InscriptionFormInput = {
   dateNaissance: '',
   tailleTshirt: '',
   genre: '',
+  hebergement: '',
 };
 
 const NETWORK_ERROR = {
@@ -68,16 +69,19 @@ function prefill(state: InscriptionState): InscriptionFormInput {
     dateNaissance: coureur.dateNaissance,
     tailleTshirt: coureur.tailleTshirt,
     genre: coureur.genre ?? '',
+    hebergement: coureur.hebergement ? 'oui' : '',
   };
 }
 
 export function InscriptionForm({
   state,
   assistancePhone,
+  hebergement,
   children,
 }: {
   state: InscriptionState;
   assistancePhone: string;
+  hebergement: HebergementState;
   children?: ReactNode;
 }) {
   const router = useRouter();
@@ -458,6 +462,35 @@ export function InscriptionForm({
                   </p>
                 )}
               </div>
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend>Hébergement</legend>
+              {/* Option contingentée : la case est désactivée quand il n'y a
+                  plus de lits, jamais masquée — un coureur venu pour
+                  l'hébergement doit comprendre pourquoi il ne le trouve pas. */}
+              <label className="option option--case">
+                <input
+                  type="checkbox"
+                  id={fieldId('hebergement')}
+                  name="hebergement"
+                  value="oui"
+                  checked={values.hebergement === 'oui'}
+                  disabled={hebergement.complet && values.hebergement !== 'oui'}
+                  onChange={(event) =>
+                    update('hebergement', event.target.checked ? 'oui' : '')
+                  }
+                  aria-describedby={aideId('hebergement')}
+                />
+                <span className="option-label">
+                  {`Je souhaite un hébergement (${hebergement.prixDa} DA)`}
+                </span>
+              </label>
+              <p id={aideId('hebergement')} className="socle-champ-aide">
+                {hebergement.complet
+                  ? 'Hébergement complet : tous les lits sont pris. Tu peux t’inscrire sans.'
+                  : `Il reste ${hebergement.restantes} place${hebergement.restantes > 1 ? 's' : ''} sur ${hebergement.capacite}. Le montant s’ajoute à ton versement : un seul paiement, une seule preuve.`}
+              </p>
             </fieldset>
 
             <button type="submit" className="btn-action" disabled={pending}>

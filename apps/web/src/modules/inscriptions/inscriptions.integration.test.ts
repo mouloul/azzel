@@ -59,6 +59,7 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    hebergement: '',
     ...overrides,
   };
 }
@@ -398,6 +399,80 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
         VALUES (${coureur!.organisation_id}, ${coureur!.id}, 'k', 'image/jpeg', 1024, 'abc', 'active')
       `;
       expect(await store.enfilerRappelsPreuve(new Date())).toBe(0);
+    });
+  });
+
+  describe('contingent d’hébergement', () => {
+    afterEach(async () => {
+      await sql`UPDATE edition SET capacite = 600, capacite_hebergement = 200`;
+      await sql`DELETE FROM coureur`;
+    });
+
+    async function hebergementDe(session: SessionRecord): Promise<boolean | null> {
+      const rows = await sql<{ hebergement: boolean }[]>`
+        SELECT hebergement FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      return rows[0]?.hebergement ?? null;
+    }
+
+    it('option demandée, lit disponible : accordée', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ hebergement: 'oui' }), { store });
+      expect(await hebergementDe(session)).toBe(true);
+    });
+
+    it('option non demandée : pas d’hébergement', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      expect(await hebergementDe(session)).toBe(false);
+    });
+
+    it('le dernier lit n’est attribué QU’UNE fois sur dix demandes simultanées', async () => {
+      await sql`UPDATE edition SET capacite_hebergement = 1`;
+      const sessions = await Promise.all(Array.from({ length: 10 }, () => createSession()));
+      await Promise.all(
+        sessions.map((session) =>
+          submitInscription(session, validInput({ hebergement: 'oui' }), { store }),
+        ),
+      );
+      const accordes = await Promise.all(sessions.map(hebergementDe));
+      expect(accordes.filter(Boolean)).toHaveLength(1);
+    });
+
+    it('hébergement complet : l’inscription passe quand même, sans le lit', async () => {
+      await sql`UPDATE edition SET capacite_hebergement = 0`;
+      const session = await createSession();
+      await submitInscription(session, validInput({ hebergement: 'oui' }), { store });
+      expect(await hebergementDe(session)).toBe(false);
+      const rows = await sql<{ status: string }[]>`
+        SELECT status FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      expect(rows[0]?.status).toBe('en constitution');
+    });
+
+    it('un dossier expiré rend son lit', async () => {
+      await sql`UPDATE edition SET capacite_hebergement = 1`;
+      const premier = await createSession();
+      await submitInscription(premier, validInput({ hebergement: 'oui' }), { store });
+      await sql`
+        UPDATE coureur SET status = 'expirée', expired_at = now()
+        WHERE account_id = ${premier.accountId}
+      `;
+      const suivant = await createSession();
+      await submitInscription(suivant, validInput({ hebergement: 'oui' }), { store });
+      expect(await hebergementDe(suivant)).toBe(true);
+    });
+
+    it('renoncer à l’hébergement libère le lit pour un autre', async () => {
+      await sql`UPDATE edition SET capacite_hebergement = 1`;
+      const session = await createSession();
+      await submitInscription(session, validInput({ hebergement: 'oui' }), { store });
+      await submitInscription(session, validInput(), { store });
+      expect(await hebergementDe(session)).toBe(false);
+
+      const autre = await createSession();
+      await submitInscription(autre, validInput({ hebergement: 'oui' }), { store });
+      expect(await hebergementDe(autre)).toBe(true);
     });
   });
 
