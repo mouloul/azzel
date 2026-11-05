@@ -55,20 +55,34 @@ const EDITION = {
   slug: '2027',
   nom: 'Édition 2027',
   dateCourse: '2027-03-26',
+  dateCourseLibelle: 'printemps 2027',
+  dateCoursePhrase: 'au printemps 2027',
   registrationClosesAt: '2027-03-16T22:59:59.000Z',
   registrationOpen: true,
+};
+
+const RECAP = {
+  epreuve: 'La Longue — 35 km',
+  distanceKm: 35,
+  categorieAge: 'Senior (18–39 ans)',
+  tshirt: 'XL',
+  contactUrgenceNom: 'Mhaouili',
+  contactUrgenceTelephone: '0754127932',
+  dateCourse: '2027-03-26',
+  dateCourseLibelle: 'printemps 2027',
 };
 
 function piece(id: string, fait: boolean): ChecklistPiece {
   return { id: id as ChecklistPiece['id'], libelle: `Pièce ${id}`, fait };
 }
 
-function checklistState(faites: number) {
+function checklistState(faites: number, statut: string | null = null) {
   const ids = ['email', 'epreuve', 'decharge', 'reglement', 'preuve', 'validation'];
   return {
     edition: EDITION,
     pieces: ids.map((id, index) => piece(id, index < faites)),
     recap: null,
+    statut,
   };
 }
 
@@ -83,6 +97,72 @@ beforeEach(() => {
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_COUREUR,
+  });
+});
+
+describe('page /espace-coureur — récapitulatif', () => {
+  async function renduRecap(statut: string | null, faites: number): Promise<string> {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue({
+      ...checklistState(faites, statut),
+      recap: RECAP,
+    });
+    return (await rendu()).replaceAll('<!-- -->', '');
+  }
+
+  it('la date exacte est cachée : « printemps 2027 », jamais le jour', async () => {
+    const html = await renduRecap('en constitution', 4);
+    expect(html).toContain('Course : printemps 2027');
+    expect(html).not.toContain('26 mars');
+  });
+
+  it('le statut figure DANS le récapitulatif, pas seulement sous le titre', async () => {
+    const html = await renduRecap('en constitution', 4);
+    const recap = html.slice(html.indexOf('recap-titre'));
+    expect(recap).toContain('Statut :');
+    expect(recap).toContain('En attente de justificatif de paiement');
+  });
+
+  it('la distance n’est dite qu’une fois : « La Longue — 35 km », sans « (35 km) »', async () => {
+    const html = await renduRecap('en constitution', 4);
+    expect(html).toContain('La Longue — 35 km');
+    expect(html).not.toContain('35 km (35 km)');
+    expect(html).not.toContain('— 35 km (35');
+  });
+});
+
+describe('page /espace-coureur — statut du dossier', () => {
+  it('place tenue, preuve absente : « en attente de justificatif de paiement »', async () => {
+    // 4 pièces faites : la preuve (5ᵉ) ne l'est pas encore.
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(
+      checklistState(4, 'en constitution'),
+    );
+    const html = await rendu();
+    expect(html).toContain('En attente de justificatif de paiement');
+    expect(html).not.toContain('En attente de validation par l’organisation</span>');
+  });
+
+  it('preuve déposée : « en attente de validation par l’organisation »', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(
+      checklistState(5, 'en constitution'),
+    );
+    const html = await rendu();
+    expect(html).toMatch(/socle-pastille[^"]*"[^>]*>\s*<span[^>]*><\/span>En attente de validation par l’organisation/);
+    expect(html).not.toContain('En attente de justificatif de paiement');
+  });
+
+  it('liste d’attente : jamais « justificatif » — aucun versement n’est à faire', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(
+      checklistState(4, 'liste d’attente'),
+    );
+    const html = await rendu();
+    expect(html).toContain('Liste d’attente');
+    expect(html).not.toContain('En attente de justificatif de paiement');
+  });
+
+  it('aucune inscription (statut null) : pas de ligne « Statut »', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(checklistState(1, null));
+    const html = await rendu();
+    expect(html).not.toContain('espace-statut');
   });
 });
 
@@ -101,5 +181,15 @@ describe('page /espace-coureur — lien e-dossard (story 4.1)', () => {
     const html = await rendu();
     expect(html).not.toContain('href="/espace-coureur/e-dossard"');
     expect(html).not.toContain('Ton e-dossard');
+  });
+
+  // Story 9.4 — le bouton d’assistance « Appeler l’équipe » reste visible
+  // sur la checklist, dossier complet ou non (SM-C1, UX-DR-11, story 1.7).
+  it('checklist rendue : « Appeler l’équipe » toujours visible avec le numéro', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(checklistState(2));
+    const html = await rendu();
+    expect(html).toContain('Appeler l’équipe');
+    expect(html).toContain('href="tel:+213555010200"');
+    expect(html).toContain('2 pièces sur 6');
   });
 });

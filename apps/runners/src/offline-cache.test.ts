@@ -34,6 +34,8 @@ const DOSSIER: ChecklistState = {
     slug: '2027',
     nom: 'Édition 2027',
     dateCourse: '2027-05-16',
+    dateCourseLibelle: 'printemps 2027',
+    dateCoursePhrase: 'au printemps 2027',
     registrationClosesAt: '2027-03-16T22:59:59.000Z',
     registrationOpen: true,
   },

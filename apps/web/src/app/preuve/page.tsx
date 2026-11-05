@@ -1,6 +1,7 @@
 import { formatLocalDateTime } from '@azzel/shared';
 
 import { AssistanceButton } from '@/components/assistance-button';
+import { FilEtapes, etapesPreuve } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
@@ -8,8 +9,10 @@ import { requireRolePage } from '@/modules/iam/session';
 import { canDepositPreuve } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
+import { getComptesPaiement, getMontantDu } from '@/modules/inscriptions/service';
 
 import { PreuveForm } from './preuve-form';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +41,10 @@ export default async function PreuvePage() {
     );
   }
   const session = result.session;
+
+  // Le montant ne fait jamais tomber la page : getMontantDu rend null plutôt
+  // que de lever, et l'encart disparaît.
+  const montant = await getMontantDu(session);
 
   let state: PreuveState;
   try {
@@ -138,6 +145,7 @@ export default async function PreuvePage() {
     );
   }
 
+  const comptes = await getComptesPaiement(session);
   return (
     <>
       {state.coureurStatus === 'refusé' && state.refusalReason !== null ? (
@@ -153,7 +161,81 @@ export default async function PreuvePage() {
           </article>
         </section>
       ) : null}
-      <PreuveForm state={state} assistancePhone={assistancePhone} />
+      <PreuveForm state={state} assistancePhone={assistancePhone}>
+        <FilEtapes
+          etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)}
+        />
+        {montant !== null ? (
+          <p className="encart-montant" role="status">
+            Montant à verser :{' '}
+            <strong>{`${montant.totalDa} DA`}</strong>
+            {montant.avecHebergement
+              ? ` — dossard ${montant.prixDossardDa} DA et hébergement ${montant.prixHebergementDa} DA, en un seul versement.`
+              : ` — le dossard seul.`}
+          </p>
+        ) : null}
+        {comptes !== null ? (
+          <section className="encart-comptes" aria-labelledby="titre-comptes">
+            <p className="encart-comptes__surtitre">Où verser</p>
+            <h2 id="titre-comptes" className="encart-comptes__titre">
+              Rappel des comptes de l’événement
+            </h2>
+            <p className="encart-comptes__intro">
+              Verse le montant ci-dessus sur{' '}
+              {comptes.ccp !== null && comptes.baridimob !== null
+                ? 'l’un des deux comptes ci-dessous, CCP ou Baridimob (pas les deux).'
+                : 'le compte ci-dessous.'}
+            </p>
+            <div className="encart-comptes__liste">
+              {comptes.ccp !== null ? (
+                <dl className="encart-comptes__compte">
+                  <dt>Compte CCP</dt>
+                  <dd className="encart-comptes__numero">{comptes.ccp}</dd>
+                  {comptes.titulaireCcp !== null ? (
+                    <>
+                      <dt>Titulaire</dt>
+                      <dd>{comptes.titulaireCcp}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              ) : null}
+              {comptes.ccp !== null && comptes.baridimob !== null ? (
+                <p className="encart-comptes__ou" aria-hidden="true">
+                  ou
+                </p>
+              ) : null}
+              {comptes.baridimob !== null ? (
+                <dl className="encart-comptes__compte">
+                  <dt>RIP Baridimob</dt>
+                  <dd className="encart-comptes__numero">{comptes.baridimob}</dd>
+                  {comptes.titulaireBaridimob !== null ? (
+                    <>
+                      <dt>Titulaire</dt>
+                      <dd>{comptes.titulaireBaridimob}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              ) : null}
+            </div>
+            <ul className="encart-comptes__regles">
+              <li>
+                <strong>Un versement par personne.</strong> Chaque coureur règle sa propre
+                participation, en un seul versement : un paiement ne vaut que pour une
+                inscription.
+              </li>
+              <li>
+                <strong>Le reçu CCP ou Baridimob</strong> porte un numéro de transaction.
+                Il doit être parfaitement lisible sur la pièce jointe.
+              </li>
+              <li>
+                <strong>Ce numéro est unique.</strong> Tu le saisis ci-dessous ; le système
+                vérifie qu’il n’a jamais servi, pour qu’un même reçu ne puisse pas valider
+                plusieurs inscriptions.
+              </li>
+            </ul>
+          </section>
+        ) : null}
+      </PreuveForm>
     </>
   );
 }

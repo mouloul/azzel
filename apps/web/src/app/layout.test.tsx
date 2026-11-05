@@ -1,8 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { EGIDE_TEXTE } from '@/components/bandeau-egide';
-
 import RootLayout from './layout';
 
 /** Navigation du pied de page seule (l'en-tête porte aussi une navigation ≥ 960 px). */
@@ -12,22 +10,14 @@ function navigationDuPied(html: string): string {
 }
 
 describe('layout racine — rendu statique', () => {
-  it('affiche le bandeau égide (présent sur toutes les pages)', () => {
+  // Recette du 04/11/2026 : bandeau égide retiré du layout. Le test devient sa
+  // garde inverse — la mention ne doit plus reparaître sans décision explicite.
+  it('plus de bandeau égide sur aucune page', () => {
     const html = renderToStaticMarkup(
       RootLayout({ children: <p>Contenu de page</p> }),
     );
-    expect(html).toContain(EGIDE_TEXTE);
-    expect(html).toContain('class="egide"');
-  });
-
-  it('le bandeau égide précède l’en-tête du site', () => {
-    const html = renderToStaticMarkup(
-      RootLayout({ children: <p>Contenu de page</p> }),
-    );
-    expect(html.indexOf('class="egide"')).toBeGreaterThan(-1);
-    expect(html.indexOf('class="egide"')).toBeLessThan(
-      html.indexOf('class="site-header"'),
-    );
+    expect(html).not.toContain('class="egide"');
+    expect(html).not.toContain('égide');
   });
 
   it('aucune frise ni crête décorative au niveau du layout (réservées aux seuils de la vitrine)', () => {

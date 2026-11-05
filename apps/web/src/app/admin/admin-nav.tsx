@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation';
  */
 const SECTIONS = [
   { href: '/admin/dossiers', label: 'Dossiers' },
+  { href: '/admin/inscriptions', label: 'Inscriptions' },
   { href: '/admin/volontaires', label: 'Volontaires' },
   { href: '/admin/missions', label: 'Secteurs et missions' },
   { href: '/admin/course', label: 'PC course' },

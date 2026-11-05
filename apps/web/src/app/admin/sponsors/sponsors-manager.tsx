@@ -338,7 +338,7 @@ function LigneSponsor({
       <div>
         <span className="dossier-nom">{sponsor.nom}</span>
         {mode === 'A' && sponsor.signature ? (
-          <span className="chip-meta">Signature</span>
+          <span className="socle-chip">Signature</span>
         ) : null}
         {sponsor.url !== null ? (
           <span className="meta dossier-email">{sponsor.url}</span>

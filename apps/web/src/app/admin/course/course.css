@@ -6,14 +6,17 @@
    display:none. Fichier propre à la page /admin/course : hors du chunk CSS
    partagé (budget accueil). Seule animation : le clignotement borné du bloc
    alertes 5.2 (1 flash/s), coupé sous prefers-reduced-motion. Story 5.3 :
-   en-tête + formulaire abandon sans animation propre. */
+   en-tête + formulaire abandon sans animation propre.
+   Story 10.3 — vocabulaire de rayons du socle : les conteneurs type carte
+   passent à 16 px (--az-rayon-md) ; le bloc alertes garde son rayon 8 px
+   qui le distingue des cartes, les badges dossard/« … » restent discrets. */
 
 .course-live{display:grid;gap:var(--az-space-4)}
 .course-fraicheur{font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);font-variant-numeric:tabular-nums;color:var(--az-texte-2);margin:0}
 .course-reconnexion{margin-left:var(--az-space-2);color:var(--az-texte-2)}
 .course-reconnexion::before{content:"●";margin-right:calc(var(--az-space-1) / 2);font-size:8px;vertical-align:middle}
 .course-cartes{display:grid;gap:var(--az-space-3);grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))}
-.course-carte{display:grid;gap:var(--az-space-1);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-carte{display:grid;gap:var(--az-space-1);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3)}
 .course-carte-chiffre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);line-height:1;font-variant-numeric:tabular-nums;color:var(--heading)}
 .course-carte-titre{margin:0;font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);text-transform:uppercase;letter-spacing:var(--az-letter-spacing-eyebrow);color:var(--az-texte-2)}
 .course-carte-note{margin:0;font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
@@ -21,7 +24,7 @@
 .course-partants li{display:flex;justify-content:space-between;gap:var(--az-space-2);font-size:var(--az-font-size-meta)}
 .course-partants-nombre{font-family:var(--az-font-meta);font-variant-numeric:tabular-nums;font-weight:600}
 .course-boards{display:grid;gap:var(--az-space-3)}
-.course-board{border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3);display:grid;gap:var(--az-space-2)}
+.course-board{border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3);display:grid;gap:var(--az-space-2)}
 .course-board-titre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--heading)}
 .course-board-vide{margin:0;font-size:var(--az-font-size-meta);color:var(--az-texte-2)}
 .course-board-liste{list-style:none;margin:0;padding:0;display:grid}
@@ -60,18 +63,21 @@
    abandon. */
 .course-entete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--az-space-2)}
 .course-entete .course-fraicheur{margin:0}
-.course-abandon{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-abandon{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3)}
 .course-abandon-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
 /* Bandeaux succès (role="status") — abandon 5.3 et dialogue annulation 5.4
    partagent la même règle, classes distinctes par surface. */
-.course-abandon-succes,.course-dialogue-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-2) var(--az-space-3)}
-.course-ligne-annuler{opacity:0;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);background:transparent;color:var(--az-texte-2);font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);line-height:1.4;padding:0 calc(var(--az-space-1) * 1.5);cursor:pointer;transition:opacity 120ms ease}
+.course-abandon-succes,.course-dialogue-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-2) var(--az-space-3)}
+/* I6 (revue épopée 10) — cible tactile ≥ 44 px de HAUT (mesurée ≈ 21-23 px
+   avant : padding vertical nul + line-height 1,4) ; le libellé « … » n'est
+   jamais collé au bord : centré, avec un padding horizontal. */
+.course-ligne-annuler{opacity:0;display:inline-flex;align-items:center;min-height:44px;border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);background:transparent;color:var(--az-texte-2);font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);line-height:1.4;padding:0 calc(var(--az-space-1) * 1.5);cursor:pointer;transition:opacity 120ms ease}
 .course-board-ligne:hover .course-ligne-annuler,
 .course-board-ligne:focus-within .course-ligne-annuler{opacity:1}
 .course-ligne-annuler:hover,
 .course-ligne-annuler:focus-visible{color:var(--az-texte);border-color:var(--az-texte-2)}
 @media (hover:none){.course-ligne-annuler{opacity:1}}
-.course-annulation{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-annulation{display:grid;gap:var(--az-space-3);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3)}
 .course-annulation-cible{margin:0;font-family:var(--az-font-meta);font-weight:var(--az-font-weight-surtitre);font-variant-numeric:tabular-nums;color:var(--az-texte)}
 
 @media (prefers-reduced-motion: reduce){
@@ -82,7 +88,7 @@
 /* Story 7.1 — carte « Heures de départ » : une ligne par épreuve (nom +
    distance, input datetime-local en heure locale du poste), heure serveur
    réaffichée en heure locale, bouton Enregistrer. Aucune animation propre. */
-.course-heures{display:grid;gap:var(--az-space-2);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-3)}
+.course-heures{display:grid;gap:var(--az-space-2);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3)}
 .course-heures-titre{margin:0;font-family:var(--az-font-display-sm);font-size:var(--az-font-size-display-sm);font-weight:var(--az-font-weight-display-sm);text-transform:uppercase;color:var(--heading)}
 .course-heures-liste{list-style:none;margin:0;padding:0;display:grid;gap:var(--az-space-3)}
 .course-heures-ligne{display:grid;gap:calc(var(--az-space-1) / 2)}
@@ -90,4 +96,4 @@
 .course-heures-distance{color:var(--az-texte-2)}
 .course-heures-ligne .hint{margin:0}
 .course-heures-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
-.course-heures-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:var(--az-space-2) var(--az-space-3)}
+.course-heures-succes{margin:0;font-family:var(--az-font-meta-lg);font-size:var(--az-font-size-meta-lg);color:var(--az-texte);border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-2) var(--az-space-3)}

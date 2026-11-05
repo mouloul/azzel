@@ -17,8 +17,8 @@ import {
 } from '@/lib/sync/sync-terrain';
 
 // Story 4.5 (UX-DR-8, AD-2/AD-5) — bandeau sync PERMANENT de la PWA
-// volontaires : « ◷ N en attente » → envoi → « ✓ envoyés — file : 0 », ou
-// « Appelle le PC » si l'appareil est révoqué (jamais d'auto-réenregistrement).
+// volontaires : « ◷ N passages en attente » → envoi → « ✓ envoyés — file : 0 »,
+// ou « Appelle le PC » si l'appareil est révoqué (jamais d'auto-réenregistrement).
 // Déclenchements : ouverture en ligne (montée + signal du parent après fetch
 // etat OK), événement `online`, bouton du bandeau — un déclenchement pendant
 // un envoi en cours est mémorisé et rejoué à la fin. Le journal (details,
@@ -47,7 +47,8 @@ export function libellerBandeauSync(phase: PhaseSync, enAttente: number): string
     case 'revoque':
       return '⚠ Appareil bloqué par le PC';
     case 'attente':
-      return `◷ ${enAttente} en attente`;
+      // Story 10.1 — texte exact de la story : « ◷ N passages en attente ».
+      return `◷ ${enAttente} passages en attente`;
   }
 }
 
@@ -183,7 +184,7 @@ export function BandeauSync({
         return;
       }
       // « ✓ envoyés — file : 0 » SEULEMENT si la file est réellement vide —
-      // des rejets restants (non marqués) gardent « ◷ N en attente ».
+      // des rejets restants (non marqués) gardent « ◷ N passages en attente ».
       setPhase(restant > 0 ? 'attente' : 'envoye');
     } finally {
       enCours.current = false;

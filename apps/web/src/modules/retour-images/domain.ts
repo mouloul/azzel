@@ -316,3 +316,14 @@ export function resolveRetourImagesPage(input: {
 export function avecLectureImmediate(url: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}autoplay=1`;
 }
+
+/**
+ * Lecture automatique à l'arrivée à l'écran (teaser de l'accueil) : SANS LE SON,
+ * seule forme qu'aucun navigateur ne bloque et qui ne déclenche pas 1.4.2 (pas
+ * de son démarré sans geste). `playsinline=1` évite le plein écran imposé sur
+ * iOS. Les commandes du lecteur restent là pour mettre en pause (2.2.2).
+ */
+export function avecLectureAutomatiqueMuette(url: string): string {
+  const separateur = url.includes('?') ? '&' : '?';
+  return `${url}${separateur}autoplay=1&mute=1&muted=1&playsinline=1`;
+}

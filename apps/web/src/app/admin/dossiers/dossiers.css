@@ -1,0 +1,42 @@
+/* Admin dossiers (story 10.3) — compteurs de tête de page. Fichier propre à
+   la page /admin/dossiers : hors du chunk CSS partagé avec la vitrine
+   (budget premier chargement). Densité par l'espacement : chiffre display,
+   libellé 15 px, rien sous le plancher de lisibilité. */
+.dossiers-compteurs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--az-space-3);
+  margin: 0 0 var(--az-space-4);
+}
+
+.dossiers-compteur {
+  display: grid;
+  gap: var(--az-space-1);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--az-surface);
+  padding: var(--az-space-3) var(--az-space-4);
+  margin: 0;
+}
+
+.dossiers-compteur-nombre {
+  /* Chiffre AU-DESSUS du libellé à l'écran (dt précède dd dans le DOM,
+     conforme HTML) — l'ordre visuel se joue ici, pas dans le markup. */
+  order: -1;
+  margin: 0;
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--heading);
+}
+
+.dossiers-compteur-libelle {
+  margin: 0;
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-meta-lg);
+  text-transform: uppercase;
+  letter-spacing: var(--az-letter-spacing-eyebrow);
+  color: var(--az-texte-2);
+}

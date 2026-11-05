@@ -1,6 +1,7 @@
 /* Story 4.2 — scanner e-dossard (surface volontaire). Deux ambiances :
    - écrans d'état (prêt, permission, annuaire absent) : cartes claires de la
-     surface volontaires ;
+     surface volontaires — depuis la story 10.1, chrome de CARTE et ACTIONS en
+     pilule fournis par le socle (socle.css, importé par le layout racine) ;
    - écran actif : caméra PLEIN ÉCRAN par-dessus la mise en page du site
      (position fixed), voile quasi opaque ≥ 96 %, palette sombre FIXE issue
      des rôles *-sombre des tokens — indépendante du mode clair/sombre (guichet
@@ -45,31 +46,17 @@
   gap: var(--az-space-2);
 }
 
-.scan-etat-actions .btn-action,
-.scan-etat-actions .btn-contour {
+/* Cibles terrain : les pilules du socle montent à 48 px. */
+.scan-etat-actions .socle-action {
   min-height: 48px;
 }
 
 /* Gros bouton de démarrage : geste fondateur (débloque audio + caméra),
-   cible généreuse ≥ 64 px. */
+    cible généreuse ≥ 64 px. Pilule du socle (.socle-action porte fond, encre,
+    rayon full, focus 2 px) ; ici la cible et la frappe terrain (20 px). */
 .scan-demarrer {
   min-height: 64px;
-  padding: var(--az-space-3) var(--az-space-5);
-  border: none;
-  border-radius: var(--az-radius);
-  background: var(--az-action);
-  color: var(--az-action-texte);
-  font-family: var(--az-font-surtitre);
   font-size: 20px;
-  font-weight: var(--az-font-weight-surtitre);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.scan-demarrer:focus-visible {
-  outline: 3px solid var(--az-focus);
-  outline-offset: 2px;
 }
 
 /* --- Écran actif : caméra plein écran ---------------------------------------- */
@@ -78,7 +65,10 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: #0C1610; /* bg-sombre, sous la video le temps de l'accroche */
+  /* Story 9.1 — #0C1610 reste en littéral : valeur historique ≠ bg-sombre
+     (#101A14) ; le remplacer par le token changerait le rendu, ce que la
+     story interdit. Arbitrage (token dédié ou alignement) à trancher. */
+  background: #0C1610;
 }
 
 .scan-video {
@@ -99,7 +89,7 @@
   padding: calc(var(--az-space-3) + env(safe-area-inset-top, 0px))
     var(--az-space-3) calc(var(--az-space-3) + env(safe-area-inset-bottom, 0px));
   background: rgba(12, 22, 16, 0.96);
-  color: #E8F0E9; /* texte-sombre */
+  color: var(--az-texte-sombre);
 }
 
 .scan-entete {
@@ -122,7 +112,7 @@
   min-height: 32px;
   padding: var(--az-space-1) var(--az-space-2);
   border-radius: var(--az-radius-full);
-  background: rgba(232, 240, 233, 0.12);
+  background: color-mix(in srgb, var(--az-texte-sombre) 12%, transparent);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: var(--az-font-size-meta-lg);
   font-weight: var(--az-font-weight-meta);
@@ -130,7 +120,7 @@
 }
 
 .scan-badge--live {
-  color: #8FD4A8; /* action-sombre */
+  color: var(--az-action-sombre);
   font-weight: var(--az-font-weight-surtitre);
 }
 
@@ -149,7 +139,7 @@
   margin: 0;
   font-size: var(--az-font-size-body-lg);
   line-height: var(--az-line-height-body-lg);
-  color: #A9C0AE; /* texte-2-sombre */
+  color: var(--az-texte-2-sombre);
 }
 
 /* --- Voyant (UX-DR-7) : pill plein cadre ≥ 96 px, texte ≥ 24 px / 800 -------- */
@@ -196,18 +186,18 @@
 /* Trois états, sémantique des couleurs opérationnelles (paires sombres
    fixes — jamais la couleur seule : icônes ✓/↻/⚠ + textes intégraux). */
 .scan-voyant--succes {
-  background: #62D288; /* succes-sombre */
-  color: #07290F; /* succes-encre-sombre */
+  background: var(--az-succes-sombre);
+  color: var(--az-succes-encre-sombre);
 }
 
 .scan-voyant--doublon {
-  background: #F0B445; /* attention-sombre */
-  color: #302205; /* attention-encre-sombre */
+  background: var(--az-attention-sombre);
+  color: var(--az-attention-encre-sombre);
 }
 
 .scan-voyant--inconnu {
-  background: #FF7268; /* danger-sombre */
-  color: #340905; /* danger-encre-sombre */
+  background: var(--az-danger-sombre);
+  color: var(--az-danger-encre-sombre);
 }
 
 /* Clignotement borné : exactement 1 flash/s, jamais plus — et seulement
@@ -237,7 +227,10 @@
   min-height: 48px;
   padding: var(--az-space-1) var(--az-space-3);
   border-radius: var(--az-radius);
-  background: #340905;
+  background: var(--az-danger-encre-sombre);
+  /* Story 9.1 — #FFD9D6 reste en littéral : teinte claire du danger non
+     tokenisée ; aucune variable ne vaut cette couleur et le rendu doit rester
+     strictement identique. À tokeniser si elle resservit. */
   color: #FFD9D6;
   text-decoration: none;
   font-weight: var(--az-font-weight-surtitre);
@@ -255,10 +248,10 @@
 .scan-stop {
   min-height: 64px;
   padding: var(--az-space-2) var(--az-space-4);
-  border: 2px solid rgba(232, 240, 233, 0.55);
+  border: 2px solid color-mix(in srgb, var(--az-texte-sombre) 55%, transparent);
   border-radius: var(--az-radius);
   background: rgba(12, 22, 16, 0.9);
-  color: #E8F0E9;
+  color: var(--az-texte-sombre);
   font-family: var(--az-font-surtitre);
   font-size: var(--az-font-size-body-lg);
   font-weight: var(--az-font-weight-surtitre);
@@ -268,6 +261,6 @@
 }
 
 .scan-stop:focus-visible {
-  outline: 3px solid #8FD4A8;
+  outline: 3px solid var(--az-action-sombre);
   outline-offset: 2px;
 }

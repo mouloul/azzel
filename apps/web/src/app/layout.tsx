@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AdminHeaderLink } from '@/components/admin-header-link';
-import { BandeauEgide } from '@/components/bandeau-egide';
 import { MonTrail } from '@/components/mon-trail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildThemeInitScript } from '@/lib/theme';
 import './globals.css';
+import './socle.css';
 import './tokens-synchronises.css';
 
 export const metadata: Metadata = {
@@ -24,13 +24,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr" data-theme="light" suppressHydrationWarning>
       <body>
-        <link
-          rel="preload"
-          href="/charte/fonts/barlow-condensed-latin-700-normal.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        {/* Préchargements du chemin critique : Barlow 800 (titre du hero, LCP)
+            et Inter 400 (texte courant). Barlow Condensed 700 (libellés de
+            boutons, rail, nav) n'est pas préchargé : son @font-face reste dans
+            tokens-synchronises.css avec font-display swap, et le repli
+            métriquement calibré « Barlow Condensed Fallback » (ascent/descent
+            overrides + size-adjust) garantit des hauteurs de ligne identiques —
+            mesure CDP : aucun déplacement vertical, seules les pilules et la nav
+            se recalent horizontalement (CLS ≈ 0,002, seuil 0,1). Spec 9.6 : ce
+            retrait n'enlève AUCUN octet de la page (la police reste servie via
+            @font-face) — il sort la police du décompte du chemin critique du
+            script de budget et débloque le premier rendu, qui n'attend plus ce
+            fichier. */}
         <link
           rel="preload"
           href="/charte/fonts/barlow-condensed-latin-800-normal.woff2"
@@ -49,7 +54,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a className="skip-link" href="#contenu">
           Aller au contenu
         </a>
-        <BandeauEgide />
         <header className="site-header">
           <div className="site-header__inner">
             <Link

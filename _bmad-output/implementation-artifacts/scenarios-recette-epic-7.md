@@ -2,6 +2,7 @@
 
 **Produit :** Azzel · **Périmètre :** stories 7-1 → 7-4 · **Date :** 2026-10-24
 **Durée estimée :** 70–90 min (module par module, arrêt/reprise possible)
+**Réaligné story 9-6 (2026-11-03) :** page /resultats refondu (story 9-5) — recherche par dossard, filtres épreuve/catégorie, podium des premiers arrivés. Libellés (« Classement provisoire », « synchronisé il y a X ») et états vides vérifiés inchangés. Modules S1, S3 et S4 inchangés.
 
 Chaque module se teste indépendamment. Prérequis : recettes épopées 1 à 6 terminées (coureurs validés/numérotés, e-dossards consultés, scans volontaires opérationnels, app coureurs avec suivi activable).
 
@@ -49,6 +50,11 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | 2.6 | Copier `/resultats?partage=1` et l'ouvrir 3× | Page normale ; `psql : select visites from resultats_visite` → 3 visites du jour (aucune IP/UA en base) |
 | 2.7 | Ouvrir `/resultats` SANS paramètre + laisser le polling tourner | Aucun comptage supplémentaire |
 | 2.8 | `GET /api/resultats` direct | JSON {ok, resultats} no-store — aucune donnée personnelle (dossards seuls) |
+| 2.9 | Bloc « Retrouver un coureur » : saisir un dossard présent au classement (ex. 201) | Le classement ET la liste « Derniers arrivés » ne montrent plus que ce dossard, sans rechargement ; le bouton « Effacer les filtres » apparaît ; un dossard inconnu n'affiche aucune ligne, jamais une erreur |
+| 2.10 | Filtre « Épreuve » : choisir La Longue | Seule la carte de La Longue reste (titre « La Longue — 35 km », méta « 35 km — départ à 08:00 » si l'heure est définie) ; « Toutes » réaffiche les deux épreuves ; sur téléphone, le tableau défile dans sa propre zone, le reste de la page ne défile pas horizontalement |
+| 2.11 | Filtre « Catégorie » : choisir une catégorie présente | Le tableau de chaque épreuve n'affiche que cette catégorie ; les trois critères se combinent (dossard + épreuve + catégorie) ; « Effacer les filtres » restaure la vue complète |
+| 2.12 | Avec des arrivés en base : regarder le podium au-dessus du tableau de chaque épreuve | Bloc « Premiers arrivés » : rang en toutes lettres (1ᵉʳ, 2ᵉ, 3ᵉ), badge dossard, temps — les rangs ex æquo sont servis tels quels (deux « 1ᵉʳ » possibles), aucun recalcul |
+| 2.13 | Activer la recherche ou un filtre alors que le podium est visible | Le podium disparaît (un podium dérivé d'un filtre serait trompeur) ; il revient à l'effacement des filtres |
 
 ## S3 — Carte publique anonyme (story 7.3)
 

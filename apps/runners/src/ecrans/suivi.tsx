@@ -24,6 +24,38 @@ import { Bouton, BoutonAssistance, Carte, Surtitre, Titre } from './ui';
 /** Intervalle lisible par un humain (7 min — constante shared, jamais durcie ici). */
 const MINUTES_INTERVALLE = Math.round(INTERVALLE_POSITION_MS / 60_000);
 
+/**
+ * 10.2 — libellé d'état en tête d'écran : les états vécus par le coureur,
+ * en toutes lettres (jamais la couleur seule). « En pause » = permission
+ * refusée (le suivi repart tout seul une fois autorisée) ; « interrompu » =
+ * piège iOS « Autoriser une fois ». Avant-plan seul : honnête sur ce qui est
+ * réellement capturé.
+ *
+ * B1 (revue épopée 10) — switch EXHAUSTIF, sans default qui absorbe :
+ * `(optIn: true, etatMoteur: 'inactif')` est atteignable (services de
+ * localisation coupés à l'OS, erreur capteur → demarrerSansEchec retourne
+ * 'inactif', au démarrage comme au toggle). Cet état n'affirme JAMAIS un
+ * suivi actif : le coureur et ses proches ne doivent pas croire que la
+ * position est partagée.
+ */
+export function libelleEtatSuivi(optIn: boolean, etatMoteur: EtatSuivi): string {
+  if (!optIn) {
+    return 'Suivi désactivé';
+  }
+  switch (etatMoteur) {
+    case 'actif':
+      return 'Suivi activé';
+    case 'actif-avant-plan':
+      return 'Suivi activé (app ouverte)';
+    case 'interrompu':
+      return 'Suivi interrompu';
+    case 'permission-refusee':
+      return 'Suivi en pause';
+    case 'inactif':
+      return 'Suivi demandé, pas démarré';
+  }
+}
+
 export interface PropsEcranSuivi {
   theme: AppTheme;
   telephone: string;
@@ -57,6 +89,7 @@ export function EcranSuivi({
   const interrompu = optIn && etatMoteur === 'interrompu';
   const permissionRefusee = optIn && etatMoteur === 'permission-refusee';
   const avantPlanSeul = optIn && etatMoteur === 'actif-avant-plan';
+  const pasDemarre = optIn && etatMoteur === 'inactif';
 
   return (
     <ScrollView
@@ -69,7 +102,11 @@ export function EcranSuivi({
     >
       <Carte theme={theme}>
         <Surtitre theme={theme}>Suivi de course</Surtitre>
-        <Titre theme={theme}>Ta famille te suit</Titre>
+        {/* 10.2 — l'état du suivi (activé / désactivé / en pause /
+            interrompu) est la PREMIÈRE information lisible de l'écran,
+            avant le titre : au soleil, sur le sentier, c'est la seule que
+            le coureur cherche. Aucune donnée de progression ni de position
+            n'existe dans l'état de l'app — on n'en affiche aucune. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: 48 }}>
           <Switch
             accessibilityLabel="Activer le suivi GPS de ma course"
@@ -79,10 +116,14 @@ export function EcranSuivi({
             trackColor={{ true: theme.colors.action, false: theme.colors.ink2 }}
             thumbColor={theme.colors.surface}
           />
-          <Text style={[theme.fonts.bodyLg, { color: theme.colors.ink, flex: 1 }]}>
-            {optIn ? 'Suivi activé' : 'Suivi désactivé'}
+          <Text
+            accessibilityRole="text"
+            style={[theme.fonts.bodyLg, { color: theme.colors.ink, flex: 1 }]}
+          >
+            {libelleEtatSuivi(optIn, etatMoteur)}
           </Text>
         </View>
+        <Titre theme={theme}>Ta famille te suit</Titre>
 
         {optIn ? (
           interrompu ? (
@@ -104,6 +145,12 @@ export function EcranSuivi({
                 choisis « Toujours » — le suivi repartra tout seul.
               </Text>
             </>
+          ) : pasDemarre ? (
+            <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
+              Le suivi n’a pas pu démarrer : ta position n’est pas partagée. Vérifie que
+              les services de localisation du téléphone sont activés, puis éteins et
+              rallume l’interrupteur pour réessayer.
+            </Text>
           ) : (
             <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
               Ta position est partagée toutes les {MINUTES_INTERVALLE} minutes avec une précision
@@ -119,7 +166,7 @@ export function EcranSuivi({
             Désactivé : rien n’est enregistré.
           </Text>
         )}
-        {optIn && !interrompu && !permissionRefusee && !avantPlanSeul ? (
+        {optIn && !interrompu && !permissionRefusee && !avantPlanSeul && !pasDemarre ? (
           <Text style={[theme.fonts.meta, { color: theme.colors.ink2 }]}>
             Aucune position n’est capturée hors de cet intervalle — jamais plus souvent, la
             fréquence est fixe.

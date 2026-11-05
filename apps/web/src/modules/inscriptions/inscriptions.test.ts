@@ -9,11 +9,12 @@ import { processOutbox } from '@/modules/notifications/worker';
 
 import {
   AGE_CATEGORY_LABELS,
+  FIELD_ORDER,
   MAX_AGE_AT_RACE,
   MAX_REFUSAL_REASON_LENGTH,
   MIN_AGE_AT_RACE,
+  PASTILLE_STATUT,
   canDepositPreuve,
-  coureurStatusChipClass,
   deriveAgeAndCategory,
   isRegistrationOpen,
   isValidPhone,
@@ -60,6 +61,8 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     contactUrgenceTelephone: '0555010204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
+    hebergement: '',
     ...overrides,
   };
 }
@@ -72,8 +75,18 @@ describe('deriveAgeAndCategory — bornes à la date de course', () => {
     });
   });
 
-  it('la veille de ses 20 ans : U20', () => {
-    expect(deriveAgeAndCategory('2007-03-27', RACE_DATE)).toEqual({ age: 19, category: 'U20' });
+  it('19 ans : Senior — U20 n’existe plus, la course est réservée aux majeurs', () => {
+    expect(deriveAgeAndCategory('2007-03-27', RACE_DATE)).toEqual({
+      age: 19,
+      category: 'Senior',
+    });
+  });
+
+  it('18 ans tout juste le jour de la course : admis, Senior', () => {
+    expect(deriveAgeAndCategory('2009-03-26', RACE_DATE)).toEqual({
+      age: 18,
+      category: 'Senior',
+    });
   });
 
   it('bornes Senior / V1 / V2 / V3', () => {
@@ -129,6 +142,8 @@ describe('normalizeInscriptionInput', () => {
         contactUrgenceTelephone: '0555-010-204',
         dateNaissance: '1990-05-12',
         tailleTshirt: 'M ',
+        genre: ' h ',
+        hebergement: '',
         junk: 42,
       }),
     ).toEqual(validInput({ telephone: '+213555010203', contactUrgenceTelephone: '0555010204' }));
@@ -149,8 +164,12 @@ describe('validateInscriptionInput — champ par champ', () => {
     expect(Object.keys(errors)).toEqual([]);
   });
 
-  it('chaque champ manquant est nommé individuellement', () => {
-    const keys = Object.keys(validInput()) as (keyof InscriptionFormInput)[];
+  it('chaque champ OBLIGATOIRE manquant est nommé individuellement', () => {
+    // L'hébergement est la seule option du formulaire : son absence est un
+    // choix, pas une erreur. Tout le reste est exigé.
+    const keys = (Object.keys(validInput()) as (keyof InscriptionFormInput)[]).filter(
+      (key) => key !== 'hebergement',
+    );
     for (const key of keys) {
       const input = validInput({ [key]: '' });
       const errors = validateInscriptionInput(input, slugs, RACE_DATE);
@@ -158,7 +177,7 @@ describe('validateInscriptionInput — champ par champ', () => {
     }
   });
 
-  it('formulaire vide : les huit champs sont signalés', () => {
+  it('formulaire vide : les neuf champs obligatoires sont signalés', () => {
     const errors = validateInscriptionInput(
       {
         epreuve: '',
@@ -169,6 +188,8 @@ describe('validateInscriptionInput — champ par champ', () => {
         contactUrgenceTelephone: '',
         dateNaissance: '',
         tailleTshirt: '',
+        genre: '',
+        hebergement: '',
       },
       slugs,
       RACE_DATE,
@@ -183,6 +204,7 @@ describe('validateInscriptionInput — champ par champ', () => {
         'contactUrgenceTelephone',
         'dateNaissance',
         'tailleTshirt',
+        'genre',
       ].sort(),
     );
   });
@@ -197,7 +219,7 @@ describe('validateInscriptionInput — champ par champ', () => {
     expect(errors.tailleTshirt).toBeDefined();
   });
 
-  it('âge imbroglio : moins de 10 ans ou plus de 100 ans à la course', () => {
+  it('âge imbroglio : moins de 18 ans ou plus de 100 ans à la course', () => {
     expect(
       validateInscriptionInput(validInput({ dateNaissance: '2020-01-01' }), slugs, RACE_DATE)
         .dateNaissance,
@@ -281,6 +303,13 @@ describe('submitInscription — service avec store stubbé', () => {
       nom: 'Édition 2027',
       dateCourse: RACE_DATE,
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
+      dateCoursePublique: false,
       ...edition,
     };
     const epreuves = [
@@ -303,6 +332,10 @@ describe('submitInscription — service avec store stubbé', () => {
       contactUrgenceTelephone: '0555010204',
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
+      genre: 'H',
+      hebergement: false,
+      preuveDueAt: null,
+      expiredAt: null,
       age: input.age,
       categorieAge: input.categorieAge,
       status: 'en constitution',
@@ -389,6 +422,7 @@ describe('submitInscription — service avec store stubbé', () => {
         'contactUrgenceTelephone',
         'dateNaissance',
         'tailleTshirt',
+        'genre',
       ].sort(),
     );
     expect(store.upsertCoureur).not.toHaveBeenCalled();
@@ -404,8 +438,85 @@ describe('submitInscription — service avec store stubbé', () => {
   });
 
   it('labels de catégorie complets pour l’affichage', () => {
-    expect(AGE_CATEGORY_LABELS.U20).toContain('U20');
+    expect(AGE_CATEGORY_LABELS.Senior).toContain('18');
     expect(AGE_CATEGORY_LABELS.V3).toContain('60');
+    expect(Object.keys(AGE_CATEGORY_LABELS)).toEqual(['Senior', 'V1', 'V2', 'V3']);
+  });
+});
+
+describe('majorité obligatoire à la date de la course', () => {
+  const slugs = ['longue', 'moyenne'];
+
+  it('17 ans la veille de ses 18 ans : refusé', () => {
+    const errors = validateInscriptionInput(
+      validInput({ dateNaissance: '2009-03-27' }),
+      slugs,
+      RACE_DATE,
+    );
+    expect(errors.dateNaissance).toBeDefined();
+  });
+
+  it('18 ans le jour de la course : accepté', () => {
+    const errors = validateInscriptionInput(
+      validInput({ dateNaissance: '2009-03-26' }),
+      slugs,
+      RACE_DATE,
+    );
+    expect(errors.dateNaissance).toBeUndefined();
+  });
+
+  it('le message dit la règle, pas seulement un intervalle', () => {
+    const message = validateInscriptionInput(
+      validInput({ dateNaissance: '2015-01-01' }),
+      slugs,
+      RACE_DATE,
+    ).dateNaissance;
+    expect(message).toContain('18');
+    expect(message).toMatch(/majeur|18 ans/i);
+  });
+});
+
+describe('genre du coureur', () => {
+  const slugs = ['longue', 'moyenne'];
+
+  it('obligatoire : absent, erreur nommée sur le champ', () => {
+    const errors = validateInscriptionInput(
+      validInput({ genre: '' }),
+      slugs,
+      RACE_DATE,
+    );
+    expect(errors.genre).toBeDefined();
+  });
+
+  it('refuse une valeur hors liste', () => {
+    expect(
+      validateInscriptionInput(validInput({ genre: 'X' }), slugs, RACE_DATE).genre,
+    ).toBeDefined();
+  });
+
+  it('accepte F et H', () => {
+    for (const genre of ['F', 'H']) {
+      expect(
+        validateInscriptionInput(validInput({ genre }), slugs, RACE_DATE).genre,
+      ).toBeUndefined();
+    }
+  });
+
+  it('normalise la saisie brute : espaces et minuscules', () => {
+    expect(normalizeInscriptionInput({ genre: ' f ' }).genre).toBe('F');
+    expect(normalizeInscriptionInput({ genre: 'h' }).genre).toBe('H');
+  });
+
+  it('valeur inconnue : conservée telle quelle pour que la validation la refuse', () => {
+    expect(normalizeInscriptionInput({ genre: 'autre' }).genre).toBe('AUTRE');
+  });
+
+  it('fait partie de l’ordre des champs — sinon le focus d’erreur l’ignore', () => {
+    expect(FIELD_ORDER).toContain('genre');
+  });
+
+  it('l’hébergement, facultatif, reste HORS de cet ordre : il ne peut pas produire d’erreur', () => {
+    expect(FIELD_ORDER).not.toContain('hebergement');
   });
 });
 
@@ -499,6 +610,13 @@ describe('acceptDocuments — service avec store stubbé', () => {
       nom: 'Édition 2027',
       dateCourse: RACE_DATE,
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
+      dateCoursePublique: false,
       ...edition,
     };
     const store = {
@@ -604,10 +722,15 @@ describe('cycle de statut — helpers domaine', () => {
     expect(normalizeRefusalReason(undefined)).toBe('');
   });
 
-  it('coureurStatusChipClass : une variante charte par statut', () => {
-    expect(coureurStatusChipClass('validé')).toBe('aa-chip aa-chip--phare');
-    expect(coureurStatusChipClass('refusé')).toBe('aa-chip aa-chip--refuse');
-    expect(coureurStatusChipClass('en constitution')).toBe('aa-chip aa-chip--tbc');
+  // I9 (revue épopée 10) — l'ancien test épingle coureurStatusChipClass (un
+  // variant aa-chip par statut) : la fonction est supprimée, la page détail
+  // affiche désormais la MÊME pastille socle que la liste. La correspondance
+  // statut → variante socle reste épinglée ici (PASTILLE_STATUT), et le
+  // rendu réel est couvert par admin/dossiers/[id]/page.test.tsx.
+  it('PASTILLE_STATUT : une variante socle par statut (liste ET détail)', () => {
+    expect(PASTILLE_STATUT['validé']).toBe('socle-pastille--succes');
+    expect(PASTILLE_STATUT['refusé']).toBe('socle-pastille--danger');
+    expect(PASTILLE_STATUT['en constitution']).toBe('socle-pastille--attention');
   });
 });
 
@@ -633,6 +756,13 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       nom: 'Édition 2027',
       dateCourse: RACE_DATE,
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
+      dateCoursePublique: false,
     };
     const record: CoureurRecord = {
       id: 'coureur-1',
@@ -650,6 +780,10 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       contactUrgenceTelephone: '0555010204',
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
+      genre: 'H',
+      hebergement: false,
+      preuveDueAt: null,
+      expiredAt: null,
       age: 36,
       categorieAge: 'Senior',
       status: 'en constitution',

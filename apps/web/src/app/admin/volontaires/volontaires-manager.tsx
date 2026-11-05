@@ -8,13 +8,16 @@ import {
   MAX_IMPORT_BYTES,
   MAX_IMPORT_LIBELLE,
   MAX_IMPORT_LINES,
+  type ImportStatut,
+  type RapportImport,
 } from '@/modules/missions/domain';
-import type { RapportImport, ImportStatut } from '@/modules/missions/domain';
 import type { VolontaireSummary } from '@/modules/missions/service';
 
 // Story 3.1 — manager volontaires : import (multipart), rapport accessible
 // ligne par ligne, liste avec renvoi manuel d'invitation. Succès role="status",
 // erreurs role="alert" (pattern sponsors).
+// Story 10.3 — tableaux sur le gabarit commun .socle-table ; statuts en
+// pastilles du socle (point + libellé, jamais la couleur seule).
 
 const NETWORK_ERROR = {
   message: 'Connexion au serveur impossible.',
@@ -26,10 +29,22 @@ const TIMEOUT_ERROR = {
   action: 'Réessaie dans un instant.',
 };
 
-const CLASSES_STATUT: Record<ImportStatut, string> = {
-  'créé': 'chip-statut chip-cree',
-  'ignoré': 'chip-statut chip-ignore',
-  'rejeté': 'chip-statut chip-rejete',
+/* Pastille d'état du rapport d'import : créé → succès, rejeté → danger,
+   ignoré → point neutre (rien à signaler). */
+const PASTILLE_IMPORT: Record<ImportStatut, string> = {
+  'créé': 'socle-pastille--succes',
+  'ignoré': '',
+  'rejeté': 'socle-pastille--danger',
+};
+
+/* Pastille du statut d'invitation : la couleur du point suit l'avancement,
+   le libellé porte le sens. */
+const PASTILLE_INVITATION: Record<VolontaireSummary['statutInvitation'], string> = {
+  en_file: 'socle-pastille--sync-attente',
+  envoyee: 'socle-pastille--sync-envoye',
+  echec: 'socle-pastille--danger',
+  active: 'socle-pastille--succes',
+  aucune: 'socle-pastille--attention',
 };
 
 function libelleStatut(statut: ImportStatut): string {
@@ -80,7 +95,8 @@ function ErreurServeur({
   );
 }
 
-function RapportImport({ rapport }: { rapport: RapportImport }) {
+/* Exporté pour le test de gabarit (story 10.3) : rendu pur, aucun état. */
+export function RapportImport({ rapport }: { rapport: RapportImport }) {
   return (
     <div className="volontaires-rapport">
       <div role="status" aria-live="polite" className="volontaires-resume">
@@ -93,34 +109,43 @@ function RapportImport({ rapport }: { rapport: RapportImport }) {
           d’envoi.
         </p>
       </div>
-      <table className="volontaires-table">
-        <caption className="sr-only">
-          Résultat de l’import, ligne par ligne : numéro de ligne, nom, email,
-          statut et raison.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Ligne</th>
-            <th scope="col">Nom</th>
-            <th scope="col">Email</th>
-            <th scope="col">Statut</th>
-            <th scope="col">Raison</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rapport.lignes.map((ligne) => (
-            <tr key={ligne.ligne}>
-              <td data-libelle="Ligne">{ligne.ligne}</td>
-              <td data-libelle="Nom">{ligne.nom || '—'}</td>
-              <td data-libelle="Email">{ligne.email || '—'}</td>
-              <td data-libelle="Statut">
-                <span className={CLASSES_STATUT[ligne.statut]}>{libelleStatut(ligne.statut)}</span>
-              </td>
-              <td data-libelle="Raison">{ligne.raison ?? '—'}</td>
+      <div className="table-wrap">
+        <table className="socle-table volontaires-table">
+          <caption className="sr-only">
+            Résultat de l’import, ligne par ligne : numéro de ligne, nom, email,
+            statut et raison.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" className="socle-num">
+                Ligne
+              </th>
+              <th scope="col">Nom</th>
+              <th scope="col">Email</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Raison</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rapport.lignes.map((ligne) => (
+              <tr key={ligne.ligne}>
+                <td data-libelle="Ligne" className="socle-num">
+                  {ligne.ligne}
+                </td>
+                <td data-libelle="Nom">{ligne.nom || '—'}</td>
+                <td data-libelle="Email">{ligne.email || '—'}</td>
+                <td data-libelle="Statut">
+                  <span className={`socle-pastille ${PASTILLE_IMPORT[ligne.statut]}`}>
+                    <span className="socle-pastille-point" aria-hidden="true" />
+                    {libelleStatut(ligne.statut)}
+                  </span>
+                </td>
+                <td data-libelle="Raison">{ligne.raison ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {rapport.resume.rejetes > 0 && (
         <p className="hint">
           Corrige les lignes rejetées dans ton fichier puis réimporte-le : les
@@ -274,7 +299,12 @@ function LigneVolontaire({ volontaire }: { volontaire: VolontaireSummary }) {
         <td data-libelle="Email">{volontaire.email}</td>
         <td data-libelle="Téléphone">{volontaire.telephone ?? '—'}</td>
         <td data-libelle="Invitation">
-          <span className="chip-meta">{volontaire.statutInvitationLabel}</span>
+          <span
+            className={`socle-pastille ${PASTILLE_INVITATION[volontaire.statutInvitation]}`}
+          >
+            <span className="socle-pastille-point" aria-hidden="true" />
+            {volontaire.statutInvitationLabel}
+          </span>
         </td>
         <td data-libelle="Action">
           <button
@@ -319,26 +349,28 @@ export function VolontairesManager({ volontaires }: { volontaires: VolontaireSum
             import.
           </p>
         ) : (
-          <table className="volontaires-table">
-            <caption className="sr-only">
-              Liste des volontaires : nom, email, téléphone, statut de
-              l’invitation et action de renvoi.
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Nom</th>
-                <th scope="col">Email</th>
-                <th scope="col">Téléphone</th>
-                <th scope="col">Invitation</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {volontaires.map((volontaire) => (
-                <LigneVolontaire key={volontaire.id} volontaire={volontaire} />
-              ))}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="socle-table volontaires-table">
+              <caption className="sr-only">
+                Liste des volontaires : nom, email, téléphone, statut de
+                l’invitation et action de renvoi.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Nom</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Téléphone</th>
+                  <th scope="col">Invitation</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {volontaires.map((volontaire) => (
+                  <LigneVolontaire key={volontaire.id} volontaire={volontaire} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <p className="hint">
           Statuts : En file (email prêt à partir), Envoyée, Échec (SMTP — le

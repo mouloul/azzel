@@ -13,13 +13,16 @@ import type { SessionRecord } from '@/modules/iam/store';
 import {
   BodyTooLargeError,
   InvalidBodyError,
+  NumeroTransactionInvalideError,
   toPreuveApiError,
   type ApiError,
 } from '@/modules/inscriptions/errors';
+import { normaliserNumeroTransaction } from '@/modules/inscriptions/numero-transaction';
 import { MAX_UPLOAD_BYTES } from '@/modules/inscriptions/proof-format';
 import { getPreuveState, uploadPreuve } from '@/modules/inscriptions/proof-service';
 
 const PROOF_FIELD = 'fichier';
+const TRANSACTION_FIELD = 'numeroTransaction';
 
 function errorResponse(apiError: ApiError): NextResponse {
   return NextResponse.json(apiError.envelope, { status: apiError.status });
@@ -85,6 +88,12 @@ export async function POST(request: NextRequest) {
   } catch {
     return errorResponse(toPreuveApiError(new InvalidBodyError()));
   }
+  const numero = normaliserNumeroTransaction(form.get(TRANSACTION_FIELD));
+  if (!numero.ok) {
+    return errorResponse(
+      toPreuveApiError(new NumeroTransactionInvalideError({ [TRANSACTION_FIELD]: numero.message })),
+    );
+  }
   const candidate = form.get(PROOF_FIELD);
   if (candidate === null || typeof candidate === 'string') {
     return errorResponse(toPreuveApiError(new InvalidBodyError()));
@@ -98,7 +107,9 @@ export async function POST(request: NextRequest) {
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
-    const preuve = await uploadPreuve(authenticated.session, bytes);
+    const preuve = await uploadPreuve(authenticated.session, bytes, {
+      numeroTransaction: numero.numero,
+    });
     return NextResponse.json({ preuve }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return errorResponse(toPreuveApiError(error));

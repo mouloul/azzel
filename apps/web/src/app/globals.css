@@ -1,4 +1,7 @@
-:where(a, button, input, select, textarea):focus-visible {
+/* Story 10.4 — summary ajouté au sélecteur : le commutateur « Journal sync »
+   du bandeau volontaires (et tout <details> du site) est une cible interactive
+   et montrait AUCUN focus clavier (écart prouvé en audit UX-DR-23). */
+:where(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--surface);
@@ -262,6 +265,149 @@ main {
   max-width: 42rem;
 }
 
+/* Parcours d'inscription (recette du 04/11/2026) : le formulaire garde sa
+   largeur de lecture, le guide s'installe à côté dès qu'il y a la place.
+   Sous ce seuil, il passe SOUS le formulaire — on vient pour saisir son
+   adresse, pas pour lire cinq étapes d'abord. */
+.auth--guide {
+  max-width: 58rem;
+}
+
+@media (min-width: 900px) {
+  .auth--guide {
+    display: grid;
+    grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+    gap: var(--az-space-6);
+    align-items: start;
+  }
+}
+
+.guide-inscription {
+  margin-top: var(--az-space-5);
+}
+
+@media (min-width: 900px) {
+  .guide-inscription {
+    margin-top: 0;
+  }
+}
+
+.guide-inscription h2 {
+  margin: 0 0 var(--az-space-4);
+  font-family: var(--az-font-display-sm);
+  font-size: 20px;
+  font-weight: var(--az-font-weight-display-sm);
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+.guide-inscription__etapes {
+  display: grid;
+  gap: var(--az-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.guide-etape {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--az-space-3);
+  align-items: start;
+}
+
+/* Marqueur : contour pour ce qui reste à venir, plein pour l'étape en cours
+   et pour ce qui est fait — la forme double le texte d'état. */
+.guide-etape__marqueur {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  font-family: var(--az-font-display);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--az-texte-2);
+}
+
+.guide-etape--courante .guide-etape__marqueur,
+.guide-etape--faite .guide-etape__marqueur {
+  border-color: var(--az-action);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+}
+
+.guide-etape__textes {
+  display: grid;
+  gap: var(--az-space-1);
+}
+
+.guide-etape__titre {
+  font-weight: 700;
+  color: var(--az-texte);
+}
+
+.guide-etape__etat {
+  font-weight: 400;
+  color: var(--az-texte-2);
+}
+
+.guide-etape__texte {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte-2);
+}
+
+/* Compteur du contingent : discret dans le hero (le CTA reste la cible), mais
+   jamais porté par la seule couleur — le chiffre et le mot « complet »
+   portent l'information. */
+.compteur-places {
+  margin: 0 0 var(--space-4);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--az-texte-2);
+}
+
+/* Le placement nommé ne vaut QUE dans la grille du hero. Posé sur le
+   composant lui-même, il créait une colonne implicite dans toute grille qui
+   l'accueille — la carte d'inscription se disloquait et le compteur passait
+   par-dessus le titre. */
+.aa-hero--plein .compteur-places {
+  grid-area: compteur;
+  margin-top: var(--space-6);
+  color: var(--on-forest);
+}
+
+.compteur-places strong {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+
+/* Relais vers la suite du parcours : volontairement SANS numéro — cet écran ne
+   suit pas ces étapes-là, le fil du dossier s'en charge. */
+.guide-inscription__suite {
+  margin: var(--az-space-5) 0 0;
+  padding-top: var(--az-space-4);
+  border-top: 1px solid var(--az-filet-controle);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte-2);
+}
+
+/* Étapes à venir : même texte, moins d'appui — jamais la couleur seule,
+   l'état est écrit. */
+.guide-etape:not(.guide-etape--courante):not(.guide-etape--faite) .guide-etape__titre {
+  font-weight: 600;
+  color: var(--az-texte-2);
+}
+
 .auth .card + .card {
   margin-top: var(--az-space-5);
 }
@@ -483,7 +629,12 @@ main {
   gap: var(--az-space-3);
 }
 
+/* I6 (revue épopée 10) — cible tactile ≥ 44 px (mesurée ≈ 41,5 px avant) :
+   même approche que .aa-lien-texte — inline-flex centré + min-height. */
 .btn-lien {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: var(--az-space-2) 0;
   background: none;
   border: none;
@@ -564,16 +715,16 @@ main {
   gap: var(--az-space-2);
 }
 
+/* Checklist (habillage 9.4 : dossier.css) — cette feuille ne porte QUE ce
+   dont dossier.css ne se passe pas : dimensions de la puce, conteneurs,
+   états textuels. Les actions (checklist-action/-inactive), le fond de la
+   puce et son état fait vivent SEULEMENT dans dossier.css : aucune
+   propriété n'est posée deux fois, l'ordre d'import est sans effet. */
 .checklist-puce {
   width: 0.75rem;
   height: 0.75rem;
   flex-shrink: 0;
   border-radius: var(--az-radius-full);
-  background: var(--az-filet);
-}
-
-.checklist-item--fait .checklist-puce {
-  background: var(--az-succes);
 }
 
 .checklist-libelle {
@@ -596,16 +747,6 @@ main {
 .checklist-etat--refuse {
   color: var(--az-danger);
   font-weight: 700;
-}
-
-.checklist-action {
-  color: var(--az-action);
-  font-weight: 700;
-  text-decoration: underline;
-}
-
-.checklist-action-inactive {
-  color: var(--az-texte-2);
 }
 
 .header-actions {
@@ -631,6 +772,64 @@ main {
 .admin-link:hover {
   background: var(--heading);
   color: var(--az-surface);
+}
+
+/* Revue visuelle du 04/11/2026 (B3 + M4) — la bascule de thème était un bouton
+   à libellé plein (« Passer en thème sombre ») : plus large que le logo en
+   390 px, coupée par le bord droit sur /admin/dossiers. Remplacée par deux
+   boutons radio icôniques de largeur fixe (88 px au total), cibles tactiles
+   44 × 44 px conservées. */
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  overflow: hidden;
+  color: var(--heading);
+}
+
+.theme-switch__option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+
+.theme-switch__option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+.theme-switch__icone {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* État courant : fond plein ET contour, jamais la seule couleur. */
+.theme-switch__option:has(input:checked) {
+  background: var(--heading);
+  color: var(--az-surface);
+}
+
+.theme-switch__option:hover:not(:has(input:checked)) {
+  background: var(--az-filet-controle);
+}
+
+.theme-switch__option:has(input:focus-visible) {
+  outline: 3px solid var(--az-focus);
+  outline-offset: -3px;
 }
 
 .visually-hidden {
@@ -690,28 +889,11 @@ main {
   overflow-x: auto;
 }
 
+/* Story 10.3 — le gabarit de base vit dans le socle (.socle-table) ; la
+   classe locale ne porte plus que la largeur minimale qui rend le défilement
+   horizontal du conteneur .table-wrap réel en écran étroit. */
 .table-dossiers {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--az-font-size-body);
-}
-
-.table-dossiers th,
-.table-dossiers td {
-  padding: var(--az-space-2) var(--az-space-3);
-  border-bottom: 1px solid var(--az-filet);
-  text-align: left;
-  vertical-align: top;
-}
-
-.table-dossiers th {
-  font-family: var(--az-font-surtitre);
-  font-size: var(--az-font-size-meta);
-  font-weight: var(--az-font-weight-meta);
-  letter-spacing: var(--az-letter-spacing-eyebrow);
-  text-transform: uppercase;
-  color: var(--az-texte-2);
-  white-space: nowrap;
+  min-width: 720px;
 }
 
 .dossier-nom {
@@ -772,46 +954,25 @@ main {
 .aa-btn--secondary{background:transparent;color:var(--heading);border-color:var(--heading)}
 .aa-btn--secondary:hover{background:var(--heading);color:var(--surface)}
 .aa-btn--on-forest{background:transparent;color:var(--on-forest);border-color:var(--on-forest)}
-.aa-stat__value{font-family:var(--font-display);font-weight:800;font-size:96px;line-height:.82;color:var(--highlight);font-variant-numeric:tabular-nums}
-.aa-stat__value--neutral{color:var(--heading)}
-.aa-stat__label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);margin-top:8px}
-.aa-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-md);padding:24px;box-shadow:var(--shadow-card)}
+/* Story 9.2 — rayons harmonisés sur les primitives du socle : cartes 16 px
+   (--az-rayon-md), chips en pilule (--az-radius-full). */
+.aa-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--az-rayon-md);padding:24px;box-shadow:var(--shadow-card)}
 .aa-card__title{font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading);margin:0}
 .aa-card__text{font-size:14px;line-height:1.5;color:var(--ink-muted);margin:8px 0 0}
-.aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-sm);line-height:1.2}
+.aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 12px;border-radius:var(--az-radius-full);line-height:1.2}
 .aa-chip--phare{background:var(--action);color:var(--on-action)}
 .aa-chip--nouveau{background:var(--forest-surface);color:var(--on-forest)}
-.aa-chip--tbc{border:1.5px dashed var(--accent);color:var(--accent)}
-.aa-chip--refuse{border:1.5px dashed var(--az-danger);color:var(--az-danger)}
+/* I9 (revue épopée 10) — .aa-chip--tbc et .aa-chip--refuse retirés : seuls
+   consommateurs = coureurStatusChipClass, supprimée (les statuts inscriptions
+   passent aux pastilles socle, liste comme détail). */
 .aa-hero{position:relative;min-height:440px;display:flex;align-items:flex-end;color:var(--on-forest);background:var(--forest);overflow:hidden}
 .aa-hero__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .aa-hero__veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,36,26,.85) 0%,rgba(15,36,26,.7) 40%,rgba(15,36,26,.1) 75%)}
 .aa-hero__body{position:relative;padding:48px 32px;max-width:640px}
 .aa-hero__title{font-family:var(--font-display);font-weight:800;font-size:72px;line-height:.92;text-transform:uppercase;margin:12px 0 0}
-.aa-hero__title em{font-style:normal;color:var(--ochre-300)}
+.aa-hero__title em{display:block;font-style:normal;color:var(--ochre-300)}
 .aa-hero__meta{font-size:16px;margin:16px 0 24px}
-@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-stat__value{font-size:72px}.aa-hero__body{padding:32px 16px}}
-
-/* Bandeau égide — toujours visible, toutes pages (layout) */
-.egide {
-  margin: 0;
-  padding: 10px var(--az-space-gutter);
-  background: var(--forest-surface);
-  color: var(--on-forest);
-  text-align: center;
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-@media (max-width: 640px) {
-  .egide {
-    font-size: 11px;
-    letter-spacing: 0.12em;
-  }
-}
+@media (max-width:640px){.aa-hero__title{font-size:44px}.aa-h2{font-size:28px}.aa-hero__body{padding:32px 16px}}
 
 /* Vitrine — sections pleine largeur + conteneur */
 .vitrine-bande--foret {
@@ -833,6 +994,38 @@ main {
 
 .vitrine-bande--foret .aa-h2 {
   color: var(--on-forest);
+}
+
+/* Recette du 04/11/2026 — .aa-h3 et le bloc trailer servaient à la seule page
+   /retour-en-images ; le teaser de l'accueil les partage désormais. Déplacés
+   ici VERBATIM depuis vitrine-textes.css (rendu inchangé, pas de duplication). */
+.aa-h3{font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading);margin:0 0 var(--space-3)}
+.aa-trailer{margin:0}
+.aa-trailer__poster{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-4);width:100%;min-height:72px;padding:var(--space-12) var(--space-6);aspect-ratio:16/9;border:2px solid transparent;border-radius:var(--radius-md);cursor:pointer;background:linear-gradient(160deg,var(--forest-600) 0%,var(--forest) 55%,var(--forest-800) 100%);color:var(--on-forest);font:inherit}
+.aa-trailer__poster:hover .aa-trailer__play{transform:scale(1.06)}
+/* WCAG 1.4.11 : var(--focus) ≈ 2,2:1 sur fond forêt — outline on-forest (pattern hero). */
+.aa-trailer__poster:focus-visible{outline:2px solid var(--on-forest);outline-offset:2px;box-shadow:0 0 0 4px var(--forest)}
+.aa-trailer__play{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:9999px;background:var(--vert-altitude);color:var(--forest);transition:transform .2s ease}
+.aa-trailer__play svg{display:block;margin-left:4px}
+.aa-trailer__libelle{margin:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--on-forest)}
+.aa-trailer__lecteur{display:block;width:100%;aspect-ratio:16/9;border:none;border-radius:var(--radius-md);background:var(--forest-800)}
+
+/* Sur la bande forêt, le titre suit le h2/lead (encre claire). */
+.vitrine-bande--foret .aa-h3 {
+  color: var(--on-forest);
+}
+
+/* Teaser de la bande bilan : le poster est lui aussi forêt — un filet le
+   détache du fond, et sa largeur reste celle d'une vidéo lisible. */
+/* Le teaser porte la section : toute la largeur de la bande, calé sur le corps
+   du hero (même --container-max, mêmes gouttières) — les deux blocs s'arrêtent
+   sur les mêmes verticales. */
+.aa-bilan__teaser {
+  min-width: 0;
+}
+
+.vitrine-bande--foret .aa-trailer__poster {
+  border-color: color-mix(in srgb, var(--on-forest) 35%, transparent);
 }
 
 /* ochre-300 sur forest-surface ne tient pas AA en sombre (≈3,35:1 à 14 px) :
@@ -863,25 +1056,75 @@ main {
   color: var(--on-forest);
 }
 
-/* Vitrine — chiffres officiels */
-.aa-stats {
-  display: grid;
-  gap: var(--az-space-6);
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  margin: var(--space-8) 0 0;
+/* Vitrine — bande bilan 2026 (story 9.2) : bande horizontale compacte sur
+   fond forêt, plus de cartes pleine hauteur. Valeurs inchangées (279 / 222 /
+   214 / 116, dont 36 femmes). Valeurs ochre-300 réservé au grand texte
+   (≥ 24 px — règle contrastes.test.ts sur bande forêt), libellés on-forest. */
+.aa-bilan .aa-section {
+  padding-block: var(--space-12);
 }
 
-.aa-stat__value,
-.aa-stat__label,
-.aa-stat__note {
+/* Deux colonnes : l'éditorial chiffré, puis le teaser. Sous 900 px, l'un sous
+   l'autre — les chiffres d'abord, ils portent le propos. */
+/* Titre d'introduction des chiffres : il ouvre la rangée, pas la section —
+   d'où l'espace au-dessus (après la vidéo) plus grand qu'en dessous. */
+.aa-bilan__titre {
+  margin: var(--space-12) 0 0;
+}
+
+/* Les quatre chiffres en rangée sous la vidéo ; ils se replient d'eux-mêmes
+   en deux puis une colonne sur les petits écrans. */
+.aa-bilan__rail {
+  display: grid;
+  gap: var(--space-6) var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin: var(--space-6) 0 0;
+}
+
+.aa-bilan__stat {
+  display: grid;
+  justify-items: start;
+  padding-block: var(--space-2);
+}
+
+.aa-bilan__stat > dt,
+.aa-bilan__stat > dd {
   margin: 0;
 }
 
-.aa-stat__note {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--ink-muted);
+/* dl : dt précède dd (HTML) — la grille place la valeur au-dessus. */
+.aa-bilan__stat > dd {
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(32px, 4.5vw, 44px);
+  line-height: 1;
+  color: var(--ochre-300);
 }
+
+.aa-bilan__stat > dt {
+  grid-row: 2;
+  margin-top: var(--az-space-2);
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--on-forest);
+}
+
+.aa-bilan__stat > dd + dd {
+  grid-row: 3;
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--on-forest);
+}
+
+/* ink-muted est interdit sur bande forêt (≈1,95:1 en clair — garde
+   contrastes.test.ts) : la note passe en on-forest. */
+.aa-bilan .aa-note {
+  color: var(--on-forest);
+}
+
 
 .aa-note {
   margin: var(--az-space-6) 0 0;
@@ -904,6 +1147,61 @@ main {
   margin: var(--space-8) 0 0;
 }
 
+.aa-galerie__carte {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.aa-galerie__carte .aa-photo {
+  margin: 0;
+  border-radius: 0;
+}
+
+.aa-galerie__corps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--az-space-2);
+  padding: var(--az-space-5);
+  border-top: 4px solid var(--accent);
+}
+
+.aa-galerie__surtitre {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.aa-galerie__titre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--az-font-size-display-sm);
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+.aa-galerie__texte {
+  margin: 0 0 var(--az-space-2);
+  font-size: var(--az-font-size-body);
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.aa-galerie__corps .aa-lien-texte {
+  margin-top: auto;
+}
+
 .aa-card > .aa-chip {
   margin-bottom: var(--az-space-3);
 }
@@ -922,9 +1220,66 @@ main {
    Taille des glyphes : constante TAILLE_GLYPHE du composant (attributs SVG width/height). */
 .aa-piliers {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--az-space-5);
   grid-template-columns: 1fr;
   margin: var(--space-8) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aa-piliers__item {
+  display: flex;
+}
+
+.aa-pilier {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 4px solid var(--accent);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.aa-pilier:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--heading) 14%, transparent);
+}
+
+.aa-pilier__accroche {
+  margin: var(--space-2) 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.aa-pilier__fait {
+  display: grid;
+  gap: 2px;
+  margin: auto 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.aa-pilier__texte + .aa-pilier__fait {
+  margin-top: var(--az-space-5);
+}
+
+.aa-pilier__chiffre {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.aa-pilier__legende {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-muted);
 }
 
 .aa-glyphe {
@@ -945,9 +1300,9 @@ main {
 
 .aa-pilier__texte {
   font-size: var(--az-font-size-body);
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--ink-muted);
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
 }
 
 .aa-frise {
@@ -969,9 +1324,19 @@ main {
   }
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1200px) {
   .aa-piliers {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-pilier {
+    transition: none;
+  }
+
+  .aa-pilier:hover {
+    transform: none;
   }
 }
 
@@ -997,12 +1362,12 @@ main {
    (charte « bandeau partenaires ») ; option B : grille sobre d’emplacements
    équivalents. Contrastes : on-forest / forest-surface (testés), heading / surface-raised. */
 .aa-signature{margin:var(--space-8) 0 0;display:grid;gap:var(--space-3);justify-items:start}
-.aa-signature__mention{margin:0;font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-forest);border:1.5px solid var(--on-forest);border-radius:var(--radius-sm);padding:4px 10px}
+.aa-signature__mention{margin:0;font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-forest);border:1.5px solid var(--on-forest);border-radius:var(--az-radius-full);padding:4px 12px}
 .aa-signature__nom{margin:0;font-family:var(--font-display);font-weight:800;font-size:48px;line-height:1;text-transform:uppercase;color:var(--on-forest)}
 a.aa-signature__nom{text-decoration:underline;text-underline-offset:6px}
 .aa-signature__nom:hover{text-decoration:none}
 .aa-partenaires{list-style:none;display:grid;gap:var(--space-6);grid-template-columns:1fr;margin:var(--space-8) 0 0;padding:0}
-.aa-partenaire{display:grid;gap:var(--space-3);justify-items:center;align-content:center;text-align:center;background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-6);min-height:120px}
+.aa-partenaire{display:grid;gap:var(--space-3);justify-items:center;align-content:center;text-align:center;background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--az-rayon-md);padding:var(--space-6);min-height:120px}
 .aa-partenaire__nom{margin:0;font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading)}
 a.aa-partenaire__nom{color:inherit}
 /* Logo fourni par URL (jamais déformé) ; onError masque l’image côté client. */
@@ -1069,13 +1434,88 @@ a.aa-partenaire__nom{color:inherit}
    vitrine-textes.css, importé par ces pages seules : hors du chemin critique
    de l’accueil (budget premier chargement < 300 Ko). */
 .aa-liens-vitrine{display:flex;flex-wrap:wrap;gap:var(--az-space-4) var(--az-space-6);margin:var(--space-8) 0 0}
-.aa-lien-texte{color:var(--heading);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+/* Cible tactile ≥ 44 px (story 9.6 : mesuré 25,5 px de haut au harnais CDP
+   avant cette règle — même contrat que .fil-etape-lien, dossier.css). */
+.aa-lien-texte{display:inline-flex;align-items:center;min-height:44px;color:var(--heading);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .aa-lien-texte:hover{color:var(--accent)}
 
 /* Pied de page — liens texte sobres vers les pages vitrine (story 2.4) */
 .footer-nav{display:flex;flex-wrap:wrap;gap:var(--az-space-2) var(--az-space-4);margin:0 0 var(--az-space-3)}
 .footer-nav a{color:var(--az-texte);text-decoration:underline;text-underline-offset:3px}
 .footer-nav a:hover{color:var(--az-texte-2)}
+
+/* Section parcours de l’accueil (story 9.3) — sélecteur SANS JavaScript :
+   radios natifs masqués visuellement, labels .socle-action en cibles ≥ 44 px,
+   focus 2 px porté sur le label par le radio adjacent ; les règles de
+   bascule `:has()` par épreuve sont générées dans le composant (section-parcours.tsx).
+   Chiffres en monospace système alignés à droite (zéro octet téléchargé).
+   Contrastes : paires déjà testées — heading et ink-muted sur surface /
+   surface-raised, az-action-texte / az-action (socle), filet-controle 3:1. */
+.aa-parcours-accueil [data-panneau]{display:none}
+.aa-parcours-accueil__selecteur{border:0;padding:0;margin:var(--space-8) 0 0;min-inline-size:0}
+.aa-parcours-accueil__legende{padding:0;margin:0 0 var(--az-space-3);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted)}
+.aa-parcours-accueil__choix{display:flex;flex-wrap:wrap;gap:var(--az-space-3)}
+.aa-parcours-accueil__radio{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.aa-parcours-accueil__radio:focus-visible + .aa-parcours-accueil__libelle{outline:2px solid var(--az-focus);outline-offset:2px}
+.aa-parcours-accueil__panneaux{display:grid;gap:var(--az-space-4);margin:var(--az-space-5) 0 0}
+.aa-parcours-accueil__synthese{display:grid;gap:var(--az-space-2);margin:var(--az-space-4) 0 0}
+.aa-parcours-accueil__ligne{display:flex;align-items:baseline;justify-content:space-between;gap:var(--az-space-4);border-bottom:1px solid var(--line);padding-bottom:var(--az-space-2)}
+.aa-parcours-accueil__ligne dt{margin:0;font-size:13px;color:var(--ink-muted)}
+.aa-parcours-accueil__ligne dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;font-weight:600;color:var(--heading);text-align:right}
+.aa-parcours-accueil__gpx{display:inline-block;margin-top:var(--az-space-4)}
+/* Décision produit 2026-11-04 : mention « tracé provisoire » (relevé d’essai)
+   sous la synthèse — sobre, encre atténuée, jamais présentée comme officielle. */
+.aa-parcours-accueil__provisoire{margin:var(--az-space-4) 0 0;font-size:13px;line-height:1.5;color:var(--ink-muted)}
+.aa-parcours-accueil__passages{margin:var(--az-space-5) 0 0;border-top:1px solid var(--line);padding-top:var(--az-space-4)}
+.aa-parcours-accueil__passages-titre{margin:0 0 var(--az-space-2);font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--heading)}
+.aa-parcours-accueil__passages ul{list-style:none;display:grid;gap:var(--az-space-2);margin:0;padding:0}
+.aa-parcours-accueil__passages li{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--az-space-1) var(--az-space-3);font-size:15px}
+.aa-parcours-accueil__passage-nom{font-weight:600;color:var(--ink)}
+.aa-parcours-accueil__passage-km{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;color:var(--ink-muted)}
+.aa-parcours-accueil__passage-services{font-size:13px;color:var(--ink-muted)}
+.aa-parcours-accueil__viz{display:grid;gap:var(--az-space-2);margin:var(--az-space-5) 0 0;padding:var(--az-space-5);border:1.5px dashed var(--az-filet-controle);border-radius:var(--az-rayon-md)}
+.aa-parcours-accueil__viz svg{color:var(--accent)}
+.aa-parcours-accueil__viz-surtitre{margin:0;font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-muted)}
+.aa-parcours-accueil__viz-titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--heading)}
+.aa-parcours-accueil__viz-texte{margin:0;font-size:15px;line-height:1.55;color:var(--ink)}
+/* Story 11.4 — profil altimétrique & graphe de technicité dans l’aside viz :
+   blocs [data-viz] par épreuve, masqués par défaut, montrés par les règles
+   :has() générées (même mécanique que les panneaux). Couleurs UNIQUEMENT par
+   tokens --az-pente-* (4 teintes différenciées aussi en clarté, AA non
+   textuel 3:1 clair + sombre — contrastes.test.ts) ; aucun littéral hex. */
+.aa-parcours-accueil [data-viz]{display:none}
+.aa-parcours-accueil__annonce{display:grid;gap:var(--az-space-2)}
+.aa-profil{margin:0;display:grid;gap:var(--az-space-3)}
+.aa-profil__corps{position:relative}
+.aa-profil__graphique svg{display:block;width:100%;height:auto}
+.aa-profil__aire--roulant{fill:var(--az-pente-roulant)}
+.aa-profil__aire--soutenu{fill:var(--az-pente-soutenu)}
+.aa-profil__aire--raide{fill:var(--az-pente-raide)}
+.aa-profil__aire--tres-raide{fill:var(--az-pente-tres-raide)}
+.aa-profil__arete{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linejoin:round}
+.aa-profil__grille{stroke:var(--line);stroke-width:1}
+.aa-profil__axe{fill:var(--ink-muted);font-size:11px}
+.aa-profil__marqueur{stroke:var(--line-strong);stroke-dasharray:3 3;stroke-width:1}
+.aa-profil__marqueur-point{fill:var(--ink)}
+.aa-profil__marqueur-libelle{fill:var(--ink);font-size:11px;font-weight:600}
+.aa-profil__synthese{margin:0;font-size:13px;line-height:1.5;color:var(--ink)}
+.aa-profil__legende{list-style:none;display:flex;flex-wrap:wrap;gap:var(--az-space-2) var(--az-space-4);margin:0;padding:0}
+.aa-profil__legende li{display:flex;align-items:center;gap:var(--az-space-2);font-size:13px;color:var(--ink)}
+.aa-profil__trait{display:inline-block;width:18px;height:4px;border-radius:2px;flex:none}
+.aa-profil__trait--roulant{background:var(--az-pente-roulant)}
+.aa-profil__trait--soutenu{background:var(--az-pente-soutenu)}
+.aa-profil__trait--raide{background:var(--az-pente-raide)}
+.aa-profil__trait--tres-raide{background:var(--az-pente-tres-raide)}
+.aa-profil__note{margin:0;font-size:13px;color:var(--ink-muted)}
+/* pan-y : le glisser horizontal pilote le curseur, le glisser vertical
+   continue de faire défiler la page (le profil ne capture jamais le doigt). */
+.aa-profil__interaction{position:absolute;inset:0;cursor:ew-resize;touch-action:pan-y}
+.aa-profil__interaction:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:var(--az-rayon-sm)}
+.aa-profil__ligne{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink)}
+.aa-profil__lecture{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink)}
+/* Filet de sécurité : sans :has(), les panneaux SE PLOIENT en pile lisible
+   (dégradation progressive — la section ne perd jamais son contenu). */
+@supports not selector(:has(*)){.aa-parcours-accueil [data-panneau]{display:block}.aa-parcours-accueil [data-viz]{display:block}}
 
 /* Thème sombre — voile hero assombri */
 [data-theme='dark'] .aa-hero__veil {
@@ -1091,15 +1531,11 @@ a.aa-partenaire__nom{color:inherit}
    Sans JS : body:has(.aa-hero--plein) — le layout reste statique (ISR intact).
    Hauteurs d'égide/frise approchées (l'égide passe sur deux lignes en mobile). */
 :root {
-  --egide-hauteur: 40px;
   --frise-hauteur: 16px;
   --mon-trail-largeur: 44px;
-}
-
-@media (max-width: 640px) {
-  :root {
-    --egide-hauteur: 58px;
-  }
+  /* Cloison décorative du rail de chiffres du hero — seule .aa-hero__rail
+     l'utilise (la bande bilan est une grille sans cloisons). */
+  --cloison: color-mix(in srgb, var(--on-forest) 40%, transparent);
 }
 
 body:has(.aa-hero--plein) {
@@ -1128,9 +1564,20 @@ body:has(.aa-hero--plein) .header-logo {
   }
 }
 
-body:has(.aa-hero--plein) .site-header :is(.btn-contour, .admin-link) {
+body:has(.aa-hero--plein) .site-header :is(.btn-contour, .admin-link, .theme-switch) {
   color: var(--on-forest);
   border-color: var(--on-forest);
+}
+
+body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:checked) {
+  background: var(--on-forest);
+  color: var(--forest);
+}
+
+body:has(.aa-hero--plein)
+  .site-header
+  .theme-switch__option:hover:not(:has(input:checked)) {
+  background: var(--forest-surface);
 }
 
 body:has(.aa-hero--plein) .site-header .btn-contour:hover:not(:disabled),
@@ -1148,104 +1595,270 @@ body:has(.aa-hero--plein) .site-header :is(a, button):focus-visible {
   box-shadow: 0 0 0 4px var(--forest-surface);
 }
 
+body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-visible) {
+  outline-color: var(--on-forest);
+}
+
 .aa-hero--plein {
-  min-height: calc(100vh - var(--egide-hauteur) - var(--frise-hauteur));
-  min-height: calc(100svh - var(--egide-hauteur) - var(--frise-hauteur));
+  min-height: calc(100vh - var(--frise-hauteur));
+  min-height: calc(100svh - var(--frise-hauteur));
   align-items: stretch;
   justify-content: center;
 }
 
 /* Voile charte : opacité bornée 60–85 % sur toute la hauteur (en-tête lisible
-   en haut, badge lisible en bas) — vérifié par page.test.tsx. */
+   en haut) — vérifié par page.test.tsx. Arrêts médians remontés en 9.2 pour
+   la nouvelle échelle typographique : ratios MESURÉS sur la photo réelle
+   (fenêtres 8 px, compositing du dégradé) — on-forest ≥ 5,69:1 en clair et
+   ≥ 7,18:1 en sombre sur le pire vitrage, hors socle. */
 .aa-hero--plein .aa-hero__veil {
-  background: linear-gradient(180deg, rgba(15, 36, 26, 0.78) 0%, rgba(15, 36, 26, 0.6) 30%, rgba(15, 36, 26, 0.62) 65%, rgba(15, 36, 26, 0.85) 100%);
+  background: linear-gradient(180deg, rgba(15, 36, 26, 0.8) 0%, rgba(15, 36, 26, 0.68) 30%, rgba(15, 36, 26, 0.7) 65%, rgba(15, 36, 26, 0.85) 100%);
 }
 
 [data-theme='dark'] .aa-hero--plein .aa-hero__veil {
   background: linear-gradient(180deg, rgba(8, 18, 13, 0.82) 0%, rgba(8, 18, 13, 0.7) 30%, rgba(8, 18, 13, 0.72) 65%, rgba(8, 18, 13, 0.85) 100%);
 }
 
+/* Composition 9.2 : titre condensé à très grande échelle à gauche, rail de
+   chiffres clés cloisonné à droite ; sous le titre en mobile. Le bloc repose
+   sur un socle translucide forest-800 (45 %) qui, composé au voile, porte
+   l'accent ocre du nom (≥ 3,49:1, grand texte ≥ 24 px) et l'encre on-forest
+   (≥ 8,39:1) — MESURÉS sur la photo, story 9.2. */
 .aa-hero--plein .aa-hero__body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-areas:
+    "titre rail"
+    "crete rail"
+    "meta rail"
+    "compteur rail"
+    "actions rail";
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
+  column-gap: var(--space-8);
+  align-content: center;
   width: 100%;
-  max-width: 1040px;
+  max-width: var(--container-max);
   margin-inline: auto;
-  padding: calc(var(--header-height) + 48px) 24px 112px;
-  text-align: center;
+  padding: calc(var(--header-height) + 48px) var(--az-space-gutter) var(--space-12);
+  text-align: left;
+  background: color-mix(in srgb, var(--forest-800) 45%, transparent);
 }
 
 .aa-hero--plein .aa-hero__title {
+  grid-area: titre;
   margin: 0;
-  font-size: clamp(40px, 9vw, 128px);
+  font-size: clamp(72px, 10.5vw, 136px);
   line-height: 0.9;
   text-wrap: balance;
 }
 
+/* Crête d'identité (story 2.2) : toujours sous le titre, calée à gauche
+   avec lui depuis la refonte 9.2 (plus de centrage). */
 .aa-hero--plein .aa-crete {
-  margin: var(--space-4) auto 0;
+  grid-area: crete;
+  margin: var(--space-4) 0 0;
 }
 
-.aa-hero__date {
-  margin: var(--space-6) 0 0;
-  padding: 10px var(--space-6);
-  border-block: 1px solid var(--on-forest);
+/* Rail de chiffres clés (story 9.2) : grille cloisonnée. Absorbe le bandeau
+   de date et le badge des épreuves. Paires dt/dd directes (une paire = une
+   cellule) ; les cloisons, décoratives, n'ont aucun seuil 1.4.11. Textes
+   on-forest sur le socle du bloc (≥ 8,39:1, mesuré story 9.2). */
+/* Recette du 04/11/2026 — le rail était un tableau à quatre cases cloisonnées,
+   toutes de même poids. Fiche vitrée à la place : fond forêt translucide flouté,
+   date en vedette avec crête ocre, les trois autres clés sur une rangée. Aucune
+   cloison interne. Le fond est plus sombre que --forest : la paire tenue en test
+   (ochre-300 / forest, on-forest / forest) reste un proxy pessimiste. */
+.aa-hero__rail {
+  grid-area: rail;
+  align-self: center;
+  margin: 0;
+  padding: var(--az-space-5);
+  border: 1px solid var(--cloison);
+  border-radius: var(--az-rayon-md);
+  background: color-mix(in srgb, var(--forest-800) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+/* Repli sans backdrop-filter (Firefox ancien, économie d'énergie) : fond plein. */
+@supports not (backdrop-filter: blur(10px)) {
+  .aa-hero__rail {
+    background: var(--forest-800);
+  }
+}
+
+.aa-hero__rail dt,
+.aa-hero__rail dd {
+  margin: 0;
+}
+
+.aa-hero__rail dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ochre-300);
+}
+
+.aa-hero__rail dd {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 20px;
-  line-height: 1.2;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  line-height: 1.15;
   color: var(--on-forest);
 }
 
+.aa-hero__rail-vedette dd {
+  margin-top: var(--az-space-2);
+  font-size: clamp(26px, 2.6vw, 32px);
+}
+
+/* Rang de l'édition : au-dessus de la date, en corps de texte — la date
+   porte seule le poids d'affiche. */
+.aa-hero__rang {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--on-forest);
+}
+
+/* Crête : rappel du trait sous le titre, non textuel (3:1 suffit). */
+.aa-hero__rail-vedette::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 3px;
+  margin-top: var(--az-space-4);
+  background: var(--ochre-300);
+}
+
+.aa-hero__rail-cles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--az-space-5) var(--az-space-4);
+  margin-top: var(--az-space-5);
+}
+
+/* Sous 560 px, trois colonnes couperaient « Stade Agni Lhoudh » en bouillie :
+   les clés se replient d'elles-mêmes. */
+@media (max-width: 560px) {
+  .aa-hero__rail-cles {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  }
+}
+
+.aa-hero__cle dt {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.aa-hero__cle dd {
+  margin-top: var(--az-space-1);
+  font-size: 16px;
+}
+
 .aa-hero--plein .aa-hero__meta {
-  max-width: 46ch;
-  margin: var(--space-4) 0 28px;
+  grid-area: meta;
+  max-width: 52ch;
+  margin: var(--space-4) 0 var(--space-6);
   font-size: 17px;
   line-height: 1.5;
 }
 
-.aa-hero--plein .aa-hero__actions {
-  justify-content: center;
+/* Accroche plus longue depuis la recette du 04/11/2026 : en mobile, elle
+   descend d'un cran pour ne pas repousser les actions hors de l'écran. */
+@media (max-width: 640px) {
+  .aa-hero--plein .aa-hero__meta {
+    margin: var(--space-3) 0 var(--space-6);
+    font-size: 15px;
+  }
 }
 
-.aa-hero__badge {
-  position: absolute;
-  left: var(--space-8);
-  bottom: var(--space-8);
-  margin: 0;
-  padding: 10px var(--space-4);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.aa-hero--plein .aa-hero__actions {
+  grid-area: actions;
+  align-self: start;
+}
+
+/* Pilules du socle (9.1) sur fond photo voilée : la variante contour passe
+   en on-forest — l'encre --az-action ne tient pas sur forêt (même décision
+   que l'outline de focus hero, WCAG 1.4.11/1.4.3 ; sur socle : ≥ 8,39:1,
+   mesuré story 9.2). Le survol inverse la pair (forêt sur crème, testée). */
+.aa-hero .socle-action--contour,
+.vitrine-bande--foret .socle-action--contour {
+  border-color: var(--on-forest);
   color: var(--on-forest);
-  background: rgba(15, 36, 26, 0.72);
-  border: 1.5px solid var(--on-forest);
-  border-radius: var(--radius-md);
+}
+
+.aa-hero .socle-action--contour:hover:not(:disabled),
+.vitrine-bande--foret .socle-action--contour:hover:not(:disabled) {
+  background: var(--on-forest);
+  color: var(--forest-surface);
+}
+
+/* Mobile/tablette (story 9.2) : une colonne — le rail passe SOUS le titre
+   au lieu de le comprimer ; le titre descend par paliers sans jamais
+   déborder (minmax(0, 1fr) + text-wrap). Sélecteurs en but de ligne pour
+   le garde page.test.tsx. */
+@media (max-width: 959.98px) {
+.aa-hero--plein .aa-hero__body {
+  grid-template-areas:
+    "titre"
+    "crete"
+    "meta"
+    "rail"
+    "compteur"
+    "actions";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.aa-hero--plein .aa-hero__title {
+  font-size: clamp(56px, 12vw, 96px);
+}
+
 }
 
 @media (max-width: 640px) {
-  .aa-hero--plein .aa-hero__body {
-    padding: calc(var(--header-height) + 32px) var(--space-4) 96px;
-  }
+.aa-hero--plein .aa-hero__body {
+  padding: calc(var(--header-height) + 32px) var(--az-space-margin-mobile) var(--space-8);
+}
 
-  .aa-hero__date {
-    font-size: 16px;
-    letter-spacing: 0.14em;
-    padding: 8px var(--space-3);
-  }
+/* Recette du 05/11/2026 : sur petit écran la fiche passait avant l'accroche et
+   mangeait la hauteur. Elle descend sous l'accroche, avant le compteur de places (grille ci-dessus) et se
+   compacte : marges serrées, date et rang sur une ligne, clés sur trois colonnes. */
+.aa-hero__rail {
+  align-self: start;
+  margin-top: var(--space-6);
+  padding: var(--az-space-4);
+}
 
-  .aa-hero__badge {
-    left: var(--space-4);
-    bottom: var(--space-6);
-    font-size: 20px;
-  }
+.aa-hero__rail-vedette dd {
+  margin-top: var(--az-space-1);
+  font-size: 22px;
+}
+
+.aa-hero__rang {
+  display: inline;
+  margin-right: 0.4em;
+  font-size: 14px;
+}
+
+.aa-hero__rail-vedette::after {
+  margin-top: var(--az-space-3);
+}
+
+.aa-hero__rail-cles {
+  margin-top: var(--az-space-3);
+  gap: var(--az-space-3);
+}
+
+.aa-hero--plein .aa-hero__title {
+  font-size: clamp(44px, 12.5vw, 72px);
+}
+}
+
+@media (max-width: 400px) {
+.aa-hero--plein .aa-hero__title {
+  font-size: clamp(40px, 11vw, 44px);
+}
 }
 
 /* Navigation vitrine dans l'en-tête — à partir de 960 px seulement (le pied

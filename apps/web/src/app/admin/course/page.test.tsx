@@ -301,6 +301,24 @@ describe('page /admin/course — bloc alertes hors-délais (story 5.2)', () => {
     const blocReduit = css.slice(css.indexOf('@media (prefers-reduced-motion'));
     expect(blocReduit).toMatch(/\.course-alertes\s*\{\s*animation:\s*none/);
   });
+
+  // Story 10.3 — renforcement : la mise à jour du board ne peut pas faire
+  // clignoter l'écran. Toute NOUVELLE animation dans course.css doit sortir
+  // du polling (ou passer par le socle) : ce garde échoue sinon.
+  // M4 (revue épopée 10) — le comptage couvre TOUTE la feuille (les règles
+  // après le bloc prefers-reduced-motion — .course-annulation, .course-heures*
+  // — n'échappent plus au garde) ; les @keyframes sont retirés avant comptage
+  // et le `animation: none` du reduced-motion n'est pas une animation.
+  it('CSS : la SEULE animation de la feuille est le clignotement du bloc alertes (aucun flash global)', () => {
+    const css = readFileSync(fileURLToPath(new URL('./course.css', import.meta.url)), 'utf8');
+    const sansKeyframes = css.replace(/@keyframes[^{]+\{[\s\S]*?\n\}/g, '');
+    const animations = sansKeyframes.match(/animation:\s*(?!none)/g) ?? [];
+    expect(
+      animations.length,
+      `animations trouvées sur toute la feuille : ${animations.length} (attendu : 1, le clignotement du bloc alertes)`,
+    ).toBe(1);
+    expect(sansKeyframes).toMatch(/\.course-alertes\{[^}]*animation:/);
+  });
 });
 
 describe('page /admin/course — saisie des abandons (story 5.3)', () => {

@@ -1,0 +1,756 @@
+/* Story 9.4 — habillage du parcours de dossier coureur (inscription,
+   acceptations, preuve) et de la checklist de l'espace coureur.
+   Feuille chargée UNIQUEMENT par ces routes : la page d'accueil (budget
+   2.1/9.6) ne la paie pas.
+   Contrat : aucune couleur littérale (garde css-sans-litteraux.test.ts),
+   cibles interactives ≥ 44 px jamais collées au bord, écarts ≥ 8 px
+   (--az-space-2), focus 2 px par la règle globale de globals.css, texte AA
+   (paires épinglées : ink/ink-muted sur surface, action/encre). */
+
+/* --- Fil d'étapes ------------------------------------------------------- */
+
+/* Marqueurs distincts PAR LA FORME : courante = disque plein à double filet,
+   fait = disque plein portant un glyphe ✓, a-faire et suite = disque creux
+   numéroté. Le texte porte l'état (« Étape N sur 4 — en cours », « Fait »,
+   « À faire ») : la couleur n'est jamais seule à porter l'information. */
+.fil-etapes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2);
+}
+
+.fil-etape {
+  display: flex;
+}
+
+.fil-etape-lien,
+.fil-etape-corps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-2);
+  min-height: 44px;
+  padding: var(--az-space-1) var(--az-space-2);
+  border-radius: var(--az-radius-full);
+}
+
+/* Cible de retour ≥ 44 px ; soulignement sur le libellé seul pour rester
+   sobre sur l'ensemble. */
+.fil-etape-lien {
+  text-decoration: none;
+}
+
+.fil-etape-lien .fil-etape-libelle {
+  color: var(--az-action);
+  text-decoration: underline;
+}
+
+.fil-etape-marqueur {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  background: var(--az-surface);
+  color: var(--az-texte-2);
+  font-family: var(--az-font-meta-lg);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fil-etape-textes {
+  display: grid;
+}
+
+.fil-etape-libelle {
+  font-weight: 600;
+  color: var(--az-texte);
+}
+
+.fil-etape-etat {
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}
+
+/* Courante : disque plein ocre + double filet (action/surface ≥ 3:1, paire
+   focus épinglée ; encre on-action/action AA épinglée). */
+.fil-etape--courante .fil-etape-marqueur {
+  border-color: var(--az-action);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  box-shadow: 0 0 0 2px var(--az-surface), 0 0 0 4px var(--az-action);
+}
+
+.fil-etape--courante .fil-etape-libelle {
+  font-weight: 800;
+}
+
+.fil-etape--courante .fil-etape-etat {
+  color: var(--az-texte);
+  font-weight: 700;
+}
+
+/* Faite : disque plein vert portant ✓ (succes-encre sur succes, les deux
+   thèmes ; renforce le texte « Fait », jamais seule). */
+.fil-etape--fait .fil-etape-marqueur {
+  border-color: var(--az-succes);
+  background: var(--az-succes);
+  color: var(--az-succes-encre);
+}
+
+/* --- Gabarit formulaire du socle, appoints parcours ---------------------- */
+
+/* Mentions « (obligatoire) » : texte, jamais un astérisque couleur seule. */
+.champ-obligatoire {
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  font-weight: 600;
+  color: var(--az-texte-2);
+}
+
+/* --- Parcours : formulaire + récapitulatif ------------------------------- */
+
+/* Une colonne par défaut (téléphone) : le récapitulatif, APRÈS le formulaire
+   dans le DOM, passe dessous. Largeur de lecture élargie à partir de 960 px
+   pour poser le récapitulatif en colonne latérale. */
+.dossier-edition {
+  display: grid;
+  gap: var(--az-space-4);
+}
+
+.dossier-recap {
+  display: grid;
+  gap: var(--az-space-3);
+  align-content: start;
+}
+
+.dossier-recap-vide {
+  margin: 0;
+  color: var(--az-texte-2);
+}
+
+@media (min-width: 960px) {
+  /* Élargi de 60 à 66rem : la colonne du formulaire gagne la place que la
+     colonne latérale, souvent vide, lui prenait. */
+  .dossier-section {
+    max-width: 66rem;
+  }
+
+  .dossier-edition {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    align-items: start;
+    gap: var(--az-space-5);
+  }
+}
+
+/* --- Checklist espace coureur (habillage 9.4) ---------------------------- */
+
+/* Actions nommées : cibles pleines ≥ 44 px, pilule, écart natif de la liste
+   (≥ 8 px). Le libellé d'action reste le texte exact de la story 1.7. */
+.checklist-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 1.5px solid var(--az-action);
+  border-radius: var(--az-radius-full);
+  background: transparent;
+  color: var(--az-action);
+  font-weight: 700;
+  text-decoration: none;
+  width: max-content;
+}
+
+.checklist-action:hover {
+  background: var(--az-action);
+  color: var(--az-action-texte);
+}
+
+/* Même gabarit, passive : la pièce est neutralisée (inscriptions fermées),
+   jamais présentée comme une action possible. */
+.checklist-action-inactive {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 1.5px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  color: var(--az-texte-2);
+  font-weight: 600;
+  width: max-content;
+}
+
+/* Puce : anneau creux à faire, disque plein fait — la forme change avec
+   l'état, pas seulement la couleur (le texte « Fait »/« À faire » reste
+   porteur de sens). */
+.checklist-puce {
+  background: transparent;
+  border: 2px solid var(--az-filet-controle);
+}
+
+.checklist-item--fait .checklist-puce {
+  background: var(--az-succes);
+  border-color: var(--az-succes);
+}
+
+/* Encart « liste d'attente » : l'information est portée par le texte, le filet
+   latéral ne fait que l'isoler du reste du formulaire. Ni succès ni danger —
+   l'attente n'est pas un problème à corriger. */
+.encart-attente {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-attention);
+  background: var(--az-surface);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}
+
+/* Échéance de dépôt : même traitement que l'encart d'attente, filet d'accent —
+   c'est une information datée à ne pas manquer, pas une alerte. */
+.encart-echeance {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-action);
+  background: var(--az-surface);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}
+
+/* Montant à verser : un chiffre qu'on recopie sur un bordereau — il doit se
+   lire sans ambiguïté, d'où le filet et le corps plein. */
+.encart-montant {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-succes);
+  background: var(--az-surface);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}
+
+.encart-comptes {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-5);
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}
+
+.encart-comptes__surtitre {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--az-succes);
+}
+
+.encart-comptes__titre {
+  margin: var(--az-space-1) 0 var(--az-space-2);
+  font-size: 1.125rem;
+}
+
+.encart-comptes__intro {
+  margin: 0 0 var(--az-space-4);
+}
+
+/* Deux comptes côte à côte quand la place le permet, « ou » entre les deux. */
+.encart-comptes__liste {
+  display: grid;
+  gap: var(--az-space-3);
+  align-items: stretch;
+}
+
+@media (min-width: 640px) {
+  .encart-comptes__liste {
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+
+  .encart-comptes__liste > .encart-comptes__compte:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.encart-comptes__compte {
+  display: grid;
+  gap: var(--az-space-1);
+  margin: 0;
+  padding: var(--az-space-4);
+  border-radius: var(--az-rayon-md);
+  background: var(--az-surface);
+}
+
+.encart-comptes__ou {
+  margin: 0;
+  text-align: center;
+  color: var(--az-texte-2);
+  font-style: italic;
+}
+
+.encart-comptes dt {
+  margin-top: var(--az-space-2);
+  font-size: 13px;
+  color: var(--az-texte-2);
+}
+
+.encart-comptes dt:first-child {
+  margin-top: 0;
+}
+
+.encart-comptes dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Numéro de compte : recopié à la main sur un bordereau, donc lisible et
+   sélectionnable d'un geste. */
+.encart-comptes__numero {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.encart-comptes__regles {
+  display: grid;
+  gap: var(--az-space-2);
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-3) 0 0 var(--az-space-5);
+  border-top: 1px solid var(--az-filet-controle);
+  font-size: 14px;
+}
+
+/* --- Habillage du formulaire d'inscription ------------------------------- */
+
+/* Les sections passent du cadre filaire au PANNEAU : fond propre, coins
+   adoucis, ombre d'un pixel. Le formulaire fait plus d'un écran — sans
+   découpage visuel, c'est une colonne de champs identiques où l'œil se perd. */
+.dossier-form {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+.dossier-form .fieldset {
+  padding: var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  gap: var(--az-space-5);
+}
+
+/* La légende reste sur le filet (comportement natif du fieldset) mais cesse
+   d'être un simple mot gras : capitales espacées, encre de titre. */
+.dossier-form .fieldset legend {
+  padding: 0 var(--az-space-3);
+  font-family: var(--az-font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+/* Deux champs courts par ligne dès qu'il y a la place : prénom et nom n'ont
+   aucune raison d'occuper deux pleines lignes. */
+.dossier-duo {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+@media (min-width: 720px) {
+  .dossier-duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Choix exclusifs courts (genre, épreuve) : côte à côte plutôt qu'empilés. */
+.option-group--duo {
+  display: grid;
+  gap: var(--az-space-3);
+}
+
+@media (min-width: 560px) {
+  .option-group--duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* L'option devient une carte cliquable sur toute sa surface, et son état
+   choisi se lit par le FOND et le FILET, pas par la seule pastille radio. */
+.dossier-form .option {
+  align-items: flex-start;
+  gap: var(--az-space-3);
+  padding: var(--az-space-4);
+  border-radius: var(--az-rayon-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dossier-form .option:hover {
+  border-color: var(--az-action);
+}
+
+.dossier-form .option:has(input:checked) {
+  border-color: var(--az-action);
+  background: color-mix(in srgb, var(--az-action) 8%, var(--surface-raised));
+}
+
+/* Le contour de focus suit la carte entière : sans cela, il n'entoure que la
+   pastille et devient invisible au clavier. */
+.dossier-form .option:has(input:focus-visible) {
+  outline: 2px solid var(--az-focus);
+  outline-offset: 2px;
+}
+
+.dossier-form .option-label {
+  font-weight: 700;
+  color: var(--az-texte);
+}
+
+/* Carte de choix : pastille à gauche, libellé puis précision empilés à
+   droite. En flex, le nom et la distance se disputaient la largeur et
+   « La Longue — 35 km » cassait sur deux lignes. */
+.option-group--duo .option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--az-space-3);
+  row-gap: var(--az-space-1);
+}
+
+.option-group--duo .option input {
+  grid-row: 1 / -1;
+}
+
+.option-group--duo .option .meta {
+  grid-column: 2;
+  justify-self: start;
+}
+
+/* Barre d'envoi : fond plein de la carte et filet supérieur, pour qu'elle se
+   détache des champs. */
+.dossier-envoi {
+  margin: 0 calc(-1 * var(--az-space-5));
+  padding: var(--az-space-4) var(--az-space-5) 0;
+  border-top: 1px solid var(--az-filet);
+  background: var(--az-surface);
+}
+
+/* Essayée en barre COLLANTE, puis abandonnée : le formulaire vit dans une
+   grille à deux colonnes, la barre n'en couvrait qu'une et flottait au-dessus
+   des panneaux comme un bandeau détaché. Un pied de formulaire franc vaut
+   mieux qu'un demi-bandeau. */
+
+.dossier-envoi .btn-action {
+  width: 100%;
+  margin: 0;
+}
+
+@media (min-width: 560px) {
+  .dossier-envoi .btn-action {
+    width: auto;
+    min-width: 16rem;
+  }
+}
+
+/* Le récapitulatif accompagne le défilement au lieu de rester en haut d'une
+   colonne vide. 96px : hauteur de l'en-tête collant plus une respiration. */
+@media (min-width: 960px) {
+  .dossier-recap {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+/* Compteur de places sur fond de carte : pastille sobre plutôt qu'une ligne
+   de texte perdue entre deux paragraphes. */
+.dossier-section .compteur-places {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--az-space-2);
+  margin: 0;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  background: var(--surface-raised);
+}
+
+/* Ce qui attend après l'envoi, écrit au-dessus du bouton : sans cela,
+   « Valider » se lit comme une fin de parcours alors qu'il reste trois
+   étapes. */
+.dossier-envoi__suite {
+  margin: 0 0 var(--az-space-3);
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}
+
+/* Les documents à lire prennent le même relief que les panneaux du formulaire
+   d'inscription : sans cela, les deux écrans du même parcours n'avaient pas
+   l'air d'appartenir au même produit. */
+.dossier-section .documents {
+  gap: var(--az-space-4);
+}
+
+.dossier-section .document {
+  padding: 0 var(--az-space-5);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.dossier-section .document summary {
+  min-height: 56px;
+  padding: var(--az-space-3) 0;
+}
+
+/* Les cases d'acceptation sont des cartes, comme les choix d'épreuve et de
+   genre : même langage pour la même action. */
+.dossier-form .option:has(input[type='checkbox']) {
+  align-items: center;
+}
+
+/* Chevron de déroulement, à la place de la version : il tourne quand le
+   document s'ouvre, de sorte que l'état se lit par la FORME et pas seulement
+   par la présence du texte en dessous. */
+.document-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--az-texte-2);
+  transition: transform 0.15s ease;
+}
+
+.document-chevron svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.document[open] .document-chevron {
+  transform: rotate(180deg);
+  color: var(--az-action);
+}
+
+.document summary:hover .document-chevron {
+  color: var(--az-action);
+}
+
+/* Case verrouillée tant que le document n'a pas été ouvert : atténuée, mais
+   l'état reste écrit juste en dessous — la couleur ne porte jamais seule
+   l'information. */
+.option--verrouillee {
+  opacity: 0.6;
+}
+
+.option--verrouillee,
+.option--verrouillee input {
+  cursor: not-allowed;
+}
+
+.acceptation {
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+/* --- Espace coureur : même langage que l'inscription et les documents ----- */
+
+.espace {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+/* .auth .card + .card posait une marge entre les cartes : la grille porte
+   désormais l'écart, la marge ferait double emploi. */
+.espace > .card + .card {
+  margin-top: 0;
+}
+
+/* Bloc compte : à partir de 720 px, le texte à gauche et la déconnexion à
+   droite plutôt qu'empilés dans une colonne étroite. */
+@media (min-width: 720px) {
+  .espace-compte {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--az-space-6);
+  }
+
+  .espace-compte__action {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    align-self: center;
+  }
+}
+
+/* Dossier : les pièces à gauche, le récapitulatif en colonne latérale. */
+.espace-dossier__corps {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+@media (min-width: 960px) {
+  .espace-dossier__corps {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    align-items: start;
+  }
+
+  .espace-recap {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+/* Jauge : la barre ne porte AUCUNE information propre, elle double le compteur
+   écrit. D'où aria-hidden côté balisage. */
+.checklist-jauge {
+  height: 8px;
+  border-radius: var(--az-radius-full);
+  background: color-mix(in srgb, var(--az-filet-controle) 40%, transparent);
+  overflow: hidden;
+}
+
+.checklist-jauge__remplie {
+  display: block;
+  height: 100%;
+  border-radius: var(--az-radius-full);
+  background: var(--az-succes);
+  transition: width 0.3s ease;
+}
+
+/* Pièces : du filet plat au PANNEAU, comme les sections du formulaire. */
+.espace .checklist {
+  gap: var(--az-space-4);
+}
+
+.espace .checklist-item {
+  gap: var(--az-space-3);
+  padding: var(--az-space-4) var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.espace .checklist-item--fait {
+  border-left: 4px solid var(--az-succes);
+}
+
+.espace .checklist-entete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--az-space-3);
+}
+
+/* Puce agrandie : un disque de 28 px qui porte un ✓ quand la pièce est faite.
+   La forme change avec l'état, pas seulement la couleur — le texte « Fait » /
+   « À faire » reste porteur de sens. */
+.espace .checklist-puce {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--az-action-texte);
+}
+
+.espace .checklist-item--fait .checklist-puce::after {
+  content: '✓';
+}
+
+.espace .checklist-libelle {
+  font-size: 17px;
+}
+
+/* État en pastille plutôt qu'un mot isolé au bord de la ligne. */
+.espace .checklist-etat {
+  margin-left: 0;
+  padding: var(--az-space-1) var(--az-space-3);
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  white-space: nowrap;
+}
+
+.espace .checklist-etat--fait {
+  border-color: var(--az-succes);
+  background: color-mix(in srgb, var(--az-succes) 10%, transparent);
+}
+
+.espace .checklist-etat--refuse {
+  border-color: var(--az-danger);
+  background: color-mix(in srgb, var(--az-danger) 10%, transparent);
+}
+
+/* Actions alignées sous le libellé : puce (28 px) + écart (12 px). */
+.espace .checklist-item .checklist-action,
+.espace .checklist-item .checklist-action-inactive,
+.espace .checklist-item .error-box {
+  margin-left: calc(28px + var(--az-space-3));
+}
+
+/* Récapitulatif : panneau, comme le reste de l'écran. */
+.espace .recap {
+  padding: var(--az-space-4) var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-left: 4px solid var(--az-action);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.espace .checklist-bandeau {
+  padding: var(--az-space-4) var(--az-space-5);
+  border-radius: var(--az-rayon-md);
+}
+
+@media (max-width: 480px) {
+  /* Étroit : la pastille d'état passe sous le libellé plutôt que de
+     l'écraser. */
+  .espace .checklist-entete {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .espace .checklist-etat {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .espace .checklist-item .checklist-action,
+  .espace .checklist-item .checklist-action-inactive,
+  .espace .checklist-item .error-box {
+    margin-left: 0;
+  }
+}
+
+/* Statut du dossier, juste sous le titre : c'est la première chose qu'un
+   coureur cherche en revenant sur son espace. */
+.espace-statut {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+  font-weight: 600;
+}

@@ -65,6 +65,8 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     contactUrgenceTelephone: '0555 010 204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
+    hebergement: '',
     ...overrides,
   };
 }
@@ -288,7 +290,7 @@ describe.skipIf(testUrls === null)(
       };
       expect(etat.disponible).toBe(true);
       expect(etat.jeton).toMatch(/^[A-Za-z0-9_-]{22}$/);
-      expect(etat.dossard).toBeNull();
+      expect(etat.dossard).toEqual(expect.any(Number));
       expect(etat.payloadQr).toBe(`azzel-e1:${etat.jeton}`);
       expect(etat.editionNom).toBe('Édition 2027');
     });

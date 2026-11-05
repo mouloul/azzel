@@ -525,7 +525,7 @@ function LigneTemoignage({
         </span>
         <div>
           <span className="dossier-nom">{temoignage.prenom}</span>
-          <span className="chip-meta">Ordre {temoignage.ordre}</span>
+          <span className="socle-chip">Ordre {temoignage.ordre}</span>
           <span className="meta dossier-email">{temoignage.editionReference}</span>
           <p className="meta temoignage-citation">« {temoignage.citation} »</p>
         </div>

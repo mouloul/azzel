@@ -52,6 +52,8 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     contactUrgenceTelephone: '0555 010 204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
+    hebergement: '',
     ...overrides,
   };
 }
@@ -150,18 +152,18 @@ describe.skipIf(testUrls === null)(
       return row.id as string;
     }
 
-    it('nominal : 3 validés → dossards 1–3 dans l’ordre created_at, visible dans la liste', async () => {
+    it('nominal : le numéro naît à la validation, incrémental dans l’ordre des validations, visible dans la liste', async () => {
       const premier = await createCoureurValide();
       const deuxieme = await createCoureurValide();
       const troisieme = await createCoureurValide();
 
+      // Aucun lot à lancer : les trois sont déjà numérotés par leur validation.
       const resultat = await attribuerDossards(organisateur, { store });
-
-      expect(resultat).toEqual({ attribues: 3, premier: 1, dernier: 3 });
+      expect(resultat).toEqual({ attribues: 0, premier: null, dernier: null });
       const rows = await sql`
         SELECT first_name, dossard FROM coureur
         WHERE id IN (${premier.coureurId}, ${deuxieme.coureurId}, ${troisieme.coureurId})
-        ORDER BY created_at ASC, id ASC
+        ORDER BY dossard ASC
       `;
       expect(rows.map((row) => row.dossard)).toEqual([1, 2, 3]);
       // La surface de liste admin expose le dossard de chaque dossier (UI 3.4).
@@ -187,7 +189,7 @@ describe.skipIf(testUrls === null)(
       expect(apres).toEqual(avant);
     });
 
-    it('suite après max : nouveaux validés numérotés à partir du dernier, existants inchangés', async () => {
+    it('suite après max : le nouveau validé reçoit le numéro suivant, existants inchangés', async () => {
       const nouveau = await createCoureurValide();
       const existant = await sql`
         SELECT id, dossard FROM coureur
@@ -196,9 +198,6 @@ describe.skipIf(testUrls === null)(
       `;
       expect(existant[0]?.dossard).toBe(1);
 
-      const resultat = await attribuerDossards(organisateur, { store });
-
-      expect(resultat).toEqual({ attribues: 1, premier: 4, dernier: 4 });
       const row = await sql`SELECT dossard FROM coureur WHERE id = ${nouveau.coureurId}`;
       expect(row[0]?.dossard).toBe(4);
       const inchangé = await sql`SELECT dossard FROM coureur WHERE id = ${existant[0]?.id}`;
@@ -212,9 +211,6 @@ describe.skipIf(testUrls === null)(
       await sql`UPDATE coureur SET status = 'en constitution' WHERE id = ${rows[0]?.id}`;
       const suivant = await createCoureurValide();
 
-      const resultat = await attribuerDossards(organisateur, { store });
-
-      expect(resultat).toEqual({ attribues: 1, premier: 5, dernier: 5 });
       const nouveau = await sql`SELECT dossard FROM coureur WHERE id = ${suivant.coureurId}`;
       expect(nouveau[0]?.dossard).toBe(5);
     });

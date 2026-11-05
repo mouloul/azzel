@@ -18,9 +18,15 @@ import { toAdminApiError, type ApiError } from '@/modules/inscriptions/errors';
  * leur propre `fields` — jamais lu ici, la signature reste compatible.
  */
 export function adminErrorResponse(
-  apiError: Pick<ApiError, 'status' | 'envelope'>,
+  apiError: Pick<ApiError, 'status' | 'envelope'> & { fields?: object },
 ): NextResponse {
-  return NextResponse.json(apiError.envelope, { status: apiError.status });
+  // Les erreurs PAR CHAMP accompagnent l'enveloppe quand le mapper en fournit :
+  // sans elles, l'écran ne sait dire qu'« un réglage est invalide », jamais
+  // lequel.
+  const corps = apiError.fields
+    ? { ...apiError.envelope, fields: apiError.fields }
+    : apiError.envelope;
+  return NextResponse.json(corps, { status: apiError.status });
 }
 
 function roleGuardResponse(failure: 'unauthenticated' | 'forbidden'): NextResponse {

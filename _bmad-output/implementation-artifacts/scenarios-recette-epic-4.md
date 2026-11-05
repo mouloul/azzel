@@ -1,6 +1,6 @@
 # Scénarios de recette — Épopée 4 : Chronométrage offline & e-dossard
 
-**Produit :** Azzel · **Périmètre :** stories 4-1 → 4-5 · **Date :** 2026-10-23
+**Produit :** Azzel · **Périmètre :** stories 4-1 → 4-5 · **Date :** 2026-10-23 · **Révision :** 2026-11-03 (story 10.1 : CTA et bandeau sync de la PWA volontaires refondus — libellé « ◷ N passages en attente », pilules du socle ; pas de pas supprimé)
 **Durée estimée :** 75–100 min (module par module, arrêt/reprise possible)
 
 Chaque module se teste indépendamment : cochez au fur et à mesure et notez les écarts dans la colonne Observations du tableau final. Aucune connaissance du code n'est requise. S1 à S4 de la recette épopée 3 sont un prérequis (volontaire importé, missions, annuaire chargé).
@@ -41,7 +41,7 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 
 | # | Action | Résultat attendu |
 |---|--------|------------------|
-| 2.1 | Volontaire avec mission scan → `/volontaires` | Gros bouton « Démarrer le scan » avec le titre de sa mission |
+| 2.1 | Volontaire avec mission scan → `/volontaires` | Gros bouton en pilule « Démarrer le scan » avec le titre de sa mission (section « Scan des e-dossards », ou « Retrait des dossards » si le volontaire n'a que la mission guichet) |
 | 2.2 | Volontaire SANS mission scan | PAS de bouton scan (le scan reste une mission parmi d'autres) |
 | 2.3 | Ouvrir le scanner, refuser la caméra | Écran « Autoriser la caméra » : chemins Réglages iPhone ET Android complets + bouton « Appeler le PC » |
 | 2.4 | Autoriser puis « Démarrer le scan » | Caméra plein écran, voile sombre, badges « · LIVE » + heure + mission, annonce « caméra active · annuaire chargé » |
@@ -76,8 +76,8 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 
 | # | Action | Résultat attendu |
 |---|--------|------------------|
-| 5.1 | Scanner plusieurs passages/retraits en **offline** (DevTools) | Bandeau sync sur la fiche : « ◷ N en attente » (compteur exact) |
-| 5.2 | Repasser **Online** | La sync part seule : « ⏳ Envoi en cours » → « ✓ envoyés — file : 0 » |
+| 5.1 | Scanner plusieurs passages/retraits en **offline** (DevTools) | Bandeau sync sur la fiche : « ◷ N passages en attente » (compteur exact) |
+| 5.2 | Repasser **Online** | La sync part seule : « ⏳ Envoi en cours — N en attente » → « ✓ envoyés — file : 0 » |
 | 5.3 | Ouvrir le « Journal sync » (details) | Lots horodatés : « N envoyés · M déjà connus · K rejetés », motif des rejets, « horloge appareil : ±X s vs serveur » |
 | 5.4 | Re-scanner hors-ligne puis resynchroniser | Compteur repart puis retombe à 0 ; (psql) `SELECT count(*) FROM terrain_evenement` — aucun doublon (clés uniques) |
 | 5.5 | `bash scripts/dev-db.sh psql -c "select type, jeton_coureur, checkpoint_id, offset_estime_ms from terrain_evenement order by horodatage_reception"` | Retraits (checkpoint NULL) et passages (checkpoint rempli) reçus, offsets journalisés |

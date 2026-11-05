@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { siteTokens } from '@azzel/shared';
+import { siteTokens, colorTokens } from '@azzel/shared';
 
 import {
   GLYPHE_LECTURE,
@@ -69,7 +69,8 @@ function ratioContraste(texte: string, fond: string): number {
 
 type NomRole =
   | keyof (typeof siteTokens.themes)['light']
-  | keyof (typeof siteTokens.colors);
+  | keyof (typeof siteTokens.colors)
+  | keyof typeof colorTokens;
 
 function couleur(theme: 'light' | 'dark', role: NomRole): string {
   const rolesTheme = Object.keys(siteTokens.themes[theme]);
@@ -81,6 +82,22 @@ function couleur(theme: 'light' | 'dark', role: NomRole): string {
     role in siteTokens.themes.light || role in siteTokens.themes.dark;
   if (!roleDunTheme && rolesPalette.includes(role)) {
     return siteTokens.colors[role as keyof typeof siteTokens.colors];
+  }
+  // Story 11.4 — rôles opérationnels (colorTokens, ex. paliers de pente) :
+  // le thème lit sa paire claire (`pente-raide`) ou sombre (`pente-raide-sombre`).
+  // En thème clair, un rôle suffixé `-sombre` ne se résout JAMAIS : une paire
+  // mal écrite doit tomber dans le throw nommé, pas rendre la valeur sombre.
+  if (role in colorTokens) {
+    const paire =
+      theme === 'light' && !String(role).endsWith('-sombre')
+        ? colorTokens[role as keyof typeof colorTokens]
+        : undefined;
+    const pendant = `${role}-sombre` as keyof typeof colorTokens;
+    const sombre = theme === 'dark' && pendant in colorTokens ? colorTokens[pendant] : undefined;
+    const valeur = paire ?? sombre;
+    if (valeur !== undefined) {
+      return valeur;
+    }
   }
   throw new Error(
     `rôle absent du thème ${theme} et interdit de repli palette : ${String(role)}`,
@@ -143,7 +160,7 @@ const PAIRES: readonly Paire[] = [
     texte: 'on-forest',
     fond: 'forest-surface',
     seuil: SEUIL_COURANT,
-    usage: 'bande contact + égide',
+    usage: 'bande contact',
   },
   {
     nom: 'on-forest / forest',
@@ -239,6 +256,38 @@ const PAIRES: readonly Paire[] = [
     seuil: SEUIL_NON_TEXTUEL,
     usage: 'bordure des champs dans les cartes (non textuel)',
   },
+  /* Story 11.4 — aires du graphe de technicité (UX-DR-36) : les 4 paliers de
+   * pente sont des aires pleines posées sur la bande de page (surface) —
+   * WCAG 1.4.11 non textuel 3:1, clair ET sombre. Les teintes diffèrent aussi
+   * en clarté (niveaux de gris, daltonisme) : garde dédié ci-dessous. */
+  {
+    nom: 'pente-roulant / surface',
+    texte: 'pente-roulant',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « roulant » (< 5 %) du profil altimétrique',
+  },
+  {
+    nom: 'pente-soutenu / surface',
+    texte: 'pente-soutenu',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « soutenu » (5 à 12 %) du profil altimétrique',
+  },
+  {
+    nom: 'pente-raide / surface',
+    texte: 'pente-raide',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « raide » (12 à 20 %) du profil altimétrique',
+  },
+  {
+    nom: 'pente-tres-raide / surface',
+    texte: 'pente-tres-raide',
+    fond: 'surface',
+    seuil: SEUIL_NON_TEXTUEL,
+    usage: 'aire « très raide » (≥ 20 %) du profil altimétrique',
+  },
 ];
 
 describe('ratioContraste — fonction pure WCAG', () => {
@@ -289,13 +338,53 @@ describe('contrastes WCAG — paire interdite (jamais rendue)', () => {
   });
 });
 
+/* Story 11.4 — palette de technicité : en plus du 3:1 non textuel (PAIRES),
+ * les 4 paliers doivent être différenciés AUSSI en clarté (lisible en niveaux
+ * de gris et pour un daltonien) : ordre monotone strict, du roulant (le plus
+ * clair en thème clair) au très raide, sens inversé en thème sombre. */
+describe('contrastes WCAG — paliers de pente différenciés en clarté (story 11.4)', () => {
+  const clarte = (hex: string) => luminanceRelative(hex);
+
+  it('thème clair : roulant > soutenu > raide > très raide (du plus clair au plus sombre)', () => {
+    const roulant = clarte(couleur('light', 'pente-roulant'));
+    const soutenu = clarte(couleur('light', 'pente-soutenu'));
+    const raide = clarte(couleur('light', 'pente-raide'));
+    const tresRaide = clarte(couleur('light', 'pente-tres-raide'));
+    expect(roulant).toBeGreaterThan(soutenu);
+    expect(soutenu).toBeGreaterThan(raide);
+    expect(raide).toBeGreaterThan(tresRaide);
+  });
+
+  it('thème sombre : roulant < soutenu < raide < très raide (du plus discret au plus vif)', () => {
+    const roulant = clarte(couleur('dark', 'pente-roulant'));
+    const soutenu = clarte(couleur('dark', 'pente-soutenu'));
+    const raide = clarte(couleur('dark', 'pente-raide'));
+    const tresRaide = clarte(couleur('dark', 'pente-tres-raide'));
+    expect(roulant).toBeLessThan(soutenu);
+    expect(soutenu).toBeLessThan(raide);
+    expect(raide).toBeLessThan(tresRaide);
+  });
+});
+
 /* Story 2.5 — poster du trailer : le dégradé forêt et la pastille de lecture
- * « vert altitude » sont des hex fixes (pas des rôles de thème) : le poster
- * remplace une image, identique dans les deux thèmes. Sources uniques des
- * couleurs : modules/retour-images/domain.ts — le garde ci-dessous lit le CSS
- * réellement servi et vérifie que chaque hex s'y trouve dans la règle
- * correspondante (précédent tokens-css.test : le CSS peut trahir les constantes). */
+ * « vert altitude » sont des couleurs charte fixes (pas des rôles de thème) :
+ * le poster remplace une image, identique dans les deux thèmes. Depuis la
+ * story 9.1, le CSS lit les variables de palette (--forest-600, --forest,
+ * --forest-800, --vert-altitude) : le garde ci-dessous ÉPINGLE les constantes
+ * du domaine aux tokens de la charte (aucune dérive silencieuse) puis vérifie
+ * que le CSS servi référence exactement ces variables dans les règles du
+ * poster (précédent tokens-css.test : le CSS peut trahir les constantes). */
 describe('contrastes WCAG — poster trailer (story 2.5)', () => {
+  it('les constantes du domaine restent épinglées aux tokens charte (story 9.1)', () => {
+    expect(POSTER_DEGRADE_COULEURS).toEqual([
+      siteTokens.colors['forest-600'],
+      siteTokens.colors.forest,
+      siteTokens.colors['forest-800'],
+    ]);
+    expect(PASTILLE_LECTURE).toBe(siteTokens.colors['vert-altitude']);
+    expect(GLYPHE_LECTURE).toBe(siteTokens.colors.forest);
+  });
+
   for (const stop of POSTER_DEGRADE_COULEURS) {
     it(`pastille lecture (vert altitude) / dégradé ${stop} — ≥ 3:1 (non textuel, 1.4.11)`, () => {
       const ratio = ratioContraste(PASTILLE_LECTURE, stop);
@@ -323,24 +412,23 @@ describe('contrastes WCAG — poster trailer (story 2.5)', () => {
     ).toBeGreaterThanOrEqual(SEUIL_NON_TEXTUEL);
   });
 
-  it('vitrine-textes.css servit exactement les hex du domaine dans les règles du poster', () => {
+  // Recette du 04/11/2026 : le bloc trailer a quitté vitrine-textes.css pour
+  // globals.css — l'accueil le partage avec /retour-en-images. Règles déplacées
+  // verbatim, mêmes variables exigées, même garde.
+  it('globals.css sert exactement les variables charte du poster (story 9.1)', () => {
     const css = readFileSync(
-      fileURLToPath(new URL('./vitrine-textes.css', import.meta.url)),
+      fileURLToPath(new URL('./globals.css', import.meta.url)),
       'utf8',
-    ).toLowerCase();
+    );
     const poster = extraireRegle(css, '.aa-trailer__poster');
-    for (const stop of POSTER_DEGRADE_COULEURS) {
-      expect(
-        poster,
-        `${stop} doit figurer dans le dégradé de .aa-trailer__poster`,
-      ).toContain(stop.toLowerCase());
-    }
+    expect(poster).toContain('var(--forest-600)');
+    expect(poster).toContain('var(--forest)');
+    expect(poster).toContain('var(--forest-800)');
+    // Halo du focus aligné sur l’arrêt médian du dégradé.
+    const focus = extraireRegle(css, '.aa-trailer__poster:focus-visible');
+    expect(focus).toContain('box-shadow:0 0 0 4px var(--forest)');
     const play = extraireRegle(css, '.aa-trailer__play');
-    expect(play, `${PASTILLE_LECTURE} est le fond de la pastille`).toContain(
-      PASTILLE_LECTURE.toLowerCase(),
-    );
-    expect(play, `${GLYPHE_LECTURE} est la couleur du glyphe`).toContain(
-      GLYPHE_LECTURE.toLowerCase(),
-    );
+    expect(play).toContain('background:var(--vert-altitude)');
+    expect(play).toContain('color:var(--forest)');
   });
 });

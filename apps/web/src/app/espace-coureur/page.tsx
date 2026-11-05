@@ -5,7 +5,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireRolePage } from '@/modules/iam/session';
 
-import { formatDateFrUtc } from '@/modules/inscriptions/domain';
+import { libelleEpreuve, statutAffiche } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import {
   getChecklistState,
@@ -20,6 +20,7 @@ import {
   estComplet,
   etatPiece,
 } from './checklist-view';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,8 +58,8 @@ export default async function EspaceCoureurPage() {
   }
 
   return (
-    <section className="auth">
-      <article className="card">
+    <section className="auth auth-wide dossier-section espace">
+      <article className="card espace-compte">
         <p className="surtitre">Espace coureur</p>
         <h1>Tu es connecté</h1>
         <p className="lead">
@@ -71,7 +72,7 @@ export default async function EspaceCoureurPage() {
           Session unique : te connecter sur un autre appareil déconnecte automatiquement
           celui-ci.
         </p>
-        <div className="auth-alt">
+        <div className="auth-alt espace-compte__action">
           <LogoutButton />
         </div>
       </article>
@@ -108,6 +109,7 @@ export default async function EspaceCoureurPage() {
           edition={state.edition}
           pieces={state.pieces}
           recap={state.recap}
+          statut={state.statut ?? null}
           assistancePhone={assistancePhone}
         />
       )}
@@ -119,22 +121,50 @@ function ChecklistCard({
   edition,
   pieces,
   recap,
+  statut,
   assistancePhone,
 }: {
   edition: EditionSummary;
   pieces: ChecklistPiece[];
   recap: ChecklistRecap | null;
+  statut: string | null;
   assistancePhone: string;
 }) {
   const complet = estComplet(pieces);
+  // La preuve se lit sur la pièce de la checklist : c'est elle qui sépare
+  // « en attente de justificatif » de « en attente de validation ».
+  const statutLu =
+    statut === null
+      ? null
+      : statutAffiche(statut, pieces.some((piece) => piece.id === 'preuve' && piece.fait));
 
   return (
-    <article className="card">
+    <article className="card espace-dossier">
       <p className="surtitre">Dossier</p>
       <h2>Ton dossier — {edition.nom}</h2>
+      {statutLu !== null && (
+        <p className="espace-statut">
+          Statut :{' '}
+          <span className={`socle-pastille ${statutLu.pastille}`}>
+            <span className="socle-pastille-point" aria-hidden="true" />
+            {statutLu.libelle}
+          </span>
+        </p>
+      )}
       <p className="checklist-compteur" aria-live="polite">
         {compteurPieces(pieces)}
       </p>
+      {/* Jauge décorative : le compteur écrit ci-dessus porte déjà
+          l'information, la barre ne fait que la rendre lisible d'un coup
+          d'œil. */}
+      <div className="checklist-jauge" aria-hidden="true">
+        <span
+          className="checklist-jauge__remplie"
+          style={{
+            width: `${pieces.length === 0 ? 0 : Math.round((pieces.filter((piece) => piece.fait).length / pieces.length) * 100)}%`,
+          }}
+        />
+      </div>
       {complet && (
         <div role="status" className="checklist-bandeau">
           <p className="checklist-bandeau-texte">{BANDEAU_DOSSIER_VALIDE}</p>
@@ -145,6 +175,7 @@ function ChecklistCard({
           Ton e-dossard — QR à présenter au guichet
         </a>
       )}
+      <div className="espace-dossier__corps">
       <ol role="list" className="checklist">
         {pieces.map((piece) => {
           const etat = etatPiece(piece);
@@ -179,19 +210,29 @@ function ChecklistCard({
         })}
       </ol>
       {recap !== null && (
-        <div className="recap">
+        <aside className="recap espace-recap" aria-label="Récapitulatif de ton inscription">
           <p className="recap-titre">Récapitulatif</p>
+          {statutLu !== null && (
+            <p>
+              Statut :{' '}
+              <span className={`socle-pastille ${statutLu.pastille}`}>
+                <span className="socle-pastille-point" aria-hidden="true" />
+                {statutLu.libelle}
+              </span>
+            </p>
+          )}
           <p>
-            Épreuve : <strong>{recap.epreuve} ({recap.distanceKm} km)</strong>
+            Épreuve : <strong>{libelleEpreuve(recap.epreuve, recap.distanceKm)}</strong>
           </p>
           <p>Catégorie : {recap.categorieAge}</p>
           <p>T-shirt : {recap.tshirt}</p>
           <p>
             Contact d’urgence : {recap.contactUrgenceNom} · {recap.contactUrgenceTelephone}
           </p>
-          <p>Course le {formatDateFrUtc(recap.dateCourse)}</p>
-        </div>
+          <p>Course : {recap.dateCourseLibelle}</p>
+        </aside>
       )}
+      </div>
       <p className="meta">
         Clôture des inscriptions : {formatLocalDateTime(edition.registrationClosesAt)}
       </p>

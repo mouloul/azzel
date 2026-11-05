@@ -42,6 +42,8 @@ function validInput(): InscriptionFormInput {
     contactUrgenceTelephone: '0555 010 204',
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
+    genre: 'H',
+    hebergement: '',
   };
 }
 
@@ -157,9 +159,9 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     expect(piece(avant, 'epreuve').actionLabel).toBe('Modifier mon inscription');
     expect(piece(avant, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
     expect(avant.recap).toMatchObject({
-      epreuve: 'La Longue — 35 km',
-      distanceKm: 35,
-      categorieAge: 'Senior (20–39 ans)',
+      epreuve: 'La Longue',
+      distanceKm: 28,
+      categorieAge: 'Senior (18–39 ans)',
       tshirt: 'M',
       contactUrgenceNom: 'Lounis Ulahianne',
       dateCourse: RACE_DATE,

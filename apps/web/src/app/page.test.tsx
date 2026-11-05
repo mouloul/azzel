@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { renderToReadableStream } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { BandeauEgide, EGIDE_TEXTE } from '@/components/bandeau-egide';
 
 // L’accueil lit la section partenaires en base (dynamique, story 2.3) : le
 // composant est asynchrone — rendu via renderToReadableStream (l’API statique
@@ -21,42 +20,121 @@ vi.mock(
     sponsorsServiceMock as unknown as typeof import('@/modules/sponsors/service'),
 );
 
+// Story 9.3 : la section parcours de l’accueil lit les épreuves via le
+// contrat dédié (lui-même branché sur getParcoursPage — voir
+// section-parcours.test.tsx pour le rendu complet, vues actuelle et épopée 11).
+const sectionParcoursMock = vi.hoisted(() => ({
+  getSectionParcours: vi.fn(),
+}));
+
+vi.mock(
+  '@/modules/contenus/section-parcours',
+  () =>
+    sectionParcoursMock as unknown as typeof import('@/modules/contenus/section-parcours'),
+);
+
+// La date de course se lit en base (réglage d'administration) : isolée par mock,
+// le reste du module service garde son vrai comportement (compteur muet sans base).
+const dateCourseMock = vi.hoisted(() => ({ date: { libelle: 'printemps 2027', phrase: 'au printemps 2027' } }));
+
+vi.mock('@/modules/inscriptions/service', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('@/modules/inscriptions/service')>();
+  return { ...reel, getDateCourseVitrine: vi.fn(async () => dateCourseMock.date) };
+});
+
 import HomePage, { revalidate as ACCUEIL_REVALIDATE } from './page';
+
+const VUE_PARCOURS_ACCUEIL = {
+  epreuves: [
+    {
+      slug: 'longue',
+      nom: 'La Longue',
+      distanceKm: 28,
+      gpxUrl: 'https://files.exemple.dz/longue.gpx',
+      metriques: null,
+      pointsDePassage: null,
+    },
+    {
+      slug: 'moyenne',
+      nom: 'La Moyenne',
+      distanceKm: 28,
+      gpxUrl: null,
+      metriques: null,
+      pointsDePassage: null,
+    },
+  ],
+};
 
 let HTML_ACCUEIL = '';
 
 beforeAll(async () => {
   sponsorsServiceMock.getPartenairesSection.mockResolvedValue(null);
+  sectionParcoursMock.getSectionParcours.mockResolvedValue(VUE_PARCOURS_ACCUEIL);
   HTML_ACCUEIL = await renduAccueil();
 });
 
 async function renduAccueil(): Promise<string> {
   const flux = await renderToReadableStream(
-    <>
-      <BandeauEgide />
-      <HomePage />
-    </>,
+    <HomePage />,
   );
   return await new Response(flux).text();
 }
 
-describe('accueil vitrine — rendu statique', () => {
-  it('affiche le bandeau égide (texte exact, capitales espacées)', () => {
-    const html = HTML_ACCUEIL;
-    expect(html).toContain(EGIDE_TEXTE);
-    expect(EGIDE_TEXTE).toBe('Sous l’égide de la Fédération et du ministère des Sports');
-    expect(html).toContain('class="egide"');
+describe('accueil vitrine — date de course pilotée depuis l’administration', () => {
+  async function rendreAvec(libelle: string, phrase: string): Promise<string> {
+    const avant = dateCourseMock.date;
+    dateCourseMock.date = { libelle, phrase };
+    try {
+      return (await renduAccueil()).replaceAll('<!-- -->', '');
+    } finally {
+      dateCourseMock.date = avant;
+    }
+  }
+
+  it('date cachée : la saison partout, jamais le jour', async () => {
+    const html = await rendreAvec('printemps 2027', 'au printemps 2027');
+    expect(html).toContain('revient au printemps 2027');
+    expect(html).toContain('Au printemps 2027, deux courses');
+    expect(html).not.toContain('26 mars');
   });
 
-  it('hero : bandeau date, titre, lieu, CTA S’inscrire vers /connexion?parcours=inscription', () => {
+  it('date publiée : le rail, l’accroche et le chapeau la reprennent, avec la bonne préposition', async () => {
+    const html = await rendreAvec('26 mars 2027', 'le 26 mars 2027');
+    expect(html).toContain('26 mars 2027</dd>');
+    expect(html).toContain('revient le 26 mars 2027');
+    expect(html).toContain('Le 26 mars 2027, deux courses');
+    expect(html).not.toContain('rintemps 2027');
+  });
+
+  it('base muette (« prochainement ») : aucune date inventée', async () => {
+    const html = await rendreAvec('prochainement', 'prochainement');
+    expect(html).toContain('revient prochainement');
+    expect(html).toContain('Prochainement, deux courses');
+    expect(html).not.toMatch(/\d{2} (mars|avril|mai)/);
+  });
+});
+
+describe('accueil vitrine — rendu statique', () => {
+  it('plus de mention d’égide sur l’accueil (retirée en recette le 04/11/2026)', () => {
+    expect(HTML_ACCUEIL).not.toContain('égide');
+  });
+
+  it('hero : bandeau date, titre, lieu, CTA Participer vers /connexion?parcours=inscription', () => {
     const html = HTML_ACCUEIL;
-    expect(html).toContain('2ᵉ édition — 26 mars 2027');
+    expect(html).toContain('2ᵉ édition');
+    expect(html).toContain('Printemps 2027');
     expect(html).toContain('Week-end Sportif');
     expect(html).toContain('Aït Aïssi');
     expect(html).toContain('stade Agni Lhoudh');
     expect(html).toContain('Yakouren');
     expect(html).toContain('href="/connexion?parcours=inscription"');
-    expect(html).toContain('S’inscrire');
+    expect(html).toContain('Participer');
+  });
+
+  it('hero : la date exacte reste masquee tant que le comite ne l’a pas annoncee', () => {
+    const html = HTML_ACCUEIL;
+    expect(html).not.toContain('26 mars');
+    expect(html).toContain('printemps 2027');
   });
 
   it('hero : photo eager + fetchpriority high (LCP), dimensions alignées sur la variante 640', () => {
@@ -89,14 +167,34 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('>214<');
     expect(html).toContain('>116<');
     expect(html).toContain('dont 36 femmes');
-    expect(html).toContain('Chiffres officiels de l’édition 2026');
   });
 
-  it('épreuves 2027 : trail long 35 km et trail moyen 12 km', () => {
+  /* Revue visuelle du 04/11/2026 (B1) : les distances ne sont plus figées dans
+   * les titres. Elles sont publiées par la section parcours, depuis le relevé,
+   * avec la mention « tracé provisoire » — un seul endroit à corriger quand le
+   * tracé définitif arrivera. */
+  it('épreuves 2027 : UNE seule section, les accroches des deux épreuves, sans distance figée', () => {
     const html = HTML_ACCUEIL;
-    expect(html).toContain('Trail long — 35 km');
-    expect(html).toContain('Trail moyen — 12 km');
+    // Recette du 05/11/2026 : « Les épreuves » et « Les parcours » sont fusionnées.
+    expect(html.match(/id="titre-epreuves-2027"/g)).toHaveLength(1);
+    expect(html).not.toContain('titre-parcours-accueil');
     expect(html).toContain('Épreuve phare');
+    expect(html.match(/Épreuve phare/g)).toHaveLength(1);
+    expect(html).toContain('Le Grand Trail d’Aït Aïssi');
+    expect(html).toContain('La Petite Boucle');
+    expect(html).toContain('Une boucle au départ du stade Agni Lhoudh');
+    expect(html).toContain('Le même départ et les mêmes sentiers');
+    expect(html).not.toContain('Trail long — 35 km');
+    expect(html).not.toContain('Trail moyen — 12 km');
+  });
+
+  it('les deux cartes d’accroche autonomes ont disparu : plus de « Trail long » / « Trail moyen »', () => {
+    expect(HTML_ACCUEIL).not.toContain('aa-cards');
+    expect(HTML_ACCUEIL).not.toContain('Trail moyen');
+  });
+
+  it('aucune distance contredisant le relevé ne subsiste dans l’accueil', () => {
+    expect(HTML_ACCUEIL).not.toContain('35 km');
   });
 
   it('navigation sobre : liens texte /parcours et /region dans la section épreuves (story 2.4)', () => {
@@ -157,38 +255,77 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
     return bloc;
   }
 
-  it('structure : section plein écran, titre centré, crête, bandeau date, actions, badge épreuves', () => {
+  it('structure : section plein écran, titre, crête, rail de chiffres clés (date + épreuves), méta, actions', () => {
     const html = HTML_ACCUEIL;
     const debut = html.indexOf('class="aa-hero aa-hero--plein"');
     expect(debut).toBeGreaterThan(-1);
     const titre = html.indexOf('aa-hero__title');
     const crete = html.indexOf('data-crete');
-    const date = html.indexOf('class="aa-hero__date"');
+    const rail = html.indexOf('class="aa-hero__rail"');
+    const date = html.indexOf('Printemps 2027');
+    const epreuves = html.indexOf('Deux trails');
+    const meta = html.indexOf('class="aa-hero__meta"');
     const actions = html.indexOf('class="aa-hero__actions"');
-    const badge = html.indexOf('class="aa-hero__badge"');
     expect(debut).toBeLessThan(titre);
     expect(titre).toBeLessThan(crete);
-    expect(crete).toBeLessThan(date);
-    expect(date).toBeLessThan(actions);
-    expect(actions).toBeLessThan(badge);
-    expect(badge).toBeLessThan(html.indexOf('titre-bilan-2026'));
+    expect(crete).toBeLessThan(rail);
+    expect(rail).toBeLessThan(date);
+    expect(rail).toBeLessThan(epreuves);
+    expect(rail).toBeLessThan(meta);
+    expect(meta).toBeLessThan(actions);
+    expect(actions).toBeLessThan(html.indexOf('aa-bilan'));
+    // Story 9.2 : le bandeau de date et le badge des épreuves se fondent
+    // dans le rail — plus d'éléments flottants autonomes.
+    expect(html).not.toContain('aa-hero__badge');
+    expect(html).not.toContain('aa-hero__date');
+    // Rail en liste de définitions : quatre paires dt/dd (une paire = une
+    // cellule cloisonnée).
+    const railHtml = html.slice(html.indexOf('aa-hero__rail'), html.indexOf('</dl>'));
+    expect((railHtml.match(/<dt>/g) ?? []).length).toBe(4);
+    expect((railHtml.match(/<dd>/g) ?? []).length).toBe(4);
+    expect(railHtml).toContain('Stade Agni Lhoudh</dd>');
+    expect(railHtml).toContain('Forêt de Yakouren</dd>');
     // Une seule photo prioritaire, avant le titre (LCP).
     expect((html.match(/data-hero-photo/g) ?? []).length).toBe(1);
     expect(html.indexOf('data-hero-photo')).toBeLessThan(titre);
     expect(html).toMatch(/<h1 class="aa-hero__title" id="titre-accueil">/);
     expect(html).toContain('aria-labelledby="titre-accueil"');
-    expect(html).toContain('35 km · 12 km');
   });
 
-  it('CSS : hero à hauteur d’écran moins l’égide, contenu centré', () => {
+  it('CSS : hero à hauteur d’écran moins l’égide, titre à gauche / rail à droite sur socle, rail sous le titre en mobile', () => {
     const plein = regle('.aa-hero--plein');
-    expect(plein).toMatch(/min-height:\s*calc\(100svh - var\(--egide-hauteur\)/);
+    expect(plein).toMatch(/min-height:\s*calc\(100svh - var\(--frise-hauteur\)/);
     const corps = regle('.aa-hero--plein .aa-hero__body');
-    expect(corps).toContain('text-align: center');
-    expect(corps).toContain('align-items: center');
+    // Composition 9.2 : grille deux colonnes (titre à gauche, rail à droite),
+    // texte à gauche — plus de contenu centré.
+    expect(corps).toContain('display: grid');
+    expect(corps).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(/);
+    expect(corps).toContain('text-align: left');
+    // Socle translucide forest-800 : porte l’accent ocre du nom (≥ 3,49:1,
+    // grand texte) et l’encre on-forest (≥ 8,39:1) — mesurés story 9.2.
+    expect(corps).toContain('color-mix(in srgb, var(--forest-800) 45%, transparent)');
+    const titre = regle('.aa-hero--plein .aa-hero__title');
+    // Très grande échelle dégressive : plafond 136 px (UX-DR-33), plancher
+    // mobile 44 px (paliers dans les media queries ci-dessous).
+    expect(titre).toMatch(/font-size:\s*clamp\(72px, 10\.5vw, 136px\)/);
+    // Mobile/tablette : une colonne — le rail passe SOUS le texte au lieu de
+    // le comprimer (ordre vertical titre, crête, méta, actions, rail). Le bloc
+    // media capture sa première règle : celle du corps, qui porte la bascule.
+    const mobile = CSS.match(/@media \(max-width: 959\.98px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(mobile).toContain('.aa-hero--plein .aa-hero__body');
+    expect(mobile).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
+    // Recette 05/11/2026 : la fiche passe après l'accroche, AVANT le compteur
+    // de places, lui-même avant les actions.
+    expect(mobile.indexOf('"titre"')).toBeLessThan(mobile.indexOf('"meta"'));
+    expect(mobile.indexOf('"meta"')).toBeLessThan(mobile.indexOf('"rail"'));
+    expect(mobile.indexOf('"rail"')).toBeLessThan(mobile.indexOf('"compteur"'));
+    expect(mobile.indexOf('"compteur"')).toBeLessThan(mobile.indexOf('"actions"'));
+    // Paliers du titre : 44 px plancher téléphone, 40 px très petit écran.
+    expect(CSS).toMatch(/clamp\(44px, 12\.5vw, 72px\)/);
+    expect(CSS).toMatch(/clamp\(40px, 11vw, 44px\)/);
   });
 
-  it('CSS : en-tête superposé à la photo sans JS (logo négatif, texte clair)', () => {
+  it('CSS : en-tête superposé à la photo sans JS (logo négatif, texte clair) — conservé par la refonte 9.2', () => {
     const entete = regle('body:has(.aa-hero--plein) .site-header');
     expect(entete).toContain('position: absolute');
     expect(entete).toContain('background: transparent');
@@ -210,6 +347,68 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
       expect(alpha).toBeGreaterThanOrEqual(0.6);
       expect(alpha).toBeLessThanOrEqual(0.85);
     }
+  });
+});
+
+describe('accueil vitrine — section parcours (story 9.3)', () => {
+  function trancheSection(): string {
+    const debut = HTML_ACCUEIL.indexOf('titre-epreuves-2027');
+    expect(debut).toBeGreaterThan(-1);
+    const fin = HTML_ACCUEIL.indexOf('titre-piliers', debut);
+    return HTML_ACCUEIL.slice(debut, fin);
+  }
+
+  it('après le hero, avant le village — jamais le premier écran', () => {
+    const html = HTML_ACCUEIL;
+    expect(html.indexOf('aa-hero--plein')).toBeLessThan(html.indexOf('titre-epreuves-2027'));
+    expect(html.indexOf('titre-epreuves-2027')).toBeLessThan(html.indexOf('titre-piliers'));
+  });
+
+  it('sélecteur servi : deux radios homonymes, premier coché, fiches des deux épreuves', () => {
+    const section = trancheSection();
+    const radios = section.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
+    expect(radios.length).toBe(2);
+    for (const radio of radios) {
+      expect(radio).toContain('name="epreuve-parcours-accueil"');
+    }
+    expect(radios[0]).toContain('checked');
+    expect(section).toContain('La Longue');
+    expect(section).toContain('La Moyenne');
+    expect(section).toContain('href="https://files.exemple.dz/longue.gpx"');
+  });
+
+  it('aucun chiffre de dénivelé, altitude, horaire ou barrière tant que la donnée est nulle', () => {
+    const section = trancheSection();
+    for (const interdit of [
+      'Dénivelé',
+      'Altitude',
+      'Heure de départ',
+      'Barrière horaire',
+      'Points de passage',
+    ]) {
+      expect(section).not.toContain(interdit);
+    }
+  });
+
+  it('épreuve sans tracé publié : annonce utile dans son panneau, section rendue sans moteur', () => {
+    const section = trancheSection();
+    expect(section).toContain('carte en relief et le profil altimétrique');
+    expect(section).not.toContain('<iframe');
+    expect(section).not.toContain('<canvas');
+    expect(section).not.toContain('maplibre');
+  });
+
+  it('la page détaillée reste à portée : lien /parcours dans la section', () => {
+    expect(trancheSection()).toContain('href="/parcours"');
+  });
+
+  it('liens texte : cibles tactiles ≥ 44 px (mesuré 25,5 px avant la garde, story 9.6)', () => {
+    const css = readFileSync(fileURLToPath(new URL('./globals.css', import.meta.url)), 'utf8');
+    const regleCss = css
+      .replace(/\s+/g, ' ')
+      .match(/\.aa-lien-texte\{([^}]*)\}/)?.[1] ?? '';
+    expect(regleCss).toMatch(/min-height:\s*44px/);
+    expect(regleCss).toContain('display:inline-flex');
   });
 });
 
@@ -244,7 +443,8 @@ describe('accueil vitrine — identité village (story 2.2)', () => {
     const glyphes = html.match(/<svg[^>]*data-glyphe="([^"]+)"[^>]*>/g) ?? [];
     expect(glyphes.length).toBe(4);
     // Correspondance piliers ↔ glyphes (noms kabyles sources) :
-    // Sport → yaz ⵣ, Santé → tala (la fontaine), Citoyenneté → tabzimt (la fibule), Écologie → ingel (le cèdre).
+    // Valeurs du dossier 2027 : Sport & santé → yaz ⵣ, Jeunesse → tala (la source),
+    // Liens entre générations → tabzimt (la fibule), Nature & territoire → ingel (le cèdre).
     const noms = glyphes
       .map((g) => g.match(/data-glyphe="([^"]+)"/)?.[1] ?? '')
       .sort();
@@ -252,7 +452,9 @@ describe('accueil vitrine — identité village (story 2.2)', () => {
     const titres = (html.match(/class="aa-pilier__titre">([^<]+)</g) ?? []).map((t) =>
       t.replace(/^.*?>/, '').replace(/<$/, ''),
     );
-    expect(new Set(titres)).toEqual(new Set(['Sport', 'Santé', 'Citoyenneté', 'Écologie']));
+    expect(new Set(titres)).toEqual(
+      new Set(['Sport &amp; santé', 'Jeunesse', 'Liens entre générations', 'Nature &amp; territoire']),
+    );
   });
 
   it('piliers : cartes sobres avec glyphe + titre + ligne concrète, jamais de glyphe seul', () => {
@@ -291,14 +493,17 @@ describe('accueil vitrine — identité village (story 2.2)', () => {
     expect(derniere).toBeGreaterThan(html.indexOf('id="titre-contact"'));
   });
 
-  it('crête : ligne ocre 1,5 px sous le titre du hero, aria-hidden', () => {
+  it('crête : ligne ocre 1,5 px directement sous le titre du hero (avant le rail), aria-hidden', () => {
     const html = HTML_ACCUEIL;
     const crete = html.match(/<svg[^>]*data-crete[^>]*>/)?.[0] ?? '';
     expect(crete).not.toBe('');
     expect(crete).toContain('aria-hidden="true"');
     expect(crete).toContain('stroke-width="1.5"');
     expect((html.match(/data-crete/g) ?? []).length).toBe(1);
+    // Identité story 2.2 conservée dans la composition 9.2 : la crête reste
+    // sous le titre, déplacée ni par le rail ni par la méta.
     expect(html.indexOf('data-crete')).toBeGreaterThan(html.indexOf('aa-hero__title'));
+    expect(html.indexOf('data-crete')).toBeLessThan(html.indexOf('aa-hero__rail'));
     expect(html.indexOf('data-crete')).toBeLessThan(html.indexOf('aa-hero__meta'));
   });
 

@@ -1,44 +1,53 @@
-/* Story 4.1 — e-dossard (surface coureur, palette operationsTokens).
-   Fichier propre à /espace-coureur/e-dossard. La carte sombre est TOUJOURS
-   sombre (guichet, plein soleil) : couleurs fixes issues des rôles *-sombre
-   des tokens (bg-sombre #101A14, texte-sombre #E8F0E9, texte-2-sombre
-   #A9C0AE, action-sombre #8FD4A8) — indépendantes du mode clair/sombre du
-   site. Le QR vit sur carte blanche coins 16 px, modules encre : contrastes
-   fixes pour rester scannable dans les deux modes. */
+/* Story 4.1 — e-dossard (surface coureur). Habillage aligné sur le parcours
+   d'inscription (dossier.css) : une carte, un fil d'étapes, des PANNEAUX
+   (fond propre, coins adoucis, ombre d'un pixel). La carte sombre « guichet »
+   de la première version a disparu : le QR garde, lui, son support blanc fixe
+   pour rester scannable dans les deux modes. */
 
-/* --- Carte sombre : identité + numéro 74 px -------------------------------- */
+.edossard-grille {
+  display: grid;
+  gap: var(--az-space-5);
+  margin-top: var(--az-space-5);
+}
 
-.edossard-carte-sombre {
-  --edossard-fond: #101A14;
-  --edossard-encre: #E8F0E9;
-  --edossard-encre-2: #A9C0AE;
-  --edossard-accent: #8FD4A8;
+@media (min-width: 720px) {
+  .edossard-grille {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+}
 
+.edossard .edossard-panneau {
   display: grid;
   gap: var(--az-space-2);
-  justify-items: start;
-  background: var(--edossard-fond);
-  color: var(--edossard-encre);
-  border-color: var(--edossard-fond);
+  align-content: start;
+  margin-top: var(--az-space-5);
+  padding: var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
 }
 
-.edossard-surtitre {
-  color: var(--edossard-accent);
+.edossard-grille .edossard-panneau {
+  margin-top: 0;
 }
+
+/* --- Identité + numéro -------------------------------------------------------- */
 
 .edossard-identite {
   margin: 0;
   font-family: var(--az-font-display-sm);
   font-size: var(--az-font-size-display-sm);
   font-weight: var(--az-font-weight-display-sm);
-  color: var(--edossard-encre);
+  color: var(--heading);
 }
 
 .edossard-epreuve {
   margin: 0;
   font-size: var(--az-font-size-body-lg);
   line-height: var(--az-line-height-body-lg);
-  color: var(--edossard-encre-2);
+  color: var(--az-texte-2);
 }
 
 .edossard-numero {
@@ -47,7 +56,7 @@
   font-size: var(--az-font-size-dossard);
   font-weight: var(--az-font-weight-dossard);
   line-height: var(--az-line-height-dossard);
-  color: var(--edossard-encre);
+  color: var(--heading);
   font-variant-numeric: tabular-nums;
 }
 
@@ -56,14 +65,14 @@
   font-size: var(--az-font-size-display-sm);
   font-weight: var(--az-font-weight-display-sm);
   line-height: 1.2;
-  color: var(--edossard-encre-2);
+  color: var(--az-texte-2);
 }
 
 .edossard-numero-note {
   margin: 0;
   font-size: var(--az-font-size-body);
   line-height: var(--az-line-height-body);
-  color: var(--edossard-encre-2);
+  color: var(--az-texte-2);
 }
 
 /* Badge « HORS-LIGNE PRÊT » — mono (fontStackMono de packages/shared). */
@@ -71,12 +80,14 @@
   display: inline-flex;
   align-items: center;
   gap: var(--az-space-2);
+  justify-self: start;
   min-height: 32px;
-  margin-top: var(--az-space-2);
+  margin: var(--az-space-2) 0 0;
   padding: var(--az-space-1) var(--az-space-3);
+  border: 1px solid var(--az-succes);
   border-radius: var(--az-radius-full);
-  background: var(--edossard-accent);
-  color: #0C2415; /* action-texte-sombre */
+  background: var(--az-surface);
+  color: var(--az-texte);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: var(--az-font-size-meta-lg);
   font-weight: var(--az-font-weight-surtitre);
@@ -87,17 +98,21 @@
   width: 8px;
   height: 8px;
   border-radius: var(--az-radius-full);
-  background: currentColor;
+  background: var(--az-succes);
 }
 
-/* --- Carte QR : blanche, coins 16 px, SVG haute définition ------------------ */
+/* --- Panneau QR : blanc, SVG haute définition --------------------------------- */
+/* Story 9.1 — les #FFFFFF qui suivent restent en littéraux : le blanc du
+   support du QR est une contrainte de lisibilité du scanner (modules clairs
+   purs sur fond du document), pas une couleur de charte. Aucune variable
+   ne le remplace : --surface-raised bascule en sombre, les encres *-encre
+   sont sémantiquement autre chose. Exception tracée dans le garde-fou
+   anti-littéraux (css-sans-litteraux.test.ts). */
 
-.edossard-carte-qr {
-  display: grid;
-  gap: var(--az-space-3);
+.edossard .edossard-carte-qr {
   justify-items: center;
+  gap: var(--az-space-3);
   background: #FFFFFF;
-  border-color: var(--az-filet);
   color: var(--az-texte);
 }
 
@@ -122,13 +137,14 @@
   text-align: center;
 }
 
-/* --- Conseil raccourci système ---------------------------------------------- */
+/* --- Conseil raccourci système ------------------------------------------------ */
 
 .edossard-conseil-titre {
-  margin: 0 0 var(--az-space-2);
+  margin: 0;
   font-family: var(--az-font-display-sm);
   font-size: var(--az-font-size-display-sm);
   font-weight: var(--az-font-weight-display-sm);
+  color: var(--heading);
 }
 
 .edossard-conseil {
@@ -137,7 +153,7 @@
   line-height: var(--az-line-height-body-lg);
 }
 
-[data-theme="dark"] .edossard-carte-qr {
+[data-theme="dark"] .edossard .edossard-carte-qr {
   background: #FFFFFF;
   color: var(--az-texte);
 }

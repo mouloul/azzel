@@ -2,6 +2,7 @@
 
 **Produit :** Azzel · **Périmètre :** stories 2-1 → 2-5 · **Date :** 2026-10-22
 **Durée estimée :** 45–60 min. Prérequis identiques à l'épopée 1 (§0 de scenarios-recette-epic-1.md) : `dev-db.sh up`, `dev-mail.sh up`, `db:migrate`, `AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web`.
+**Réaligné story 9-6 (2026-11-03) :** accueil refondu (stories 9-2/9-3) — hero plein écran à rail de chiffres, section parcours avec sélecteur d'épreuve. Modules S3, S4 et S5 inchangés.
 
 **Budget à vérifier en premier :** `pnpm build && pnpm budget` → **< 300 Ko** (garde-fou automatisé, aussi en CI).
 
@@ -11,13 +12,19 @@
 
 | # | Action | Résultat attendu |
 |---|--------|------------------|
-| 1.1 | Ouvrir `/` (cache vidé, DevTools Network) | Hero photo 2026 + voile forêt, texte lisible immédiatement, total < 300 Ko (onglet Network, colonne transféré) |
+| 1.1 | Ouvrir `/` (cache vidé, DevTools Network) | Hero plein écran : photo du départ 2026 sous voile forêt, titre « Week-end Sportif Aït Aïssi » avec un rail de chiffres clés à sa droite (sous le titre en mobile) ; texte lisible immédiatement, total < 300 Ko (onglet Network, colonne transféré) |
 | 1.2 | Throttling « Slow 3G » + rechargement | Titre/CTA lisibles avant l'arrivée de la photo ; aucune page blanche |
 | 1.3 | Bandeau égide | « Sous l'égide de la Fédération et du ministère des Sports » visible sur TOUTES les pages (accuei /connexion, /parcours…) |
-| 1.4 | Section Bilan 2026 | 279 inscrits, 222 dossards, 214 finishers dont 36 femmes, 116 enfants — chiffres exacts, non additionnés |
+| 1.4 | Bande forêt « Bilan 2026 » (juste sous le hero) | Rail de 4 chiffres : 279 inscrits, 222 dossards distribués, 214 finishers au trail dont 36 femmes, 116 enfants à la Course Kids — chiffres exacts, non additionnés, note « Chiffres officiels de l'édition 2026 » |
 | 1.5 | CTA « S'inscrire » | Mène à /connexion?parcours=inscription (écran « Créer mon compte ») ; bouton « Appeler l'équipe » visible avec numéro |
 | 1.6 | JS désactivé | Contenu complet lisible (page serveur) |
 | 1.7 | 360 px | Une colonne, symbole seul dans l'en-tête, aucun scroll horizontal |
+| 1.8 | Lire la fiche de clés du hero (carte vitrée) | Quatre clés, la date en vedette : **Date** — « 2ᵉ édition » en petit puis « Printemps 2027 » en grand, crête ocre dessous ; puis sur une rangée Épreuves « 35 km · 12 km », Départ « Stade Agni Lhoudh », Cadre « Forêt de Yakouren ». Aucune date exacte, ni dénivelé, ni altitude, ni horaires |
+| 1.8bis | Descendre à « Bilan 2026 » | Sous les chiffres, un bloc « Le teaser de la première édition » : poster vert avec pastille de lecture et la mention « La vidéo se charge uniquement quand vous cliquez ». Cliquer : la vidéo YouTube se monte et démarre. Avant le clic, aucune requête vers YouTube (onglet Réseau) |
+| 1.9 | Descendre à la section « Les parcours » (titre « Comparer les deux trails ») | Section placée après les photos de la section épreuves : deux boutons d'épreuve (« La Longue », « La Moyenne ») ; « La Longue » affichée par défaut, sa fiche montre la Distance (35 km) et le lien « Télécharger le tracé GPX » |
+| 1.10 | Cliquer le bouton « La Moyenne » | La fiche devient celle de La Moyenne (Distance 12 km, son propre lien GPX) sans rechargement de page ; recliquer « La Longue » réaffiche la première fiche |
+| 1.11 | Désactiver JavaScript puis recharger `/` | Le sélecteur fonctionne toujours : cocher une épreuve affiche sa fiche (mécanisme natif sans script), la section reste lisible |
+| 1.12 | Chercher « Dénivelé », « Altitude », « Heure de départ » ou « Points de passage » dans la section parcours | Aucune de ces lignes n'apparaît : tant que le comité n'a pas publié les données, les fiches n'affichent que nom, distance et lien GPX |
 
 ## S2 — Identité Village (story 2-2)
 

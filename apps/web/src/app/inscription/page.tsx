@@ -1,14 +1,27 @@
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
 
+import { AssistanceButton } from '@/components/assistance-button';
+import { FilEtapes, etapesInscription } from '@/components/fil-etapes';
+import { readAssistancePhone } from '@/lib/assistance-phone';
+
 import {
-  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_LISTE_ATTENTE,
+  FUSEAU_COURSE,
+  STATUTS_MODIFIABLES,
   formatDateFrUtc,
 } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
-import { getInscriptionState, type InscriptionState } from '@/modules/inscriptions/service';
+import {
+  getHebergementState,
+  getInscriptionState,
+  getPlacesState,
+  type InscriptionState,
+} from '@/modules/inscriptions/service';
+import { CompteurPlaces } from '@/components/compteur-places';
 
 import { InscriptionForm } from './inscription-form';
+import '../dossier.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +30,7 @@ export const metadata = {
 };
 
 export default async function InscriptionPage() {
+  const assistancePhone = readAssistancePhone();
   // Garde de RÔLE, pas seulement de session : un organisateur ou un
   // volontaire est renvoyé vers son espace au lieu de rester ici.
   const result = await requireRolePage('coureur');
@@ -30,6 +44,9 @@ export default async function InscriptionPage() {
           <div role="alert" aria-live="assertive" className="error-box">
             <p className="error-message">{envelope.error.message}</p>
             <p className="error-action">{envelope.error.action}</p>
+          </div>
+          <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
           </div>
         </article>
       </section>
@@ -52,6 +69,7 @@ export default async function InscriptionPage() {
             <p className="error-action">{envelope.error.action}</p>
           </div>
           <div className="auth-alt">
+            <AssistanceButton phone={assistancePhone} />
             <a className="btn-contour" href="/espace-coureur">
               Retour à mon espace
             </a>
@@ -98,7 +116,7 @@ export default async function InscriptionPage() {
     );
   }
 
-  if (state.coureur && state.coureur.status !== COUREUR_STATUS_EN_CONSTITUTION) {
+  if (state.coureur && !STATUTS_MODIFIABLES.includes(state.coureur.status)) {
     return (
       <section className="auth">
         <article className="card">
@@ -117,5 +135,41 @@ export default async function InscriptionPage() {
     );
   }
 
-  return <InscriptionForm state={state} />;
+  const [places, hebergement] = await Promise.all([
+    getPlacesState(result.session.organisationId),
+    getHebergementState(result.session.organisationId),
+  ]);
+  const enAttente = state.coureur?.status === COUREUR_STATUS_LISTE_ATTENTE;
+  // Échéance rendue à l'heure de la course : l'instant est stocké en UTC,
+  // mais le coureur vit à Alger — lui afficher 22h59 le ferait rater d'une heure.
+  const echeance =
+    state.coureur?.preuveDueAt != null
+      ? new Intl.DateTimeFormat('fr-FR', {
+          dateStyle: 'full',
+          timeStyle: 'short',
+          timeZone: FUSEAU_COURSE,
+        }).format(new Date(state.coureur.preuveDueAt))
+      : null;
+
+  return (
+    <InscriptionForm state={state} assistancePhone={assistancePhone} hebergement={hebergement}>
+      <FilEtapes etapes={etapesInscription(state.coureur)} />
+      <CompteurPlaces places={places} />
+      {echeance !== null ? (
+        <p className="encart-echeance" role="status">
+          Ta place est réservée. Dépose ta preuve de paiement avant le
+          <strong> {echeance}</strong> : passé ce délai, l’inscription expire et
+          la place repart aux autres coureurs.
+        </p>
+      ) : null}
+      {enAttente ? (
+        <p className="encart-attente" role="status">
+          Les dossards sont tous pris : ton inscription est enregistrée en
+          <strong> liste d’attente</strong>. Tu peux encore la corriger. Aucun
+          versement n’est à faire tant qu’une place ne t’a pas été attribuée —
+          l’organisation te préviendra par email.
+        </p>
+      ) : null}
+    </InscriptionForm>
+  );
 }

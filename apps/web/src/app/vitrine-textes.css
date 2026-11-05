@@ -4,7 +4,6 @@
    Texte simple échappé, GPX en <details> natif (chargement différé
    structurel). Contrastes : paires testées ink/ink-muted/heading sur
    surface-raised (voir contrastes.test.ts). */
-.aa-h3{font-family:var(--font-display);font-weight:700;font-size:22px;line-height:1.1;text-transform:uppercase;color:var(--heading);margin:0 0 var(--space-3)}
 .aa-parcours{margin-top:var(--space-8)}
 .aa-card__corps{font-size:15px;line-height:1.6;color:var(--ink-muted)}
 .aa-card__corps p{margin:0 0 var(--space-3)}
@@ -25,22 +24,50 @@
 .aa-citation__bloc p{margin:0;font-family:var(--font-display);font-weight:600;font-size:22px;line-height:1.2;color:var(--heading)}
 .aa-citation__bloc footer{margin-top:var(--space-2);font-size:13px;color:var(--ink-muted)}
 @media (max-width:640px){.aa-parcours{grid-template-columns:1fr}.aa-citation__bloc p{font-size:19px}}
+.aa-ravitos{margin-top:var(--az-space-7)}
+.aa-ravitos .aa-lead{max-width:62ch}
+/* Ligne de course : mêmes tokens que le lecteur de parcours (.vp). */
+.aa-ravitos__ligne{--rv-trait:color-mix(in srgb,var(--on-forest) 18%,transparent);--rv-doux:color-mix(in srgb,var(--on-forest) 72%,transparent);margin-top:var(--az-space-6);overflow:hidden;border:1px solid var(--rv-trait);border-radius:var(--az-rayon-md);background:var(--forest-800);color:var(--on-forest)}
+.aa-ravitos__stats{display:flex;flex-wrap:wrap;gap:var(--az-space-1) var(--az-space-5);margin:0;padding:var(--az-space-3) var(--az-space-4);border-bottom:1px solid var(--rv-trait);background:var(--forest);font-size:14px;font-variant-numeric:tabular-nums}
+.aa-ravitos__stat{display:flex;gap:var(--az-space-1)}
+.aa-ravitos__stat dt{color:var(--rv-doux)}
+.aa-ravitos__stat dd{margin:0;font-weight:600}
+.aa-ravitos__piste{position:relative;height:72px;margin:0 var(--az-space-6);padding:0;list-style:none}
+.aa-ravitos__piste::before{content:"";position:absolute;left:0;right:0;top:28px;height:4px;border-radius:2px;background:var(--rv-trait)}
+.aa-ravitos__borne{--pos:0%;position:absolute;left:var(--pos);top:22px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.aa-ravitos__borne::before{content:"";width:16px;height:16px;border-radius:9999px;background:var(--az-action);border:2px solid var(--on-forest)}
+.aa-ravitos__borne--depart::before,.aa-ravitos__borne--arrivee::before{width:12px;height:12px;margin:2px 0;background:var(--az-succes)}
+.aa-ravitos__borne-km{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;font-variant-numeric:tabular-nums}
+.aa-ravitos__borne--depart .aa-ravitos__borne-km,.aa-ravitos__borne--arrivee .aa-ravitos__borne-km{color:var(--rv-doux)}
+/* Cartes : même grammaire que la fiche épreuve. */
+.aa-ravitos__liste{display:grid;gap:var(--az-space-5);margin:var(--az-space-6) 0 0;padding:0;list-style:none}
+.aa-ravito{display:grid;align-content:start;gap:var(--az-space-4)}
+.aa-ravito__tete{display:grid;gap:var(--az-space-2);padding-bottom:var(--az-space-4);border-bottom:1px solid var(--line)}
+.aa-ravito__surtitre{margin:0}
+.aa-ravito__titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:clamp(22px,2.6vw,28px);line-height:1.05;text-transform:uppercase;color:var(--heading)}
+.aa-ravito__stats{display:flex;flex-wrap:wrap;gap:var(--az-space-1) var(--az-space-4);margin:0;font-size:14px;font-variant-numeric:tabular-nums}
+.aa-ravito__stats div{display:flex;gap:var(--az-space-1)}
+.aa-ravito__stats dt{color:var(--ink-muted)}
+.aa-ravito__stats dd{margin:0;font-weight:600;color:var(--ink)}
+.aa-ravito__texte{margin:0;font-size:16px;line-height:1.6;color:var(--ink)}
+.aa-ravito__rubrique{display:grid;gap:var(--az-space-2)}
+.aa-ravito__rubrique--conseil{padding:var(--az-space-3) var(--az-space-4);border-left:3px solid var(--accent);border-radius:0 var(--az-radius-sm) var(--az-radius-sm) 0;background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.aa-ravito__rubrique-titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.aa-ravito__services{display:flex;flex-wrap:wrap;gap:var(--az-space-2);margin:0;padding:0;list-style:none}
+.aa-ravitos__sante{display:grid;gap:var(--az-space-3);margin-top:var(--az-space-5)}
+.aa-ravitos__conseils{display:grid;gap:var(--az-space-2);margin:0;padding-left:var(--az-space-5);font-size:16px;line-height:1.6;color:var(--ink)}
+.aa-ravitos__conseils li::marker{color:var(--accent)}
+.aa-ravitos .aa-note{margin-top:var(--az-space-4)}
+@media (min-width:960px){.aa-ravitos__liste{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.aa-ravitos__piste{margin:0 var(--az-space-5)}.aa-ravitos__borne-km{font-size:11px}.aa-ravitos__borne--depart .aa-ravitos__borne-km,.aa-ravitos__borne--arrivee .aa-ravitos__borne-km{visibility:hidden}.aa-ravito{padding:var(--az-space-4)}}
 
 /* Retour en images (story 2.5) — trailer, témoignages, galerie.
-   Poster du trailer : dégradé forêt en pur CSS (zéro octet d'image) ; les hex
-   ci-dessous sont ceux de POSTER_DEGRADE_COULEURS / PASTILLE_LECTURE du domaine
-   (modules/retour-images/domain.ts) — le contraste pastille/gradient et
-   glyphe/pastille est testé (≥ 3:1, WCAG 1.4.11) dans contrastes.test.ts. */
+   Poster du trailer : dégradé forêt en pur CSS (zéro octet d'image). Depuis
+   la story 9.1, les arrêts lisent la palette charte (forest-600, forest,
+   forest-800) et la pastille le vert altitude — variables émises dans :root,
+   invariantes de thème. Le contraste pastille/gradient et glyphe/pastille
+   reste testé (≥ 3:1, WCAG 1.4.11) dans contrastes.test.ts. */
 .aa-retour-section{margin-top:var(--space-8)}
-.aa-trailer{margin:0}
-.aa-trailer__poster{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-4);width:100%;min-height:72px;padding:var(--space-12) var(--space-6);aspect-ratio:16/9;border:2px solid transparent;border-radius:var(--radius-md);cursor:pointer;background:linear-gradient(160deg,#24503C 0%,#183A2B 55%,#122C20 100%);color:var(--on-forest);font:inherit}
-.aa-trailer__poster:hover .aa-trailer__play{transform:scale(1.06)}
-/* WCAG 1.4.11 : var(--focus) ≈ 2,2:1 sur fond forêt — outline on-forest (pattern hero). */
-.aa-trailer__poster:focus-visible{outline:2px solid var(--on-forest);outline-offset:2px;box-shadow:0 0 0 4px #183A2B}
-.aa-trailer__play{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:9999px;background:#8FD4A8;color:#183A2B;transition:transform .2s ease}
-.aa-trailer__play svg{display:block;margin-left:4px}
-.aa-trailer__libelle{margin:0;font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--on-forest)}
-.aa-trailer__lecteur{display:block;width:100%;aspect-ratio:16/9;border:none;border-radius:var(--radius-md);background:#122C20}
 .aa-temoignages{display:grid;gap:var(--space-6);grid-template-columns:1fr;margin:var(--space-6) 0 0}
 .aa-temoignage__entete{display:flex;align-items:center;gap:var(--space-3)}
 .aa-temoignage__avatar{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:9999px;background:var(--forest-surface);color:var(--on-forest);font-family:var(--font-display);font-weight:700;font-size:18px}

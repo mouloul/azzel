@@ -8,7 +8,8 @@ import {
 } from '@/modules/retour-images/domain';
 import { getRetourImagesPage } from '@/modules/retour-images/service';
 
-import { TrailerBloc } from './trailer-bloc';
+import { TrailerBloc } from '@/components/trailer-bloc';
+
 import '../vitrine-textes.css';
 
 const PHOTOS = '/charte/photos-2026';

@@ -1,6 +1,10 @@
-/* Espace volontaire (stories 3.2/3.3) — surface terrain, palette operationsTokens.
-   Fichier propre à la page /volontaires : les variables --az-* basculent
-   automatiquement en sombre ([data-theme="dark"] dans tokens-synchronises.css).
+/* Espace volontaire (stories 3.2/3.3, refonte 10.1) — surface terrain,
+   palette operationsTokens. Fichier propre à la page /volontaires : depuis la
+   story 10.1, le chrome partagé vient du SOCLE (socle.css, importé par le
+   layout racine) : cartes (.socle-carte), actions en pilule (.socle-action),
+   chips (.socle-chip). Ne restent ici que les gabarits et la densité propres
+   à l'écran. Les variables --az-* basculent automatiquement en sombre
+   ([data-theme="dark"] dans tokens-synchronises.css).
    Règles terrain : une colonne, cibles ≥ 48 px, gaps ≥ 8 px, frappe ≥ 15 px
    sur les contenus critiques, aucune dépendance au survol. */
 
@@ -50,6 +54,18 @@
   margin: var(--az-space-3) 0 var(--az-space-1);
 }
 
+/* Story 10.1 (AC2) — la section « Ta fiche mission » domine l’écran : son
+   titre passe au gabarit display du socle (24 px / 800, cf. socle-entete-titre)
+   quand « Toutes les missions » et l’annuaire restent au poids eyebrow. */
+.volontaires-titre--principal {
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  letter-spacing: var(--az-letter-spacing-btn);
+  color: var(--heading);
+  margin: var(--az-space-4) 0 var(--az-space-2);
+}
+
 /* --- Badge d'état (role="status") ------------------------------------------ */
 
 .volontaires-badge {
@@ -95,7 +111,7 @@
   width: 100%;
   padding: var(--az-space-3);
   border: 1px solid var(--az-attention);
-  border-radius: var(--az-radius-md);
+  border-radius: var(--az-rayon-md);
   background: var(--az-surface);
 }
 
@@ -111,8 +127,8 @@
   gap: var(--az-space-2);
 }
 
-.volontaires-bandeau-actions .btn-action,
-.volontaires-bandeau-actions .btn-contour {
+/* Cibles terrain : les pilules du socle montent à 48 px, frappe 16,5 px. */
+.volontaires-bandeau-actions .socle-action {
   min-height: 48px;
   font-size: var(--az-font-size-body-lg);
 }
@@ -124,13 +140,13 @@
   gap: var(--az-space-3);
 }
 
+/* Story 10.1 — chrome de carte (fond, filet, rayon 16 px, ombre) fourni par
+   .socle-carte ; ici seule la DENSITÉ terrain : grille une colonne, padding
+   16 px (le socle met 24 px — la fiche reste compacte d’un coup d’œil). */
 .volontaires-fiche {
   display: grid;
   gap: var(--az-space-3);
   padding: var(--az-space-4);
-  border: 1px solid var(--az-filet);
-  border-radius: var(--az-radius-md);
-  background: var(--az-surface);
 }
 
 .volontaires-fiche-titre {
@@ -163,24 +179,22 @@
   color: var(--az-texte);
 }
 
-/* Gros bouton tel: du contact PC — cible ≥ 48 px, frappe ≥ 15 px. */
+/* Gros bouton tel: du contact PC — cible ≥ 48 px, frappe ≥ 15 px. Story 10.1 :
+   pilule du socle (.socle-action porte fond/action, encre, rayon full, focus
+   2 px) ; ici le gabarit DEUX LIGNES terrain et la cible généreuse 64 px. */
 .volontaires-tel {
   display: grid;
   gap: 2px;
   justify-items: center;
+  width: 100%;
   min-height: 64px;
-  padding: var(--az-space-3);
-  border-radius: var(--az-radius);
-  background: var(--az-action);
-  color: var(--az-action-texte);
-  text-decoration: none;
-  font-weight: var(--az-font-weight-surtitre);
+  /* socle-action impose line-height 1 (pilule une ligne) : le gabarit terrain
+     est DEUX lignes — interligne de lecture rétabli. */
+  line-height: var(--az-line-height-body);
 }
 
 .volontaires-tel-libelle {
   font-size: var(--az-font-size-body);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .volontaires-tel-numero {
@@ -215,7 +229,7 @@
   padding: var(--az-space-3) var(--az-space-4);
   border: 1px solid var(--az-attention);
   border-left: 4px solid var(--az-attention);
-  border-radius: var(--az-radius-sm);
+  border-radius: var(--az-rayon-sm);
   background: var(--az-surface);
   font-size: var(--az-font-size-body-lg);
   line-height: var(--az-line-height-body-lg);
@@ -228,24 +242,20 @@
   justify-items: start;
 }
 
-/* Gros CTA terrain vers /volontaires/scan — cible ≥ 64 px (geste fondateur). */
+/* Gros CTA terrain vers /volontaires/scan — cible ≥ 64 px (geste fondateur).
+   Story 10.1 : pilule du socle (.socle-action porte fond, encre, rayon full,
+   focus 2 px) ; ici le gabarit deux lignes et la cible 64 px. */
 .volontaires-scan-lien {
   display: grid;
   gap: 2px;
   width: 100%;
   min-height: 64px;
-  padding: var(--az-space-2) var(--az-space-4);
-  border-radius: var(--az-radius);
-  background: var(--az-action);
-  color: var(--az-action-texte);
-  text-decoration: none;
+  /* Deux lignes (libellé + mission) : interligne de lecture, cf. .volontaires-tel. */
+  line-height: var(--az-line-height-body);
 }
 
 .volontaires-scan-libelle {
   font-size: 20px;
-  font-weight: var(--az-font-weight-surtitre);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .volontaires-scan-mission {
@@ -264,12 +274,14 @@
   gap: var(--az-space-2);
 }
 
+/* Missions « à suivre » : secondaires (AC2) — items compacts, rayon du socle.
+   La chip de couverture est celle du socle (.socle-chip). */
 .volontaires-mission-courte {
   display: grid;
   gap: 2px;
   padding: var(--az-space-2) var(--az-space-3);
   border: 1px solid var(--az-filet);
-  border-radius: var(--az-radius-sm);
+  border-radius: var(--az-rayon-sm);
   font-size: var(--az-font-size-body-lg);
   line-height: var(--az-line-height-body-lg);
 }
@@ -281,25 +293,14 @@
   gap: var(--az-space-2);
 }
 
-.volontaires-chip {
-  font-family: var(--az-font-meta);
-  font-size: var(--az-font-size-meta);
-  padding: 2px var(--az-space-2);
-  border-radius: var(--az-radius-full);
-  background: var(--az-bg);
-  color: var(--az-texte-2);
-}
-
 /* --- Annuaire des coureurs (story 3.4) — état de préchargement seul -------- */
 
+/* Story 10.1 — chrome de carte du socle ; padding terrain compact (12 px). */
 .volontaires-annuaire {
   display: grid;
   gap: var(--az-space-2);
   justify-items: start;
   padding: var(--az-space-3);
-  border: 1px solid var(--az-filet);
-  border-radius: var(--az-radius-md);
-  background: var(--az-surface);
 }
 
 .volontaires-annuaire-texte {
@@ -361,7 +362,7 @@
   display: grid;
   gap: var(--az-space-2);
   padding: var(--az-space-3);
-  border-radius: 12px;
+  border-radius: var(--az-rayon-md);
   background: var(--az-sync-attente);
   color: var(--az-sync-attente-encre);
 }
@@ -384,12 +385,15 @@
   line-height: var(--az-line-height-body-lg);
 }
 
+/* Actions DU bandeau : encre currentColor — l’encre/action du socle ne tiendrait
+   pas le contraste sur les fonds opérationnels (attente/envoyé/danger). Pilule
+   comme toutes les actions (maquette 10), cible ≥ 48 px. */
 .volontaires-sync-bouton,
 .volontaires-sync-appelle {
   justify-self: start;
   min-height: 48px;
   padding: var(--az-space-1) var(--az-space-3);
-  border-radius: 10px;
+  border-radius: var(--az-radius-full);
   border: 2px solid currentColor;
   background: transparent;
   color: inherit;

@@ -14,6 +14,19 @@ export class InvalidFieldsError extends Error {
   }
 }
 
+/**
+ * Réglages d'édition invalides (administration). Distincte de
+ * InvalidFieldsError, qui porte les champs du formulaire d'inscription : ce
+ * ne sont pas les mêmes champs, et les confondre ferait remonter « capacite »
+ * comme une erreur de saisie coureur.
+ */
+export class ReglagesInvalidesError extends Error {
+  constructor(readonly fields: Record<string, string>) {
+    super('réglages invalides');
+    this.name = 'ReglagesInvalidesError';
+  }
+}
+
 export class RegistrationClosedError extends Error {
   constructor(readonly closedAt: Date) {
     super('inscriptions fermées');
@@ -159,6 +172,20 @@ export class PreuveStorageError extends Error {
   constructor(readonly storageKey: string) {
     super('fichier de preuve illisible sur le stockage');
     this.name = 'PreuveStorageError';
+  }
+}
+
+export class NumeroTransactionInvalideError extends Error {
+  constructor(readonly fields: Record<string, string>) {
+    super('numéro de transaction invalide');
+    this.name = 'NumeroTransactionInvalideError';
+  }
+}
+
+export class NumeroTransactionDejaUtiliseError extends Error {
+  constructor() {
+    super('numéro de transaction déjà utilisé');
+    this.name = 'NumeroTransactionDejaUtiliseError';
   }
 }
 
@@ -323,6 +350,27 @@ export function toPreuveApiError(error: unknown): ApiError {
       }),
     };
   }
+  if (error instanceof NumeroTransactionInvalideError) {
+    return {
+      status: 400,
+      fields: error.fields as FieldErrors,
+      envelope: createErrorEnvelope({
+        code: 'preuve.numero_transaction_invalide',
+        message: 'Le numéro de transaction est invalide.',
+        action: 'Recopie-le tel qu’il figure sur ton reçu, puis renvoie ta preuve.',
+      }),
+    };
+  }
+  if (error instanceof NumeroTransactionDejaUtiliseError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'preuve.numero_transaction_deja_utilise',
+        message: 'Ce numéro de transaction est déjà associé à un autre dossier.',
+        action: 'Vérifie le numéro sur ton reçu. Si c’est bien le tien, appelle l’équipe.',
+      }),
+    };
+  }
   if (error instanceof PreuveIdenticalRefusedError) {
     return {
       status: 409,
@@ -376,6 +424,17 @@ export function toPreuveApiError(error: unknown): ApiError {
 }
 
 export function toAdminApiError(error: unknown): ApiError {
+  if (error instanceof ReglagesInvalidesError) {
+    return {
+      status: 400,
+      fields: error.fields as FieldErrors,
+      envelope: createErrorEnvelope({
+        code: 'admin.reglages_invalides',
+        message: 'Certains réglages sont invalides.',
+        action: 'Corrige les valeurs signalées puis enregistre à nouveau.',
+      }),
+    };
+  }
   if (error instanceof DecisionInvalidError) {
     return {
       status: 400,

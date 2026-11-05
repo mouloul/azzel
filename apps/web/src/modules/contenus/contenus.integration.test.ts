@@ -182,7 +182,7 @@ describe.skipIf(testUrls === null)(
       const avecGpx = await updateContenu(
         sessionA,
         'parcours-longue',
-        { titre: 'Trail long — 35 km', corps: 'Corps longue.', gpxUrl: 'https://files.exemple.dz/longue.gpx', updatedAt: version },
+        { titre: 'Trail long', corps: 'Corps longue.', gpxUrl: 'https://files.exemple.dz/longue.gpx', updatedAt: version },
         { store },
       );
       expect(avecGpx.epreuve).toMatchObject({
@@ -194,14 +194,15 @@ describe.skipIf(testUrls === null)(
       const page = await getParcoursPage({ store });
       const longue = page.blocs.find((bloc) => bloc.slug === 'parcours-longue');
       expect(longue?.epreuve?.gpxUrl).toBe('https://files.exemple.dz/longue.gpx');
-      expect(longue?.epreuve?.distanceKm).toBe(35);
+      // Migration 0040 : la longue s'aligne sur le relevé GPX.
+    expect(longue?.epreuve?.distanceKm).toBe(28);
 
       // Effacement : chaîne vide → null (« Tracé à venir » côté vitrine).
       const apresGpx = await store.findContenuBySlug(orgAId, 'parcours-longue');
       const sansGpx = await updateContenu(
         sessionA,
         'parcours-longue',
-        { titre: 'Trail long — 35 km', corps: 'Corps longue.', gpxUrl: '', updatedAt: apresGpx!.updatedAt.toISOString() },
+        { titre: 'Trail long', corps: 'Corps longue.', gpxUrl: '', updatedAt: apresGpx!.updatedAt.toISOString() },
         { store },
       );
       expect(sansGpx.epreuve?.gpxUrl).toBeNull();

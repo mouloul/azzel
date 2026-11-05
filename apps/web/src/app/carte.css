@@ -1,0 +1,137 @@
+/* Story 11.3 — carte 3D du parcours.
+ *
+ * Aucune valeur littérale : tout vient des tokens (css-sans-litteraux.test.ts
+ * le vérifie). Les cibles tactiles tiennent 44 px et ne touchent jamais le
+ * bord de l'écran (UX-DR-25, UX-DR-37). */
+
+.aa-carte {
+  margin-top: var(--az-space-6);
+}
+
+.aa-carte__annonce,
+.aa-carte__indisponible {
+  margin: var(--az-space-2) 0 var(--az-space-3);
+  font-family: var(--az-font-body);
+  font-size: var(--az-font-size-body);
+  line-height: var(--az-line-height-body);
+  color: var(--az-texte-2);
+}
+
+.aa-carte__indisponible {
+  padding: var(--az-space-3);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--az-surface);
+  color: var(--az-texte);
+}
+
+.aa-carte__cadre {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--az-surface);
+}
+
+/* Hauteur réservée AVANT le chargement : l'apparition de la carte ne doit pas
+   pousser le contenu qui la suit (pas de décalage de mise en page). */
+.aa-carte__toile {
+  width: 100%;
+  height: 58vh;
+  min-height: 320px;
+  max-height: 560px;
+}
+
+.aa-carte__controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2) var(--az-space-3);
+  align-items: center;
+  margin-top: var(--az-space-3);
+}
+
+.aa-carte__chip {
+  min-height: 44px;
+}
+
+.aa-carte__reglage {
+  display: flex;
+  gap: var(--az-space-2);
+  align-items: center;
+  min-height: 44px;
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}
+
+.aa-carte__reglage input[type='range'] {
+  width: 128px;
+  min-height: 44px;
+  accent-color: var(--az-action);
+}
+
+.aa-carte__reglage output {
+  font-variant-numeric: tabular-nums;
+  color: var(--az-texte);
+}
+
+.aa-carte__mode-emploi {
+  margin: var(--az-space-2) 0 0;
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  line-height: var(--az-line-height-body);
+  color: var(--az-texte-2);
+}
+
+/* FR-32 — attributions hors du canvas : jamais superposées au contenu, et
+   jamais recouvertes par la carte. */
+.aa-carte__attributions {
+  margin: var(--az-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  line-height: var(--az-line-height-body);
+  color: var(--az-texte-2);
+}
+
+.aa-carte__attributions li + li {
+  margin-top: var(--az-space-1);
+}
+
+/* Pastille d'un point de passage : un vrai bouton, donc focusable. */
+.aa-carte__repere {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--az-surface);
+  border-radius: var(--az-radius-full);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-surtitre);
+  cursor: pointer;
+}
+
+.aa-carte__repere:focus-visible {
+  outline: 3px solid var(--az-focus);
+  outline-offset: 2px;
+}
+
+/* Repère du curseur partagé (story 11.5) : posé seulement sur interaction. */
+.aa-carte__curseur {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--az-surface);
+  border-radius: var(--az-radius-full);
+  background: var(--az-carte-trace);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-carte__cadre,
+  .aa-carte__toile {
+    transition: none;
+  }
+}

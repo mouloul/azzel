@@ -4,34 +4,23 @@ import { describe, expect, it } from 'vitest';
 
 import { operationsTokens } from '@azzel/shared';
 
-// Story 4.1 (revue) — la carte sombre et le QR utilisent des littéraux hex
-// (couleurs fixes, indépendantes du mode clair/sombre) : ce test les ÉPINGLE
-// aux valeurs d'operationsTokens (*-sombre pour la carte, texte pour les
-// modules du QR). Si un token change dans shared, ce fichier échoue jusqu'à
-// ce que le CSS/la page soient alignés — plus de dérive silencieuse.
+// Le QR encode ses modules en encre operationsTokens.texte sur blanc, et les
+// seuls littéraux hex restants du CSS sont les blancs du support QR
+// (contrainte de lisibilité du scanner, pas une couleur de charte).
 
-const css = readFileSync(
+const cssBrut = readFileSync(
   fileURLToPath(new URL('./e-dossard.css', import.meta.url)),
   'utf8',
 );
+const css = cssBrut.replace(/\/\*[\s\S]*?\*\//g, '');
 const pageSource = readFileSync(
   fileURLToPath(new URL('./page.tsx', import.meta.url)),
   'utf8',
 );
 
-describe('e-dossard — couleurs épinglées aux tokens operationsTokens', () => {
-  it('carte sombre : les 5 rôles *-sombre du CSS valent exactement les tokens', () => {
-    const attendus: Record<string, string> = {
-      '--edossard-fond': operationsTokens.colors['bg-sombre'],
-      '--edossard-encre': operationsTokens.colors['texte-sombre'],
-      '--edossard-encre-2': operationsTokens.colors['texte-2-sombre'],
-      '--edossard-accent': operationsTokens.colors['action-sombre'],
-    };
-    for (const [variable, valeur] of Object.entries(attendus)) {
-      expect(css).toContain(`${variable}: ${valeur};`);
-    }
-    // Encre du badge : action-texte-sombre, en littéral dans la règle.
-    expect(css).toContain(`color: ${operationsTokens.colors['action-texte-sombre']};`);
+describe('e-dossard — habillage aligné sur le parcours d’inscription', () => {
+  it('plus de carte sombre : le CSS ne référence plus les variables *-sombre', () => {
+    expect(css).not.toContain('-sombre)');
   });
 
   it('QR : modules encre = operationsTokens.texte, sur blanc', () => {
@@ -39,21 +28,12 @@ describe('e-dossard — couleurs épinglées aux tokens operationsTokens', () =>
     expect(pageSource).toContain("const QR_BLANC = '#FFFFFF';");
   });
 
-  it('aucune couleur hors contrat dans la carte sombre (les littéraux restent les seuls)', () => {
-    // Le CSS ne doit contenir AUCUN autre hex que les couleurs épinglées
-    // (blanc du QR inclus) — un nouveau littéral doit passer par un token.
-    const autorises = new Set([
-      operationsTokens.colors['bg-sombre'].toLowerCase(),
-      operationsTokens.colors['texte-sombre'].toLowerCase(),
-      operationsTokens.colors['texte-2-sombre'].toLowerCase(),
-      operationsTokens.colors['action-sombre'].toLowerCase(),
-      operationsTokens.colors['action-texte-sombre'].toLowerCase(),
-      operationsTokens.colors.texte.toLowerCase(),
-      '#ffffff',
-    ]);
-    const hex = css.match(/#[0-9a-f]{6}\b/gi) ?? [];
-    for (const valeur of hex) {
-      expect(autorises.has(valeur.toLowerCase())).toBe(true);
-    }
+  it('aucune couleur hors contrat dans le CSS (seuls les blancs QR restent, en nombre exact)', () => {
+    // Les #FFFFFF du support QR sont la seule exception (lisible au scanner,
+    // pas une couleur de charte) : leur nombre est ÉPINGLÉ — il ne peut que
+    // décroître. Tout autre littéral échoue (voir aussi
+    // app/css-sans-litteraux.test.ts, garde général).
+    const hex = css.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
+    expect(hex).toEqual(['#FFFFFF', '#FFFFFF', '#FFFFFF']);
   });
 });

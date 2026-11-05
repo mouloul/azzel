@@ -7,6 +7,7 @@ import { DbUnavailableError } from '@/modules/iam/errors';
 import {
   DossierValidatedError,
   NoCoureurError,
+  NumeroTransactionDejaUtiliseError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
@@ -70,10 +71,15 @@ function multipart(
   bytes: Uint8Array,
   contentType: string,
   field = 'fichier',
+  numero: string | null = 'TX1234567890',
 ): { body: Uint8Array; contentType: string; length: number } {
   const encoder = new TextEncoder();
+  const numeroPart =
+    numero === null
+      ? ''
+      : `--${BOUNDARY}\r\nContent-Disposition: form-data; name="numeroTransaction"\r\n\r\n${numero}\r\n`;
   const head = encoder.encode(
-    `--${BOUNDARY}\r\nContent-Disposition: form-data; name="${field}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+    `${numeroPart}--${BOUNDARY}\r\nContent-Disposition: form-data; name="${field}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
   );
   const tail = encoder.encode(`\r\n--${BOUNDARY}--\r\n`);
   const body = new Uint8Array(head.length + bytes.length + tail.length);
@@ -212,7 +218,7 @@ describe('POST /api/inscriptions/preuve', () => {
     iamServiceMock.getSession.mockResolvedValue(SESSION);
     const encoder = new TextEncoder();
     const body = encoder.encode(
-      `--${BOUNDARY}\r\nContent-Disposition: form-data; name="autre"\r\n\r\nvaleur\r\n--${BOUNDARY}--\r\n`,
+      `--${BOUNDARY}\r\nContent-Disposition: form-data; name="numeroTransaction"\r\n\r\nTX1234567890\r\n--${BOUNDARY}\r\nContent-Disposition: form-data; name="autre"\r\n\r\nvaleur\r\n--${BOUNDARY}--\r\n`,
     );
 
     const response = await postPreuve(
@@ -387,10 +393,49 @@ describe('POST /api/inscriptions/preuve', () => {
     const call = proofServiceMock.uploadPreuve.mock.calls[0] as [
       typeof SESSION,
       Uint8Array,
+      { numeroTransaction: string },
     ];
+    expect(call[2]).toEqual({ numeroTransaction: 'TX1234567890' });
     expect(call[0]).toEqual(SESSION);
     expect(call[1].byteLength).toBe(2048);
     expect(Array.from(call[1].slice(0, 4))).toEqual([0xff, 0xd8, 0xff, 0xe0]);
+  });
+});
+
+describe('POST /api/inscriptions/preuve — numéro de transaction', () => {
+  it('sans numéro : 400 preuve.numero_transaction_invalide, service non appelé', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+    const part = multipart('recu.jpg', jpegBytes(2048), 'image/jpeg', 'fichier', null);
+
+    const response = await postPreuve(postRequest(part.body, part.length, part.contentType));
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('preuve.numero_transaction_invalide');
+    expect(proofServiceMock.uploadPreuve).not.toHaveBeenCalled();
+  });
+
+  it('numéro normalisé : espaces retirés, majuscules', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+    proofServiceMock.uploadPreuve.mockResolvedValue(PREUVE);
+    const part = multipart('recu.jpg', jpegBytes(2048), 'image/jpeg', 'fichier', ' 0125 9424 6237 ');
+
+    await postPreuve(postRequest(part.body, part.length, part.contentType));
+
+    const call = proofServiceMock.uploadPreuve.mock.calls[0] as unknown[];
+    expect(call[2]).toEqual({ numeroTransaction: '012594246237' });
+  });
+
+  it('numéro déjà utilisé par un autre dossier : 409', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+    proofServiceMock.uploadPreuve.mockRejectedValue(new NumeroTransactionDejaUtiliseError());
+    const part = multipart('recu.jpg', jpegBytes(2048), 'image/jpeg');
+
+    const response = await postPreuve(postRequest(part.body, part.length, part.contentType));
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('preuve.numero_transaction_deja_utilise');
   });
 });
 

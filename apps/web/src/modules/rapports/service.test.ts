@@ -50,7 +50,7 @@ const CLASSEMENTS_RECORD: ClassementsRecord = {
         {
           dossard: 203,
           epreuveId: 'ep-longue',
-          categorieAge: 'U20',
+          categorieAge: 'Senior',
           statut: 'arrivé',
           arriveeRecue: new Date('2027-03-26T08:02:03.000Z'),
         },

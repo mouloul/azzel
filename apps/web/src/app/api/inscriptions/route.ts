@@ -16,7 +16,12 @@ import {
   toApiError,
   type ApiError,
 } from '@/modules/inscriptions/errors';
-import { getInscriptionState, submitInscription } from '@/modules/inscriptions/service';
+import {
+  getChecklistState,
+  getInscriptionState,
+  submitInscription,
+} from '@/modules/inscriptions/service';
+import { prochaineEtapeCoureur } from '@/modules/inscriptions/prochaine-etape';
 
 const MAX_BODY_BYTES = 32_768;
 
@@ -86,10 +91,29 @@ export async function POST(request: NextRequest) {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     return errorResponse(toApiError(new InvalidBodyError()));
   }
+  let coureur: Awaited<ReturnType<typeof submitInscription>>;
   try {
-    const coureur = await submitInscription(authenticated.session, body);
-    return NextResponse.json({ ok: true, coureur });
+    coureur = await submitInscription(authenticated.session, body);
   } catch (error) {
     return errorResponse(toApiError(error));
   }
+  // Où envoyer le coureur ensuite : la première pièce non faite de son
+  // dossier, calculée par la MÊME fonction que la redirection de connexion.
+  // Sans cela, « Valider mon inscription » renvoyait au tableau de bord, à
+  // charge de retrouver l'étape suivante tout seul.
+  //
+  // Le dossier est déjà écrit à ce stade : une panne de lecture de la
+  // checklist ne doit pas faire croire à un échec d'enregistrement. On replie
+  // alors sur l'espace coureur, qui affiche lui-même l'état du dossier.
+  let prochaineEtape = '/espace-coureur';
+  try {
+    const etat = await getChecklistState(authenticated.session);
+    prochaineEtape = prochaineEtapeCoureur(etat?.pieces ?? []);
+  } catch (error) {
+    console.warn(
+      '[inscriptions] étape suivante indéterminée après inscription :',
+      error instanceof Error ? error.message : error,
+    );
+  }
+  return NextResponse.json({ ok: true, coureur, prochaineEtape });
 }

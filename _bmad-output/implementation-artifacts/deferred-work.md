@@ -125,3 +125,157 @@
     présente donc comme une disparition de données. C'est ce qui a fait chercher au
     mauvais endroit ; la garde sur la forme de la clé a été ajoutée pour ça.
 
+
+## Deferred from: build de la story 9.1 — socle de style partagé (2026-11-02)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
+  summary: `volontaires/scan/scan.css` pose le fond de l'écran caméra à `#0C1610` avec un commentaire qui annonce `bg-sombre`, alors que `bg-sombre` vaut `#101A14`. Dérive historique non tranchée : soit la valeur devient un token dédié, soit l'écran s'aligne sur `bg-sombre` en acceptant le changement de rendu.
+  evidence: la story 9.1 interdisait tout changement de rendu ; le littéral a été figé avec son nombre épinglé dans `apps/web/src/app/css-sans-litteraux.test.ts`. Le `rgba(12,22,16,…)` du voile partage la même base non tokenisée, et `page.test.tsx:301` exige l'opacité 0,96 telle quelle.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
+  summary: `#FFD9D6`, encre du bouton d'appel du voyant « dossard inconnu » dans `scan.css`, est une teinte claire du danger qui n'existe dans aucun token. À remonter en token si elle ressert ailleurs.
+  evidence: figée en exception épinglée dans `css-sans-litteraux.test.ts` ; aucune variable existante ne vaut cette couleur.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.1)
+  summary: Les deux tokens ajoutés par la story — `forest-800` (arrêt sombre du dégradé du poster trailer) et `vert-altitude` (pastille de lecture) — portent des noms choisis par cohérence d'échelle, sans validation de la charte. `vert-altitude` a la même valeur que `action-sombre` côté opérations mais une sémantique vitrine distincte, volontairement découplée.
+  evidence: `packages/shared/src/tokens.ts`, section `siteColorTokens` ; épinglage des constantes dans `apps/web/src/app/contrastes.test.ts`.
+
+## Deferred from: build de la story 9.2 — accueil refondu (2026-11-02)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
+  summary: Le budget de premier chargement de l'accueil est à 306 848 octets, soit 299,7 Kio pour un plafond de 300 Kio (NFR-2). La marge est de 0,3 Kio : la prochaine addition, même minime, le fera passer.
+  evidence: mesure sur build frais après la refonte du hero. Le socle de la story 9.1 a dû être importé depuis `layout.tsx` plutôt que depuis la page pour gagner le kilo-octet manquant par fusion de chunk CSS.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
+  summary: `socle.css` est importé par `layout.tsx` : il charge donc sur toutes les routes, y compris celles qui ne consomment pas encore ses classes. Choix dicté par le budget, pas par l'architecture.
+  evidence: import depuis la page coûtait un chunk CSS séparé et faisait dépasser les 300 Kio. À réexaminer quand les stories 9.4, 9.5 et 10.x auront effectivement consommé le socle partout.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.2)
+  summary: Le rail de chiffres clés du hero n'affiche que Date, Épreuves, Départ et Cadre. Les cellules D+, plage d'altitude et nombre de places attendent des valeurs validées par le comité : aucune source officielle n'existe aujourd'hui, et les chiffres de la maquette viennent du relevé d'essai (28 km, D+ 1 280 m), contradictoires avec les 35 km annoncés.
+  evidence: la grille cloisonnée est dimensionnée pour les accueillir ; `page.test.tsx` interdit par ailleurs tout objectif 2027 chiffré sur l'accueil.
+
+## Deferred from: build de la story 9.3 — coquille de la section parcours (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
+  summary: Sous-ensemble de caractères de Barlow Condensed. Le jeu réellement rendu par les huit pages publiques tient en 69 caractères ; en sous-ensemble prudent (87 caractères, a–z, 0–9, ponctuation française), Barlow 700 passe de 22 444 à 10 940 octets et Barlow 800 de 22 464 à 10 884, soit environ 23 Ko de moins sur le chemin critique.
+  evidence: mesuré avec fonttools dans un environnement isolé hors dépôt. Deux réserves : le jeu strict n'inclut pas le « 8 », qu'aucune page publique n'affiche aujourd'hui, ce qui montre sa fragilité ; et les surfaces authentifiées (e-dossard, admin) rendent aussi du Barlow avec des noms de coureurs libres, il faut donc un inventaire ou un fichier pleine plage réservé au dossard.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
+  summary: Le sélecteur d'épreuve repose sur `:has()` généré côté serveur, avec un repli en panneaux empilés pour les navigateurs sans `:has()` (Firefox avant la 121). Ce repli n'a été testé sur aucun vieil appareil réel.
+  evidence: prévu par la règle `@supports not selector(:has(*))` dans `globals.css` ; vérification uniquement par lecture du CSS.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.3)
+  summary: Quand la story 11.1 branchera `parcours.json`, le formatage des nombres devra rester identique côté serveur : `Intl.NumberFormat('fr-FR')` produit une espace fine insécable comme séparateur de milliers, et le rendu comme les tests reposent sur le même moteur.
+  evidence: contrat de données `apps/web/src/modules/contenus/section-parcours.ts` ; rendu `apps/web/src/components/section-parcours.tsx`.
+
+## Deferred from: build de la story 9.5 — résultats refondus (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Les garanties « un rafraîchissement ne vide pas la recherche » et « Effacer les filtres remet les trois états à zéro » ne sont pas testées en comportement. L'environnement vitest est `node`, sans DOM : la frappe, le polling et le clic ne sont pas simulables. Elles reposent sur le rendu d'un champ contrôlé et sur des regex lues dans le code source (`setSaisieDossard('')`, absence de `key` sur `VueResultats`), ce qui prouve la structure mais pas le comportement.
+  evidence: `apps/web/src/app/resultats/resultats-live.test.tsx`. Même limite déjà notée pour l'onglet « Mon trail » (build du 2026-10-31). Décision d'architecture à prendre une fois pour toutes : ajouter jsdom ou happy-dom, ou un test Playwright, ce qui couvrirait les deux surfaces.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Quand un filtre ne retient que des dossards d'une épreuve sans heure de départ configurée, les classements affichent « Aucun dossard ne correspond à cette recherche » alors que le dossard apparaît dans « Derniers arrivés ». Cas rare, jour J, documenté par un test de caractérisation et non par une garantie voulue.
+  evidence: test « CARACTÉRISATION (à arbitrer) » dans `resultats-live.test.tsx`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Les abandons ne sont filtrés que par dossard, pas par catégorie : le contrat public ne porte pas la catégorie sur les abandons.
+  evidence: contrat `ResultatsPublic` dans `packages/shared`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.5)
+  summary: Un champ de recherche par nom est exclu par NFR-7 (canaux publics anonymes). La story avait été rédigée à tort avec « par nom ou dossard » ; texte corrigé dans `epics.md`. Si le comité veut chercher un coureur par nom, il faut une surface authentifiée, pas la page publique.
+  evidence: NFR-7 et AD-7 dans `epics.md`.
+
+## Deferred from: build de la story 9.4 — inscription et checklist refondues (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: Le fil d'étapes n'affiche aucune mention sur les étapes suivantes, ni « À venir » ni état : un coureur qui a sauté une étape via la checklist ne serait pas « à venir » et le fil mentirait. Seules les étapes franchies sont des liens de retour. Le résultat est plus sobre que la maquette ; arbitrage visuel à faire en recette.
+  evidence: `apps/web/src/components/fil-etapes.tsx`, 13 tests dans `fil-etapes.test.tsx`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: Couvert par construction seulement, faute de DOM dans vitest : la compression canvas et le réessai sans re-sélection du dépôt de preuve (JavaScript de navigation, jamais exécuté en rendu serveur), la gestion du focus sur le premier champ en erreur (`document.getElementById`), et le rendu visuel réel du fil et de la colonne latérale. Le garde `dossier-css.test.ts` lit la feuille, pas le pixel.
+  evidence: même limite d'environnement que les stories 9.5 et « Mon trail » ; décision jsdom, happy-dom ou Playwright déjà consignée.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: Le groupe de boutons radio « épreuve » porte sa mention « obligatoire » dans le texte d'aide du groupe, pas dans un label par bouton. Le compte de huit mentions « (obligatoire) » est épinglé par un test.
+  evidence: `apps/web/src/app/inscription/inscription-form.tsx`.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.4)
+  summary: `proof-service.ts` expose maintenant `documentsAcceptes` dans son read-model pour que le fil d'étapes de `/preuve` sache si les documents sont acceptés. Seul fichier de service modifié par la story, ajout pur dérivé de champs déjà chargés.
+  evidence: `apps/web/src/modules/inscriptions/proof-service.ts`, un test ajouté dans `preuve.test.ts`.
+
+## Deferred from: build de la story 9.6 — non-régression de la vitrine (2026-11-03)
+
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: **Le budget mesuré par `pnpm budget` n'est pas le poids réellement transféré.** `scripts/check-budget.sh` compte les ressources référencées par le HTML servi, `<link rel="preload">` compris ; une police déclarée uniquement en `@font-face` n'y figure pas. La story 9.3 a retiré le préchargement de Barlow Condensed 700 : le décompte est passé de 301 à 279 Kio, mais le navigateur télécharge toujours la police dès qu'un texte en graisse 700 s'affiche. Mesure réelle au harnais CDP, cache désactivé : 321,2 Kio sur `/`, 334,7 sur `/resultats`, 300,5 sur `/connexion`, dont environ 68,5 Kio de polices non préchargées (Inter 600, Barlow 600 et 700). Ce que le retrait du préchargement garantit réellement : un premier rendu lisible non bloqué (`font-display: swap`, repli calibré, CLS 0,002) ; pas une réduction des octets. NFR-2 dit « premier chargement < 300 Ko » : à la lettre, il n'est pas tenu en octets transférés, et il ne l'était vraisemblablement pas avant la refonte non plus.
+  evidence: rapport de la story 9.6 ; `scripts/check-budget.sh` lignes 1 à 25. Décision à prendre : soit redéfinir NFR-2 comme budget de chemin critique (et le dire dans la définition du script), soit réduire réellement les octets. Le sous-ensemble de caractères de Barlow, estimé à environ 23 Ko de gain réel sur les deux fichiers préchargés, est le levier honnête.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Zoom 200 % : toutes les pages publiques débordent horizontalement (227 px pour 195 px de largeur utile) à cause de `header-actions` (bascule de thème et lien admin, stories 1.6 et 3.3) et de l'onglet « Mon trail » (accueil, story 8.x). Défaut antérieur à l'épopée 9, à traiter globalement.
+  evidence: harnais CDP, émulation 195 px ; `/resultats` est passé de 265 à 227 px grâce au correctif 9.5, le résidu est ce défaut commun.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Pied de page : quatre liens de 25,5 px de haut, et trois paires de liens séparées par 7,5 px au lieu de 8. Skip-link déployé au focus : 43,5 px. Tous antérieurs à l'épopée 9 (stories 2.4 et 1.1).
+  evidence: harnais CDP à 390 px.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Sur `/resultats`, les titres d'épreuve (« La Longue — 35 km ») et la méta (« 35 km — départ à 08:00 ») débordent de 6 px à 195 px parce que leurs espaces sont insécables. Le corriger impose de toucher au formatage des textes, ce qui est un choix de contenu.
+  evidence: résidu après correctif 9.5, harnais CDP.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: Quatre écrans n'ont pas pu être mesurés à l'écran faute de base de données (`/inscription`, `/acceptations`, `/preuve`, `/espace-coureur` redirigent vers `/connexion`). Ils sont couverts par des tests qui lisent les feuilles de style (`socle.test.ts`, `dossier-css.test.ts`, `fil-etapes.test.tsx`, `contrastes.test.ts`), ce qui prouve les règles et non le rendu.
+  evidence: `curl` : 307 vers `/connexion`. À mesurer en recette sur l'environnement déployé, ou avec la base de dev.
+- source_spec: `_bmad-output/planning-artifacts/epics.md` (story 9.6)
+  summary: `.aa-lien-texte` est utilisée sur six pages (accueil, section parcours, `/parcours`, `/region`, `/resultats`, `/retour-en-images`). Le correctif de cible tactile (`display: inline-flex; min-height: 44px`) s'applique donc aux six, pas seulement à l'accueil.
+  evidence: `grep` des usages ; les tests de ces pages passent.
+
+## Deferred from: build de la story 10.1 — PWA volontaires refondue (2026-11-03)
+
+- **Rendu non comparé visuellement** : les deltas (cartes 16 px + ombre, CTA pilules, chips) sont jugés sur le code, pas sur capture. Recette humaine requise sur appareil.
+- **Prémisse UX-DR-7 de la story fausse** : le voyant était déjà conforme ; le critère de la story était périmé. Consigné dans la spec 10.1.
+- **`.volontaires-badge` hors socle** : pilule pleine « HORS-LIGNE PRÊT » ; `.socle-pastille` est point + libellé. Arbitrer si le socle doit offrir une variante pleine.
+- **`LogoutButton` / `AssistanceButton` (`.btn-contour`)** restent sur l'ancienne classe globale, partagée par 8+ surfaces : à migrer dans 10.3 ou une story transverse.
+- **Pas de `bmad-code-review`** sur cette story.
+
+## Deferred from: build de la story 10.2 — app coureurs refondue (2026-11-03)
+
+- **Rendu natif jamais vérifié** (contrastes plein soleil, Switch, QR, états pressed) : recette sur appareil requise.
+- **Mode sombre par défaut** : critère de la story non appliqué, contredit UX-DR-2 (suit le système). Décision produit à prendre.
+- **« Se déconnecter » en pleine pastille danger** : choix de design à valider ; une déconnexion est-elle assez destructrice pour dominer l'écran ? Alternative : contour + icône.
+- **Distinction destructeur/principal par la couleur seule** sur l'écran dossier faute d'icônes.
+- **Progression et position sur le tracé** : absentes de l'état de l'app ; à spécifier si voulues (dépend de l'épopée 11).
+- **Pas de `bmad-code-review`** sur cette story.
+
+## Deferred from: build de la story 10.3 — back-office refondu (2026-11-03)
+
+- **Rendu admin jamais vu** : aucune base ni session en dev ; recette humaine (`dev-db.sh` + session organisateur) requise.
+- **Compteurs sur ≤ 200 dossiers** : ne reflètent pas l'édition entière au-delà. Un vrai « à valider » (preuve déposée, non traitée) et des liens de filtre exigent une requête d'agrégat et un filtre de statut : à spécifier.
+- **Chips sans base** : `.chip-statut` était définie dans une feuille non chargée par `/admin/missions` — signe que le CSS par route masque des dépendances ; couvert pour ces cas par le socle.
+- **Fraîcheur en en-tête** et non en pied (critère 5.1 historique).
+- **Artboard `AdminDossiers`** absent du dépôt.
+- **Pas de `bmad-code-review`** sur cette story.
+
+## Deferred from: build de la story 10.4 — non-régression des surfaces d'exploitation (2026-11-03)
+
+- **Cibles sous 44 px, antérieures à l'épopée 10, non corrigées** : `.btn-lien` ≈ 41,5 px (`globals.css:489`, « Revenir à ma fiche », « Reconnecte-toi ») ; `.admin-nav__lien` ≈ 43,2 px (`admin.css:18`) ; `.course-ligne-annuler` ≈ 21 px (`course.css:71`, annulation d'un passage, story 5.4). Ce dernier est le plus grave : action d'annulation du PC à 21 px.
+- **Non vérifiable sans appareil** : latence réelle de confirmation < 1 s sur iPhone (couverte seulement par la structure du code), rendu natif, hors-ligne de bout en bout dans un navigateur réel. Le câblage de reprise réseau est couvert par lecture de source, pas par comportement (vitest sans DOM).
+- **Recette de l'épopée 5 inchangée** : aucun pas ne désignait d'élément modifié ; recette 6 étendue (2 pas) car les écrans de l'app coureurs en dépendent.
+- **Ce que GLM a touché en base de dev** : sessions de sonde créées puis supprimées pour mesurer le précache sur build réel ; à confirmer que la base de dev est propre.
+- **Pas de `bmad-code-review`** sur 10.1 à 10.4.
+
+## Deferred from: build de la story 11.1 — pipeline GPX vers parcours.json (2026-11-03)
+
+- **Chiffres publiés issus d'un relevé d'ESSAI** : le GPX source est « essai trail ait ainsi 2027 » (28,0 km, D+ 1 186 m) ; l'accueil affiche désormais ce D+ pour la longue alors que la distance affichée vient de la base (la page parcours annonce ~35 km). Risque de contradiction visible. À trancher : relevé officiel, ou retrait de la fusion (suppression de `parcours.json` ⇒ retour à `null`, sans autre changement).
+- **Manques côté organisation (rien inventé)** : tracé GPX de l'épreuve moyenne ; ravitaillements et services réels (seuls Départ et Arrivée existent) ; heure de départ et barrière horaire (toujours `null`).
+- **Seuil D+ 5 m** : brut 1 280 m → 1 186 m (−7,3 %), constante arbitraire à valider avec l'organisation ; D+ calculé sur altitudes non arrondies (arrondir à 0,1 m le ferait passer à 1 176 m).
+- **Porte de qualité** : constantes (pas médian ≤ 2 s, ≤ 5 % de la distance en segments > 30 s, ≤ 1 % de points > 12,5 m/s) calibrées sur DEUX relevés seulement ; elles refusent le second sur trois défauts à la fois.
+- **Postgres de dev** arrêté par la session GLM ; relancé par l'architecte (`scripts/dev-db.sh up`). Les tests d'intégration échouent base arrêtée (25 fichiers) : piège pour toute session suivante.
+- **Pas de `bmad-code-review`** sur cette story.
+- source_spec: `_bmad-output/implementation-artifacts/spec-11-4-profil-altimetrique-et-graphe-de-technicite.md`
+  summary: Épingler par test le CustomEvent `az-parcours-curseur` (detail `{epreuve, sM}`) et les interactions réelles du curseur (pointeur, flèches, aria-live) — aucun harnais DOM (jsdom/testing-library) dans le repo, tests actuels node/SSR-only.
+  evidence: Recherche vérification-gap (story 11.4) : supprimer le dispatch du useEffect ou casser un handler ne fait échouer AUCUN test ; à rouvrir à la 11.5 (premier consommateur du bus `s`) en décidant alors du harnais DOM.
+
+## Deferred from: build de la story 11.4 — profil altimétrique (2026-11-04, architecte)
+
+- **Contradiction de distance dans la base** : la longue est « 35 km » dans `inscriptions/migrations/0002_inscriptions.sql:70` (`'La Longue — 35 km', 35.0`, affiché par `app/parcours/page.tsx:59`) et `contenus/migrations/0014_contenus_vitrine.sql:55` (`'Trail long — 35 km'`), alors que la section d'accueil affiche désormais 28 km (relevé d'essai, décision du 2026-11-04). La page `/parcours` et l'accueil peuvent se contredire. À aligner quand le tracé officiel existe (migration éditoriale).
+- **Mention « tracé provisoire »** : constante `MENTION_TRACE_PROVISOIRE` (`components/section-parcours.tsx`) ; à retirer en une ligne quand le tracé sera officiel.
+- **Profil limité à la longue** : la moyenne n'a aucune donnée, donc aucune visualisation.
+- **Interactions du curseur non testées à l'exécution** (pointeur, clavier, événement) faute de harnais DOM ; garanties par des fonctions pures et le rendu SSR. À rouvrir en 11.5.
+- **Poids** : HTML de l'accueil 43 → 77 Ko bruts (8 → 16 Ko gzip) ; budget 288/300 Kio, marge 11,9 Kio, à surveiller pour les stories 11.3 et 11.5.
+- **Rendu réel non vérifié** (couleurs perçues, tap, annonce vocale) : recette humaine.
+- **Pas de `bmad-code-review` humain/architecte** ; GLM a fait une auto-revue en 3 couches (journal dans la spec).
+
+## Deferred from: revues indépendantes des épopées 9 et 10 (2026-11-04)
+
+Rapports : `revue-epopee-9.md`, `revue-epopee-10.md` (aucun bloquant sur l'épopée 9 ; un bloquant sur l'épopée 10, « Suivi activé » affiché moteur non démarré, corrigé et testé). Corrigés sur `fix/revue-epopee-9` et `fix/revue-epopee-10`. Restent :
+
+- ~~**NFR-2 en octets transférés**~~ — **tranché le 2026-11-04**, voir l'amendement dans `epics.md`. Mesure honnête par Chrome : 344 776 o (336,7 Kio) sur `/`, dont 181,4 Kio de socle incompressible. NFR-2 porte maintenant deux seuils bloquants en CI (poids réel ≤ 350 Kio, chemin critique ≤ 300 Kio) ; les polices servies sont élaguées sans perdre un caractère. État : 326 Kio réels, 283 Kio critiques. Reste ouvert, sans échéance : les 145 Ko de runtime d'App Router, seul vrai poste de réduction restant, et le fait que `/resultats` (334,7 Kio avant élagage) n'est pas mesuré par le budget.
+- **Rayons hérités à 6 px** (`.aa-btn`, `.carte-course`, `vitrine-textes.css`) et vocabulaire mixte `--az-radius-full` / `--az-rayon-*` dans `volontaires.css` : story de finition de la vitrine.
+- **Utilitaire WCAG dupliqué** dans 4 fichiers de test (`contrastes*.test.ts`, `socle.test.ts`, runners) : à extraire.
+- **`.btn-lien` global passé à `min-height: 44px` (37 usages, 19 fichiers)** : le rendu n'a été vérifié que par lecture CSS ; relire à l'œil les écrans qui l'utilisent (missions, scan, volontaires, sponsors, retour-images, dossiers, course, preuve).
+- **Destructeur de l'app coureurs** : pastille pleine à l'état pressé (inversion) au lieu de l'opacité 80 % (sous AA, 4,18–4,48:1). Rendu natif jamais vu.
+- **Aucune vérification visuelle réelle** des épopées 9 et 10 : recettes `scenarios-recette-epic-9.md` et `-10.md` listent ce qu'un humain doit juger à l'œil.

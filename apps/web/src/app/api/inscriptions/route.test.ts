@@ -22,6 +22,7 @@ vi.mock(
 const inscriptionsServiceMock = vi.hoisted(() => ({
   submitInscription: vi.fn(),
   getInscriptionState: vi.fn(),
+  getChecklistState: vi.fn(),
 }));
 
 vi.mock(
@@ -277,6 +278,41 @@ describe('POST /api/inscriptions', () => {
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe('inscriptions.invalid_body');
     expect(inscriptionsServiceMock.submitInscription).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/inscriptions — etape suivante', () => {
+  it('rend le chemin de la premiere piece non faite, pour y mener directement', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+    inscriptionsServiceMock.submitInscription.mockResolvedValue(COUREUR);
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue({
+      pieces: [
+        { id: 'email', fait: true },
+        { id: 'epreuve', fait: true },
+        { id: 'decharge', fait: false, actionHref: '/acceptations' },
+      ],
+    });
+
+    const response = await postInscriptions(postRequest('{}'));
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { prochaineEtape: string };
+    expect(body.prochaineEtape).toBe('/acceptations');
+  });
+
+  it('checklist illisible : repli sur l\u2019espace coureur, l\u2019inscription reste enregistree', async () => {
+    // Le dossier est ecrit avant ce calcul : une panne de lecture ne doit pas
+    // faire croire a un echec d'enregistrement.
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+    inscriptionsServiceMock.submitInscription.mockResolvedValue(COUREUR);
+    inscriptionsServiceMock.getChecklistState.mockRejectedValue(new Error('base muette'));
+
+    const response = await postInscriptions(postRequest('{}'));
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; prochaineEtape: string };
+    expect(body.ok).toBe(true);
+    expect(body.prochaineEtape).toBe('/espace-coureur');
   });
 });
 

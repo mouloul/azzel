@@ -1,0 +1,256 @@
+/* Story 9.1 — socle de classes sémantiques partagées.
+   Couche de primitives posée pour les stories 9.2 à 9.5 et 10.1 à 10.3 ;
+   volontairement APPLIQUÉE À AUCUN écran dans cette story (les écrans
+   suivants l'importent au besoin : `import './socle.css'`… attention, chemin
+   relatif à ajuster, ce fichier vit dans src/app/).
+
+   Contrat non négociable :
+   - AUCUNE couleur littérale : chaque couleur lit une variable issue des
+     tokens (garde : css-sans-litteraux.test.ts + socle.test.ts).
+   - Cible interactive ≥ 44 px de haut (boutons, champs : 48 px).
+   - Focus visible : outline 2 px + décalage 2 px. Sur fond clair, l'outline
+     var(--focus) tient le 3:1 (WCAG 1.4.11, pairs testées dans
+     contrastes.test.ts). Sur fond forêt, var(--focus) ne tient PAS le 3:1
+     (≈ 2,2:1 en clair — voir globals.css) : poser la classe .socle-sur-foret
+     sur le conteneur forêt pour basculer l'outline en --on-forest + halo
+     --forest-surface (pattern hero/vitrine-bande).
+   - Texte AA : texte/--az-texte et secondaire/--az-texte-2 sur --az-bg et
+     --az-surface (paires testées), libellés d'action/--az-action-texte sur
+     --az-action.
+   - prefers-reduced-motion neutralise toute transition introduite ici.
+   - Rayons : pilule (9999 px) pour actions et chips, 16 px (--az-rayon-md)
+     pour les cartes. */
+
+/* --- Action en pilule ------------------------------------------------------- */
+
+.socle-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--az-space-2);
+  min-height: 44px;
+  padding: var(--az-space-2) var(--az-space-5);
+  border: 2px solid transparent;
+  border-radius: var(--az-radius-full);
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  font-family: var(--font-display);
+  font-size: var(--az-font-size-btn);
+  font-weight: var(--az-font-weight-btn);
+  letter-spacing: var(--az-letter-spacing-btn);
+  text-transform: uppercase;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.socle-action:hover:not(:disabled) {
+  background: var(--az-action-hover);
+}
+
+.socle-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Variante contour : encre et filet = action (≥ 4,5:1 sur surface et cartes,
+   piné dans socle.test.ts) ; au survol, bascule en pilule pleine. */
+.socle-action--contour {
+  background: transparent;
+  border-color: var(--az-action);
+  color: var(--az-action);
+}
+
+.socle-action--contour:hover:not(:disabled) {
+  background: var(--az-action);
+  color: var(--az-action-texte);
+}
+
+/* --- Chip (étiquette passive, jamais une cible interactive) ----------------- */
+
+.socle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-1);
+  min-height: 32px;
+  padding: var(--az-space-1) var(--az-space-3);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-full);
+  background: var(--az-bg);
+  color: var(--az-texte-2);
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  font-weight: 600;
+  letter-spacing: var(--az-letter-spacing-eyebrow);
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* --- Carte ------------------------------------------------------------------- */
+
+.socle-carte {
+  background: var(--az-surface);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  padding: var(--az-space-5);
+  box-shadow: var(--shadow-card);
+  color: var(--az-texte);
+}
+
+/* --- En-tête de surface ------------------------------------------------------ */
+
+.socle-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--az-space-3);
+  padding-bottom: var(--az-space-3);
+  border-bottom: 1px solid var(--az-filet);
+  margin-bottom: var(--az-space-4);
+}
+
+.socle-entete-titre {
+  margin: 0;
+  font-family: var(--az-font-display-sm);
+  font-size: var(--az-font-size-display-sm);
+  font-weight: var(--az-font-weight-display-sm);
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+.socle-entete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+}
+
+/* --- Pastille d'état (point + libellé : jamais la couleur seule) ------------- */
+
+.socle-pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--az-space-2);
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}
+
+/* Le point porte la couleur d'état (3:1 minimum sur les surfaces des deux
+   thèmes, vérifié dans socle.test.ts) ; le libellé porte le sens. */
+.socle-pastille-point {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: var(--az-radius-full);
+  background: var(--az-filet-controle);
+}
+
+.socle-pastille--succes .socle-pastille-point { background: var(--az-succes); }
+.socle-pastille--danger .socle-pastille-point { background: var(--az-danger); }
+.socle-pastille--attention .socle-pastille-point { background: var(--az-attention); }
+.socle-pastille--sync-attente .socle-pastille-point { background: var(--az-sync-attente); }
+.socle-pastille--sync-envoye .socle-pastille-point { background: var(--az-sync-envoye); }
+
+/* --- Tableau dense ------------------------------------------------------------- */
+
+.socle-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--az-font-size-body);
+  color: var(--az-texte);
+}
+
+.socle-table th,
+.socle-table td {
+  padding: var(--az-space-1) var(--az-space-2);
+  border-bottom: 1px solid var(--az-filet);
+  text-align: left;
+  vertical-align: top;
+}
+
+.socle-table th {
+  font-family: var(--az-font-surtitre);
+  font-size: var(--az-font-size-meta);
+  font-weight: var(--az-font-weight-meta);
+  letter-spacing: var(--az-letter-spacing-eyebrow);
+  text-transform: uppercase;
+  color: var(--az-texte-2);
+  white-space: nowrap;
+}
+
+/* Story 10.3 — cellule numérique du gabarit commun (dossards, heures,
+   classements) : mono tabulaire, alignée à droite, sans wrap. Posée sur le
+   th ET le td de la colonne concernée. */
+.socle-table .socle-num {
+  font-family: var(--az-font-meta);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* --- Champ de formulaire + étiquette ------------------------------------------ */
+
+.socle-champ {
+  display: grid;
+  gap: var(--az-space-2);
+}
+
+.socle-etiquette {
+  font-weight: 700;
+  color: var(--az-texte);
+}
+
+/* Bordure --az-filet-controle (line-strong) : 3:1 exigé WCAG 1.4.11, pair
+   testée dans contrastes.test.ts — le filet décoratif --az-filet ne tient pas. */
+.socle-champ :is(input, select, textarea) {
+  min-height: 48px;
+  width: 100%;
+  padding: var(--az-space-2) var(--az-space-4);
+  background: var(--az-bg);
+  color: var(--az-texte);
+  font: inherit;
+  font-size: 16px;
+  border: 1.5px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-md);
+}
+
+.socle-champ textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.socle-champ-aide {
+  margin: 0;
+  font-family: var(--az-font-meta);
+  font-size: var(--az-font-size-meta);
+  color: var(--az-texte-2);
+}
+
+/* --- Focus --------------------------------------------------------------------- */
+
+/* Fond clair comme fond sombre : l'outline var(--focus) tient le 3:1 sur les
+   surfaces des deux thèmes (pairs testées). 2 px + décalage 2 px. */
+.socle-action:focus-visible,
+.socle-champ :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--az-focus);
+  outline-offset: 2px;
+}
+
+/* Fond forêt : var(--focus) ne tient pas le 3:1 (globals.css, ≈ 2,2:1 en
+   clair) — outline on-forest + halo forest-surface, pattern hero. */
+.socle-sur-foret :is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--on-forest);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--forest-surface);
+}
+
+/* --- Mouvement réduit ------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .socle-action {
+    transition: none;
+  }
+}

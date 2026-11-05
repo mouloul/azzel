@@ -9,39 +9,81 @@ import {
   GlypheTala,
   GlypheYaz,
 } from '@/components/glyphes-piliers';
+import { CompteurPlaces } from '@/components/compteur-places';
 import { SectionPartenaires } from '@/components/section-partenaires';
+import { PRESENTATIONS_EPREUVES } from '@/components/presentations-epreuves';
+import { SectionParcours } from '@/components/section-parcours';
+import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { getParcoursDoc } from '@/modules/contenus/parcours/lecture';
+import { getSectionParcours } from '@/modules/contenus/section-parcours';
+import { resolveTrailerPlayer } from '@/modules/retour-images/domain';
+import { getDateCourseVitrine, getPlacesVitrine } from '@/modules/inscriptions/service';
+import { getRetourImagesPage } from '@/modules/retour-images/service';
 import { getPartenairesSection } from '@/modules/sponsors/service';
+
 
 const PHOTOS = '/charte/photos-2026';
 
+/** « au printemps 2027 » devient « Au printemps 2027 » en tête de phrase. */
+function premiereMajuscule(texte: string): string {
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
+
+/**
+ * Teaser de l'accueil : lien PROVISOIRE, posé en recette du 04/11/2026 en
+ * attendant le montage définitif. Dès qu'une adresse est enregistrée dans
+ * /admin/retour-images, c'est elle qui l'emporte — ce lien n'est qu'un repli.
+ */
+const TEASER_PROVISOIRE = 'https://www.youtube.com/watch?v=jpvFJ2vTPZA';
+
+// Valeurs du dossier de partenariat 2027 (« Notre vision ») ; chiffres du
+// bilan officiel de l'édition 2026 (réunion du 4 avril 2026).
 const PILIERS = [
   {
     Glyphe: GlypheYaz,
-    titre: 'Sport',
-    texte: 'Deux trails — 35 km et 12 km — au départ du stade Agni Lhoudh.',
+    titre: 'Sport & santé',
+    accroche: 'De 7 à 77 ans, l’envie de bouger.',
+    texte:
+      'Les traileurs confirmés côtoient les familles : pendant que le trail s’élance dans la forêt, le stade Agni Lhoudh accueille compétitions, initiations et découvertes.',
+    chiffre: '96 %',
+    legende: 'des coureurs au départ ont franchi l’arrivée en 2026',
   },
   {
     Glyphe: GlypheTala,
-    titre: 'Santé',
-    texte: '116 enfants ont couru la Course Kids lors de l’édition 2026.',
+    titre: 'Jeunesse',
+    accroche: 'Des disciplines nouvelles, le goût de l’effort.',
+    texte:
+      'Boxe, karaté, gymnastique, échecs : chaque discipline a sa zone sur le stade. Les jeunes regardent, s’essaient, et repartent parfois avec une passion.',
+    chiffre: '116 enfants',
+    legende: 'au départ de la Course Kids en 2026',
   },
   {
     Glyphe: GlypheTabzimt,
-    titre: 'Citoyenneté',
-    texte: 'Coureurs, familles et bénévoles se retrouvent au village d’Aït Aïssi.',
+    titre: 'Liens entre générations',
+    accroche: 'Un même rendez-vous pour toutes les générations.',
+    texte:
+      'Anciens, familles et sportifs se retrouvent au village d’Aït Aïssi. Chants, bendir et plats partagés accompagnent les athlètes du départ à l’arrivée : ici, une course est aussi une fête.',
+    chiffre: '2 jours',
+    legende: 'de sport et de fête au village',
   },
   {
     Glyphe: GlypheIngel,
-    titre: 'Écologie',
-    texte: 'Les sentiers traversent la forêt de Yakouren.',
+    titre: 'Nature & territoire',
+    accroche: 'La Kabylie, à travers ses sentiers.',
+    texte:
+      'Le trail traverse la forêt de Yakouren, l’un des grands massifs forestiers de la région, entre crêtes, sous-bois et ruelles du village. Une invitation à découvrir nos paysages.',
+    chiffre: '8 disciplines',
+    legende: 'sur le stade et dans la forêt en 2026',
   },
 ];
+
+import './vue-parcours.css';
 
 export const metadata = {
   title: 'Week-end Sportif Aït Aïssi',
   description:
-    'Deux trails — 35 km et 12 km — au départ du stade Agni Lhoudh, au village d’Aït Aïssi. Dates, épreuves, parcours et informations pratiques de l’édition 2027.',
+    'Deux trails au départ du stade Agni Lhoudh, au village d’Aït Aïssi. Dates, épreuves, parcours et informations pratiques de l’édition 2027.',
 };
 
 // Section partenaires lue en base (bascule A/B « sans dev », FR-22). La page
@@ -52,17 +94,37 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [telephone, partenaires] = await Promise.all([
+  const [telephone, partenaires, parcours, retourImages, places, dateCourse] = await Promise.all([
     readAssistancePhone(),
     getPartenairesSection(),
+    getSectionParcours(),
+    getRetourImagesPage(),
+    getPlacesVitrine(),
+    getDateCourseVitrine(),
   ]);
+  // La vidéo de l'admin prime ; sans elle, le teaser provisoire. Le bloc ne
+  // charge rien avant le clic : le budget de premier chargement est intact.
+  const teaser = retourImages.trailer ?? resolveTrailerPlayer(TEASER_PROVISOIRE);
 
   return (
     <>
       <Frise />
-      {/* Hero plein écran (modèle page course UTMB) : photo sous voile,
-          en-tête du site posé dessus (body:has(.aa-hero--plein), sans JS),
-          titre centré, bandeau date, badge des épreuves en bas à gauche. */}
+      {/* Hero plein écran (story 9.2) : photo de la ligne de départ 2026
+          conservée (LCP), en-tête du site posé dessus (body:has(.aa-hero--plein),
+          sans JS), titre condensé à très grande échelle à gauche, rail de
+          chiffres clés cloisonné à droite (sous le titre en mobile). Le bandeau
+          de date et le badge des épreuves se fondent dans le rail. Les chiffres
+          du rail sont les seuls officiels : date, épreuves, départ, cadre —
+          D+ et tracés 2027 attendent la confirmation du comité (page /parcours).
+          Revue visuelle du 04/11/2026 (B1) : la clé « Épreuves » annonçait
+          « 35 km · 12 km » alors que la section parcours, plus bas sur la même
+          page, publie les 28 km du relevé d'essai. Aucune distance n'est plus
+          figée ici : elles viennent toutes de parcours.json, avec leur mention
+          « tracé provisoire ».
+          Recette du 04/11/2026 : la date exacte n'est publique que si
+          l'organisation l'a décidé (réglage d'administration). Tant que non, la
+          vitrine ne dit que la saison, ici comme dans l'accroche et la section
+          des épreuves — une seule source, getDateCourseVitrine. */}
       <section className="aa-hero aa-hero--plein" aria-labelledby="titre-accueil">
         <AaPhoto
           variant="couverture"
@@ -79,131 +141,203 @@ export default async function HomePage() {
             Week-end Sportif <em>Aït Aïssi</em>
           </h1>
           <Crete />
-          <p className="aa-hero__date">2ᵉ édition — 26 mars 2027</p>
+          {/* Recette du 04/11/2026 : les quatre clés formaient un tableau cloisonné
+              sans hiérarchie. La date passe en vedette (crête ocre dessous), les trois
+              autres clés suivent sur une rangée — mêmes faits, même ordre. */}
+          <dl className="aa-hero__rail">
+            <div className="aa-hero__rail-vedette">
+              <dt>Date</dt>
+              <dd>
+                <span className="aa-hero__rang">2ᵉ édition</span>
+                {premiereMajuscule(dateCourse.libelle)}
+              </dd>
+            </div>
+            <div className="aa-hero__rail-cles">
+              <div className="aa-hero__cle">
+                <dt>Épreuves</dt>
+                <dd>Deux trails</dd>
+              </div>
+              <div className="aa-hero__cle">
+                <dt>Départ</dt>
+                <dd>Stade Agni Lhoudh</dd>
+              </div>
+              <div className="aa-hero__cle">
+                <dt>Cadre</dt>
+                <dd>Forêt de Yakouren</dd>
+              </div>
+            </div>
+          </dl>
+          {/* Accroche (recette 04/11/2026) : la phrase descriptive ne disait rien
+              que le rail ne dise déjà. Elle s’appuie désormais sur la première
+              édition — sans chiffre ici, le bilan 2026 plus bas porte les chiffres
+              officiels. */}
           <p className="aa-hero__meta">
-            Trail en forêt au départ du stade Agni Lhoudh — Aït Aïssi, commune de Yakouren.
+            Une première édition qui a dépassé toutes les attentes : le village
+            mobilisé, les sentiers de Yakouren pris d’assaut, une ambiance qu’on
+            n’oublie pas. Le trail d’Aït Aïssi revient {dateCourse.phrase}.
           </p>
+          <CompteurPlaces places={places} />
           <div className="aa-hero__actions">
-            <Link className="aa-btn aa-btn--primary" href="/connexion?parcours=inscription">
-              S’inscrire
+            {/* Recette du 04/11/2026 : « Participer » plutôt que « S'inscrire » —
+                le parcours derrière (connexion puis inscription) est inchangé. */}
+            <Link className="socle-action" href="/connexion?parcours=inscription">
+              Participer
             </Link>
-            <a className="aa-btn aa-btn--on-forest" href={assistancePhoneHref(telephone)}>
+            <a
+              className="socle-action socle-action--contour"
+              href={assistancePhoneHref(telephone)}
+            >
               Appeler l’équipe
             </a>
           </div>
         </div>
-        <p className="aa-hero__badge">
-          <span className="visually-hidden">Épreuves : </span>35 km · 12 km
-        </p>
       </section>
 
-      <section className="vitrine-bande" aria-labelledby="titre-bilan-2026">
+      {/* Bilan 2026 — recette du 04/11/2026 : le teaser porte la section. Gros
+          encart vidéo pleine largeur, les quatre chiffres officiels en rangée
+          juste dessous. Rien n'est chargé avant le clic sur le poster. */}
+      {/* Recette du 04/11/2026 : plus de surtitre ni d'intertitre au-dessus de la
+          vidéo — elle ouvre la section seule. Le titre revient juste avant les
+          chiffres, qu'il introduit littéralement. */}
+      <section
+        className="vitrine-bande vitrine-bande--foret aa-bilan"
+        aria-labelledby="titre-bilan-2026"
+      >
         <div className="aa-section">
-          <p className="aa-eyebrow">Bilan 2026</p>
-          <h2 className="aa-h2" id="titre-bilan-2026">
-            Une première édition réussie
+          {teaser !== null ? (
+            <div className="aa-bilan__teaser">
+              <TrailerBloc player={teaser} auto />
+            </div>
+          ) : null}
+
+          <h2 className="aa-h2 aa-bilan__titre" id="titre-bilan-2026">
+            La première édition, c’est
           </h2>
-          <p className="aa-lead">
-            En 2026, la première édition a réuni coureurs, familles et bénévoles au village
-            d’Aït Aïssi. Voici les chiffres officiels.
-          </p>
-          <div className="aa-stats">
-            <div className="aa-stat">
-              <p className="aa-stat__value">279</p>
-              <p className="aa-stat__label">Inscrits</p>
+          <dl className="aa-bilan__rail">
+            <div className="aa-bilan__stat">
+              <dt>Inscrits</dt>
+              <dd>279</dd>
             </div>
-            <div className="aa-stat">
-              <p className="aa-stat__value">222</p>
-              <p className="aa-stat__label">Dossards distribués</p>
+            <div className="aa-bilan__stat">
+              <dt>Dossards distribués</dt>
+              <dd>222</dd>
             </div>
-            <div className="aa-stat">
-              <p className="aa-stat__value">214</p>
-              <p className="aa-stat__label">Finishers au trail</p>
-              <p className="aa-stat__note">dont 36 femmes</p>
+            <div className="aa-bilan__stat">
+              <dt>Finishers au trail</dt>
+              <dd>214</dd>
+              <dd>dont 36 femmes</dd>
             </div>
-            <div className="aa-stat">
-              <p className="aa-stat__value">116</p>
-              <p className="aa-stat__label">Enfants à la Course Kids</p>
+            <div className="aa-bilan__stat">
+              <dt>Enfants à la Course Kids</dt>
+              <dd>116</dd>
             </div>
-          </div>
-          <p className="aa-note">Chiffres officiels de l’édition 2026.</p>
+          </dl>
         </div>
       </section>
 
-      <section className="vitrine-bande" aria-labelledby="titre-epreuves-2027">
-        <div className="aa-section">
-          <p className="aa-eyebrow">Les épreuves</p>
-          <h2 className="aa-h2" id="titre-epreuves-2027">
-            Deux trails au départ du stade
-          </h2>
-          <p className="aa-lead">
-            Le 26 mars 2027, deux courses de trail partent du stade Agni Lhoudh, sur les
-            sentiers de la forêt de Yakouren.
-          </p>
-          <div className="aa-cards">
-            <article className="aa-card">
-              <span className="aa-chip aa-chip--phare">Épreuve phare</span>
-              <h3 className="aa-card__title">Trail long — 35 km</h3>
-              <p className="aa-card__text">
-                La grande course de l’édition 2027, au départ du stade Agni Lhoudh.
-              </p>
-            </article>
-            <article className="aa-card">
-              <h3 className="aa-card__title">Trail moyen — 12 km</h3>
-              <p className="aa-card__text">
-                Une distance plus courte, le même jour, sur les mêmes sentiers.
-              </p>
-            </article>
-          </div>
-          <p className="aa-liens-vitrine">
-            <Link className="aa-lien-texte" href="/parcours">
-              Parcours, horaires et consignes
-            </Link>
-            <Link className="aa-lien-texte" href="/region">
-              Hébergement et infos pratiques dans la région
-            </Link>
-          </p>
-          <div className="aa-galerie">
-            <AaPhoto
-              src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
-              srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
-              alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
-              width={640}
-              height={360}
-            />
-            <AaPhoto
-              src={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-640.webp`}
-              srcLarge={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-1280.webp`}
-              alt="Coureurs à l’arrivée, médailles au cou, édition 2026"
-              width={640}
-              height={360}
-            />
-          </div>
-        </div>
-      </section>
+      {/* Section « épreuves » et section « parcours » FUSIONNÉES (recette du
+          05/11/2026) : l'accueil montrait d'abord deux cartes d'accroche, puis,
+          plus bas, un sélecteur et une fiche. Un seul bloc désormais — on choisit
+          Longue ou Moyenne, et le détail de l'épreuve (chiffres, carte en relief,
+          profil) s'affiche juste en dessous. Reprise de la vue du POC 3D. */}
+      <SectionParcours
+        entete={{
+          id: 'titre-epreuves-2027',
+          surtitre: 'Les épreuves',
+          titre: 'Deux trails au départ du stade',
+          chapeau: `${premiereMajuscule(dateCourse.phrase)}, deux courses de trail partent du stade Agni Lhoudh, sur les sentiers de la forêt de Yakouren.`,
+        }}
+        presentations={PRESENTATIONS_EPREUVES}
+        sansLienDetail
+        pied={
+          <>
+            <p className="aa-liens-vitrine">
+              <Link className="aa-lien-texte" href="/parcours">
+                Parcours, horaires et consignes
+              </Link>
+            </p>
+            <div className="aa-galerie">
+              <article className="aa-galerie__carte">
+                <AaPhoto
+                  src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
+                  srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
+                  alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
+                  width={640}
+                  height={360}
+                />
+                <div className="aa-galerie__corps">
+                  <p className="aa-galerie__surtitre">L’ambiance</p>
+                  <h3 className="aa-galerie__titre">Une arrivée qui tourne à la fête</h3>
+                  <p className="aa-galerie__texte">
+                    Chants, bendir et applaudissements : tout le village attend
+                    les coureurs sur la ligne. Ici, on ne franchit pas l’arrivée
+                    seul.
+                  </p>
+                  <Link className="aa-lien-texte" href="/retour-en-images">
+                    Revivre l’édition 2026 en images
+                  </Link>
+                </div>
+              </article>
+              <article className="aa-galerie__carte">
+                <AaPhoto
+                  src={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-640.webp`}
+                  srcLarge={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-1280.webp`}
+                  alt="Coureurs à l’arrivée, médailles au cou, édition 2026"
+                  width={640}
+                  height={360}
+                />
+                <div className="aa-galerie__corps">
+                  <p className="aa-galerie__surtitre">La région et la nature</p>
+                  <h3 className="aa-galerie__titre">Au cœur de la forêt de Yakouren</h3>
+                  <p className="aa-galerie__texte">
+                    Chênes, crêtes et villages perchés de Kabylie : venir courir à
+                    Aït Aïssi, c’est aussi découvrir un territoire. Où dormir, comment
+                    venir, que voir autour.
+                  </p>
+                  <Link className="aa-lien-texte" href="/region">
+                    Découvrir la région et préparer son séjour
+                  </Link>
+                </div>
+              </article>
+            </div>
+          </>
+        }
+        version={getParcoursDoc()?.version ?? 0}
+        view={parcours}
+      />
 
       <section
         className="vitrine-bande"
         aria-labelledby="titre-piliers"
       >
         <div className="aa-section">
-          <p className="aa-eyebrow">Le village</p>
+          <p className="aa-eyebrow">Nos valeurs</p>
           <h2 className="aa-h2" id="titre-piliers">
-            Une course portée par son village
+            Le sport comme trait d’union
           </h2>
           <p className="aa-lead">
-            Sport, santé, citoyenneté, écologie : quatre piliers ancrent la
-            course dans la vie du village d’Aït Aïssi.
+            Né d’une idée simple, réunir tout un village et bien au-delà autour
+            du sport, le Week-end Sportif est porté par le comité de village, le
+            club sportif de jeunes et les associations d’Aït Aïssi. Une
+            conviction le guide : le sport rassemble les générations et fait
+            vivre un territoire.
           </p>
-          <div className="aa-piliers">
-            {PILIERS.map(({ Glyphe, titre, texte }) => (
-              <article className="aa-card aa-pilier" key={titre}>
-                <Glyphe />
-                <h3 className="aa-pilier__titre">{titre}</h3>
-                <p className="aa-pilier__texte">{texte}</p>
-              </article>
+          <ol className="aa-piliers">
+            {PILIERS.map(({ Glyphe, titre, accroche, texte, chiffre, legende }) => (
+              <li className="aa-piliers__item" key={titre}>
+                <article className="aa-card aa-pilier">
+                  <Glyphe />
+                  <h3 className="aa-pilier__titre">{titre}</h3>
+                  <p className="aa-pilier__accroche">{accroche}</p>
+                  <p className="aa-pilier__texte">{texte}</p>
+                  <p className="aa-pilier__fait">
+                    <span className="aa-pilier__chiffre">{chiffre}</span>
+                    <span className="aa-pilier__legende">{legende}</span>
+                  </p>
+                </article>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
@@ -223,7 +357,10 @@ export default async function HomePage() {
             Sportif Aït Aïssi vous répond au téléphone.
           </p>
           <div className="aa-section__actions">
-            <a className="aa-btn aa-btn--on-forest" href={assistancePhoneHref(telephone)}>
+            <a
+              className="socle-action socle-action--contour"
+              href={assistancePhoneHref(telephone)}
+            >
               Appeler l’équipe
             </a>
             <p className="aa-contact-numero">{telephone}</p>

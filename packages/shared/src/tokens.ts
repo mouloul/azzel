@@ -20,6 +20,24 @@ export const colorTokens = {
   'sync-attente-encre': '#FFFFFF',
   'sync-envoye': '#2E6570',
   'sync-envoye-encre': '#FFFFFF',
+  // Story 11.4 — graphe de technicité du profil altimétrique (UX-DR-36) :
+  // 4 paliers verrouillés (< 5 % roulant · 5–12 soutenu · 12–20 raide ·
+  // ≥ 20 très raide). Teintes différenciées AUSSI en clarté (niveaux de gris,
+  // daltonisme) : clair du plus clair (roulant) au plus sombre (très raide),
+  // sombre en sens inverse. Contrastes AA non textuels 3:1 vs surface testés
+  // dans apps/web/src/app/contrastes.test.ts (clair ET sombre).
+  // Story 11.3 — carte 3D du parcours. Le tracé doit se détacher d'un fond
+  // topographique déjà saturé de courbes de niveau ocre et de vert : d'où une
+  // trace très soutenue, doublée d'un halo qui l'isole du fond. Le ciel n'est
+  // pas décoratif, il donne la profondeur à la vue inclinée.
+  'carte-trace': '#A3400C',
+  'carte-halo': '#FFFFFF',
+  'carte-ciel-haut': '#86B4E0',
+  'carte-ciel-horizon': '#CFE0EF',
+  'pente-roulant': '#6E8F6B',
+  'pente-soutenu': '#47825F',
+  'pente-raide': '#9E5418',
+  'pente-tres-raide': '#7A2E1B',
   'bg-sombre': '#101A14',
   'surface-sombre': '#1B281F',
   'texte-sombre': '#E8F0E9',
@@ -36,6 +54,20 @@ export const colorTokens = {
   'sync-attente-encre-sombre': '#291D04',
   'sync-envoye-sombre': '#74C7D6',
   'sync-envoye-encre-sombre': '#06262C',
+  // Story 11.3 — pendants sombres de la carte. Le fond topographique, lui,
+  // reste clair (les tuiles d'OpenTopoMap ne se déclinent pas) : le halo
+  // reste donc sombre en thème sombre, pour continuer à détacher la trace
+  // d'un fond qui, lui, n'a pas changé. Le ciel s'assombrit, lui, puisqu'il
+  // est rendu par le moteur et non par les tuiles.
+  'carte-trace-sombre': '#FF8A4C',
+  'carte-halo-sombre': '#10241A',
+  'carte-ciel-haut-sombre': '#16314A',
+  'carte-ciel-horizon-sombre': '#2F4F66',
+  // Story 11.4 — pendants sombres des paliers de pente (même mécanique az-*).
+  'pente-roulant-sombre': '#4E7A58',
+  'pente-soutenu-sombre': '#6FA97E',
+  'pente-raide-sombre': '#E39A5B',
+  'pente-tres-raide-sombre': '#FFB4A0',
 } as const;
 
 export type ColorRole = keyof typeof colorTokens;
@@ -127,6 +159,12 @@ export const siteColorTokens = {
   forest: '#183A2B',
   'forest-600': '#24503C',
   'forest-400': '#2F6A4F',
+  // Story 9.1 — arrêt sombre du dégradé du poster trailer (domain.ts
+  // POSTER_DEGRADE_COULEURS) : remonté en token pour sortir les hex du CSS.
+  'forest-800': '#122C20',
+  // Vert altitude (palette Vert Djurdjura) — pastille de lecture du trailer.
+  // Même valeur qu’action-sombre côté operations, sémantique charte vitrine.
+  'vert-altitude': '#8FD4A8',
   ochre: '#C8742B',
   'ochre-300': '#D98A45',
   sage: '#8FA58A',

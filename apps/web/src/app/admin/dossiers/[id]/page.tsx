@@ -7,10 +7,8 @@ import { requireRolePage } from '@/modules/iam/session';
 
 import {
   AGE_CATEGORY_LABELS,
-  COUREUR_STATUS_LABELS,
-  coureurStatusChipClass,
   type AgeCategory,
-  type CoureurStatus,
+  statutAffiche,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
 import { formatKiloBytes } from '@/modules/inscriptions/proof-format';
@@ -74,9 +72,18 @@ export default async function AdminDossierDetailPage({
         <p className="meta">{detail.email}</p>
         <p>
           Statut :{' '}
-          <span className={coureurStatusChipClass(coureur.status)}>
-            {COUREUR_STATUS_LABELS[coureur.status as CoureurStatus] ?? coureur.status}
-          </span>
+          {/* I9 (revue épopée 10) — même pastille socle que la liste : un seul
+              langage visuel par statut (point + libellé, jamais la couleur
+              seule) ; l'ancien vocabulaire aa-chip est retiré. */}
+          {(() => {
+            const statut = statutAffiche(coureur.status, detail.preuveActive !== null);
+            return (
+              <span className={`socle-pastille ${statut.pastille}`}>
+                <span className="socle-pastille-point" aria-hidden="true" />
+                {statut.libelle}
+              </span>
+            );
+          })()}
         </p>
         {coureur.dossard !== null ? (
           <p className="meta">
@@ -114,6 +121,14 @@ export default async function AdminDossierDetailPage({
               <p>
                 Déposée le {formatLocalDateTime(detail.preuveActive.depositedAt)} ·{' '}
                 {formatKiloBytes(detail.preuveActive.sizeBytes)} · {detail.preuveActive.mime}
+              </p>
+              <p>
+                N° de transaction :{' '}
+                {detail.preuveActive.numeroTransaction !== null ? (
+                  <strong>{detail.preuveActive.numeroTransaction}</strong>
+                ) : (
+                  'non renseigné (preuve antérieure à la saisie)'
+                )}
               </p>
               <div className="auth-alt">
                 <a

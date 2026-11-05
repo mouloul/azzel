@@ -12,6 +12,7 @@ import {
   NoEditionError,
   PreuveIdenticalRefusedError,
   PreuveStorageError,
+  NumeroTransactionInvalideError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
@@ -267,6 +268,7 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
       sha256: sha256Hex(jpegBytes(2048)),
       status: 'active',
       createdAt: new Date('2026-10-21T10:30:00.000Z'),
+      numeroTransaction: null,
       ...overrides,
     };
   }
@@ -284,6 +286,13 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
       nom: 'Édition 2027',
       dateCourse: '2027-03-26',
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
+      dateCoursePublique: false,
       ...edition,
     };
     const store = {
@@ -349,6 +358,28 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
     expect(input.file.storageKey).toBe(key);
     expect(summary.mime).toBe('image/jpeg');
     expect(summary.format).toBe('JPEG');
+  });
+
+  it('numéro de transaction : normalisé puis transmis au store', async () => {
+    const store = buildStore();
+    await uploadPreuve(session, jpegBytes(1024), {
+      store,
+      proofStore,
+      numeroTransaction: ' 0125 9424 6237 ',
+    });
+    const input = (store.savePreuve.mock.calls[0] as unknown as [
+      { numeroTransaction: string | null },
+    ])[0];
+    expect(input.numeroTransaction).toBe('012594246237');
+  });
+
+  it('numéro de transaction invalide : refusé avant tout stockage', async () => {
+    const store = buildStore();
+    await expect(
+      uploadPreuve(session, jpegBytes(1024), { store, proofStore, numeroTransaction: '12' }),
+    ).rejects.toBeInstanceOf(NumeroTransactionInvalideError);
+    expect(store.savePreuve).not.toHaveBeenCalled();
+    expect(readdirSync(dir)).toHaveLength(0);
   });
 
   it('nom d’origine jamais utilisé : clé UUID sur disque', async () => {
@@ -476,5 +507,41 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
     expect(sans.coureurStatus).toBeNull();
     expect(sans.refusalReason).toBeNull();
     expect(sans.preuve).toBeNull();
+  });
+
+  // Story 9.4 — le fil d'étapes de /preuve marque l'étape Documents depuis
+  // l'enregistrement coureur déjà lu : vrai seulement avec les DEUX
+  // acceptations horodatées (décharge ET règlement, story 1.4).
+  it('documentsAcceptes : vrai seulement avec les deux acceptations, faux sinon (fil 9.4)', async () => {
+    const storeComplet = buildStore();
+    storeComplet.findCoureurByAccount.mockResolvedValue({
+      id: 'coureur-1',
+      status: 'en constitution',
+      refusalReason: null,
+      dechargeAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+      dechargeVersion: 'v1',
+      reglementAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+      reglementVersion: 'v1',
+    });
+    const complet = await getPreuveState(session, { store: storeComplet, proofStore });
+    expect(complet.documentsAcceptes).toBe(true);
+
+    const storePartiel = buildStore();
+    storePartiel.findCoureurByAccount.mockResolvedValue({
+      id: 'coureur-1',
+      status: 'en constitution',
+      refusalReason: null,
+      dechargeAcceptedAt: new Date('2026-10-21T09:30:00.000Z'),
+      dechargeVersion: 'v1',
+      reglementAcceptedAt: null,
+      reglementVersion: null,
+    });
+    const partiel = await getPreuveState(session, { store: storePartiel, proofStore });
+    expect(partiel.documentsAcceptes).toBe(false);
+
+    const storeSansCoureur = buildStore();
+    storeSansCoureur.findCoureurByAccount.mockResolvedValue(null);
+    const sansCoureur = await getPreuveState(session, { store: storeSansCoureur, proofStore });
+    expect(sansCoureur.documentsAcceptes).toBe(false);
   });
 });

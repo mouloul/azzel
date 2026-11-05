@@ -2,6 +2,7 @@ import { encoderPayloadEdossard } from '@azzel/shared';
 import QRCode from 'qrcode';
 
 import { AssistanceButton } from '@/components/assistance-button';
+import { etapesEdossard, FilEtapes } from '@/components/fil-etapes';
 import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireRolePage } from '@/modules/iam/session';
@@ -9,6 +10,7 @@ import { NoEditionError } from '@/modules/inscriptions/errors';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { obtenirEdossard, type EdossardState } from '@/modules/inscriptions/service';
 
+import '../../dossier.css';
 import './e-dossard.css';
 
 // Story 4.1 — e-dossard QR hors-ligne (NFR-6) : la carte à présenter au
@@ -33,7 +35,7 @@ export default async function EdossardPage() {
   const guard = await requireRolePage('coureur');
   if (guard.status === 'db-unavailable') {
     return (
-      <section className="auth">
+      <section className="auth auth-wide dossier-section">
         <article className="card">
           <p className="surtitre">E-dossard</p>
           <h1>Connexion indisponible</h1>
@@ -74,7 +76,7 @@ export default async function EdossardPage() {
 
   if (sansEdition) {
     return (
-      <section className="auth">
+      <section className="auth auth-wide dossier-section">
         <article className="card">
           <p className="surtitre">E-dossard</p>
           <h1>Aucune édition disponible</h1>
@@ -94,7 +96,7 @@ export default async function EdossardPage() {
 
   if (failure !== null) {
     return (
-      <section className="auth">
+      <section className="auth auth-wide dossier-section">
         <article className="card">
           <p className="surtitre">E-dossard</p>
           <h1>E-dossard indisponible</h1>
@@ -118,7 +120,7 @@ export default async function EdossardPage() {
   if (edossard === null) {
     // Dossier non validé : message d'attente vers la checklist, AUCUN QR.
     return (
-      <section className="auth">
+      <section className="auth auth-wide dossier-section">
         <article className="card">
           <p className="surtitre">E-dossard</p>
           <h1>Ton e-dossard arrive</h1>
@@ -145,53 +147,68 @@ export default async function EdossardPage() {
   // coureur non numéroté voit quand même son QR — le guichet résoudra le
   // dossard dès l'attribution (story 3.4).
   return (
-    <section className="auth edossard">
+    <section className="auth auth-wide dossier-section edossard">
       {/* Marker lu par le service worker (sw-coureur.js) : SEULE la page
           « QR prêt » a le droit de survivre hors-ligne — la page d'attente
           (dossier non validé) n'est jamais cachée ni servie au guichet. */}
-      <article className="card edossard-carte-sombre" data-edossard="pret">
-        <p className="surtitre edossard-surtitre">E-dossard — {edossard.editionNom}</p>
-        <p className="edossard-identite">
-          {edossard.prenom} {edossard.nom}
+      <article className="card" data-edossard="pret">
+        <p className="surtitre">E-dossard — {edossard.editionNom}</p>
+        <h1>Ton e-dossard est prêt</h1>
+        <p className="lead">
+          Présente ce QR code au guichet du retrait des dossards. Il reste lisible sans
+          réseau.
         </p>
-        <p className="edossard-epreuve">{edossard.epreuveNom}</p>
-        {edossard.dossard !== null ? (
-          <p className="edossard-numero">{edossard.dossard}</p>
-        ) : (
-          <p className="edossard-numero edossard-numero--attente">Numéro à venir</p>
-        )}
-        {edossard.dossard === null && (
-          <p className="edossard-numero-note">
-            Ton numéro est attribué par l’organisation avant la course — ton QR
-            fonctionne déjà.
+        <FilEtapes etapes={etapesEdossard()} />
+
+        <div className="edossard-grille">
+          <section className="edossard-panneau" aria-label="Ton dossard">
+            <p className="edossard-identite">
+              {edossard.prenom} {edossard.nom}
+            </p>
+            <p className="edossard-epreuve">{edossard.epreuveNom}</p>
+            {edossard.dossard !== null ? (
+              <p className="edossard-numero">{edossard.dossard}</p>
+            ) : (
+              <p className="edossard-numero edossard-numero--attente">Numéro à venir</p>
+            )}
+            {edossard.dossard === null && (
+              <p className="edossard-numero-note">
+                Ton numéro est attribué par l’organisation avant la course — ton QR
+                fonctionne déjà.
+              </p>
+            )}
+            <p className="edossard-badge" role="status">
+              <span aria-hidden="true" className="edossard-badge-point" />
+              HORS-LIGNE PRÊT
+            </p>
+          </section>
+
+          <section className="edossard-panneau edossard-carte-qr">
+            <div
+              className="edossard-qr"
+              role="img"
+              aria-label={`QR e-dossard de ${edossard.prenom} ${edossard.nom}`}
+              dangerouslySetInnerHTML={{ __html: qrSvg ?? '' }}
+            />
+            <p className="edossard-qr-legende">
+              Présente ce QR code au guichet du retrait des dossards.
+            </p>
+          </section>
+        </div>
+
+        <section className="edossard-panneau">
+          <h2 className="edossard-conseil-titre">Garde-le dans ta poche</h2>
+          <p className="edossard-conseil">
+            Ajoute cette page à l’écran d’accueil de ton téléphone (menu
+            Partager → « Sur l’écran d’accueil ») : ton e-dossard reste lisible
+            sans réseau, même des semaines plus tard.
           </p>
-        )}
-        <p className="edossard-badge" role="status">
-          <span aria-hidden="true" className="edossard-badge-point" />
-          HORS-LIGNE PRÊT
-        </p>
-      </article>
+        </section>
 
-      <article className="card edossard-carte-qr">
-        <div
-          className="edossard-qr"
-          role="img"
-          aria-label={`QR e-dossard de ${edossard.prenom} ${edossard.nom}`}
-          dangerouslySetInnerHTML={{ __html: qrSvg ?? '' }}
-        />
-        <p className="edossard-qr-legende">
-          Présente ce QR code au guichet du retrait des dossards.
-        </p>
-      </article>
-
-      <article className="card">
-        <h2 className="edossard-conseil-titre">Garde-le dans ta poche</h2>
-        <p className="edossard-conseil">
-          Ajoute cette page à l’écran d’accueil de ton téléphone (menu
-          Partager → « Sur l’écran d’accueil ») : ton e-dossard reste lisible
-          sans réseau, même des semaines plus tard.
-        </p>
         <div className="auth-alt">
+          <a className="btn-contour" href="/espace-coureur">
+            Retour à mon espace
+          </a>
           <LogoutButton />
           <AssistanceButton phone={assistancePhone} />
         </div>

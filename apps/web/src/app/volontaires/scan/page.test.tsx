@@ -145,6 +145,8 @@ describe('page /volontaires/scan — garde serveur et mission', () => {
     expect(html).toContain('Scan des e-dossards');
     // Écran initial : lecture de l'annuaire local (IndexedDB), pas de fetch.
     expect(html).toContain('Lecture de l’annuaire enregistré');
+    // Story 10.1 — écrans d'état sur la carte du socle.
+    expect(html).toContain('socle-carte scan-cadre');
   });
 
   it('état missions en échec : redirection SILENCIEUSE (l’indisponibilité n’est pas l’absence, pattern 4.3)', async () => {
@@ -231,6 +233,8 @@ describe('écran caméra refusée (UX-DR-18)', () => {
     // Bouton assistance PC — numéro formaté tel:.
     expect(html).toContain('Appeler le PC');
     expect(html).toContain('href="tel:+213555010200"');
+    // Story 10.1 — actions en pilule du socle sur les écrans d'état.
+    expect(html).toContain('socle-action');
   });
 
   it('variante caméra indisponible : titre dédié + assistance', async () => {
@@ -302,14 +306,71 @@ describe('scan.css — garde-fous UX-DR-6/7, SCOPÉS au sélecteur concerné', (
     expect(regleCss('.scan-voile')).toMatch(/rgba\([^)]*,\s*0\.9[6-9]\)/);
   });
 
+  it('cible d’appel PC du voyant inconnu ≥ 44 px DANS la règle .scan-voyant-action', () => {
+    expect(regleCss('.scan-voyant-action')).toMatch(/min-height: (4[4-9]|[5-9][0-9])px/);
+  });
+
   it('stop ≥ 64 dp DANS la règle .scan-stop', () => {
     expect(regleCss('.scan-stop')).toContain('min-height: 64px');
+  });
+});
+
+describe('scan-client.tsx — voyant annoncé au lecteur d’écran (UX-DR-7, story 10.1)', () => {
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'scan-client.tsx'),
+    'utf8',
+  );
+
+  it('les DEUX voyants (succès/doublon ET inconnu) portent role="status" + aria-live="assertive" et la classe scan-voyant', () => {
+    // Chaque voyant est un conteneur role="status" aria-live="assertive" dont
+    // la className commence par scan-voyant (l'écran actif ne se rend qu'après
+    // le geste caméra : le garde lit le source, même principe que scan.css).
+    const voyantsAssertifs = source.match(
+      /role="status"\s+aria-live="assertive"\s+className=\{`scan-voyant/g,
+    );
+    expect(voyantsAssertifs).toHaveLength(2);
+    // Aucun autre aria-live assertif caché ailleurs dans l'écran actif.
+    expect(source.split('aria-live="assertive"').length - 1).toBe(2);
   });
 });
 
 describe('clignotement borné dans le temps', () => {
   it('le voyant clignote 6 s puis reste statique (constante du client)', () => {
     expect(DUREE_CLIGNOTEMENT_MS).toBe(6000);
+  });
+});
+
+describe('scan-client.tsx — émission immédiate, append arrière-plan (NFR-1, story 10.4)', () => {
+  const sourceClient = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'scan-client.tsx'),
+    'utf8',
+  );
+
+  // I7 (revue épopée 10) — une garde PAR SITE D'APPEL : la tranche part du
+  // site d'usage `traiterScan…(` (l'import, sans parenthèse, ne peut plus
+  // faire démarrer la tranche sur le mauvais mode — l'ancienne garde
+  // `indexOf(mode)` tombait sur la ligne d'import et validait deux fois le
+  // bloc retrait, jamais spécifiquement le site passage).
+  function gardeEmissionAvantAppend(source: string, site: 'traiterScanRetrait(' | 'traiterScanPassage('): void {
+    const debut = source.indexOf(site);
+    expect(debut, `site d’appel ${site} introuvable dans scan-client.tsx`).toBeGreaterThan(-1);
+    const bloc = source.slice(debut);
+    const emission = bloc.indexOf('emettreRetourAudio');
+    const append = bloc.indexOf('termine.then');
+    expect(emission, `${site} : l’émission (voyant + bip) est introuvable après le site d’appel`).toBeGreaterThan(-1);
+    expect(append, `${site} : l’append outbox (termine.then) est introuvable après le site d’appel`).toBeGreaterThan(-1);
+    expect(
+      append,
+      `${site} : l’émission doit partir AVANT l’attente de l’append outbox (bip < 1 s)`,
+    ).toBeGreaterThan(emission);
+  }
+
+  it('mode RETRAIT : voyant + bip partent AVANT l’attente de l’append outbox', () => {
+    gardeEmissionAvantAppend(sourceClient, 'traiterScanRetrait(');
+  });
+
+  it('mode PASSAGE : voyant + bip partent AVANT l’attente de l’append outbox', () => {
+    gardeEmissionAvantAppend(sourceClient, 'traiterScanPassage(');
   });
 });
 

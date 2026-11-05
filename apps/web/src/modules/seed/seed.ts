@@ -440,6 +440,7 @@ async function peupler(deps: PeuplementDeps): Promise<void> {
           contactUrgenceTelephone: urgence.telephone,
           dateNaissance: coureur.dateNaissance,
           tailleTshirt: coureur.tailleTshirt,
+          genre: coureur.genre,
         },
         sansOutbox,
       );
@@ -500,8 +501,10 @@ async function peupler(deps: PeuplementDeps): Promise<void> {
     }
   }
 
+  // Le numéro naît à la validation ; le lot ne rattrape que d'éventuels validés
+  // restés sans numéro (données antérieures à cette règle).
   const attribution = await attribuerDossards(organisateur, sansOutbox);
-  rapport.dossardsAttribues = attribution.attribues;
+  rapport.dossardsAttribues = rapport.dossiersValides + attribution.attribues;
 
   // ———————————————————— heures de départ échelonnées ————————————————————
 

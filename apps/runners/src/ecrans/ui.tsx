@@ -50,12 +50,20 @@ export function Bouton({
   theme: AppTheme;
   label: string;
   onPress: () => void;
-  variante?: 'principal' | 'contour';
+  /** 10.2 — « destructeur » : action irréversible (déconnexion). I2 (revue
+   * épopée 10) — distinct du principal PAR LA FORME, pas seulement par la
+   * couleur : contour ÉPAIS (3 px) danger sur fond TRANSPARENT + pictogramme
+   * ⚠ (aria-hidden) devant le libellé — le principal reste une pastille
+   * PLEINE sans bordure. À l'état pressé, le destructeur s'inverse en
+   * pastille pleine danger/encre-danger (retour visuel fort, contrastes AA
+   * dans contrastes-theme.test.ts). */
+  variante?: 'principal' | 'contour' | 'destructeur';
   /** Requête en cours : onPress ignoré, opacité réduite (anti double-tap). */
   disabled?: boolean;
   accessibilityLabel?: string;
 }) {
   const principal = variante === 'principal';
+  const destructeur = variante === 'destructeur';
   return (
     <Pressable
       disabled={disabled}
@@ -71,25 +79,46 @@ export function Bouton({
           paddingHorizontal: theme.spacing[5],
           paddingVertical: theme.spacing[3],
           borderRadius: theme.radius.full,
-          backgroundColor: principal
+          backgroundColor: destructeur
             ? pressed
-              ? theme.colors.ink
-              : theme.colors.action
-            : 'transparent',
-          borderWidth: principal ? 0 : 2,
-          borderColor: theme.colors.action,
+              ? theme.colors.danger
+              : 'transparent'
+            : principal
+              ? pressed
+                ? theme.colors.ink
+                : theme.colors.action
+              : 'transparent',
+          borderWidth: destructeur ? 3 : principal ? 0 : 2,
+          borderColor: destructeur ? theme.colors.danger : theme.colors.action,
         },
         disabled ? { opacity: 0.5 } : null,
       ]}
     >
-      <Text
-        style={[
-          theme.fonts.surtitre,
-          { color: principal ? theme.colors.actionInk : theme.colors.action },
-        ]}
-      >
-        {label}
-      </Text>
+      {({ pressed }) => (
+        <Text
+          style={[
+            theme.fonts.surtitre,
+            {
+              color: destructeur
+                ? pressed
+                  ? theme.colors.dangerInk
+                  : theme.colors.danger
+                : principal
+                  ? theme.colors.actionInk
+                  : theme.colors.action,
+            },
+          ]}
+        >
+          {destructeur ? (
+            <>
+              <Text aria-hidden={true}>{'⚠ '}</Text>
+              {label}
+            </>
+          ) : (
+            label
+          )}
+        </Text>
+      )}
     </Pressable>
   );
 }

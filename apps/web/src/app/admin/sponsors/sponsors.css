@@ -1,8 +1,11 @@
 /* Admin sponsors (story 2.3) — liste, actions, badge signature.
-   Fichier propre à la page /admin/sponsors : hors du chunk CSS partagé
-   avec la vitrine (budget premier chargement < 300 Ko). */
+    Fichier propre à la page /admin/sponsors : hors du chunk CSS partagé
+    avec la vitrine (budget premier chargement < 300 Ko).
+    Story 10.3 — l'étiquette « Signature » est une chip du socle
+    (.socle-chip, chargé par le layout racine) ; cette feuille ne porte
+    plus que l'espacement local (le parent n'a pas de gap). */
 .sponsors-liste{display:grid;gap:var(--az-space-3)}
 .sponsor-ligne{display:grid;gap:var(--az-space-2);padding:var(--az-space-3) 0;border-bottom:1px solid var(--az-filet)}
 .sponsor-ligne form{display:grid;gap:var(--az-space-3)}
 .sponsors-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
-.chip-meta{display:inline-block;margin-left:var(--az-space-2);font-family:var(--az-font-surtitre);font-size:var(--az-font-size-meta);font-weight:var(--az-font-weight-meta);letter-spacing:var(--az-letter-spacing-eyebrow);text-transform:uppercase;color:var(--az-texte-2);border:1px solid var(--az-filet);border-radius:var(--az-radius-sm);padding:2px 8px}
+.sponsor-ligne .socle-chip{margin-left:var(--az-space-2)}

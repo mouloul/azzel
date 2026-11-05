@@ -448,7 +448,7 @@ describe.skipIf(testUrls === null)(
       // 404 isolé : seule « longue » servie, « moyenne » absente — jamais d'erreur.
       expect(traces.map((trace) => trace.epreuveSlug)).toEqual(['longue']);
       const longue = traces[0]!;
-      expect(longue.epreuveNom).toBe('La Longue — 35 km');
+      expect(longue.epreuveNom).toBe('La Longue');
       expect(longue.points).toHaveLength(500);
       expect(longue.points[0]!.lat).toBeCloseTo(36.5, 5);
       expect(longue.points[499]!.lat).toBeCloseTo(36.5 + 1_199 / 10_000, 3);
