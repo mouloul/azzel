@@ -1,6 +1,6 @@
 import type { SessionRecord } from '@/modules/iam/store';
 
-import { isRegistrationOpen } from './domain';
+import { dateCourseAffichee, isRegistrationOpen } from './domain';
 import {
   NoEditionError,
   PreuveNotFoundError,
@@ -62,11 +62,14 @@ function toPreuveSummary(record: PreuveRecord): PreuveSummary {
 }
 
 function toEditionSummary(edition: EditionRecord): EditionSummary {
+  const dateAffichee = dateCourseAffichee(edition.dateCourse, edition.dateCoursePublique);
   return {
     id: edition.id,
     slug: edition.slug,
     nom: edition.nom,
     dateCourse: edition.dateCourse,
+    dateCourseLibelle: dateAffichee.libelle,
+    dateCoursePhrase: dateAffichee.phrase,
     registrationClosesAt: edition.registrationClosesAt.toISOString(),
     registrationOpen: isRegistrationOpen(edition.registrationClosesAt),
   };

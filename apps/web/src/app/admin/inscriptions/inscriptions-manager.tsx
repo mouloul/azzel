@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import {
   LIBELLES_REGLAGES,
+  REGLAGES_OUI_NON,
   type ChampReglage,
 } from '@/modules/inscriptions/domain';
 import type { ReglagesAdminState } from '@/modules/inscriptions/service';
@@ -15,6 +16,7 @@ const CHAMPS: readonly ChampReglage[] = [
   'prixDossardDa',
   'prixHebergementDa',
   'delaiPreuveJours',
+  'dateCoursePublique',
 ];
 
 /** Aides de saisie : ce que chaque réglage change pour un visiteur. */
@@ -28,7 +30,17 @@ const AIDES: Record<ChampReglage, string> = {
   prixHebergementDa: 'S’ajoute au dossard, en un seul versement.',
   delaiPreuveJours:
     'Nombre de jours pleins après l’inscription. Ne s’applique qu’aux inscriptions à venir : les échéances déjà posées ne bougent pas.',
+  dateCoursePublique:
+    'Décoché, le public ne lit que la saison (« printemps 2027 ») sur la vitrine et dans le parcours coureur. La date réelle, elle, reste enregistrée telle quelle : l’âge des coureurs et le chronométrage en dépendent.',
 };
+
+/** Valeur d'un réglage telle qu'on la lit dans l'historique. */
+function formaterValeur(champ: string, valeur: number): string {
+  if (REGLAGES_OUI_NON.includes(champ)) {
+    return valeur === 1 ? 'oui' : 'non';
+  }
+  return String(valeur);
+}
 
 function formaterInstant(iso: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
@@ -173,20 +185,40 @@ export function InscriptionsManager({ etat }: { etat: ReglagesAdminState }) {
               <label className="socle-etiquette" htmlFor={`reglage-${champ}`}>
                 {LIBELLES_REGLAGES[champ]}
               </label>
-              <input
-                id={`reglage-${champ}`}
-                name={champ}
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={1}
-                value={valeurs[champ]}
-                onChange={(event) =>
-                  setValeurs((anciennes) => ({ ...anciennes, [champ]: event.target.value }))
-                }
-                aria-invalid={erreurs[champ] !== undefined || undefined}
-                aria-describedby={`aide-${champ}`}
-              />
+              {REGLAGES_OUI_NON.includes(champ) ? (
+                <label className="option option--case">
+                  <input
+                    id={`reglage-${champ}`}
+                    name={champ}
+                    type="checkbox"
+                    checked={valeurs[champ] === '1'}
+                    onChange={(event) =>
+                      setValeurs((anciennes) => ({
+                        ...anciennes,
+                        [champ]: event.target.checked ? '1' : '0',
+                      }))
+                    }
+                    aria-invalid={erreurs[champ] !== undefined || undefined}
+                    aria-describedby={`aide-${champ}`}
+                  />
+                  <span className="option-label">Afficher la date exacte</span>
+                </label>
+              ) : (
+                <input
+                  id={`reglage-${champ}`}
+                  name={champ}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={valeurs[champ]}
+                  onChange={(event) =>
+                    setValeurs((anciennes) => ({ ...anciennes, [champ]: event.target.value }))
+                  }
+                  aria-invalid={erreurs[champ] !== undefined || undefined}
+                  aria-describedby={`aide-${champ}`}
+                />
+              )}
               <p id={`aide-${champ}`} className="socle-champ-aide">
                 {AIDES[champ]}
               </p>
@@ -254,7 +286,7 @@ export function InscriptionsManager({ etat }: { etat: ReglagesAdminState }) {
           <ul className="admin-journal">
             {courant.journal.map((ligne) => (
               <li key={`${ligne.modifieLe}-${ligne.champ}`}>
-                {`${ligne.libelle} : ${ligne.ancienneValeur} → ${ligne.nouvelleValeur}`}
+                {`${ligne.libelle} : ${formaterValeur(ligne.champ, ligne.ancienneValeur)} → ${formaterValeur(ligne.champ, ligne.nouvelleValeur)}`}
                 <span className="meta">
                   {` ${formaterInstant(ligne.modifieLe)}${ligne.modifiePar !== null ? ` · ${ligne.modifiePar}` : ''}`}
                 </span>

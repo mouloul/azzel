@@ -8,7 +8,16 @@ export interface EditionSummary {
   id: string;
   slug: string;
   nom: string;
+  /**
+   * Date exacte, AMORCE de calcul uniquement (âge à la course). Ne pas
+   * l'afficher : ce que le public lit est `dateCourseLibelle`, que
+   * l'organisation décide de préciser ou non.
+   */
   dateCourse: string;
+  /** « printemps 2027 » ou « 26 mars 2027 », selon le réglage d'administration. */
+  dateCourseLibelle: string;
+  /** Même chose, prête pour une phrase : « au printemps 2027 », « le 26 mars 2027 ». */
+  dateCoursePhrase: string;
   registrationClosesAt: string;
   registrationOpen: boolean;
 }
@@ -38,7 +47,9 @@ export interface ChecklistRecap {
   tshirt: string;
   contactUrgenceNom: string;
   contactUrgenceTelephone: string;
+  /** Voir EditionSummary.dateCourse : amorce de calcul, jamais affichée. */
   dateCourse: string;
+  dateCourseLibelle: string;
 }
 
 export interface ChecklistState {

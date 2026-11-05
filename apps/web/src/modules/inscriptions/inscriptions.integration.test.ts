@@ -492,7 +492,7 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
 
   describe('réglages d’édition et liste d’attente (administration)', () => {
     afterEach(async () => {
-      await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200, capacite_hebergement = 200, prix_dossard_da = 2000, prix_hebergement_da = 1500, delai_preuve_jours = 2`;
+      await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200, capacite_hebergement = 200, prix_dossard_da = 2000, prix_hebergement_da = 1500, delai_preuve_jours = 2, date_course_publique = 0`;
       await sql`DELETE FROM edition_reglage_journal`;
       await sql`DELETE FROM coureur`;
     });
@@ -524,6 +524,40 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
       expect(journal).toEqual([
         { champ: 'capacite', ancienne_valeur: 600, nouvelle_valeur: 1000 },
       ]);
+    });
+
+    it('la date de course est cachée par défaut : une édition neuve ne divulgue rien', async () => {
+      const rows = await sql<{ date_course_publique: number }[]>`
+        SELECT date_course_publique FROM edition LIMIT 1
+      `;
+      expect(rows[0]?.date_course_publique).toBe(0);
+    });
+
+    it('publier la date : appliqué, journalisé, et la contrainte refuse tout autre entier', async () => {
+      const session = await createSession();
+      const edition = await store.updateReglagesEdition({
+        organisationId: await organisationId(),
+        editionId: await editionId(),
+        accountId: session.accountId,
+        reglages: { dateCoursePublique: 1 },
+      });
+      expect(edition.dateCoursePublique).toBe(true);
+
+      const journal = await sql<{ champ: string; ancienne_valeur: number; nouvelle_valeur: number }[]>`
+        SELECT champ, ancienne_valeur, nouvelle_valeur FROM edition_reglage_journal
+      `;
+      expect(journal).toEqual([
+        { champ: 'dateCoursePublique', ancienne_valeur: 0, nouvelle_valeur: 1 },
+      ]);
+
+      await expect(sql`UPDATE edition SET date_course_publique = 2`).rejects.toThrow();
+    });
+
+    it('la lecture publique de l’accueil suit le réglage', async () => {
+      const lecture = await store.readDefaultOrgDateCourse();
+      expect(lecture?.publique).toBe(false);
+      await sql`UPDATE edition SET date_course_publique = 1`;
+      expect((await store.readDefaultOrgDateCourse())?.publique).toBe(true);
     });
 
     it('une ligne PAR CHAMP modifié : un champ inchangé ne laisse aucune trace', async () => {
@@ -615,8 +649,11 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     const epreuves = await sql`
       SELECT slug, distance_km::float8 AS distance_km FROM epreuve ORDER BY distance_km DESC
     `;
+    // Migration 0040 : la longue s'aligne sur le relevé GPX (28,0 km) et les
+    // noms ne portent plus la distance. La moyenne garde sa distance annoncée
+    // tant que son tracé court n'est pas défini.
     expect(epreuves).toEqual([
-      { slug: 'longue', distance_km: 35 },
+      { slug: 'longue', distance_km: 28 },
       { slug: 'moyenne', distance_km: 12 },
     ]);
 

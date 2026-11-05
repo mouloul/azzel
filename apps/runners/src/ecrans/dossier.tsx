@@ -106,7 +106,11 @@ export function EcranDossier({
               {dossier.recap.epreuve} · {dossier.recap.distanceKm} km · {dossier.recap.categorieAge}
             </Text>
             <Text style={[theme.fonts.body, { color: theme.colors.ink2 }]}>
-              Course le {dossier.recap.dateCourse}
+              {/* La date exacte n'est pas publique : on lit le libellé que
+                  l'organisation a choisi. Un dossier mis en cache avant ce champ
+                  ne l'a pas — on n'affiche alors RIEN de la date plutôt que la
+                  date brute. */}
+              Course : {dossier.recap.dateCourseLibelle ?? 'prochainement'}
             </Text>
           </View>
         ) : null}

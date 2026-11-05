@@ -17,6 +17,9 @@ import {
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_VALIDE,
   CHAMPS_REGLAGES,
+  dateCourseAffichee,
+  type DateCourseAffichee,
+  REGLAGES_OUI_NON,
   LIBELLES_REGLAGES,
   canDepositPreuve,
   type ChampReglage,
@@ -161,11 +164,14 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
 }
 
 function toEditionSummary(edition: EditionRecord): EditionSummary {
+  const dateAffichee = dateCourseAffichee(edition.dateCourse, edition.dateCoursePublique);
   return {
     id: edition.id,
     slug: edition.slug,
     nom: edition.nom,
     dateCourse: edition.dateCourse,
+    dateCourseLibelle: dateAffichee.libelle,
+    dateCoursePhrase: dateAffichee.phrase,
     registrationClosesAt: edition.registrationClosesAt.toISOString(),
     registrationOpen: isRegistrationOpen(edition.registrationClosesAt),
   };
@@ -207,6 +213,37 @@ export const PLACES_MUETTES: PlacesState = {
  * Variante vitrine : aucune session, donc aucune organisation en contexte.
  * Même contrat de silence en cas de panne.
  */
+/**
+ * Date de course telle que la vitrine la lit, sans session.
+ *
+ * Ne lève JAMAIS, et son repli est le plus discret : « prochainement ». Si la
+ * base ne répond pas, on ne sait pas si l'organisation a publié la date — on
+ * n'en dit donc rien, plutôt que de risquer de la divulguer.
+ */
+export async function getDateCourseVitrine(
+  deps: InscriptionsServiceDeps = {},
+): Promise<DateCourseAffichee> {
+  const store = deps.store ?? getInscriptionsStore();
+  try {
+    const date = await store.readDefaultOrgDateCourse();
+    if (!date) {
+      return DATE_COURSE_INCONNUE;
+    }
+    return dateCourseAffichee(date.raceDate, date.publique);
+  } catch (error) {
+    console.warn(
+      '[vitrine] date de course indisponible :',
+      error instanceof Error ? error.message : error,
+    );
+    return DATE_COURSE_INCONNUE;
+  }
+}
+
+export const DATE_COURSE_INCONNUE: DateCourseAffichee = {
+  libelle: 'prochainement',
+  phrase: 'prochainement',
+};
+
 export async function getPlacesVitrine(
   deps: InscriptionsServiceDeps = {},
 ): Promise<PlacesState> {
@@ -354,6 +391,7 @@ export async function getReglagesAdmin(
         prixDossardDa: 0,
         prixHebergementDa: 0,
         delaiPreuveJours: 0,
+        dateCoursePublique: 0,
       },
       placesOccupees: 0,
       hebergementsOccupes: 0,
@@ -376,6 +414,7 @@ export async function getReglagesAdmin(
       prixDossardDa: edition.prixDossardDa,
       prixHebergementDa: edition.prixHebergementDa,
       delaiPreuveJours: edition.delaiPreuveJours,
+      dateCoursePublique: edition.dateCoursePublique ? 1 : 0,
     },
     placesOccupees,
     hebergementsOccupes,
@@ -413,6 +452,16 @@ export function normaliserReglages(raw: unknown): {
       continue;
     }
     const valeur = Number(brut);
+    // Un choix oui / non n'est pas une quantité : 2 ou 600 passeraient comme
+    // entiers positifs ordinaires et seraient écrits tels quels.
+    if (REGLAGES_OUI_NON.includes(champ)) {
+      if (valeur !== 0 && valeur !== 1) {
+        erreurs[champ] = 'Choisis oui ou non.';
+        continue;
+      }
+      reglages[champ] = valeur;
+      continue;
+    }
     if (!Number.isInteger(valeur) || valeur < 0) {
       erreurs[champ] = 'Indique un nombre entier positif.';
       continue;
@@ -701,6 +750,13 @@ export async function acceptDocuments(
 
 export const CHECKLIST_VALIDATION_EN_ATTENTE = 'En attente de validation par l’organisation';
 
+/**
+ * Tant que la preuve n'est pas déposée, la validation n'est PAS « en attente »
+ * de l'organisation : c'est au coureur d'agir. Écrire « en attente de
+ * validation » dès l'inscription laissait croire qu'il avait tout fait.
+ */
+export const CHECKLIST_VALIDATION_APRES_PREUVE = 'Après ton justificatif de paiement';
+
 export const CHECKLIST_PREUVE_INDISPONIBLE = 'Indisponible (réessaie plus tard)';
 
 function checklistPiece(
@@ -813,7 +869,9 @@ export async function getChecklistState(
       ),
       texteSecondaire:
         coureur !== null && !validationFait && !refuse
-          ? CHECKLIST_VALIDATION_EN_ATTENTE
+          ? preuve !== null
+            ? CHECKLIST_VALIDATION_EN_ATTENTE
+            : CHECKLIST_VALIDATION_APRES_PREUVE
           : null,
       motifRefus: refuse ? coureur.refusalReason : null,
     }),
@@ -831,6 +889,8 @@ export async function getChecklistState(
           contactUrgenceNom: coureur.contactUrgenceNom,
           contactUrgenceTelephone: coureur.contactUrgenceTelephone,
           dateCourse: edition.dateCourse,
+          dateCourseLibelle: dateCourseAffichee(edition.dateCourse, edition.dateCoursePublique)
+            .libelle,
         };
 
   return { edition: toEditionSummary(edition), pieces, recap, statut: coureur?.status ?? null };

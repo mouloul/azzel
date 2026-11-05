@@ -55,8 +55,21 @@ const EDITION = {
   slug: '2027',
   nom: 'Édition 2027',
   dateCourse: '2027-03-26',
+  dateCourseLibelle: 'printemps 2027',
+  dateCoursePhrase: 'au printemps 2027',
   registrationClosesAt: '2027-03-16T22:59:59.000Z',
   registrationOpen: true,
+};
+
+const RECAP = {
+  epreuve: 'La Longue — 35 km',
+  distanceKm: 35,
+  categorieAge: 'Senior (18–39 ans)',
+  tshirt: 'XL',
+  contactUrgenceNom: 'Mhaouili',
+  contactUrgenceTelephone: '0754127932',
+  dateCourse: '2027-03-26',
+  dateCourseLibelle: 'printemps 2027',
 };
 
 function piece(id: string, fait: boolean): ChecklistPiece {
@@ -84,6 +97,36 @@ beforeEach(() => {
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_COUREUR,
+  });
+});
+
+describe('page /espace-coureur — récapitulatif', () => {
+  async function renduRecap(statut: string | null, faites: number): Promise<string> {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue({
+      ...checklistState(faites, statut),
+      recap: RECAP,
+    });
+    return (await rendu()).replaceAll('<!-- -->', '');
+  }
+
+  it('la date exacte est cachée : « printemps 2027 », jamais le jour', async () => {
+    const html = await renduRecap('en constitution', 4);
+    expect(html).toContain('Course : printemps 2027');
+    expect(html).not.toContain('26 mars');
+  });
+
+  it('le statut figure DANS le récapitulatif, pas seulement sous le titre', async () => {
+    const html = await renduRecap('en constitution', 4);
+    const recap = html.slice(html.indexOf('recap-titre'));
+    expect(recap).toContain('Statut :');
+    expect(recap).toContain('En attente de justificatif de paiement');
+  });
+
+  it('la distance n’est dite qu’une fois : « La Longue — 35 km », sans « (35 km) »', async () => {
+    const html = await renduRecap('en constitution', 4);
+    expect(html).toContain('La Longue — 35 km');
+    expect(html).not.toContain('35 km (35 km)');
+    expect(html).not.toContain('— 35 km (35');
   });
 });
 

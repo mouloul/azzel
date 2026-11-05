@@ -33,6 +33,7 @@ const EDITION: EditionRecord = {
   prixDossardDa: 2000,
   prixHebergementDa: 1500,
   delaiPreuveJours: 2,
+  dateCoursePublique: false,
 };
 
 const DONNEES: EdossardCoureurData = {

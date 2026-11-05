@@ -5,7 +5,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireRolePage } from '@/modules/iam/session';
 
-import { formatDateFrUtc, statutAffiche } from '@/modules/inscriptions/domain';
+import { libelleEpreuve, statutAffiche } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import {
   getChecklistState,
@@ -212,15 +212,24 @@ function ChecklistCard({
       {recap !== null && (
         <aside className="recap espace-recap" aria-label="Récapitulatif de ton inscription">
           <p className="recap-titre">Récapitulatif</p>
+          {statutLu !== null && (
+            <p>
+              Statut :{' '}
+              <span className={`socle-pastille ${statutLu.pastille}`}>
+                <span className="socle-pastille-point" aria-hidden="true" />
+                {statutLu.libelle}
+              </span>
+            </p>
+          )}
           <p>
-            Épreuve : <strong>{recap.epreuve} ({recap.distanceKm} km)</strong>
+            Épreuve : <strong>{libelleEpreuve(recap.epreuve, recap.distanceKm)}</strong>
           </p>
           <p>Catégorie : {recap.categorieAge}</p>
           <p>T-shirt : {recap.tshirt}</p>
           <p>
             Contact d’urgence : {recap.contactUrgenceNom} · {recap.contactUrgenceTelephone}
           </p>
-          <p>Course le {formatDateFrUtc(recap.dateCourse)}</p>
+          <p>Course : {recap.dateCourseLibelle}</p>
         </aside>
       )}
       </div>

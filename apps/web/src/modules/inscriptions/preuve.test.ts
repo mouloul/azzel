@@ -290,6 +290,7 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
       prixDossardDa: 2000,
       prixHebergementDa: 1500,
       delaiPreuveJours: 2,
+      dateCoursePublique: false,
       ...edition,
     };
     const store = {

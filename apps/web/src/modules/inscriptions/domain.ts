@@ -244,7 +244,11 @@ export const CHAMPS_REGLAGES = [
   'prixDossardDa',
   'prixHebergementDa',
   'delaiPreuveJours',
+  'dateCoursePublique',
 ] as const;
+
+/** Réglages qui sont un choix oui (1) / non (0), pas une quantité. */
+export const REGLAGES_OUI_NON: readonly string[] = ['dateCoursePublique'];
 
 export type ChampReglage = (typeof CHAMPS_REGLAGES)[number];
 
@@ -255,6 +259,7 @@ export const LIBELLES_REGLAGES: Record<ChampReglage, string> = {
   prixDossardDa: 'Prix du dossard (DA)',
   prixHebergementDa: 'Prix de l’hébergement (DA)',
   delaiPreuveJours: 'Délai de dépôt de la preuve (jours)',
+  dateCoursePublique: 'Afficher la date exacte de la course au public',
 };
 
 export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
@@ -287,6 +292,74 @@ export const PASTILLE_STATUT: Record<CoureurStatus, string> = {
   // refus motivé — le même registre neutre que l'attente.
   [COUREUR_STATUS_EXPIREE]: 'socle-pastille--sync-attente',
 };
+
+export interface DateCourseAffichee {
+  /** « printemps 2027 » ou « 26 mars 2027 » : utilisable seul (étiquette, rail). */
+  libelle: string;
+  /** « au printemps 2027 » ou « le 26 mars 2027 » : utilisable dans une phrase. */
+  phrase: string;
+}
+
+type Saison = 'printemps' | 'été' | 'automne' | 'hiver';
+
+const PREPOSITION_SAISON: Record<Saison, string> = {
+  printemps: 'au',
+  été: 'en',
+  automne: 'en',
+  hiver: 'en',
+};
+
+/** Saison astronomique approchée : 20 mars, 21 juin, 23 septembre, 21 décembre. */
+function saisonDe(mois: number, jour: number): Saison {
+  const quantieme = mois * 100 + jour;
+  if (quantieme >= 320 && quantieme <= 620) {
+    return 'printemps';
+  }
+  if (quantieme >= 621 && quantieme <= 922) {
+    return 'été';
+  }
+  if (quantieme >= 923 && quantieme <= 1220) {
+    return 'automne';
+  }
+  return 'hiver';
+}
+
+/**
+ * Date de course telle que le public la lit.
+ *
+ * La date réelle reste en base, exacte, parce que tout en dépend (âge à la
+ * course, ordre des éditions, chronométrage). Seul son AFFICHAGE est pilotable :
+ * tant que l'organisation ne l'a pas annoncée, le public ne lit que la saison,
+ * calculée depuis la vraie date — « printemps » écrit en dur deviendrait faux
+ * en silence si la course passait à l'automne.
+ */
+export function dateCourseAffichee(raceDate: string, publique: boolean): DateCourseAffichee {
+  const iso = parseIsoDate(raceDate);
+  if (iso === null) {
+    return { libelle: 'prochainement', phrase: 'prochainement' };
+  }
+  if (publique) {
+    const lisible = formatDateFrUtc(`${iso}T00:00:00Z`);
+    return { libelle: lisible, phrase: `le ${lisible}` };
+  }
+  const [annee, mois, jour] = iso.split('-').map(Number) as [number, number, number];
+  const saison = saisonDe(mois, jour);
+  return {
+    libelle: `${saison} ${annee}`,
+    phrase: `${PREPOSITION_SAISON[saison]} ${saison} ${annee}`,
+  };
+}
+
+/**
+ * Épreuve et distance, sans doublon : les noms seedés portent déjà la distance
+ * (« La Longue — 35 km »), et la répéter donnait « La Longue — 35 km (35 km) ».
+ * Le garde-fou évite de confondre « 135 km » avec « 35 km ».
+ */
+export function libelleEpreuve(nom: string, distanceKm: number): string {
+  const distance = String(distanceKm);
+  const dejaDit = new RegExp(`(?<![\\d.])${distance.replace('.', '\\.')}\\s*km`, 'i');
+  return dejaDit.test(nom) ? nom : `${nom} (${distance} km)`;
+}
 
 export const LIBELLE_ATTENTE_JUSTIFICATIF = 'En attente de justificatif de paiement';
 

@@ -61,6 +61,8 @@ const EDITION = {
   slug: '2027',
   nom: 'Édition 2027',
   dateCourse: '2027-03-26',
+  dateCourseLibelle: 'printemps 2027',
+  dateCoursePhrase: 'au printemps 2027',
   registrationClosesAt: '2027-03-16T22:59:59.000Z',
   registrationOpen: true,
 };
@@ -107,6 +109,27 @@ describe('/inscription — formulaire refondu (story 9.4)', () => {
     expect(html).not.toContain('href="/acceptations"');
     expect(html).not.toContain('href="/preuve"');
     expect(html).not.toContain('À venir');
+  });
+
+  it('la date exacte de la course n’est JAMAIS écrite : la saison seulement', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: EDITION,
+      epreuves: EPREUVES,
+      coureur: null,
+    });
+    const html = (await rendu()).replaceAll('<!-- -->', '');
+    expect(html).toContain('course au printemps 2027');
+    expect(html).not.toContain('26 mars');
+  });
+
+  it('une fois publiée par l’organisation, la date exacte s’écrit', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: { ...EDITION, dateCourseLibelle: '26 mars 2027', dateCoursePhrase: 'le 26 mars 2027' },
+      epreuves: EPREUVES,
+      coureur: null,
+    });
+    const html = (await rendu()).replaceAll('<!-- -->', '');
+    expect(html).toContain('course le 26 mars 2027');
   });
 
   it('champs obligatoires annoncés EN TEXTE : neuf mentions « (obligatoire) », zéro astérisque', async () => {

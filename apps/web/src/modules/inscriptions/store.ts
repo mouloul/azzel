@@ -50,6 +50,8 @@ export interface ReglagesEdition {
   prixDossardDa?: number;
   prixHebergementDa?: number;
   delaiPreuveJours?: number;
+  /** 0 ou 1. */
+  dateCoursePublique?: number;
 }
 
 export interface UpdateReglagesInput {
@@ -107,6 +109,8 @@ export interface EditionRecord {
   prixDossardDa: number;
   prixHebergementDa: number;
   delaiPreuveJours: number;
+  /** La date exacte est-elle montrée au public ? Sinon : la saison seulement. */
+  dateCoursePublique: boolean;
 }
 
 export interface DocumentRecord {
@@ -325,6 +329,7 @@ export interface InscriptionsStore {
   countPlacesOccupees(editionId: string, organisationId: string): Promise<number>;
   countHebergementsOccupes(editionId: string, organisationId: string): Promise<number>;
   readDefaultOrgPlaces(): Promise<{ capacite: number; seuil: number; occupees: number } | null>;
+  readDefaultOrgDateCourse(): Promise<{ raceDate: string; publique: boolean } | null>;
   expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration>;
   enfilerRappelsPreuve(maintenant: Date): Promise<number>;
   updateReglagesEdition(input: UpdateReglagesInput): Promise<EditionRecord>;
@@ -582,12 +587,13 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               prix_dossard_da: number;
               prix_hebergement_da: number;
               delai_preuve_jours: number;
+              date_course_publique: number;
             }[]
           >`
             SELECT id, organisation_id, slug, name, race_date::text AS race_date,
                    registration_closes_at, capacite, seuil_affichage_places,
                    capacite_hebergement, prix_dossard_da, prix_hebergement_da,
-                   delai_preuve_jours
+                   delai_preuve_jours, date_course_publique
             FROM edition
             WHERE organisation_id = ${organisationId}
             ORDER BY race_date DESC
@@ -610,6 +616,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             prixDossardDa: row.prix_dossard_da,
             prixHebergementDa: row.prix_hebergement_da,
             delaiPreuveJours: row.delai_preuve_jours,
+            dateCoursePublique: row.date_course_publique === 1,
           };
         }),
       );
@@ -645,6 +652,29 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           return rows[0]?.occupes ?? 0;
         }),
       );
+    },
+
+    async readDefaultOrgDateCourse(): Promise<{ raceDate: string; publique: boolean } | null> {
+      return withDb(async () => {
+        // Lecture publique pré-session, même exception documentée que les
+        // sponsors : l'organisation par défaut est résolue hors GUC, puis la
+        // lecture est scopée.
+        const organisationId = await findOrganisationIdBySlug(sql, DEFAULT_ORGANISATION_SLUG);
+        if (!organisationId) {
+          return null;
+        }
+        return withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<{ race_date: string; date_course_publique: number }[]>`
+            SELECT race_date::text AS race_date, date_course_publique
+            FROM edition
+            WHERE organisation_id = ${organisationId}
+            ORDER BY race_date DESC
+            LIMIT 1
+          `;
+          const row = rows[0];
+          return row ? { raceDate: row.race_date, publique: row.date_course_publique === 1 } : null;
+        });
+      });
     },
 
     async readDefaultOrgPlaces(): Promise<{
@@ -826,7 +856,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         withOrg(sql, input.organisationId, async (tx) => {
           const avantRows = await tx<Record<string, number>[]>`
             SELECT capacite, seuil_affichage_places, capacite_hebergement,
-                   prix_dossard_da, prix_hebergement_da, delai_preuve_jours
+                   prix_dossard_da, prix_hebergement_da, delai_preuve_jours, date_course_publique
             FROM edition WHERE id = ${input.editionId}
             FOR UPDATE
           `;
@@ -841,6 +871,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             ['prixDossardDa', 'prix_dossard_da'],
             ['prixHebergementDa', 'prix_hebergement_da'],
             ['delaiPreuveJours', 'delai_preuve_jours'],
+            ['dateCoursePublique', 'date_course_publique'],
           ];
           for (const [champ, colonne] of colonnes) {
             const nouvelle = input.reglages[champ];
@@ -870,7 +901,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             SELECT id, organisation_id, slug, name, race_date::text AS race_date,
                    registration_closes_at, capacite, seuil_affichage_places,
                    capacite_hebergement, prix_dossard_da, prix_hebergement_da,
-                   delai_preuve_jours
+                   delai_preuve_jours, date_course_publique
             FROM edition WHERE id = ${input.editionId}
           `;
           const row = apres[0] as {
@@ -886,6 +917,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             prix_dossard_da: number;
             prix_hebergement_da: number;
             delai_preuve_jours: number;
+            date_course_publique: number;
           };
           return {
             id: row.id,
@@ -900,6 +932,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             prixDossardDa: row.prix_dossard_da,
             prixHebergementDa: row.prix_hebergement_da,
             delaiPreuveJours: row.delai_preuve_jours,
+            dateCoursePublique: row.date_course_publique === 1,
           };
         }),
       );
@@ -1787,6 +1820,7 @@ function createUnavailableStore(): InscriptionsStore {
     countPlacesOccupees: unavailable,
     countHebergementsOccupes: unavailable,
     readDefaultOrgPlaces: unavailable,
+    readDefaultOrgDateCourse: unavailable,
     expirerInscriptionsEchues: unavailable,
     enfilerRappelsPreuve: unavailable,
     updateReglagesEdition: unavailable,

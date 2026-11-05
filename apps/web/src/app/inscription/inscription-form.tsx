@@ -11,6 +11,7 @@ import {
   TSHIRT_SIZES,
   deriveAgeAndCategory,
   formatDateFrUtc,
+  libelleEpreuve,
   hasFieldErrors,
   validateInscriptionInput,
   GENRES,
@@ -205,7 +206,7 @@ export function InscriptionForm({
         <p className="surtitre">Inscription</p>
         <h1>{state.coureur ? 'Modifier mon inscription' : 'M’inscrire'}</h1>
         <p className="lead">
-          {edition.nom} — course le {formatDateFrUtc(edition.dateCourse)}. Vérifie chaque
+          {edition.nom} — course {edition.dateCoursePhrase}. Vérifie chaque
           information avant de valider.
         </p>
         <p className="hint">
@@ -384,7 +385,11 @@ export function InscriptionForm({
                       }
                     />
                     <span className="option-label">{epreuve.nom}</span>
-                    <span className="meta">{epreuve.distanceKm} km</span>
+                    {/* Les noms seedés portent déjà la distance : la répéter en
+                        dessous donnait « La Longue — 35 km » puis « 35 km ». */}
+                    {libelleEpreuve(epreuve.nom, epreuve.distanceKm) !== epreuve.nom && (
+                      <span className="meta">{epreuve.distanceKm} km</span>
+                    )}
                   </label>
                 ))}
               </div>
@@ -541,7 +546,7 @@ export function InscriptionForm({
                   <strong>
                     {values.prenom} {values.nom}
                   </strong>{' '}
-                  — {chosenEpreuve?.nom ?? values.epreuve} ({chosenEpreuve?.distanceKm ?? '?'} km)
+                  — {chosenEpreuve ? libelleEpreuve(chosenEpreuve.nom, chosenEpreuve.distanceKm) : values.epreuve}
                 </p>
                 <p>
                   Catégorie le jour de la course : {AGE_CATEGORY_LABELS[derived.category]} ({derived.age}{' '}

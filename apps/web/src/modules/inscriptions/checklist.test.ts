@@ -5,6 +5,7 @@ import type { SessionRecord } from '@/modules/iam/store';
 
 import {
   CHECKLIST_PREUVE_INDISPONIBLE,
+  CHECKLIST_VALIDATION_APRES_PREUVE,
   CHECKLIST_VALIDATION_EN_ATTENTE,
   getChecklistState,
 } from './service';
@@ -62,6 +63,7 @@ function buildChecklistStore(scenario: ChecklistScenario = {}): InscriptionsStor
           prixDossardDa: 2000,
           prixHebergementDa: 1500,
           delaiPreuveJours: 2,
+          dateCoursePublique: false,
           ...(scenario.edition ?? {}),
         };
   const coureur: CoureurRecord | null =
@@ -199,6 +201,8 @@ describe('getChecklistState — consolidation des six pièces', () => {
       contactUrgenceNom: 'Lounis Ulahianne',
       contactUrgenceTelephone: '0555010204',
       dateCourse: RACE_DATE,
+      // Cachée par défaut : le public lit la saison, pas le jour.
+      dateCourseLibelle: 'printemps 2027',
     });
   });
 
@@ -318,6 +322,14 @@ describe('getChecklistState — consolidation des six pièces', () => {
     await expect(getChecklistState(session, { store })).rejects.toBeInstanceOf(DbUnavailableError);
   });
 
+  it('sans preuve : la validation n’est PAS « en attente de l’organisation »', async () => {
+    const store = buildChecklistStore({ coureur: ACCEPTATIONS_ACCEPTEES, preuve: null });
+    const state = await getChecklistState(session, { store });
+    const validation = piece(state, 'validation');
+    expect(validation.texteSecondaire).toBe(CHECKLIST_VALIDATION_APRES_PREUVE);
+    expect(validation.texteSecondaire).not.toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
+  });
+
   it('lecture preuve indisponible : la pièce dégrade sans faire tomber la checklist', async () => {
     const store = buildChecklistStore({
       coureur: ACCEPTATIONS_ACCEPTEES,
@@ -333,7 +345,9 @@ describe('getChecklistState — consolidation des six pièces', () => {
     expect(preuve.fait).toBe(false);
     expect(preuve.texteSecondaire).toBe(CHECKLIST_PREUVE_INDISPONIBLE);
     expect(preuve.actionLabel).toBeUndefined();
-    expect(piece(state, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
+    // Preuve illisible : on ne sait pas qu'elle est déposée, donc on n'annonce
+    // pas que l'organisation a quelque chose à valider.
+    expect(piece(state, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_APRES_PREUVE);
   });
 
   it('lecture seule : aucune méthode d’écriture du store n’est appelée', async () => {

@@ -7,6 +7,7 @@ import {
   updateReglagesAdmin,
 } from '@/modules/inscriptions/service';
 
+import { revaliderAccueil } from '../revalidation';
 import { adminErrorResponse, guardAdmin } from '../guard';
 import { readJsonBody } from '../contenus/body';
 
@@ -37,6 +38,10 @@ export async function PUT(request: NextRequest) {
   }
   try {
     const etat = await updateReglagesAdmin(guarded.session, lu.body);
+    // L'accueil est servi depuis le cache (60 s) : sans invalidation, la date
+    // exacte, le compteur de places ou la capacité changés ici mettraient une
+    // minute à se voir côté public — et la date, elle, ne doit pas traîner.
+    revaliderAccueil();
     return NextResponse.json({ ok: true, etat });
   } catch (error) {
     return adminErrorResponse(toAdminApiError(error));
