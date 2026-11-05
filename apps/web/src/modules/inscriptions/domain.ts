@@ -230,6 +230,33 @@ export function montantDuDa(
   return prixDossardDa + (avecHebergement ? prixHebergementDa : 0);
 }
 
+/**
+ * Réglages d'édition modifiables en administration.
+ *
+ * Vit dans le domaine et non dans le service : l'écran d'administration est un
+ * composant CLIENT, et importer une valeur depuis le service y tirerait le
+ * store et le pilote Postgres dans le bundle du navigateur.
+ */
+export const CHAMPS_REGLAGES = [
+  'capacite',
+  'seuilAffichagePlaces',
+  'capaciteHebergement',
+  'prixDossardDa',
+  'prixHebergementDa',
+  'delaiPreuveJours',
+] as const;
+
+export type ChampReglage = (typeof CHAMPS_REGLAGES)[number];
+
+export const LIBELLES_REGLAGES: Record<ChampReglage, string> = {
+  capacite: 'Nombre de dossards',
+  seuilAffichagePlaces: 'Seuil d’affichage du compteur',
+  capaciteHebergement: 'Nombre d’hébergements',
+  prixDossardDa: 'Prix du dossard (DA)',
+  prixHebergementDa: 'Prix de l’hébergement (DA)',
+  delaiPreuveJours: 'Délai de dépôt de la preuve (jours)',
+};
+
 export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
 
 export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {

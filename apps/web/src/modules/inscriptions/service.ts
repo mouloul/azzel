@@ -16,7 +16,10 @@ import {
   AGE_CATEGORY_LABELS,
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_VALIDE,
+  CHAMPS_REGLAGES,
+  LIBELLES_REGLAGES,
   canDepositPreuve,
+  type ChampReglage,
   doitAfficherPlaces,
   montantDuDa,
   placesRestantes,
@@ -38,6 +41,7 @@ import {
   RefusalReasonRequiredError,
   RefusalReasonTooLongError,
   RegistrationClosedError,
+  ReglagesInvalidesError,
 } from './errors';
 import {
   getInscriptionsStore,
@@ -48,6 +52,8 @@ import {
   type EditionRecord,
   type EpreuveRecord,
   type InscriptionsStore,
+  type ReglagesEdition,
+  type ResultatAttribution,
 } from './store';
 
 export interface CoureurSummary {
@@ -297,6 +303,167 @@ export async function getMontantDu(
     );
     return null;
   }
+}
+
+/** Bornes des réglages : un garde-fou de saisie, pas une règle métier. */
+const REGLAGE_MAX = 100_000;
+
+export interface ReglagesAdminState {
+  edition: { id: string; nom: string } | null;
+  reglages: Record<ChampReglage, number>;
+  placesOccupees: number;
+  hebergementsOccupes: number;
+  attente: CoureurEnAttenteView[];
+  journal: LigneJournalView[];
+}
+
+export interface CoureurEnAttenteView {
+  id: string;
+  prenom: string;
+  nom: string;
+  email: string;
+  epreuveNom: string;
+  hebergement: boolean;
+  inscritLe: string;
+}
+
+export interface LigneJournalView {
+  champ: string;
+  libelle: string;
+  ancienneValeur: number;
+  nouvelleValeur: number;
+  modifieLe: string;
+  modifiePar: string | null;
+}
+
+const JOURNAL_LIMITE = 50;
+
+export async function getReglagesAdmin(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<ReglagesAdminState> {
+  const store = deps.store ?? getInscriptionsStore();
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    return {
+      edition: null,
+      reglages: {
+        capacite: 0,
+        seuilAffichagePlaces: 0,
+        capaciteHebergement: 0,
+        prixDossardDa: 0,
+        prixHebergementDa: 0,
+        delaiPreuveJours: 0,
+      },
+      placesOccupees: 0,
+      hebergementsOccupes: 0,
+      attente: [],
+      journal: [],
+    };
+  }
+  const [placesOccupees, hebergementsOccupes, attente, journal] = await Promise.all([
+    store.countPlacesOccupees(edition.id, session.organisationId),
+    store.countHebergementsOccupes(edition.id, session.organisationId),
+    store.listListeAttente(edition.id, session.organisationId),
+    store.listJournalReglages(edition.id, session.organisationId, JOURNAL_LIMITE),
+  ]);
+  return {
+    edition: { id: edition.id, nom: edition.nom },
+    reglages: {
+      capacite: edition.capacite,
+      seuilAffichagePlaces: edition.seuilAffichagePlaces,
+      capaciteHebergement: edition.capaciteHebergement,
+      prixDossardDa: edition.prixDossardDa,
+      prixHebergementDa: edition.prixHebergementDa,
+      delaiPreuveJours: edition.delaiPreuveJours,
+    },
+    placesOccupees,
+    hebergementsOccupes,
+    attente: attente.map((coureur) => ({
+      ...coureur,
+      inscritLe: coureur.inscritLe.toISOString(),
+    })),
+    journal: journal.map((ligne) => ({
+      champ: ligne.champ,
+      libelle: LIBELLES_REGLAGES[ligne.champ as ChampReglage] ?? ligne.champ,
+      ancienneValeur: ligne.ancienneValeur,
+      nouvelleValeur: ligne.nouvelleValeur,
+      modifieLe: ligne.modifieLe.toISOString(),
+      modifiePar: ligne.modifiePar,
+    })),
+  };
+}
+
+/**
+ * Validation des réglages : entiers positifs et bornés. Une capacité à
+ * 1 000 000 serait une faute de frappe, pas une décision — et elle rendrait
+ * le compteur absurde pour tout le monde.
+ */
+export function normaliserReglages(raw: unknown): {
+  reglages: ReglagesEdition;
+  erreurs: Partial<Record<ChampReglage, string>>;
+} {
+  const record =
+    typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const reglages: ReglagesEdition = {};
+  const erreurs: Partial<Record<ChampReglage, string>> = {};
+  for (const champ of CHAMPS_REGLAGES) {
+    const brut = record[champ];
+    if (brut === undefined || brut === null || brut === '') {
+      continue;
+    }
+    const valeur = Number(brut);
+    if (!Number.isInteger(valeur) || valeur < 0) {
+      erreurs[champ] = 'Indique un nombre entier positif.';
+      continue;
+    }
+    if (valeur > REGLAGE_MAX) {
+      erreurs[champ] = `${REGLAGE_MAX} au maximum.`;
+      continue;
+    }
+    reglages[champ] = valeur;
+  }
+  return { reglages, erreurs };
+}
+
+export async function updateReglagesAdmin(
+  session: SessionRecord,
+  raw: unknown,
+  deps: InscriptionsServiceDeps = {},
+): Promise<ReglagesAdminState> {
+  const store = deps.store ?? getInscriptionsStore();
+  const { reglages, erreurs } = normaliserReglages(raw);
+  if (Object.keys(erreurs).length > 0) {
+    throw new ReglagesInvalidesError(erreurs);
+  }
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    throw new Error('Aucune édition configurée : exécute pnpm -F @azzel/web db:migrate');
+  }
+  await store.updateReglagesEdition({
+    organisationId: session.organisationId,
+    editionId: edition.id,
+    accountId: session.accountId,
+    reglages,
+  });
+  return getReglagesAdmin(session, deps);
+}
+
+export async function attribuerPlaceAdmin(
+  session: SessionRecord,
+  coureurId: unknown,
+  deps: InscriptionsServiceDeps = {},
+): Promise<{ resultat: ResultatAttribution; etat: ReglagesAdminState }> {
+  const store = deps.store ?? getInscriptionsStore();
+  if (typeof coureurId !== 'string' || coureurId === '') {
+    throw new ReglagesInvalidesError({ coureurId: 'Coureur manquant.' } as Record<string, string>);
+  }
+  const resultat = await store.attribuerPlace({
+    organisationId: session.organisationId,
+    coureurId,
+    maintenant: new Date(),
+  });
+  return { resultat, etat: await getReglagesAdmin(session, deps) };
 }
 
 export async function getHebergementState(

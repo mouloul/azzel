@@ -18,6 +18,7 @@ import {
   COUREUR_STATUS_VALIDE,
   STATUTS_MODIFIABLES,
   COUREUR_STATUS_EXPIREE,
+  COUREUR_STATUS_LISTE_ATTENTE,
   hebergementAccorde,
   limitePreuve,
   STATUTS_OCCUPANT_UNE_PLACE,
@@ -40,6 +41,51 @@ import {
   RefusalReasonRequiredError,
   type PieceDossier,
 } from './errors';
+
+/** Réglages modifiables d'une édition. Tous facultatifs : on n'envoie que ce qu'on change. */
+export interface ReglagesEdition {
+  capacite?: number;
+  seuilAffichagePlaces?: number;
+  capaciteHebergement?: number;
+  prixDossardDa?: number;
+  prixHebergementDa?: number;
+  delaiPreuveJours?: number;
+}
+
+export interface UpdateReglagesInput {
+  organisationId: string;
+  editionId: string;
+  /** Auteur du changement : le journal doit pouvoir répondre « qui ». */
+  accountId: string;
+  reglages: ReglagesEdition;
+}
+
+export interface CoureurEnAttente {
+  id: string;
+  prenom: string;
+  nom: string;
+  email: string;
+  epreuveNom: string;
+  hebergement: boolean;
+  inscritLe: Date;
+}
+
+export interface AttribuerPlaceInput {
+  organisationId: string;
+  coureurId: string;
+  maintenant: Date;
+}
+
+/** « complet » : aucune place libre au moment de l'attribution. */
+export type ResultatAttribution = 'attribuee' | 'complet' | 'introuvable';
+
+export interface LigneJournalReglage {
+  champ: string;
+  ancienneValeur: number;
+  nouvelleValeur: number;
+  modifieLe: Date;
+  modifiePar: string | null;
+}
 
 export interface BilanExpiration {
   /** Dossiers passés en « expirée » par CE passage, jamais les précédents. */
@@ -281,6 +327,14 @@ export interface InscriptionsStore {
   readDefaultOrgPlaces(): Promise<{ capacite: number; seuil: number; occupees: number } | null>;
   expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration>;
   enfilerRappelsPreuve(maintenant: Date): Promise<number>;
+  updateReglagesEdition(input: UpdateReglagesInput): Promise<EditionRecord>;
+  listListeAttente(editionId: string, organisationId: string): Promise<CoureurEnAttente[]>;
+  attribuerPlace(input: AttribuerPlaceInput): Promise<ResultatAttribution>;
+  listJournalReglages(
+    editionId: string,
+    organisationId: string,
+    limit: number,
+  ): Promise<LigneJournalReglage[]>;
   listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]>;
   findDocuments(organisationId: string): Promise<DocumentRecord[]>;
   findCoureurByAccount(
@@ -758,6 +812,221 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         }
         return enfiles;
       });
+    },
+
+    /**
+     * Applique les réglages et journalise CHAQUE champ réellement modifié.
+     *
+     * Sous verrou : les anciennes valeurs sont lues et réécrites dans la même
+     * transaction, sinon deux organisateurs qui enregistrent en même temps
+     * produiraient un journal qui ne correspond à aucun état réel.
+     */
+    async updateReglagesEdition(input: UpdateReglagesInput): Promise<EditionRecord> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          const avantRows = await tx<Record<string, number>[]>`
+            SELECT capacite, seuil_affichage_places, capacite_hebergement,
+                   prix_dossard_da, prix_hebergement_da, delai_preuve_jours
+            FROM edition WHERE id = ${input.editionId}
+            FOR UPDATE
+          `;
+          const avant = avantRows[0];
+          if (!avant) {
+            throw new Error('édition introuvable pour la mise à jour des réglages');
+          }
+          const colonnes: [keyof ReglagesEdition, string][] = [
+            ['capacite', 'capacite'],
+            ['seuilAffichagePlaces', 'seuil_affichage_places'],
+            ['capaciteHebergement', 'capacite_hebergement'],
+            ['prixDossardDa', 'prix_dossard_da'],
+            ['prixHebergementDa', 'prix_hebergement_da'],
+            ['delaiPreuveJours', 'delai_preuve_jours'],
+          ];
+          for (const [champ, colonne] of colonnes) {
+            const nouvelle = input.reglages[champ];
+            const ancienne = avant[colonne];
+            // Champ absent de l'envoi, ou valeur identique : rien à écrire et
+            // surtout rien à journaliser — une ligne « 600 → 600 » ferait
+            // croire à une décision qui n'a pas eu lieu.
+            if (nouvelle === undefined || ancienne === undefined || nouvelle === ancienne) {
+              continue;
+            }
+            await tx`
+              UPDATE edition SET ${tx.unsafe(colonne)} = ${nouvelle}
+              WHERE id = ${input.editionId}
+            `;
+            await tx`
+              INSERT INTO edition_reglage_journal (
+                organisation_id, edition_id, champ, ancienne_valeur,
+                nouvelle_valeur, modifie_par
+              )
+              VALUES (
+                ${input.organisationId}, ${input.editionId}, ${champ},
+                ${ancienne}, ${nouvelle}, ${input.accountId}
+              )
+            `;
+          }
+          const apres = await tx<Record<string, unknown>[]>`
+            SELECT id, organisation_id, slug, name, race_date::text AS race_date,
+                   registration_closes_at, capacite, seuil_affichage_places,
+                   capacite_hebergement, prix_dossard_da, prix_hebergement_da,
+                   delai_preuve_jours
+            FROM edition WHERE id = ${input.editionId}
+          `;
+          const row = apres[0] as {
+            id: string;
+            organisation_id: string;
+            slug: string;
+            name: string;
+            race_date: string;
+            registration_closes_at: Date;
+            capacite: number;
+            seuil_affichage_places: number;
+            capacite_hebergement: number;
+            prix_dossard_da: number;
+            prix_hebergement_da: number;
+            delai_preuve_jours: number;
+          };
+          return {
+            id: row.id,
+            organisationId: row.organisation_id,
+            slug: row.slug,
+            nom: row.name,
+            dateCourse: row.race_date,
+            registrationClosesAt: row.registration_closes_at,
+            capacite: row.capacite,
+            seuilAffichagePlaces: row.seuil_affichage_places,
+            capaciteHebergement: row.capacite_hebergement,
+            prixDossardDa: row.prix_dossard_da,
+            prixHebergementDa: row.prix_hebergement_da,
+            delaiPreuveJours: row.delai_preuve_jours,
+          };
+        }),
+      );
+    },
+
+    /** File d'attente, du plus ancien au plus récent : l'ordre d'arrivée. */
+    async listListeAttente(
+      editionId: string,
+      organisationId: string,
+    ): Promise<CoureurEnAttente[]> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<
+            {
+              id: string;
+              first_name: string;
+              last_name: string;
+              email: string;
+              epreuve_nom: string;
+              hebergement: boolean;
+              created_at: Date;
+            }[]
+          >`
+            SELECT c.id, c.first_name, c.last_name, a.email,
+                   e.name AS epreuve_nom, c.hebergement, c.created_at
+            FROM coureur AS c
+            JOIN account AS a ON a.id = c.account_id
+            JOIN epreuve AS e ON e.id = c.epreuve_id
+            WHERE c.edition_id = ${editionId}
+              AND c.organisation_id = ${organisationId}
+              AND c.status = ${COUREUR_STATUS_LISTE_ATTENTE}
+            ORDER BY c.created_at ASC, c.id ASC
+          `;
+          return rows.map((row) => ({
+            id: row.id,
+            prenom: row.first_name,
+            nom: row.last_name,
+            email: row.email,
+            epreuveNom: row.epreuve_nom,
+            hebergement: row.hebergement,
+            inscritLe: row.created_at,
+          }));
+        }),
+      );
+    },
+
+    /**
+     * Donne une place à un coureur en attente, sous le même verrou que les
+     * inscriptions : l'organisation ne doit pas pouvoir créer une place qui
+     * n'existe pas en cliquant pendant qu'un coureur s'inscrit.
+     *
+     * Le délai de preuve repart de l'attribution : le coureur n'est pas puni
+     * d'avoir attendu.
+     */
+    async attribuerPlace(input: AttribuerPlaceInput): Promise<ResultatAttribution> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          const coureurs = await tx<{ edition_id: string; status: string }[]>`
+            SELECT edition_id, status FROM coureur
+            WHERE id = ${input.coureurId} AND organisation_id = ${input.organisationId}
+          `;
+          const coureur = coureurs[0];
+          if (!coureur || coureur.status !== COUREUR_STATUS_LISTE_ATTENTE) {
+            return 'introuvable';
+          }
+          const editions = await tx<{ capacite: number; delai_preuve_jours: number }[]>`
+            SELECT capacite, delai_preuve_jours FROM edition
+            WHERE id = ${coureur.edition_id}
+            FOR UPDATE
+          `;
+          const edition = editions[0];
+          if (!edition) {
+            return 'introuvable';
+          }
+          const occupees = await tx<{ occupees: number }[]>`
+            SELECT count(*)::int AS occupees FROM coureur
+            WHERE edition_id = ${coureur.edition_id}
+              AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
+          `;
+          if (placesRestantes(edition.capacite, occupees[0]?.occupees ?? 0) <= 0) {
+            return 'complet';
+          }
+          await tx`
+            UPDATE coureur
+            SET status = ${COUREUR_STATUS_EN_CONSTITUTION},
+                preuve_due_at = ${limitePreuve(input.maintenant, edition.delai_preuve_jours)},
+                updated_at = now()
+            WHERE id = ${input.coureurId}
+          `;
+          return 'attribuee';
+        }),
+      );
+    },
+
+    async listJournalReglages(
+      editionId: string,
+      organisationId: string,
+      limit: number,
+    ): Promise<LigneJournalReglage[]> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<
+            {
+              champ: string;
+              ancienne_valeur: number;
+              nouvelle_valeur: number;
+              modifie_le: Date;
+              email: string | null;
+            }[]
+          >`
+            SELECT j.champ, j.ancienne_valeur, j.nouvelle_valeur, j.modifie_le, a.email
+            FROM edition_reglage_journal AS j
+            LEFT JOIN account AS a ON a.id = j.modifie_par
+            WHERE j.edition_id = ${editionId}
+              AND j.organisation_id = ${organisationId}
+            ORDER BY j.modifie_le DESC
+            LIMIT ${limit}
+          `;
+          return rows.map((row) => ({
+            champ: row.champ,
+            ancienneValeur: row.ancienne_valeur,
+            nouvelleValeur: row.nouvelle_valeur,
+            modifieLe: row.modifie_le,
+            modifiePar: row.email,
+          }));
+        }),
+      );
     },
 
     async listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]> {
@@ -1520,6 +1789,10 @@ function createUnavailableStore(): InscriptionsStore {
     readDefaultOrgPlaces: unavailable,
     expirerInscriptionsEchues: unavailable,
     enfilerRappelsPreuve: unavailable,
+    updateReglagesEdition: unavailable,
+    listListeAttente: unavailable,
+    attribuerPlace: unavailable,
+    listJournalReglages: unavailable,
     listEpreuves: unavailable,
     findDocuments: unavailable,
     findCoureurByAccount: unavailable,

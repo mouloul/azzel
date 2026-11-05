@@ -14,6 +14,19 @@ export class InvalidFieldsError extends Error {
   }
 }
 
+/**
+ * Réglages d'édition invalides (administration). Distincte de
+ * InvalidFieldsError, qui porte les champs du formulaire d'inscription : ce
+ * ne sont pas les mêmes champs, et les confondre ferait remonter « capacite »
+ * comme une erreur de saisie coureur.
+ */
+export class ReglagesInvalidesError extends Error {
+  constructor(readonly fields: Record<string, string>) {
+    super('réglages invalides');
+    this.name = 'ReglagesInvalidesError';
+  }
+}
+
 export class RegistrationClosedError extends Error {
   constructor(readonly closedAt: Date) {
     super('inscriptions fermées');
@@ -376,6 +389,17 @@ export function toPreuveApiError(error: unknown): ApiError {
 }
 
 export function toAdminApiError(error: unknown): ApiError {
+  if (error instanceof ReglagesInvalidesError) {
+    return {
+      status: 400,
+      fields: error.fields as FieldErrors,
+      envelope: createErrorEnvelope({
+        code: 'admin.reglages_invalides',
+        message: 'Certains réglages sont invalides.',
+        action: 'Corrige les valeurs signalées puis enregistre à nouveau.',
+      }),
+    };
+  }
   if (error instanceof DecisionInvalidError) {
     return {
       status: 400,

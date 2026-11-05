@@ -476,6 +476,112 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     });
   });
 
+  describe('réglages d’édition et liste d’attente (administration)', () => {
+    afterEach(async () => {
+      await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200, capacite_hebergement = 200, prix_dossard_da = 2000, prix_hebergement_da = 1500, delai_preuve_jours = 2`;
+      await sql`DELETE FROM edition_reglage_journal`;
+      await sql`DELETE FROM coureur`;
+    });
+
+    async function editionId(): Promise<string> {
+      const rows = await sql<{ id: string }[]>`SELECT id FROM edition LIMIT 1`;
+      return rows[0]!.id;
+    }
+
+    async function organisationId(): Promise<string> {
+      const rows = await sql<{ id: string }[]>`SELECT id FROM organisation WHERE slug = 'ait-aissi'`;
+      return rows[0]!.id;
+    }
+
+    it('relever la capacité : valeur appliquée et changement journalisé', async () => {
+      const session = await createSession();
+      await store.updateReglagesEdition({
+        organisationId: await organisationId(),
+        editionId: await editionId(),
+        accountId: session.accountId,
+        reglages: { capacite: 1000 },
+      });
+      const rows = await sql<{ capacite: number }[]>`SELECT capacite FROM edition LIMIT 1`;
+      expect(rows[0]?.capacite).toBe(1000);
+
+      const journal = await sql<
+        { champ: string; ancienne_valeur: number; nouvelle_valeur: number }[]
+      >`SELECT champ, ancienne_valeur, nouvelle_valeur FROM edition_reglage_journal`;
+      expect(journal).toEqual([
+        { champ: 'capacite', ancienne_valeur: 600, nouvelle_valeur: 1000 },
+      ]);
+    });
+
+    it('une ligne PAR CHAMP modifié : un champ inchangé ne laisse aucune trace', async () => {
+      const session = await createSession();
+      await store.updateReglagesEdition({
+        organisationId: await organisationId(),
+        editionId: await editionId(),
+        accountId: session.accountId,
+        // capacite inchangée, seuil modifié : une seule ligne attendue.
+        reglages: { capacite: 600, seuilAffichagePlaces: 150 },
+      });
+      const journal = await sql<{ champ: string }[]>`
+        SELECT champ FROM edition_reglage_journal
+      `;
+      expect(journal.map((l) => l.champ)).toEqual(['seuilAffichagePlaces']);
+    });
+
+    it('liste d’attente : ordonnée par ancienneté d’inscription', async () => {
+      await sql`UPDATE edition SET capacite = 0`;
+      const premier = await createSession();
+      await submitInscription(premier, validInput({ prenom: 'Premier' }), { store });
+      const second = await createSession();
+      await submitInscription(second, validInput({ prenom: 'Second' }), { store });
+
+      const attente = await store.listListeAttente(await editionId(), await organisationId());
+      expect(attente.map((c) => c.prenom)).toEqual(['Premier', 'Second']);
+    });
+
+    it('attribuer une place : le coureur passe en constitution avec une échéance neuve', async () => {
+      await sql`UPDATE edition SET capacite = 0`;
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      await sql`UPDATE edition SET capacite = 1`;
+
+      const attente = await store.listListeAttente(await editionId(), await organisationId());
+      const resultat = await store.attribuerPlace({
+        organisationId: await organisationId(),
+        coureurId: attente[0]!.id,
+        maintenant: new Date(),
+      });
+      expect(resultat).toBe('attribuee');
+
+      const rows = await sql<{ status: string; preuve_due_at: Date | null }[]>`
+        SELECT status, preuve_due_at FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      expect(rows[0]?.status).toBe('en constitution');
+      // Le délai repart de l'attribution : le coureur n'est pas puni de son attente.
+      expect(rows[0]?.preuve_due_at).not.toBeNull();
+    });
+
+    it('attribuer sans place libre : refusé, le coureur reste en attente', async () => {
+      await sql`UPDATE edition SET capacite = 1`;
+      const occupant = await createSession();
+      await submitInscription(occupant, validInput(), { store });
+      const attendeur = await createSession();
+      await submitInscription(attendeur, validInput(), { store });
+
+      const attente = await store.listListeAttente(await editionId(), await organisationId());
+      const resultat = await store.attribuerPlace({
+        organisationId: await organisationId(),
+        coureurId: attente[0]!.id,
+        maintenant: new Date(),
+      });
+      expect(resultat).toBe('complet');
+
+      const rows = await sql<{ status: string }[]>`
+        SELECT status FROM coureur WHERE account_id = ${attendeur.accountId}
+      `;
+      expect(rows[0]?.status).toBe('liste d’attente');
+    });
+  });
+
   it('migrations : toutes appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;

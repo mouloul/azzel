@@ -41,3 +41,71 @@
   color: var(--heading);
   border-bottom-color: var(--az-action);
 }
+
+/* Écran inscriptions : chiffres de tête, file d'attente, journal. Aucun
+   littéral de couleur — tout vient des tokens du socle. */
+.admin-chiffres {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--az-space-4);
+  margin: var(--az-space-5) 0 0;
+}
+
+.admin-chiffres dt {
+  font-size: 13px;
+  color: var(--az-texte-2);
+}
+
+.admin-chiffres dd {
+  margin: var(--az-space-1) 0 0;
+  font-family: var(--az-font-display);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--az-texte);
+}
+
+.admin-message {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-3) var(--az-space-4);
+  border-left: 4px solid var(--az-action);
+  background: var(--az-surface);
+}
+
+.admin-table {
+  width: 100%;
+  margin: var(--az-space-4) 0 0;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: var(--az-space-3);
+  border-bottom: 1px solid var(--az-filet-controle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--az-texte-2);
+}
+
+.admin-journal {
+  margin: var(--az-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--az-space-3);
+  font-size: 15px;
+}
+
+/* Une ligne de journal reste lisible sur un téléphone : l'auteur et l'heure
+   passent sous le changement plutôt que de l'écraser. */
+@media (max-width: 560px) {
+  .admin-journal .meta {
+    display: block;
+  }
+}

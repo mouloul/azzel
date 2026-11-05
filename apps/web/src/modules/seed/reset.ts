@@ -45,6 +45,7 @@ export const RESET_ENV_VALEUR_ATTENDUE = '1';
  *   resultats_visite, abandon → edition (conservée)
  */
 export const TABLES_PURGEES = [
+  'edition_reglage_journal',
   'annulation',
   'terrain_evenement',
   'position',
