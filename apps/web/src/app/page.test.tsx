@@ -33,6 +33,15 @@ vi.mock(
     sectionParcoursMock as unknown as typeof import('@/modules/contenus/section-parcours'),
 );
 
+// La date de course se lit en base (réglage d'administration) : isolée par mock,
+// le reste du module service garde son vrai comportement (compteur muet sans base).
+const dateCourseMock = vi.hoisted(() => ({ date: { libelle: 'printemps 2027', phrase: 'au printemps 2027' } }));
+
+vi.mock('@/modules/inscriptions/service', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('@/modules/inscriptions/service')>();
+  return { ...reel, getDateCourseVitrine: vi.fn(async () => dateCourseMock.date) };
+});
+
 import HomePage, { revalidate as ACCUEIL_REVALIDATE } from './page';
 
 const VUE_PARCOURS_ACCUEIL = {
@@ -70,6 +79,40 @@ async function renduAccueil(): Promise<string> {
   );
   return await new Response(flux).text();
 }
+
+describe('accueil vitrine — date de course pilotée depuis l’administration', () => {
+  async function rendreAvec(libelle: string, phrase: string): Promise<string> {
+    const avant = dateCourseMock.date;
+    dateCourseMock.date = { libelle, phrase };
+    try {
+      return (await renduAccueil()).replaceAll('<!-- -->', '');
+    } finally {
+      dateCourseMock.date = avant;
+    }
+  }
+
+  it('date cachée : la saison partout, jamais le jour', async () => {
+    const html = await rendreAvec('printemps 2027', 'au printemps 2027');
+    expect(html).toContain('revient au printemps 2027');
+    expect(html).toContain('Au printemps 2027, deux courses');
+    expect(html).not.toContain('26 mars');
+  });
+
+  it('date publiée : le rail, l’accroche et le chapeau la reprennent, avec la bonne préposition', async () => {
+    const html = await rendreAvec('26 mars 2027', 'le 26 mars 2027');
+    expect(html).toContain('26 mars 2027</dd>');
+    expect(html).toContain('revient le 26 mars 2027');
+    expect(html).toContain('Le 26 mars 2027, deux courses');
+    expect(html).not.toContain('rintemps 2027');
+  });
+
+  it('base muette (« prochainement ») : aucune date inventée', async () => {
+    const html = await rendreAvec('prochainement', 'prochainement');
+    expect(html).toContain('revient prochainement');
+    expect(html).toContain('Prochainement, deux courses');
+    expect(html).not.toMatch(/\d{2} (mars|avril|mai)/);
+  });
+});
 
 describe('accueil vitrine — rendu statique', () => {
   it('plus de mention d’égide sur l’accueil (retirée en recette le 04/11/2026)', () => {

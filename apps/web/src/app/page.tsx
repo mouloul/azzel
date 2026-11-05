@@ -16,12 +16,17 @@ import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { getSectionParcours } from '@/modules/contenus/section-parcours';
 import { resolveTrailerPlayer } from '@/modules/retour-images/domain';
-import { getPlacesVitrine } from '@/modules/inscriptions/service';
+import { getDateCourseVitrine, getPlacesVitrine } from '@/modules/inscriptions/service';
 import { getRetourImagesPage } from '@/modules/retour-images/service';
 import { getPartenairesSection } from '@/modules/sponsors/service';
 
 
 const PHOTOS = '/charte/photos-2026';
+
+/** « au printemps 2027 » devient « Au printemps 2027 » en tête de phrase. */
+function premiereMajuscule(texte: string): string {
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
 
 /**
  * Teaser de l'accueil : lien PROVISOIRE, posé en recette du 04/11/2026 en
@@ -67,12 +72,13 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [telephone, partenaires, parcours, retourImages, places] = await Promise.all([
+  const [telephone, partenaires, parcours, retourImages, places, dateCourse] = await Promise.all([
     readAssistancePhone(),
     getPartenairesSection(),
     getSectionParcours(),
     getRetourImagesPage(),
     getPlacesVitrine(),
+    getDateCourseVitrine(),
   ]);
   // La vidéo de l'admin prime ; sans elle, le teaser provisoire. Le bloc ne
   // charge rien avant le clic : le budget de premier chargement est intact.
@@ -93,9 +99,10 @@ export default async function HomePage() {
           page, publie les 28 km du relevé d'essai. Aucune distance n'est plus
           figée ici : elles viennent toutes de parcours.json, avec leur mention
           « tracé provisoire ».
-          Recette du 04/11/2026 : la date exacte n'est pas encore publique — la
-          vitrine ne dit que « printemps 2027 », ici comme dans l'accroche et la
-          section des épreuves. */}
+          Recette du 04/11/2026 : la date exacte n'est publique que si
+          l'organisation l'a décidé (réglage d'administration). Tant que non, la
+          vitrine ne dit que la saison, ici comme dans l'accroche et la section
+          des épreuves — une seule source, getDateCourseVitrine. */}
       <section className="aa-hero aa-hero--plein" aria-labelledby="titre-accueil">
         <AaPhoto
           variant="couverture"
@@ -120,7 +127,7 @@ export default async function HomePage() {
               <dt>Date</dt>
               <dd>
                 <span className="aa-hero__rang">2ᵉ édition</span>
-                Printemps 2027
+                {premiereMajuscule(dateCourse.libelle)}
               </dd>
             </div>
             <div className="aa-hero__rail-cles">
@@ -145,7 +152,7 @@ export default async function HomePage() {
           <p className="aa-hero__meta">
             Une première édition qui a dépassé toutes les attentes : le village
             mobilisé, les sentiers de Yakouren pris d’assaut, une ambiance qu’on
-            n’oublie pas. Le trail d’Aït Aïssi revient au printemps 2027.
+            n’oublie pas. Le trail d’Aït Aïssi revient {dateCourse.phrase}.
           </p>
           <CompteurPlaces places={places} />
           <div className="aa-hero__actions">
@@ -213,7 +220,7 @@ export default async function HomePage() {
             Deux trails au départ du stade
           </h2>
           <p className="aa-lead">
-            Au printemps 2027, deux courses de trail partent du stade Agni Lhoudh, sur les
+            {premiereMajuscule(dateCourse.phrase)}, deux courses de trail partent du stade Agni Lhoudh, sur les
             sentiers de la forêt de Yakouren.
           </p>
           <div className="aa-cards">
