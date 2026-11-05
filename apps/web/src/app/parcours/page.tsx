@@ -28,50 +28,17 @@ export const metadata = {
 };
 
 /**
- * Points de passage d'une épreuve, prêts pour les pastilles de la carte.
- *
- * Lus sur le document publié : nom, kilomètre, altitude, D+ du segment amont
- * et services, tels que la story 11.1 les a calculés (UX-DR-26). Jamais de
- * valeur inventée — un champ absent ne s'affiche pas.
- */
-function reperesEpreuve(slug: string) {
-  const doc = getParcoursDoc();
-  const epreuve = doc?.epreuves[slug];
-  if (doc == null || epreuve === undefined) return [];
-  const base = new Map(doc.pointsDePassage.map((point) => [point.id, point]));
-  return epreuve.pointsDePassage.flatMap((point) => {
-    const repere = base.get(point.id);
-    if (repere === undefined) return [];
-    const morceaux = [repere.nom];
-    if (point.kilometre !== null) morceaux.push(`km\u202f${point.kilometre}`);
-    const altitude = point.altitudeM ?? repere.altitudeM;
-    if (altitude !== null) morceaux.push(`${Math.round(altitude)}\u202fm`);
-    if (point.dplusSegmentAmontM !== null && point.dplusSegmentAmontM > 0) {
-      morceaux.push(`+${Math.round(point.dplusSegmentAmontM)}\u202fm de D+ depuis le point précédent`);
-    }
-    if (repere.services !== null && repere.services.length > 0) {
-      morceaux.push(repere.services.join(', '));
-    }
-    return [
-      {
-        id: point.id,
-        nom: repere.nom,
-        lon: repere.lon,
-        lat: repere.lat,
-        libelle: morceaux.join(' · '),
-      },
-    ];
-  });
-}
-
-/**
  * Distance publiée d'une épreuve : celle du RELEVÉ dès qu'il existe, celle de
  * la base sinon — même règle que la section parcours de l'accueil
  * (`fusionnerEpreuve`). Sans cela, les deux pages annonçaient des distances
  * différentes pour la même épreuve.
  */
 function distanceAffichee(slug: string, distanceBaseKm: number): number {
-  const releve = getParcoursDoc()?.epreuves[slug];
+  // hasOwn : un slug du type « constructor » rendrait la fonction héritée de
+  // Object, pas `undefined` — et `.distanceM` donnerait NaN à l'écran.
+  const doc = getParcoursDoc();
+  if (doc === null || !Object.hasOwn(doc.epreuves, slug)) return distanceBaseKm;
+  const releve = doc.epreuves[slug];
   if (releve === undefined) return distanceBaseKm;
   return Math.round(releve.distanceM / 100) / 10;
 }
@@ -123,8 +90,8 @@ export default async function ParcoursPage() {
                     {trace !== null && bloc.epreuve !== null ? (
                       <CarteParcours
                         nomEpreuve={bloc.epreuve.nom}
-                        reperes={reperesEpreuve(bloc.epreuve.slug)}
-                        trace={trace}
+                        slug={bloc.epreuve.slug}
+                        version={getParcoursDoc()?.version ?? 0}
                       />
                     ) : null}
                     {gpxUrl !== null ? (

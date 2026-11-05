@@ -12,6 +12,12 @@
 
 import maplibregl, { type Map as CarteMapLibre, type Marker } from 'maplibre-gl';
 
+// Feuille de style du moteur (commandes, échelle, messages de gestes). Importée
+// ICI et non dans la page : ce module n'est chargé qu'à l'ouverture de la carte,
+// la feuille ne pèse donc jamais sur le premier rendu. Sans elle, les commandes
+// s'affichent en texte brut par-dessus la page.
+import 'maplibre-gl/dist/maplibre-gl.css';
+
 import {
   CAMERA_2D,
   CAMERA_3D,
@@ -119,6 +125,24 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
   // montage — sans interaction, aucun point ne doit s'allumer sur la carte.
   let curseur: Marker | null = null;
 
+  const placerCurseur = (sM: number | null) => {
+    if (sM === null) {
+      curseur?.remove();
+      curseur = null;
+      return;
+    }
+    const index = indexDepuisDistance(trace.distancesM, sM);
+    const point = trace.points[index];
+    if (point === undefined) return;
+    if (curseur === null) {
+      const pastille = document.createElement('div');
+      pastille.className = 'aa-carte__curseur';
+      pastille.setAttribute('aria-hidden', 'true');
+      curseur = new maplibregl.Marker({ element: pastille });
+    }
+    curseur.setLngLat([point[0], point[1]]).addTo(carte);
+  };
+
   return {
     definirRelief(actif, exageration) {
       exagerationCourante = exageration;
@@ -134,23 +158,7 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
       exagerationCourante = exageration;
       if (carte.getTerrain() !== null) poserRelief(true, exageration);
     },
-    placerCurseur(sM) {
-      if (sM === null) {
-        curseur?.remove();
-        curseur = null;
-        return;
-      }
-      const index = indexDepuisDistance(trace.distancesM, sM);
-      const point = trace.points[index];
-      if (point === undefined) return;
-      if (curseur === null) {
-        const pastille = document.createElement('div');
-        pastille.className = 'aa-carte__curseur';
-        pastille.setAttribute('aria-hidden', 'true');
-        curseur = new maplibregl.Marker({ element: pastille });
-      }
-      curseur.setLngLat([point[0], point[1]]).addTo(carte);
-    },
+    placerCurseur,
     recadrer() {
       carte.resize();
       if (cadre !== null) {

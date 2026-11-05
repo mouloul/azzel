@@ -39,6 +39,7 @@ export const EXAGERATION = { min: 1, max: 3, pas: 0.1, defaut: 1.6 } as const;
 /** Durée des transitions de caméra, annulée par `prefers-reduced-motion`. */
 export const DUREE_TRANSITION_MS = 800;
 
+
 /** Identifiants de sources et de couches, partagés avec les tests. */
 export const IDS = {
   fond: 'fond',
@@ -299,8 +300,11 @@ export function traceCarte(
   slug: string,
   toleranceDeg: number = TOLERANCE_TRACE_DEG,
 ): TraceCarte | null {
-  const epreuve = doc?.epreuves[slug];
-  if (doc == null || epreuve === undefined) return null;
+  // hasOwn : le slug peut venir d'une URL publique, et `epreuves['constructor']`
+  // rendrait la fonction héritée de Object plutôt que `undefined`.
+  if (doc == null || !Object.hasOwn(doc.epreuves, slug)) return null;
+  const epreuve = doc.epreuves[slug];
+  if (epreuve === undefined) return null;
 
   const points: PointTrace[] = [];
   const distances: number[] = [];

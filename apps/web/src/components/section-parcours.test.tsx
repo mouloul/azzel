@@ -165,7 +165,6 @@ describe('section parcours accueil — sélecteur sans JavaScript (story 9.3)', 
   });
 
   it('emplacement de la visualisation annoncé, utile tel quel — jamais un cadre vide', () => {
-    expect(html).toContain('id="titre-viz-parcours"');
     expect(html).toContain('carte en relief et le profil altimétrique');
     expect(html).toMatch(/aria-hidden="true"[^>]*data-parcours-viz|data-parcours-viz[^>]*aria-hidden="true"/);
     expect(html).not.toContain('<iframe');

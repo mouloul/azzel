@@ -125,18 +125,28 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
   };
   const html = renderToStaticMarkup(<SectionParcours view={vue} />);
 
-  it('la bascule pilote AUSSI la viz : règle :has() radio i ↔ [data-viz="i"]', () => {
-    for (const rang of [0, 1]) {
-      expect(html).toContain(
-        `.aa-parcours-accueil:has([data-bascule="${rang}"]:checked) [data-viz="${rang}"]{display:block}`,
-      );
-    }
+  /* Recette du 05/11/2026 : la visualisation n'est plus un aside à part avec sa
+   * propre règle de bascule — elle vit DANS le panneau de son épreuve (vue du
+   * POC). La bascule radio → panneau suffit donc, et chaque panneau porte la
+   * sienne. */
+  function tranchePanneau(rang: number): string {
+    const debut = html.indexOf(
+      `<article class="socle-carte aa-parcours-accueil__panneau" data-panneau="${rang}">`,
+    );
+    expect(debut).toBeGreaterThan(-1);
+    const fin = html.indexOf('</article>', debut);
+    return html.slice(debut, fin);
+  }
+
+  it('plus d’aside viz ni de règle de bascule dédiée : la viz suit son panneau', () => {
+    expect(html).not.toContain('data-viz=');
+    expect(html).not.toContain('titre-viz-parcours');
   });
 
-  it('longue (données) : profil SVG servi dans l’aside, annonce absente', () => {
-    expect(html).toContain('data-viz="0"');
-    expect(html).toContain('aa-profil__aire--roulant');
-    expect(html).not.toContain('seront publiés avec\n');
+  it('longue (données) : la vue du POC est DANS son panneau, annonce absente', () => {
+    expect(tranchePanneau(0)).toContain('class="vp"');
+    expect(tranchePanneau(0)).not.toContain('seront publiés');
+    expect(tranchePanneau(1)).not.toContain('class="vp"');
   });
 
   it('décision produit 2026-11-04 : panneau longue = distance du relevé + mention « tracé provisoire »', () => {

@@ -14,6 +14,7 @@ import { SectionPartenaires } from '@/components/section-partenaires';
 import { SectionParcours } from '@/components/section-parcours';
 import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { getParcoursDoc } from '@/modules/contenus/parcours/lecture';
 import { getSectionParcours } from '@/modules/contenus/section-parcours';
 import { resolveTrailerPlayer } from '@/modules/retour-images/domain';
 import { getDateCourseVitrine, getPlacesVitrine } from '@/modules/inscriptions/service';
@@ -57,6 +58,8 @@ const PILIERS = [
     texte: 'Les sentiers traversent la forêt de Yakouren.',
   },
 ];
+
+import './vue-parcours.css';
 
 export const metadata = {
   title: 'Week-end Sportif Aït Aïssi',
@@ -213,63 +216,58 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="vitrine-bande" aria-labelledby="titre-epreuves-2027">
-        <div className="aa-section">
-          <p className="aa-eyebrow">Les épreuves</p>
-          <h2 className="aa-h2" id="titre-epreuves-2027">
-            Deux trails au départ du stade
-          </h2>
-          <p className="aa-lead">
-            {premiereMajuscule(dateCourse.phrase)}, deux courses de trail partent du stade Agni Lhoudh, sur les
-            sentiers de la forêt de Yakouren.
-          </p>
-          <div className="aa-cards">
-            <article className="aa-card">
-              <span className="aa-chip aa-chip--phare">Épreuve phare</span>
-              <h3 className="aa-card__title">Trail long</h3>
-              <p className="aa-card__text">
-                La grande course de l’édition 2027, au départ du stade Agni Lhoudh.
-              </p>
-            </article>
-            <article className="aa-card">
-              <h3 className="aa-card__title">Trail moyen</h3>
-              <p className="aa-card__text">
-                Une distance plus courte, le même jour, sur les mêmes sentiers.
-              </p>
-            </article>
-          </div>
-          <p className="aa-liens-vitrine">
-            <Link className="aa-lien-texte" href="/parcours">
-              Parcours, horaires et consignes
-            </Link>
-            <Link className="aa-lien-texte" href="/region">
-              Hébergement et infos pratiques dans la région
-            </Link>
-          </p>
-          <div className="aa-galerie">
-            <AaPhoto
-              src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
-              srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
-              alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
-              width={640}
-              height={360}
-            />
-            <AaPhoto
-              src={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-640.webp`}
-              srcLarge={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-1280.webp`}
-              alt="Coureurs à l’arrivée, médailles au cou, édition 2026"
-              width={640}
-              height={360}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Section parcours (story 9.3) : coquille de comparaison des deux
-          épreuves — sélecteur sans JS, champs réels seulement (nom, distance,
-          GPX), emplacement de la visualisation annoncé (épopée 11). Après le
-          hero et la section épreuves : jamais le premier écran. */}
-      <SectionParcours view={parcours} />
+      {/* Section « épreuves » et section « parcours » FUSIONNÉES (recette du
+          05/11/2026) : l'accueil montrait d'abord deux cartes d'accroche, puis,
+          plus bas, un sélecteur et une fiche. Un seul bloc désormais — on choisit
+          Longue ou Moyenne, et le détail de l'épreuve (chiffres, carte en relief,
+          profil) s'affiche juste en dessous. Reprise de la vue du POC 3D. */}
+      <SectionParcours
+        entete={{
+          id: 'titre-epreuves-2027',
+          surtitre: 'Les épreuves',
+          titre: 'Deux trails au départ du stade',
+          chapeau: `${premiereMajuscule(dateCourse.phrase)}, deux courses de trail partent du stade Agni Lhoudh, sur les sentiers de la forêt de Yakouren.`,
+        }}
+        presentations={{
+          longue: {
+            phare: true,
+            texte: 'La grande course de l’édition 2027, au départ du stade Agni Lhoudh.',
+          },
+          moyenne: {
+            texte: 'Une distance plus courte, le même jour, sur les mêmes sentiers.',
+          },
+        }}
+        pied={
+          <>
+            <p className="aa-liens-vitrine">
+              <Link className="aa-lien-texte" href="/parcours">
+                Parcours, horaires et consignes
+              </Link>
+              <Link className="aa-lien-texte" href="/region">
+                Hébergement et infos pratiques dans la région
+              </Link>
+            </p>
+            <div className="aa-galerie">
+              <AaPhoto
+                src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
+                srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
+                alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
+                width={640}
+                height={360}
+              />
+              <AaPhoto
+                src={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-640.webp`}
+                srcLarge={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-1280.webp`}
+                alt="Coureurs à l’arrivée, médailles au cou, édition 2026"
+                width={640}
+                height={360}
+              />
+            </div>
+          </>
+        }
+        version={getParcoursDoc()?.version ?? 0}
+        view={parcours}
+      />
 
       <section
         className="vitrine-bande"

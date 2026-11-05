@@ -1,7 +1,9 @@
 import Link from 'next/link';
 
 import { isHttpsUrl } from '@/modules/contenus/domain';
-import { ProfilAltimetrique } from '@/components/profil-altimetrique';
+import { VueParcours } from '@/components/vue-parcours';
+import type { ReactNode } from 'react';
+
 import type {
   EpreuveSectionParcours,
   MetriquesEpreuve,
@@ -66,12 +68,27 @@ function lignesSynthese(epreuve: EpreuveSectionParcours): [label: string, valeur
 function reglesBascule(nombre: number): string {
   return Array.from({ length: nombre }, (_, i) =>
     `.aa-parcours-accueil:has([data-bascule="${i}"]:checked) [data-panneau="${i}"]{display:block}` +
-    `.aa-parcours-accueil:has([data-bascule="${i}"]:checked) [data-viz="${i}"]{display:block}` +
     `.aa-parcours-accueil:has([data-bascule="${i}"]:checked) [data-libelle="${i}"]{background:var(--az-action);border-color:transparent;color:var(--az-action-texte)}`,
   ).join('');
 }
 
-function PanneauEpreuve({ epreuve, rang }: { epreuve: EpreuveSectionParcours; rang: number }) {
+/** Texte d'accroche d'une épreuve, affiché en tête de son panneau. */
+export interface PresentationEpreuve {
+  phare?: boolean;
+  texte: string;
+}
+
+function PanneauEpreuve({
+  epreuve,
+  rang,
+  version,
+  presentation,
+}: {
+  epreuve: EpreuveSectionParcours;
+  rang: number;
+  version: number;
+  presentation?: PresentationEpreuve;
+}) {
   // Garde de rendu (défense en profondeur, même garde que /parcours) : une URL
   // non https échappée en base ne devient jamais un href.
   const gpxUrl =
@@ -79,18 +96,70 @@ function PanneauEpreuve({ epreuve, rang }: { epreuve: EpreuveSectionParcours; ra
   const points = epreuve.pointsDePassage;
   // Données issues du relevé d’essai (parcours.json) : métriques ou profil.
   // La moyenne (aucun tracé fourni) ne porte JAMAIS la mention.
-  const duReleve = epreuve.metriques !== null || (epreuve.profil ?? null) !== null;
+  const profil = epreuve.profil ?? null;
+  const duReleve = epreuve.metriques !== null || profil !== null;
   return (
     <article className="socle-carte aa-parcours-accueil__panneau" data-panneau={rang}>
+      {presentation?.phare === true ? (
+        <span className="aa-chip aa-chip--phare">Épreuve phare</span>
+      ) : null}
       <h3 className="aa-card__title">{epreuve.nom}</h3>
-      <dl className="aa-parcours-accueil__synthese">
-        {lignesSynthese(epreuve).map(([label, valeur]) => (
-          <div className="aa-parcours-accueil__ligne" key={label}>
-            <dt>{label}</dt>
-            <dd>{valeur}</dd>
+      {presentation !== undefined ? (
+        <p className="aa-card__text">{presentation.texte}</p>
+      ) : null}
+      {profil !== null ? (
+        // La vue du POC : chiffres, carte en relief, commandes et profil
+        // coloré par pente. Elle remplace la fiche chiffrée ET l'ancien
+        // profil, qui disaient la même chose en moins lisible.
+        <VueParcours
+          nom={epreuve.nom}
+          profil={profil}
+          slug={epreuve.slug}
+          // Les métriques publiées d'abord ; à défaut, ce que le profil sait
+          // lui-même (D+ et altitudes). Une vue avec profil ne retombe jamais
+          // sur « sera publié » : la donnée est là.
+          stats={{
+            distanceKm: epreuve.distanceKm,
+            denivelePositifM: epreuve.metriques?.denivelePositifM ?? profil.dplusM,
+            deniveleNegatifM: epreuve.metriques?.deniveleNegatifM ?? null,
+            altitudeMinM: epreuve.metriques?.altitudeMinM ?? profil.altitudeMinM,
+            altitudeMaxM: epreuve.metriques?.altitudeMaxM ?? profil.altitudeMaxM,
+          }}
+          version={version}
+        />
+      ) : (
+        <>
+          <dl className="aa-parcours-accueil__synthese">
+            {lignesSynthese(epreuve).map(([label, valeur]) => (
+              <div className="aa-parcours-accueil__ligne" key={label}>
+                <dt>{label}</dt>
+                <dd>{valeur}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="aa-parcours-accueil__annonce">
+            <svg
+              aria-hidden="true"
+              data-parcours-viz=""
+              focusable="false"
+              viewBox="0 0 120 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              width="120"
+              height="24"
+            >
+              <path d="M0 20 L18 8 L30 14 L44 4 L60 13 L76 6 L90 15 L104 9 L120 20" />
+            </svg>
+            <p className="aa-parcours-accueil__viz-texte">
+              La carte en relief et le profil altimétrique seront publiés avec le tracé
+              officiel. En attendant, comparez les fiches et téléchargez les tracés GPX.
+            </p>
           </div>
-        ))}
-      </dl>
+        </>
+      )}
       {/* Servi SANS JavaScript : la mention fait partie du markup de base
           (décision produit 2026-11-04, texte en constante unique). */}
       {duReleve ? (
@@ -128,18 +197,35 @@ function PanneauEpreuve({ epreuve, rang }: { epreuve: EpreuveSectionParcours; ra
   );
 }
 
-export function SectionParcours({ view }: { view: SectionParcoursView }) {
+export function SectionParcours({
+  view,
+  version = 0,
+  entete,
+  presentations,
+  pied,
+}: {
+  view: SectionParcoursView;
+  /** Version publiée du document : elle est dans l'URL du tracé servi à la carte. */
+  version?: number;
+  /** Surtitre, titre et chapeau de la section ; ceux par défaut sinon. */
+  entete?: { id: string; surtitre: string; titre: string; chapeau: ReactNode };
+  /** Accroche de chaque épreuve, par slug. */
+  presentations?: Readonly<Record<string, PresentationEpreuve>>;
+  /** Contenu sous le sélecteur (liens, galerie…). */
+  pied?: ReactNode;
+}) {
   const { epreuves } = view;
+  const idTitre = entete?.id ?? 'titre-parcours-accueil';
   return (
-    <section className="vitrine-bande aa-parcours-accueil" aria-labelledby="titre-parcours-accueil">
+    <section className="vitrine-bande aa-parcours-accueil" aria-labelledby={idTitre}>
       <div className="aa-section">
-        <p className="aa-eyebrow">Les parcours</p>
-        <h2 className="aa-h2" id="titre-parcours-accueil">
-          Comparer les deux trails
+        <p className="aa-eyebrow">{entete?.surtitre ?? 'Les parcours'}</p>
+        <h2 className="aa-h2" id={idTitre}>
+          {entete?.titre ?? 'Comparer les deux trails'}
         </h2>
         <p className="aa-lead">
-          Choisissez une épreuve : la fiche affichée la suit entièrement, du
-          kilométrage au tracé GPX.
+          {entete?.chapeau ??
+            'Choisissez une épreuve : la fiche affichée la suit entièrement, du kilométrage au tracé GPX.'}
         </p>
         {epreuves.length === 0 ? (
           <p className="aa-note">
@@ -179,54 +265,15 @@ export function SectionParcours({ view }: { view: SectionParcoursView }) {
             <style dangerouslySetInnerHTML={{ __html: reglesBascule(epreuves.length) }} />
             <div className="aa-parcours-accueil__panneaux">
               {epreuves.map((epreuve, rang) => (
-                <PanneauEpreuve epreuve={epreuve} key={epreuve.slug} rang={rang} />
+                <PanneauEpreuve
+                  epreuve={epreuve}
+                  key={epreuve.slug}
+                  presentation={presentations?.[epreuve.slug]}
+                  rang={rang}
+                  version={version}
+                />
               ))}
             </div>
-            <aside className="aa-parcours-accueil__viz" aria-labelledby="titre-viz-parcours">
-              {/* Story 11.4 — la visualisation suit l’épreuve active (mêmes
-                  règles :has() que les panneaux) : profil SVG complet si
-                  l’épreuve a un tracé publié, annonce utile sinon — jamais un
-                  cadre vide ni une erreur. */}
-              <p className="aa-parcours-accueil__viz-surtitre">Visualisation</p>
-              <h3 className="aa-parcours-accueil__viz-titre" id="titre-viz-parcours">
-                Le relief de l’épreuve
-              </h3>
-              {epreuves.map((epreuve, rang) => {
-                const profil = epreuve.profil ?? null;
-                return profil === null ? (
-                  <div className="aa-parcours-accueil__annonce" data-viz={rang} key={epreuve.slug}>
-                    <svg
-                      aria-hidden="true"
-                      data-parcours-viz=""
-                      focusable="false"
-                      viewBox="0 0 120 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      width="120"
-                      height="24"
-                    >
-                      <path d="M0 20 L18 8 L30 14 L44 4 L60 13 L76 6 L90 15 L104 9 L120 20" />
-                    </svg>
-                    <p className="aa-parcours-accueil__viz-texte">
-                      La carte en relief et le profil altimétrique seront publiés avec
-                      le tracé officiel. En attendant, comparez les fiches ci-dessus et
-                      téléchargez les tracés GPX.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="aa-parcours-accueil__profil" data-viz={rang} key={epreuve.slug}>
-                    <ProfilAltimetrique
-                      nomEpreuve={epreuve.nom}
-                      profil={profil}
-                      slugEpreuve={epreuve.slug}
-                    />
-                  </div>
-                );
-              })}
-            </aside>
           </>
         )}
         <p className="aa-liens-vitrine">
@@ -234,6 +281,7 @@ export function SectionParcours({ view }: { view: SectionParcoursView }) {
             Voir le détail des parcours
           </Link>
         </p>
+        {pied}
       </div>
     </section>
   );

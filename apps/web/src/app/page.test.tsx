@@ -173,13 +173,22 @@ describe('accueil vitrine — rendu statique', () => {
    * les titres. Elles sont publiées par la section parcours, depuis le relevé,
    * avec la mention « tracé provisoire » — un seul endroit à corriger quand le
    * tracé définitif arrivera. */
-  it('épreuves 2027 : les cartes nomment les trails, sans distance figée', () => {
+  it('épreuves 2027 : UNE seule section, les accroches des deux épreuves, sans distance figée', () => {
     const html = HTML_ACCUEIL;
-    expect(html).toContain('Trail long');
-    expect(html).toContain('Trail moyen');
+    // Recette du 05/11/2026 : « Les épreuves » et « Les parcours » sont fusionnées.
+    expect(html.match(/id="titre-epreuves-2027"/g)).toHaveLength(1);
+    expect(html).not.toContain('titre-parcours-accueil');
     expect(html).toContain('Épreuve phare');
+    expect(html.match(/Épreuve phare/g)).toHaveLength(1);
+    expect(html).toContain('La grande course de l’édition 2027');
+    expect(html).toContain('Une distance plus courte, le même jour');
     expect(html).not.toContain('Trail long — 35 km');
     expect(html).not.toContain('Trail moyen — 12 km');
+  });
+
+  it('les deux cartes d’accroche autonomes ont disparu : plus de « Trail long » / « Trail moyen »', () => {
+    expect(HTML_ACCUEIL).not.toContain('aa-cards');
+    expect(HTML_ACCUEIL).not.toContain('Trail moyen');
   });
 
   it('aucune distance contredisant le relevé ne subsiste dans l’accueil', () => {
@@ -337,17 +346,16 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
 
 describe('accueil vitrine — section parcours (story 9.3)', () => {
   function trancheSection(): string {
-    const debut = HTML_ACCUEIL.indexOf('titre-parcours-accueil');
+    const debut = HTML_ACCUEIL.indexOf('titre-epreuves-2027');
     expect(debut).toBeGreaterThan(-1);
     const fin = HTML_ACCUEIL.indexOf('titre-piliers', debut);
     return HTML_ACCUEIL.slice(debut, fin);
   }
 
-  it('après le hero et la section épreuves — jamais le premier écran', () => {
+  it('après le hero, avant le village — jamais le premier écran', () => {
     const html = HTML_ACCUEIL;
-    expect(html.indexOf('aa-hero--plein')).toBeLessThan(html.indexOf('titre-parcours-accueil'));
-    expect(html.indexOf('titre-epreuves-2027')).toBeLessThan(html.indexOf('titre-parcours-accueil'));
-    expect(html.indexOf('titre-parcours-accueil')).toBeLessThan(html.indexOf('titre-piliers'));
+    expect(html.indexOf('aa-hero--plein')).toBeLessThan(html.indexOf('titre-epreuves-2027'));
+    expect(html.indexOf('titre-epreuves-2027')).toBeLessThan(html.indexOf('titre-piliers'));
   });
 
   it('sélecteur servi : deux radios homonymes, premier coché, fiches des deux épreuves', () => {
@@ -376,9 +384,8 @@ describe('accueil vitrine — section parcours (story 9.3)', () => {
     }
   });
 
-  it('emplacement de la visualisation annoncé, section rendue sans la visualisation', () => {
+  it('épreuve sans tracé publié : annonce utile dans son panneau, section rendue sans moteur', () => {
     const section = trancheSection();
-    expect(section).toContain('titre-viz-parcours');
     expect(section).toContain('carte en relief et le profil altimétrique');
     expect(section).not.toContain('<iframe');
     expect(section).not.toContain('<canvas');

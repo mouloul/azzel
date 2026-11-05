@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import {
-  EXAGERATION,
-  webglDisponible,
-  type TraceCarte,
-} from '@/modules/contenus/parcours/carte';
+import { EXAGERATION, webglDisponible } from '@/modules/contenus/parcours/carte';
+import { chargerTrace } from '@/modules/contenus/parcours/trace-client';
 import { ATTRIBUTION_COURTE, attributions } from '@/modules/contenus/parcours/fonds-carte';
+import { couleursDuTheme } from '@/components/carte-couleurs';
 import { EVENEMENT_CURSEUR } from '@/components/profil-curseur';
 import type { PiloteCarte } from '@/components/carte-maplibre';
 
@@ -24,31 +22,16 @@ import type { PiloteCarte } from '@/components/carte-maplibre';
 
 type Etat = 'repos' | 'chargement' | 'ouverte' | 'indisponible';
 
-/** Couleurs lues sur le document : la carte suit le thème comme le reste. */
-function couleursDuTheme(): {
-  trace: string;
-  halo: string;
-  cielHaut: string;
-  cielHorizon: string;
-} {
-  const style = getComputedStyle(document.documentElement);
-  const jeton = (nom: string, repli: string) => style.getPropertyValue(nom).trim() || repli;
-  return {
-    trace: jeton('--az-carte-trace', '#A3400C'),
-    halo: jeton('--az-carte-halo', '#FFFFFF'),
-    cielHaut: jeton('--az-carte-ciel-haut', '#86B4E0'),
-    cielHorizon: jeton('--az-carte-ciel-horizon', '#CFE0EF'),
-  };
-}
-
 export function CarteParcours({
   nomEpreuve,
-  trace,
-  reperes,
+  slug,
+  version,
 }: {
   nomEpreuve: string;
-  trace: TraceCarte;
-  reperes: readonly { id: string; nom: string; lon: number; lat: number; libelle: string }[];
+  /** Épreuve dont le tracé est réclamé à l'ouverture. */
+  slug: string;
+  /** Version publiée du document : elle est dans l'URL, donc dans le cache. */
+  version: number;
 }) {
   const [etat, setEtat] = useState<Etat>('repos');
   const [message, setMessage] = useState<string | null>(null);
@@ -72,7 +55,13 @@ export function CarteParcours({
 
     setEtat('chargement');
     try {
-      const { ouvrirCarte } = await import('@/components/carte-maplibre');
+      // Le tracé n'est PAS dans le HTML de la page : il serait parti à chaque
+      // visite, carte ouverte ou non (993 points, ~30 Ko). Il est réclamé ici,
+      // avec le moteur, au clic.
+      const [{ trace, reperes }, { ouvrirCarte }] = await Promise.all([
+        chargerTrace(slug, version),
+        import('@/components/carte-maplibre'),
+      ]);
       const mouvementReduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       piloteRef.current = await ouvrirCarte({
         conteneur,
@@ -88,7 +77,7 @@ export function CarteParcours({
         'La carte n’a pas pu se charger — fond de carte injoignable ou connexion interrompue. Le détail du parcours reste donné ci-dessus.',
       );
     }
-  }, [reperes, trace]);
+  }, [slug, version]);
 
   // Bus de l'épopée 11 : le curseur du profil (story 11.4) déplace le repère
   // de la carte. L'écoute ne s'installe qu'une fois la carte ouverte, et

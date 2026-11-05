@@ -201,3 +201,14 @@ describe('simplifierTrace', () => {
     expect(simplifierTrace([[0, 0, 0]], 0.1)).toEqual([0]);
   });
 });
+
+describe('traceCarte — slug fourni par un visiteur', () => {
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    'le slug « %s » rend null : un nom hérité de Object ne passe pas pour une épreuve',
+    (slug) => {
+      // La route publique du tracé transmet le slug de l'URL. Sans garde,
+      // `epreuves['constructor']` rend une fonction et `.tranches` lève.
+      expect(traceCarte(PARCOURS_DOC, slug)).toBeNull();
+    },
+  );
+});

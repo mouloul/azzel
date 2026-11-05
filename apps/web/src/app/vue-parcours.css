@@ -1,0 +1,324 @@
+/* Vue du parcours de l'accueil — composition du POC « carte 3D du parcours ».
+ *
+ * Un bloc sombre, comme le POC : une bande de chiffres, la carte, quelques
+ * commandes, le profil. Il reste sombre dans les deux thèmes — une carte en
+ * relief et un profil coloré par pente se lisent mal sur fond clair, et les
+ * quatre teintes de pente sont les mêmes partout pour que la légende reste vraie.
+ *
+ * Aucun littéral de couleur : tout vient des tokens (css-sans-litteraux.test.ts). */
+
+.vp {
+  --vp-trait: color-mix(in srgb, var(--on-forest) 18%, transparent);
+  --vp-doux: color-mix(in srgb, var(--on-forest) 72%, transparent);
+
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--vp-trait);
+  border-radius: var(--az-rayon-md);
+  background: var(--forest-800);
+  color: var(--on-forest);
+}
+
+.vp__entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--az-space-2) var(--az-space-5);
+  padding: var(--az-space-3) var(--az-space-4);
+  border-bottom: 1px solid var(--vp-trait);
+  background: var(--forest);
+}
+
+.vp__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-1) var(--az-space-4);
+  margin: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vp__stat {
+  display: flex;
+  gap: var(--az-space-1);
+}
+
+.vp__stat dt {
+  color: var(--vp-doux);
+}
+
+.vp__stat dd {
+  margin: 0;
+  /* 600 et non 700 : Inter 700 n'est PAS chargée sur l'accueil, et la demander
+     coûte une police de plus (~21 Kio) sur le premier chargement. */
+  font-weight: 600;
+}
+
+/* Hauteur réservée AVANT le chargement : l'apparition de la carte ne doit pas
+   pousser ce qui la suit. */
+.vp__cadre {
+  position: relative;
+}
+
+.vp__toile {
+  width: 100%;
+  height: clamp(320px, 52vh, 520px);
+}
+
+.vp__voile {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--az-space-5);
+  background: var(--forest-800);
+  text-align: center;
+}
+
+.vp__voile p {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--vp-doux);
+}
+
+.vp__controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-2) var(--az-space-4);
+  align-items: center;
+  padding: var(--az-space-2) var(--az-space-4);
+  border-top: 1px solid var(--vp-trait);
+  background: var(--forest);
+}
+
+.vp__bouton {
+  min-height: 44px;
+  padding: var(--az-space-1) var(--az-space-4);
+  border: 1px solid var(--vp-trait);
+  border-radius: var(--az-radius-sm);
+  background: color-mix(in srgb, var(--on-forest) 8%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vp__bouton:hover:not(:disabled) {
+  border-color: var(--vp-doux);
+}
+
+.vp__bouton[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--az-action);
+  color: var(--az-action-texte);
+}
+
+.vp__bouton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Focus sur fond sombre : l'anneau doit être clair (le focus par défaut est
+   prévu pour un fond clair — contrastes.test.ts, pattern du hero). */
+.vp :is(button, input, [role='slider']):focus-visible {
+  outline: 2px solid var(--on-forest);
+  outline-offset: 2px;
+}
+
+.vp__reglage {
+  display: flex;
+  align-items: center;
+  gap: var(--az-space-2);
+  min-height: 44px;
+  color: var(--vp-doux);
+  font-size: 14px;
+}
+
+.vp__reglage input[type='range'] {
+  width: 120px;
+  min-height: 44px;
+  accent-color: var(--az-action);
+}
+
+.vp__reglage output {
+  min-width: 2.5ch;
+  color: var(--on-forest);
+  font-variant-numeric: tabular-nums;
+}
+
+.vp__profil {
+  border-top: 1px solid var(--vp-trait);
+}
+
+.vp__entete-profil {
+  display: flex;
+  align-items: center;
+  gap: var(--az-space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 0;
+  background: color-mix(in srgb, var(--on-forest) 6%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vp__entete-profil:hover {
+  background: color-mix(in srgb, var(--on-forest) 10%, transparent);
+}
+
+.vp__chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--az-action);
+  color: var(--az-action-texte);
+  font-size: 11px;
+  transition: transform 0.2s;
+}
+
+.vp__profil--replie .vp__chevron {
+  transform: rotate(-90deg);
+}
+
+.vp__resume {
+  margin-left: auto;
+  color: var(--vp-doux);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.vp__zone {
+  padding: 6px 8px 4px;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.vp__svg {
+  display: block;
+  width: 100%;
+  max-height: 32vh;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+  font-family: inherit;
+}
+
+.vp__grille {
+  stroke: var(--vp-trait);
+  stroke-width: 1;
+}
+
+.vp__axe,
+.vp__texte-doux {
+  fill: var(--vp-doux);
+  font-size: 12px;
+}
+
+.vp__texte-fort {
+  fill: var(--on-forest);
+  font-size: 12px;
+}
+
+.vp__repere-trait {
+  stroke: var(--vp-doux);
+  stroke-dasharray: 3 3;
+  stroke-width: 1;
+}
+
+.vp__repere {
+  fill: var(--az-action);
+  stroke: var(--on-forest);
+  stroke-width: 1.5;
+}
+
+.vp__repere--depart {
+  fill: var(--az-succes);
+}
+
+.vp__curseur-trait {
+  stroke: var(--on-forest);
+  stroke-width: 1;
+}
+
+.vp__curseur-point {
+  fill: var(--on-forest);
+  stroke: var(--az-action);
+  stroke-width: 2;
+}
+
+.vp__bulle {
+  fill: var(--forest);
+  stroke: var(--vp-trait);
+}
+
+.vp__legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--az-space-1) var(--az-space-4);
+  margin: var(--az-space-2) 0 0;
+  padding: 0 var(--az-space-4);
+  list-style: none;
+  font-size: 13px;
+  color: var(--vp-doux);
+}
+
+.vp__pastille {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: var(--az-space-2);
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.vp__synthese {
+  margin: var(--az-space-2) 0 0;
+  padding: 0 var(--az-space-4) var(--az-space-3);
+  color: var(--vp-doux);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* FR-32 : attributions hors du canvas — jamais recouvertes par la carte. */
+.vp__attributions {
+  margin: 0;
+  padding: var(--az-space-2) var(--az-space-4);
+  border-top: 1px solid var(--vp-trait);
+  list-style: none;
+  color: var(--vp-doux);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Étroit : le viewBox de 1000 unités est réduit à ~40 % ; sans cela, les
+   libellés du profil tombent sous 5 px et ne se lisent plus. */
+@media (max-width: 640px) {
+  .vp__axe,
+  .vp__texte-fort {
+    font-size: 26px;
+  }
+
+  .vp__texte-doux {
+    font-size: 24px;
+  }
+
+  .vp__svg {
+    max-height: none;
+  }
+
+  .vp__toile {
+    height: clamp(300px, 60vh, 460px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vp__chevron {
+    transition: none;
+  }
+}
