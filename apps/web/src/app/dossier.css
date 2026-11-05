@@ -475,3 +475,173 @@
   display: grid;
   gap: var(--az-space-2);
 }
+
+/* --- Espace coureur : même langage que l'inscription et les documents ----- */
+
+.espace {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+/* .auth .card + .card posait une marge entre les cartes : la grille porte
+   désormais l'écart, la marge ferait double emploi. */
+.espace > .card + .card {
+  margin-top: 0;
+}
+
+/* Bloc compte : à partir de 720 px, le texte à gauche et la déconnexion à
+   droite plutôt qu'empilés dans une colonne étroite. */
+@media (min-width: 720px) {
+  .espace-compte {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--az-space-6);
+  }
+
+  .espace-compte__action {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    align-self: center;
+  }
+}
+
+/* Dossier : les pièces à gauche, le récapitulatif en colonne latérale. */
+.espace-dossier__corps {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+@media (min-width: 960px) {
+  .espace-dossier__corps {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    align-items: start;
+  }
+
+  .espace-recap {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+/* Jauge : la barre ne porte AUCUNE information propre, elle double le compteur
+   écrit. D'où aria-hidden côté balisage. */
+.checklist-jauge {
+  height: 8px;
+  border-radius: var(--az-radius-full);
+  background: color-mix(in srgb, var(--az-filet-controle) 40%, transparent);
+  overflow: hidden;
+}
+
+.checklist-jauge__remplie {
+  display: block;
+  height: 100%;
+  border-radius: var(--az-radius-full);
+  background: var(--az-succes);
+  transition: width 0.3s ease;
+}
+
+/* Pièces : du filet plat au PANNEAU, comme les sections du formulaire. */
+.espace .checklist {
+  gap: var(--az-space-4);
+}
+
+.espace .checklist-item {
+  gap: var(--az-space-3);
+  padding: var(--az-space-4) var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.espace .checklist-item--fait {
+  border-left: 4px solid var(--az-succes);
+}
+
+.espace .checklist-entete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--az-space-3);
+}
+
+/* Puce agrandie : un disque de 28 px qui porte un ✓ quand la pièce est faite.
+   La forme change avec l'état, pas seulement la couleur — le texte « Fait » /
+   « À faire » reste porteur de sens. */
+.espace .checklist-puce {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--az-action-texte);
+}
+
+.espace .checklist-item--fait .checklist-puce::after {
+  content: '✓';
+}
+
+.espace .checklist-libelle {
+  font-size: 17px;
+}
+
+/* État en pastille plutôt qu'un mot isolé au bord de la ligne. */
+.espace .checklist-etat {
+  margin-left: 0;
+  padding: var(--az-space-1) var(--az-space-3);
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  white-space: nowrap;
+}
+
+.espace .checklist-etat--fait {
+  border-color: var(--az-succes);
+  background: color-mix(in srgb, var(--az-succes) 10%, transparent);
+}
+
+.espace .checklist-etat--refuse {
+  border-color: var(--az-danger);
+  background: color-mix(in srgb, var(--az-danger) 10%, transparent);
+}
+
+/* Actions alignées sous le libellé : puce (28 px) + écart (12 px). */
+.espace .checklist-item .checklist-action,
+.espace .checklist-item .checklist-action-inactive,
+.espace .checklist-item .error-box {
+  margin-left: calc(28px + var(--az-space-3));
+}
+
+/* Récapitulatif : panneau, comme le reste de l'écran. */
+.espace .recap {
+  padding: var(--az-space-4) var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-left: 4px solid var(--az-action);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.espace .checklist-bandeau {
+  padding: var(--az-space-4) var(--az-space-5);
+  border-radius: var(--az-rayon-md);
+}
+
+@media (max-width: 480px) {
+  /* Étroit : la pastille d'état passe sous le libellé plutôt que de
+     l'écraser. */
+  .espace .checklist-entete {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .espace .checklist-etat {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .espace .checklist-item .checklist-action,
+  .espace .checklist-item .checklist-action-inactive,
+  .espace .checklist-item .error-box {
+    margin-left: 0;
+  }
+}

@@ -58,8 +58,8 @@ export default async function EspaceCoureurPage() {
   }
 
   return (
-    <section className="auth">
-      <article className="card">
+    <section className="auth auth-wide dossier-section espace">
+      <article className="card espace-compte">
         <p className="surtitre">Espace coureur</p>
         <h1>Tu es connecté</h1>
         <p className="lead">
@@ -72,7 +72,7 @@ export default async function EspaceCoureurPage() {
           Session unique : te connecter sur un autre appareil déconnecte automatiquement
           celui-ci.
         </p>
-        <div className="auth-alt">
+        <div className="auth-alt espace-compte__action">
           <LogoutButton />
         </div>
       </article>
@@ -130,12 +130,23 @@ function ChecklistCard({
   const complet = estComplet(pieces);
 
   return (
-    <article className="card">
+    <article className="card espace-dossier">
       <p className="surtitre">Dossier</p>
       <h2>Ton dossier — {edition.nom}</h2>
       <p className="checklist-compteur" aria-live="polite">
         {compteurPieces(pieces)}
       </p>
+      {/* Jauge décorative : le compteur écrit ci-dessus porte déjà
+          l'information, la barre ne fait que la rendre lisible d'un coup
+          d'œil. */}
+      <div className="checklist-jauge" aria-hidden="true">
+        <span
+          className="checklist-jauge__remplie"
+          style={{
+            width: `${pieces.length === 0 ? 0 : Math.round((pieces.filter((piece) => piece.fait).length / pieces.length) * 100)}%`,
+          }}
+        />
+      </div>
       {complet && (
         <div role="status" className="checklist-bandeau">
           <p className="checklist-bandeau-texte">{BANDEAU_DOSSIER_VALIDE}</p>
@@ -146,6 +157,7 @@ function ChecklistCard({
           Ton e-dossard — QR à présenter au guichet
         </a>
       )}
+      <div className="espace-dossier__corps">
       <ol role="list" className="checklist">
         {pieces.map((piece) => {
           const etat = etatPiece(piece);
@@ -180,7 +192,7 @@ function ChecklistCard({
         })}
       </ol>
       {recap !== null && (
-        <div className="recap">
+        <aside className="recap espace-recap" aria-label="Récapitulatif de ton inscription">
           <p className="recap-titre">Récapitulatif</p>
           <p>
             Épreuve : <strong>{recap.epreuve} ({recap.distanceKm} km)</strong>
@@ -191,8 +203,9 @@ function ChecklistCard({
             Contact d’urgence : {recap.contactUrgenceNom} · {recap.contactUrgenceTelephone}
           </p>
           <p>Course le {formatDateFrUtc(recap.dateCourse)}</p>
-        </div>
+        </aside>
       )}
+      </div>
       <p className="meta">
         Clôture des inscriptions : {formatLocalDateTime(edition.registrationClosesAt)}
       </p>
