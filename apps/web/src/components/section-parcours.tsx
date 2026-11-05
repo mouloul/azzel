@@ -2,6 +2,10 @@ import Link from 'next/link';
 
 import { isHttpsUrl } from '@/modules/contenus/domain';
 import { VueParcours } from '@/components/vue-parcours';
+import {
+  analyserProfil,
+  redigerFicheTechnique,
+} from '@/modules/contenus/parcours/fiche-technique';
 import type { ReactNode } from 'react';
 
 import type {
@@ -75,8 +79,13 @@ function reglesBascule(nombre: number): string {
 /** Texte d'accroche d'une épreuve, affiché en tête de son panneau. */
 export interface PresentationEpreuve {
   phare?: boolean;
+  /** Titre d'affichage de l'épreuve ; son nom sinon. */
+  titre?: string;
   texte: string;
 }
+
+/** Intitulés des trois paragraphes de `redigerFicheTechnique`, dans l'ordre. */
+const RUBRIQUES_FICHE = ['Relief', 'Effort', 'Pentes'] as const;
 
 function PanneauEpreuve({
   epreuve,
@@ -100,12 +109,30 @@ function PanneauEpreuve({
   const duReleve = epreuve.metriques !== null || profil !== null;
   return (
     <article className="socle-carte aa-parcours-accueil__panneau" data-panneau={rang}>
-      {presentation?.phare === true ? (
-        <span className="aa-chip aa-chip--phare">Épreuve phare</span>
-      ) : null}
-      <h3 className="aa-card__title">{epreuve.nom}</h3>
-      {presentation !== undefined ? (
-        <p className="aa-card__text">{presentation.texte}</p>
+      <header className="aa-parcours-accueil__tete">
+        <p className="aa-parcours-accueil__surtitre">
+          {presentation?.phare === true ? (
+            <span className="aa-chip aa-chip--phare">Épreuve phare</span>
+          ) : null}
+          <span>
+            {nomCourt(epreuve.nom)} · {formatKm.format(epreuve.distanceKm)}
+            {NBSP}km
+          </span>
+        </p>
+        <h3 className="aa-parcours-accueil__titre">{presentation?.titre ?? epreuve.nom}</h3>
+        {presentation !== undefined ? (
+          <p className="aa-parcours-accueil__accroche">{presentation.texte}</p>
+        ) : null}
+      </header>
+      {profil !== null ? (
+        <div className="aa-parcours-accueil__fiche">
+          {redigerFicheTechnique(analyserProfil(profil)).map((paragraphe, i) => (
+            <section className="aa-parcours-accueil__rubrique" key={RUBRIQUES_FICHE[i]}>
+              <h4 className="aa-parcours-accueil__rubrique-titre">{RUBRIQUES_FICHE[i]}</h4>
+              <p>{paragraphe}</p>
+            </section>
+          ))}
+        </div>
       ) : null}
       {profil !== null ? (
         // La vue du POC : chiffres, carte en relief, commandes et profil
@@ -203,26 +230,37 @@ export function SectionParcours({
   entete,
   presentations,
   pied,
+  sansLienDetail = false,
 }: {
   view: SectionParcoursView;
   /** Version publiée du document : elle est dans l'URL du tracé servi à la carte. */
   version?: number;
   /** Surtitre, titre et chapeau de la section ; ceux par défaut sinon. */
-  entete?: { id: string; surtitre: string; titre: string; chapeau: ReactNode };
+  entete?: {
+    id: string;
+    surtitre: string;
+    titre: string;
+    chapeau: ReactNode;
+    /** Titre de niveau 1 : la section est alors le sujet de la page. */
+    h1?: boolean;
+  };
   /** Accroche de chaque épreuve, par slug. */
   presentations?: Readonly<Record<string, PresentationEpreuve>>;
   /** Contenu sous le sélecteur (liens, galerie…). */
   pied?: ReactNode;
+  /** Masque le lien vers la page Parcours quand la section est cette page. */
+  sansLienDetail?: boolean;
 }) {
   const { epreuves } = view;
   const idTitre = entete?.id ?? 'titre-parcours-accueil';
+  const Titre = entete?.h1 === true ? 'h1' : 'h2';
   return (
     <section className="vitrine-bande aa-parcours-accueil" aria-labelledby={idTitre}>
       <div className="aa-section">
         <p className="aa-eyebrow">{entete?.surtitre ?? 'Les parcours'}</p>
-        <h2 className="aa-h2" id={idTitre}>
+        <Titre className="aa-h2" id={idTitre}>
           {entete?.titre ?? 'Comparer les deux trails'}
-        </h2>
+        </Titre>
         <p className="aa-lead">
           {entete?.chapeau ??
             'Choisissez une épreuve : la fiche affichée la suit entièrement, du kilométrage au tracé GPX.'}
@@ -276,11 +314,13 @@ export function SectionParcours({
             </div>
           </>
         )}
-        <p className="aa-liens-vitrine">
-          <Link className="aa-lien-texte" href="/parcours">
-            Voir le détail des parcours
-          </Link>
-        </p>
+        {sansLienDetail ? null : (
+          <p className="aa-liens-vitrine">
+            <Link className="aa-lien-texte" href="/parcours">
+              Voir le détail des parcours
+            </Link>
+          </p>
+        )}
         {pied}
       </div>
     </section>

@@ -190,6 +190,10 @@ export interface ProfilEpreuve {
   points: readonly PointProfil[];
   /** Parts de distance par palier, toujours les 4 (même à 0). */
   parts: readonly PartPalier[];
+  /** Pentes fenêtrées extrêmes (%, valeurs absolues) lues sur TOUTE la séquence :
+   *  les points décimés n'en gardent pas forcément le sommet. */
+  penteMaxMonteePct: number;
+  penteMaxDescentePct: number;
   /** Départ/Arrivée (et demain les points de passage) au référentiel épreuve. */
   marqueurs: readonly MarqueurProfil[];
 }
@@ -393,6 +397,8 @@ export function construireProfilEpreuve(doc: ParcoursDoc, slug: string): ProfilE
     dplusM: vue.dplusM,
     points,
     parts: partsParPalier(sequence, pentes),
+    penteMaxMonteePct: arrondi(Math.max(0, ...pentes), 1),
+    penteMaxDescentePct: arrondi(Math.max(0, ...pentes.map((v) => -v)), 1),
     marqueurs: vue.pointsDePassage.map((point) => ({
       id: point.id,
       nom: nomParId.get(point.id) ?? point.id,

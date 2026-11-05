@@ -5,7 +5,7 @@ import { palierDePente, type PointProfil } from './profil';
  * Géométrie du profil altimétrique tel que le POC le dessine (module PUR).
  *
  * Le POC (« Trail d'Ath Aïssi », carte 3D) a été retenu pour son rendu : un
- * grand viewBox 1000 × 300 plafonné en hauteur, des aires colorées par pente,
+ * grand viewBox 1000 × 420, des aires colorées par pente,
  * un curseur qui suit le pointeur. Ce module en reprend la géométrie et les
  * teintes ; la mise en page est dans `components/vue-parcours.tsx`.
  *
@@ -15,7 +15,7 @@ import { palierDePente, type PointProfil } from './profil';
 /** ViewBox et marges du POC, en unités viewBox. */
 export const VUE = {
   largeur: 1000,
-  hauteur: 300,
+  hauteur: 420,
   gauche: 54,
   droite: 16,
   haut: 46,

@@ -11,6 +11,7 @@ import {
 } from '@/components/glyphes-piliers';
 import { CompteurPlaces } from '@/components/compteur-places';
 import { SectionPartenaires } from '@/components/section-partenaires';
+import { PRESENTATIONS_EPREUVES } from '@/components/presentations-epreuves';
 import { SectionParcours } from '@/components/section-parcours';
 import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
@@ -34,28 +35,46 @@ function premiereMajuscule(texte: string): string {
  * attendant le montage définitif. Dès qu'une adresse est enregistrée dans
  * /admin/retour-images, c'est elle qui l'emporte — ce lien n'est qu'un repli.
  */
-const TEASER_PROVISOIRE = 'https://youtu.be/ZLqzyLtao7A';
+const TEASER_PROVISOIRE = 'https://www.youtube.com/watch?v=jpvFJ2vTPZA';
 
+// Valeurs du dossier de partenariat 2027 (« Notre vision ») ; chiffres du
+// bilan officiel de l'édition 2026 (réunion du 4 avril 2026).
 const PILIERS = [
   {
     Glyphe: GlypheYaz,
-    titre: 'Sport',
-    texte: 'Deux trails au départ du stade Agni Lhoudh, sur les sentiers de Yakouren.',
+    titre: 'Sport & santé',
+    accroche: 'De 7 à 77 ans, l’envie de bouger.',
+    texte:
+      'Les traileurs confirmés côtoient les familles : pendant que le trail s’élance dans la forêt, le stade Agni Lhoudh accueille compétitions, initiations et découvertes.',
+    chiffre: '96 %',
+    legende: 'des coureurs au départ ont franchi l’arrivée en 2026',
   },
   {
     Glyphe: GlypheTala,
-    titre: 'Santé',
-    texte: '116 enfants ont couru la Course Kids lors de l’édition 2026.',
+    titre: 'Jeunesse',
+    accroche: 'Des disciplines nouvelles, le goût de l’effort.',
+    texte:
+      'Boxe, karaté, gymnastique, échecs : chaque discipline a sa zone sur le stade. Les jeunes regardent, s’essaient, et repartent parfois avec une passion.',
+    chiffre: '116 enfants',
+    legende: 'au départ de la Course Kids en 2026',
   },
   {
     Glyphe: GlypheTabzimt,
-    titre: 'Citoyenneté',
-    texte: 'Coureurs, familles et bénévoles se retrouvent au village d’Aït Aïssi.',
+    titre: 'Liens entre générations',
+    accroche: 'Un même rendez-vous pour toutes les générations.',
+    texte:
+      'Anciens, familles et sportifs se retrouvent au village d’Aït Aïssi. Chants, bendir et plats partagés accompagnent les athlètes du départ à l’arrivée : ici, une course est aussi une fête.',
+    chiffre: '2 jours',
+    legende: 'de sport et de fête au village',
   },
   {
     Glyphe: GlypheIngel,
-    titre: 'Écologie',
-    texte: 'Les sentiers traversent la forêt de Yakouren.',
+    titre: 'Nature & territoire',
+    accroche: 'La Kabylie, à travers ses sentiers.',
+    texte:
+      'Le trail traverse la forêt de Yakouren, l’un des grands massifs forestiers de la région, entre crêtes, sous-bois et ruelles du village. Une invitation à découvrir nos paysages.',
+    chiffre: '8 disciplines',
+    legende: 'sur le stade et dans la forêt en 2026',
   },
 ];
 
@@ -228,40 +247,58 @@ export default async function HomePage() {
           titre: 'Deux trails au départ du stade',
           chapeau: `${premiereMajuscule(dateCourse.phrase)}, deux courses de trail partent du stade Agni Lhoudh, sur les sentiers de la forêt de Yakouren.`,
         }}
-        presentations={{
-          longue: {
-            phare: true,
-            texte: 'La grande course de l’édition 2027, au départ du stade Agni Lhoudh.',
-          },
-          moyenne: {
-            texte: 'Une distance plus courte, le même jour, sur les mêmes sentiers.',
-          },
-        }}
+        presentations={PRESENTATIONS_EPREUVES}
+        sansLienDetail
         pied={
           <>
             <p className="aa-liens-vitrine">
               <Link className="aa-lien-texte" href="/parcours">
                 Parcours, horaires et consignes
               </Link>
-              <Link className="aa-lien-texte" href="/region">
-                Hébergement et infos pratiques dans la région
-              </Link>
             </p>
             <div className="aa-galerie">
-              <AaPhoto
-                src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
-                srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
-                alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
-                width={640}
-                height={360}
-              />
-              <AaPhoto
-                src={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-640.webp`}
-                srcLarge={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-1280.webp`}
-                alt="Coureurs à l’arrivée, médailles au cou, édition 2026"
-                width={640}
-                height={360}
-              />
+              <article className="aa-galerie__carte">
+                <AaPhoto
+                  src={`${PHOTOS}/aitaissi-2026-celebration-montagne-640.webp`}
+                  srcLarge={`${PHOTOS}/aitaissi-2026-celebration-montagne-1280.webp`}
+                  alt="Coureurs en célébration sur le sentier, en montagne, édition 2026"
+                  width={640}
+                  height={360}
+                />
+                <div className="aa-galerie__corps">
+                  <p className="aa-galerie__surtitre">L’ambiance</p>
+                  <h3 className="aa-galerie__titre">Une arrivée qui tourne à la fête</h3>
+                  <p className="aa-galerie__texte">
+                    Chants, bendir et applaudissements : tout le village attend
+                    les coureurs sur la ligne. Ici, on ne franchit pas l’arrivée
+                    seul.
+                  </p>
+                  <Link className="aa-lien-texte" href="/retour-en-images">
+                    Revivre l’édition 2026 en images
+                  </Link>
+                </div>
+              </article>
+              <article className="aa-galerie__carte">
+                <AaPhoto
+                  src={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-640.webp`}
+                  srcLarge={`${PHOTOS}/aitaissi-2026-arrivee-groupe-medailles-1280.webp`}
+                  alt="Coureurs à l’arrivée, médailles au cou, édition 2026"
+                  width={640}
+                  height={360}
+                />
+                <div className="aa-galerie__corps">
+                  <p className="aa-galerie__surtitre">La région et la nature</p>
+                  <h3 className="aa-galerie__titre">Au cœur de la forêt de Yakouren</h3>
+                  <p className="aa-galerie__texte">
+                    Chênes, crêtes et villages perchés de Kabylie : venir courir à
+                    Aït Aïssi, c’est aussi découvrir un territoire. Où dormir, comment
+                    venir, que voir autour.
+                  </p>
+                  <Link className="aa-lien-texte" href="/region">
+                    Découvrir la région et préparer son séjour
+                  </Link>
+                </div>
+              </article>
             </div>
           </>
         }
@@ -274,23 +311,33 @@ export default async function HomePage() {
         aria-labelledby="titre-piliers"
       >
         <div className="aa-section">
-          <p className="aa-eyebrow">Le village</p>
+          <p className="aa-eyebrow">Nos valeurs</p>
           <h2 className="aa-h2" id="titre-piliers">
-            Une course portée par son village
+            Le sport comme trait d’union
           </h2>
           <p className="aa-lead">
-            Sport, santé, citoyenneté, écologie : quatre piliers ancrent la
-            course dans la vie du village d’Aït Aïssi.
+            Né d’une idée simple, réunir tout un village et bien au-delà autour
+            du sport, le Week-end Sportif est porté par le comité de village, le
+            club sportif de jeunes et les associations d’Aït Aïssi. Une
+            conviction le guide : le sport rassemble les générations et fait
+            vivre un territoire.
           </p>
-          <div className="aa-piliers">
-            {PILIERS.map(({ Glyphe, titre, texte }) => (
-              <article className="aa-card aa-pilier" key={titre}>
-                <Glyphe />
-                <h3 className="aa-pilier__titre">{titre}</h3>
-                <p className="aa-pilier__texte">{texte}</p>
-              </article>
+          <ol className="aa-piliers">
+            {PILIERS.map(({ Glyphe, titre, accroche, texte, chiffre, legende }) => (
+              <li className="aa-piliers__item" key={titre}>
+                <article className="aa-card aa-pilier">
+                  <Glyphe />
+                  <h3 className="aa-pilier__titre">{titre}</h3>
+                  <p className="aa-pilier__accroche">{accroche}</p>
+                  <p className="aa-pilier__texte">{texte}</p>
+                  <p className="aa-pilier__fait">
+                    <span className="aa-pilier__chiffre">{chiffre}</span>
+                    <span className="aa-pilier__legende">{legende}</span>
+                  </p>
+                </article>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 

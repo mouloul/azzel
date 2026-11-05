@@ -1147,6 +1147,61 @@ main {
   margin: var(--space-8) 0 0;
 }
 
+.aa-galerie__carte {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.aa-galerie__carte .aa-photo {
+  margin: 0;
+  border-radius: 0;
+}
+
+.aa-galerie__corps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--az-space-2);
+  padding: var(--az-space-5);
+  border-top: 4px solid var(--accent);
+}
+
+.aa-galerie__surtitre {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.aa-galerie__titre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--az-font-size-display-sm);
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+.aa-galerie__texte {
+  margin: 0 0 var(--az-space-2);
+  font-size: var(--az-font-size-body);
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.aa-galerie__corps .aa-lien-texte {
+  margin-top: auto;
+}
+
 .aa-card > .aa-chip {
   margin-bottom: var(--az-space-3);
 }
@@ -1165,9 +1220,66 @@ main {
    Taille des glyphes : constante TAILLE_GLYPHE du composant (attributs SVG width/height). */
 .aa-piliers {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--az-space-5);
   grid-template-columns: 1fr;
   margin: var(--space-8) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aa-piliers__item {
+  display: flex;
+}
+
+.aa-pilier {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 4px solid var(--accent);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.aa-pilier:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--heading) 14%, transparent);
+}
+
+.aa-pilier__accroche {
+  margin: var(--space-2) 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.aa-pilier__fait {
+  display: grid;
+  gap: 2px;
+  margin: auto 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.aa-pilier__texte + .aa-pilier__fait {
+  margin-top: var(--az-space-5);
+}
+
+.aa-pilier__chiffre {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.aa-pilier__legende {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-muted);
 }
 
 .aa-glyphe {
@@ -1188,9 +1300,9 @@ main {
 
 .aa-pilier__texte {
   font-size: var(--az-font-size-body);
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--ink-muted);
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
 }
 
 .aa-frise {
@@ -1212,9 +1324,19 @@ main {
   }
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1200px) {
   .aa-piliers {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-pilier {
+    transition: none;
+  }
+
+  .aa-pilier:hover {
+    transform: none;
   }
 }
 

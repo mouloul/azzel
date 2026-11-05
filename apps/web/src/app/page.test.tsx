@@ -180,8 +180,10 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).not.toContain('titre-parcours-accueil');
     expect(html).toContain('Épreuve phare');
     expect(html.match(/Épreuve phare/g)).toHaveLength(1);
-    expect(html).toContain('La grande course de l’édition 2027');
-    expect(html).toContain('Une distance plus courte, le même jour');
+    expect(html).toContain('Le Grand Trail d’Aït Aïssi');
+    expect(html).toContain('La Petite Boucle');
+    expect(html).toContain('Une boucle au départ du stade Agni Lhoudh');
+    expect(html).toContain('Le même départ et les mêmes sentiers');
     expect(html).not.toContain('Trail long — 35 km');
     expect(html).not.toContain('Trail moyen — 12 km');
   });
@@ -441,7 +443,8 @@ describe('accueil vitrine — identité village (story 2.2)', () => {
     const glyphes = html.match(/<svg[^>]*data-glyphe="([^"]+)"[^>]*>/g) ?? [];
     expect(glyphes.length).toBe(4);
     // Correspondance piliers ↔ glyphes (noms kabyles sources) :
-    // Sport → yaz ⵣ, Santé → tala (la fontaine), Citoyenneté → tabzimt (la fibule), Écologie → ingel (le cèdre).
+    // Valeurs du dossier 2027 : Sport & santé → yaz ⵣ, Jeunesse → tala (la source),
+    // Liens entre générations → tabzimt (la fibule), Nature & territoire → ingel (le cèdre).
     const noms = glyphes
       .map((g) => g.match(/data-glyphe="([^"]+)"/)?.[1] ?? '')
       .sort();
@@ -449,7 +452,9 @@ describe('accueil vitrine — identité village (story 2.2)', () => {
     const titres = (html.match(/class="aa-pilier__titre">([^<]+)</g) ?? []).map((t) =>
       t.replace(/^.*?>/, '').replace(/<$/, ''),
     );
-    expect(new Set(titres)).toEqual(new Set(['Sport', 'Santé', 'Citoyenneté', 'Écologie']));
+    expect(new Set(titres)).toEqual(
+      new Set(['Sport &amp; santé', 'Jeunesse', 'Liens entre générations', 'Nature &amp; territoire']),
+    );
   });
 
   it('piliers : cartes sobres avec glyphe + titre + ligne concrète, jamais de glyphe seul', () => {
