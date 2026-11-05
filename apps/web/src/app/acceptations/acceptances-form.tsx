@@ -19,7 +19,9 @@ const TIMEOUT_ERROR = {
 };
 
 function documentNote(document: DocumentSummary | undefined): string {
-  return `J’ai lu et j’accepte ${document ? document.titre.toLowerCase() : 'ce document'}`;
+  return document
+    ? `J’ai lu et j’accepte « ${document.titre} »`
+    : 'J’ai lu et j’accepte ce document';
 }
 
 export function AcceptancesForm({
@@ -121,7 +123,7 @@ export function AcceptancesForm({
   }
 
   return (
-    <section className="auth auth-wide">
+    <section className="auth auth-wide dossier-section">
       <article className="card">
         <p className="surtitre">Documents obligatoires</p>
         <h1>Décharge et règlement</h1>
@@ -150,7 +152,7 @@ export function AcceptancesForm({
           ))}
         </div>
 
-        <form onSubmit={onSubmit} noValidate>
+        <form className="dossier-form" onSubmit={onSubmit} noValidate>
           <fieldset className="fieldset">
             <legend>Acceptations — les deux cases sont obligatoires</legend>
             <label className="option">
@@ -192,9 +194,14 @@ export function AcceptancesForm({
             )}
           </fieldset>
 
-          <button type="submit" className="btn-action" disabled={pending}>
-            {pending ? 'Enregistrement…' : both ? 'J’accepte les deux documents' : 'Accepter les documents'}
-          </button>
+          <div className="dossier-envoi">
+            <p className="dossier-envoi__suite">
+              Étape suivante : le dépôt de ta preuve de paiement.
+            </p>
+            <button type="submit" className="btn-action" disabled={pending}>
+              {pending ? 'Enregistrement…' : both ? 'J’accepte les deux documents' : 'Accepter les documents'}
+            </button>
+          </div>
         </form>
 
         {serverError !== null && (

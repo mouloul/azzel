@@ -400,3 +400,28 @@
   font-size: var(--az-font-size-meta);
   color: var(--az-texte-2);
 }
+
+/* Les documents à lire prennent le même relief que les panneaux du formulaire
+   d'inscription : sans cela, les deux écrans du même parcours n'avaient pas
+   l'air d'appartenir au même produit. */
+.dossier-section .documents {
+  gap: var(--az-space-4);
+}
+
+.dossier-section .document {
+  padding: 0 var(--az-space-5);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.dossier-section .document summary {
+  min-height: 56px;
+  padding: var(--az-space-3) 0;
+}
+
+/* Les cases d'acceptation sont des cartes, comme les choix d'épreuve et de
+   genre : même langage pour la même action. */
+.dossier-form .option:has(input[type='checkbox']) {
+  align-items: center;
+}

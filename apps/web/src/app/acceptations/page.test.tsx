@@ -106,8 +106,11 @@ describe('/acceptations — formulaire refondu (story 9.4)', () => {
     });
     const html = await rendu();
     expect(html).toContain('Acceptations — les deux cases sont obligatoires');
-    expect(html).toContain('J’ai lu et j’accepte décharge de bonne santé');
-    expect(html).toContain('J’ai lu et j’accepte règlement intérieur');
+    // Le titre vient de la base : le citer entre guillemets reste correct quel
+    // que soit son libellé, là où « j’accepte décharge de bonne santé »
+    // manquait son article.
+    expect(html).toContain('J’ai lu et j’accepte « Décharge de bonne santé »');
+    expect(html).toContain('J’ai lu et j’accepte « Règlement intérieur »');
   });
 
   it('horodatage des versions : déjà acceptées → date + versions décharge/règlement affichées', async () => {
