@@ -367,14 +367,18 @@ main {
    jamais porté par la seule couleur — le chiffre et le mot « complet »
    portent l'information. */
 .compteur-places {
-  grid-area: compteur;
   margin: 0 0 var(--space-4);
   font-size: 15px;
   line-height: 1.4;
   color: var(--az-texte-2);
 }
 
+/* Le placement nommé ne vaut QUE dans la grille du hero. Posé sur le
+   composant lui-même, il créait une colonne implicite dans toute grille qui
+   l'accueille — la carte d'inscription se disloquait et le compteur passait
+   par-dessus le titre. */
 .aa-hero--plein .compteur-places {
+  grid-area: compteur;
   color: var(--on-forest);
 }
 

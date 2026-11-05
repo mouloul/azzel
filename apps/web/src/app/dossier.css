@@ -135,8 +135,10 @@
 }
 
 @media (min-width: 960px) {
+  /* Élargi de 60 à 66rem : la colonne du formulaire gagne la place que la
+     colonne latérale, souvent vide, lui prenait. */
   .dossier-section {
-    max-width: 60rem;
+    max-width: 66rem;
   }
 
   .dossier-edition {
@@ -231,4 +233,160 @@
   font-size: 15px;
   line-height: 1.5;
   color: var(--az-texte);
+}
+
+/* --- Habillage du formulaire d'inscription ------------------------------- */
+
+/* Les sections passent du cadre filaire au PANNEAU : fond propre, coins
+   adoucis, ombre d'un pixel. Le formulaire fait plus d'un écran — sans
+   découpage visuel, c'est une colonne de champs identiques où l'œil se perd. */
+.dossier-form {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+.dossier-form .fieldset {
+  padding: var(--az-space-5);
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  gap: var(--az-space-5);
+}
+
+/* La légende reste sur le filet (comportement natif du fieldset) mais cesse
+   d'être un simple mot gras : capitales espacées, encre de titre. */
+.dossier-form .fieldset legend {
+  padding: 0 var(--az-space-3);
+  font-family: var(--az-font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+/* Deux champs courts par ligne dès qu'il y a la place : prénom et nom n'ont
+   aucune raison d'occuper deux pleines lignes. */
+.dossier-duo {
+  display: grid;
+  gap: var(--az-space-5);
+}
+
+@media (min-width: 720px) {
+  .dossier-duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Choix exclusifs courts (genre, épreuve) : côte à côte plutôt qu'empilés. */
+.option-group--duo {
+  display: grid;
+  gap: var(--az-space-3);
+}
+
+@media (min-width: 560px) {
+  .option-group--duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* L'option devient une carte cliquable sur toute sa surface, et son état
+   choisi se lit par le FOND et le FILET, pas par la seule pastille radio. */
+.dossier-form .option {
+  align-items: flex-start;
+  gap: var(--az-space-3);
+  padding: var(--az-space-4);
+  border-radius: var(--az-rayon-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dossier-form .option:hover {
+  border-color: var(--az-action);
+}
+
+.dossier-form .option:has(input:checked) {
+  border-color: var(--az-action);
+  background: color-mix(in srgb, var(--az-action) 8%, var(--surface-raised));
+}
+
+/* Le contour de focus suit la carte entière : sans cela, il n'entoure que la
+   pastille et devient invisible au clavier. */
+.dossier-form .option:has(input:focus-visible) {
+  outline: 2px solid var(--az-focus);
+  outline-offset: 2px;
+}
+
+.dossier-form .option-label {
+  font-weight: 700;
+  color: var(--az-texte);
+}
+
+/* Carte de choix : pastille à gauche, libellé puis précision empilés à
+   droite. En flex, le nom et la distance se disputaient la largeur et
+   « La Longue — 35 km » cassait sur deux lignes. */
+.option-group--duo .option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--az-space-3);
+  row-gap: var(--az-space-1);
+}
+
+.option-group--duo .option input {
+  grid-row: 1 / -1;
+}
+
+.option-group--duo .option .meta {
+  grid-column: 2;
+  justify-self: start;
+}
+
+/* Barre d'envoi : fond plein de la carte et filet supérieur, pour qu'elle se
+   détache des champs. */
+.dossier-envoi {
+  margin: 0 calc(-1 * var(--az-space-5));
+  padding: var(--az-space-4) var(--az-space-5) 0;
+  border-top: 1px solid var(--az-filet);
+  background: var(--az-surface);
+}
+
+/* Essayée en barre COLLANTE, puis abandonnée : le formulaire vit dans une
+   grille à deux colonnes, la barre n'en couvrait qu'une et flottait au-dessus
+   des panneaux comme un bandeau détaché. Un pied de formulaire franc vaut
+   mieux qu'un demi-bandeau. */
+
+.dossier-envoi .btn-action {
+  width: 100%;
+  margin: 0;
+}
+
+@media (min-width: 560px) {
+  .dossier-envoi .btn-action {
+    width: auto;
+    min-width: 16rem;
+  }
+}
+
+/* Le récapitulatif accompagne le défilement au lieu de rester en haut d'une
+   colonne vide. 96px : hauteur de l'en-tête collant plus une respiration. */
+@media (min-width: 960px) {
+  .dossier-recap {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+/* Compteur de places sur fond de carte : pastille sobre plutôt qu'une ligne
+   de texte perdue entre deux paragraphes. */
+.dossier-section .compteur-places {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--az-space-2);
+  margin: 0;
+  padding: var(--az-space-2) var(--az-space-4);
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-radius-full);
+  background: var(--surface-raised);
 }

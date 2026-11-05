@@ -202,9 +202,10 @@ export function InscriptionForm({
         )}
         {children}
         <div className="dossier-edition">
-          <form onSubmit={onSubmit} noValidate>
+          <form className="dossier-form" onSubmit={onSubmit} noValidate>
             <fieldset className="fieldset">
               <legend>Ton identité</legend>
+              <div className="dossier-duo">
               <div className="socle-champ">
                 <label className="socle-etiquette" htmlFor={fieldId('prenom')}>
                   Prénom{OBLIGATOIRE}
@@ -251,6 +252,7 @@ export function InscriptionForm({
                   </p>
                 )}
               </div>
+              </div>
               <div className="socle-champ">
                 <label className="socle-etiquette" htmlFor={fieldId('dateNaissance')}>
                   Date de naissance{OBLIGATOIRE}
@@ -285,7 +287,7 @@ export function InscriptionForm({
                   Genre{OBLIGATOIRE}
                 </span>
                 <div
-                  className="option-group"
+                  className="option-group option-group--duo"
                   role="radiogroup"
                   aria-labelledby={aideId('genre')}
                   aria-describedby={errorFor('genre') !== null ? errorId('genre') : undefined}
@@ -344,7 +346,11 @@ export function InscriptionForm({
 
             <fieldset className="fieldset">
               <legend>Ton épreuve</legend>
-              <div className="option-group" role="radiogroup" aria-label="Épreuve">
+              <div
+                className="option-group option-group--duo"
+                role="radiogroup"
+                aria-label="Épreuve"
+              >
                 {state.epreuves.map((epreuve, index) => (
                   <label key={epreuve.slug} className="option">
                     <input
@@ -493,9 +499,13 @@ export function InscriptionForm({
               </p>
             </fieldset>
 
-            <button type="submit" className="btn-action" disabled={pending}>
-              {pending ? 'Envoi…' : state.coureur ? 'Enregistrer les modifications' : 'Valider mon inscription'}
-            </button>
+            {/* Barre d'envoi collante : le formulaire fait plus d'un écran,
+                et le bouton ne doit pas obliger à redescendre tout en bas. */}
+            <div className="dossier-envoi">
+              <button type="submit" className="btn-action" disabled={pending}>
+                {pending ? 'Envoi…' : state.coureur ? 'Enregistrer les modifications' : 'Valider mon inscription'}
+              </button>
+            </div>
           </form>
 
           <aside className="dossier-recap" aria-label="Récapitulatif de ton inscription">
