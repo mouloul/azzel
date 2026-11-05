@@ -211,6 +211,11 @@ export function sequenceEpreuve(
   doc: ParcoursDoc,
   slug: string,
 ): readonly PointSequence[] {
+  // hasOwn : même garde que `traceCarte`. Le slug devient public avec la
+  // route du tracé (story 11.3) ; sans ce test, `epreuves['constructor']`
+  // rend la fonction héritée de Object au lieu de `undefined`, et le `for`
+  // sur `vue.tranches` lève.
+  if (!Object.hasOwn(doc.epreuves, slug)) return [];
   const vue = doc.epreuves[slug];
   if (vue === undefined) return [];
   const sequence: PointSequence[] = [];
@@ -353,6 +358,7 @@ export function partsParPalier(
  * visualisation, aucun chiffre — l’annonce texte de la coquille 9.3 reste.
  */
 export function construireProfilEpreuve(doc: ParcoursDoc, slug: string): ProfilEpreuve | null {
+  if (!Object.hasOwn(doc.epreuves, slug)) return null;
   const vue = doc.epreuves[slug];
   if (vue === undefined) return null;
   const sequence = sequenceEpreuve(doc, slug);

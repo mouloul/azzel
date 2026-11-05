@@ -307,3 +307,13 @@ describe('lectures du curseur (île client)', () => {
     expect(sMDepuisFraction(7, distanceM)).toBe(distanceM);
   });
 });
+
+describe('slug hérité de Object (même garde que traceCarte)', () => {
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    'le slug « %s » ne passe pas pour une épreuve',
+    (slug) => {
+      expect(construireProfilEpreuve(DOC, slug)).toBeNull();
+      expect(sequenceEpreuve(DOC, slug)).toEqual([]);
+    },
+  );
+});
