@@ -128,7 +128,50 @@ describe('/acceptations — formulaire refondu (story 9.4)', () => {
     // Le rappel porte les versions ACCEPTÉES (v2 côté règlement ci-dessous),
     // les documents publiés affichent eux leur version courante.
     expect(html).toContain('décharge v1 · règlement v2');
-    expect((html.match(/Version v1/g) ?? []).length).toBe(2);
+    // La version n'est plus affichée sur les documents : le chevron de
+    // déroulement a pris sa place. Elle reste enregistrée à l'acceptation et
+    // rappelée ci-dessus (« décharge v1 · règlement v2 »).
+    expect(html).not.toContain('Version v1');
+    expect((html.match(/document-chevron/g) ?? []).length).toBe(2);
+  });
+
+  it('cases verrouillées tant que les documents n’ont pas été déroulés', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en constitution',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    const html = (await rendu()).replaceAll('<!-- -->', '');
+    // Rendu serveur : aucun document n'a encore été ouvert, les deux cases
+    // sont donc désactivées.
+    expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((html.match(/option--verrouillee/g) ?? []).length).toBe(2);
+  });
+
+  it('le motif du verrou est ÉCRIT, pas seulement signalé par l’atténuation', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en constitution',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    const html = (await rendu()).replaceAll('<!-- -->', '');
+    expect((html.match(/Déroule le document ci-dessus pour pouvoir l’accepter\./g) ?? []).length).toBe(2);
+  });
+
+  it('chaque case est reliée à son motif par aria-describedby', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en constitution',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    // Sans ce lien, un lecteur d'écran annonce « case non cochée, désactivée »
+    // et rien d'autre : l'utilisateur reste bloqué sans savoir pourquoi.
+    const html = await rendu();
+    expect(html).toContain('acceptations-deroule-decharge');
+    expect(html).toContain('acceptations-deroule-reglement');
   });
 
   it('pas encore inscrit : « Inscris-toi d’abord », sans fil ni cases', async () => {

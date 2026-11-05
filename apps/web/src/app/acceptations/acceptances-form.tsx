@@ -36,6 +36,9 @@ export function AcceptancesForm({
   const router = useRouter();
   const [decharge, setDecharge] = useState(false);
   const [reglement, setReglement] = useState(false);
+  // Documents deja deroules. Un document refermé RESTE déroulé : on ne redemande
+  // pas de le rouvrir, la condition est de l'avoir ouvert une fois.
+  const [deroules, setDeroules] = useState<ReadonlySet<string>>(new Set());
   const [missingError, setMissingError] = useState(false);
   const [serverError, setServerError] = useState<{ message: string; action: string } | null>(
     null,
@@ -44,6 +47,25 @@ export function AcceptancesForm({
   const [pending, setPending] = useState(false);
 
   const documentsBySlug = new Map(state.documents.map((document) => [document.slug, document]));
+
+  /**
+   * Ouvrir le document conditionne la case : on ne peut pas accepter un texte
+   * qu'on n'a pas affiché. Ce n'est PAS une preuve de lecture — rien ne garantit
+   * que le texte a été lu — mais cela supprime le cas où l'on coche sans même
+   * avoir vu de quoi il s'agit.
+   */
+  function marquerDeroule(slug: string): void {
+    setDeroules((anciens) => {
+      if (anciens.has(slug)) {
+        return anciens;
+      }
+      const suivants = new Set(anciens);
+      suivants.add(slug);
+      return suivants;
+    });
+  }
+
+  const aideDeroulerId = (slug: string): string => `acceptations-deroule-${slug}`;
 
   const both = decharge && reglement;
   const dechargeAccepte = state.acceptances.decharge;
@@ -142,10 +164,25 @@ export function AcceptancesForm({
 
         <div className="documents">
           {state.documents.map((document) => (
-            <details key={document.slug} className="document">
+            <details
+              key={document.slug}
+              className="document"
+              onToggle={(event) => {
+                if (event.currentTarget.open) {
+                  marquerDeroule(document.slug);
+                }
+              }}
+            >
               <summary>
                 <span>{document.titre}</span>
-                <span className="meta">Version {document.version}</span>
+                {/* Le titre du <summary> porte déjà l'action pour un lecteur
+                    d'écran ; le chevron est décoratif et son infobulle ne
+                    sert qu'au survol. */}
+                <span className="document-chevron" title="Dérouler" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false" role="presentation">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </span>
               </summary>
               <div className="document-content">{document.content}</div>
             </details>
@@ -155,38 +192,56 @@ export function AcceptancesForm({
         <form className="dossier-form" onSubmit={onSubmit} noValidate>
           <fieldset className="fieldset">
             <legend>Acceptations — les deux cases sont obligatoires</legend>
-            <label className="option">
-              <input
-                type="checkbox"
-                id="acceptations-decharge"
-                checked={decharge}
-                onChange={(event) => {
-                  setDecharge(event.target.checked);
-                  if (event.target.checked) {
-                    setMissingError(false);
-                  }
-                }}
-                aria-invalid={missingError && !decharge ? true : undefined}
-                aria-describedby={missingError ? 'acceptations-erreur' : undefined}
-              />
-              <span className="option-label">{documentNote(documentsBySlug.get('decharge'))}</span>
-            </label>
-            <label className="option">
-              <input
-                type="checkbox"
-                id="acceptations-reglement"
-                checked={reglement}
-                onChange={(event) => {
-                  setReglement(event.target.checked);
-                  if (event.target.checked) {
-                    setMissingError(false);
-                  }
-                }}
-                aria-invalid={missingError && !reglement ? true : undefined}
-                aria-describedby={missingError ? 'acceptations-erreur' : undefined}
-              />
-              <span className="option-label">{documentNote(documentsBySlug.get('reglement'))}</span>
-            </label>
+            {(
+              [
+                ['decharge', decharge, setDecharge],
+                ['reglement', reglement, setReglement],
+              ] as const
+            ).map(([slug, coche, setCoche]) => {
+              const verrouille = !deroules.has(slug);
+              return (
+                <div className="acceptation" key={slug}>
+                  <label
+                    className={
+                      verrouille ? 'option option--verrouillee' : 'option'
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      id={`acceptations-${slug}`}
+                      checked={coche}
+                      disabled={verrouille}
+                      onChange={(event) => {
+                        setCoche(event.target.checked);
+                        if (event.target.checked) {
+                          setMissingError(false);
+                        }
+                      }}
+                      aria-invalid={missingError && !coche ? true : undefined}
+                      aria-describedby={
+                        [
+                          verrouille ? aideDeroulerId(slug) : null,
+                          missingError ? 'acceptations-erreur' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
+                    />
+                    <span className="option-label">
+                      {documentNote(documentsBySlug.get(slug))}
+                    </span>
+                  </label>
+                  {/* Une case désactivée sans explication laisse le coureur
+                      bloqué sans savoir pourquoi : le motif est écrit, et il
+                      disparaît dès que le document a été ouvert. */}
+                  {verrouille && (
+                    <p id={aideDeroulerId(slug)} className="socle-champ-aide">
+                      Déroule le document ci-dessus pour pouvoir l’accepter.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
             {missingError && (
               <p id="acceptations-erreur" className="field-error" role="alert">
                 Coche les deux cases : les deux acceptations sont obligatoires.

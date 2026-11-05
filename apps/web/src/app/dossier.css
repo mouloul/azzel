@@ -425,3 +425,53 @@
 .dossier-form .option:has(input[type='checkbox']) {
   align-items: center;
 }
+
+/* Chevron de déroulement, à la place de la version : il tourne quand le
+   document s'ouvre, de sorte que l'état se lit par la FORME et pas seulement
+   par la présence du texte en dessous. */
+.document-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--az-texte-2);
+  transition: transform 0.15s ease;
+}
+
+.document-chevron svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.document[open] .document-chevron {
+  transform: rotate(180deg);
+  color: var(--az-action);
+}
+
+.document summary:hover .document-chevron {
+  color: var(--az-action);
+}
+
+/* Case verrouillée tant que le document n'a pas été ouvert : atténuée, mais
+   l'état reste écrit juste en dessous — la couleur ne porte jamais seule
+   l'information. */
+.option--verrouillee {
+  opacity: 0.6;
+}
+
+.option--verrouillee,
+.option--verrouillee input {
+  cursor: not-allowed;
+}
+
+.acceptation {
+  display: grid;
+  gap: var(--az-space-2);
+}
