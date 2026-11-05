@@ -463,6 +463,20 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
       expect(await hebergementDe(suivant)).toBe(true);
     });
 
+    it('contingent abaissé à zéro : le détenteur perd son lit à son prochain envoi', async () => {
+      // Comportement vérifié pour la recette (étape 6.9) : le contingent fait
+      // autorité à CHAQUE enregistrement, il n'est pas acquis une fois pour
+      // toutes. À connaître avant d'abaisser le contingent en cours de route.
+      await sql`UPDATE edition SET capacite_hebergement = 1`;
+      const session = await createSession();
+      await submitInscription(session, validInput({ hebergement: 'oui' }), { store });
+      expect(await hebergementDe(session)).toBe(true);
+
+      await sql`UPDATE edition SET capacite_hebergement = 0`;
+      await submitInscription(session, validInput({ hebergement: 'oui' }), { store });
+      expect(await hebergementDe(session)).toBe(false);
+    });
+
     it('renoncer à l’hébergement libère le lit pour un autre', async () => {
       await sql`UPDATE edition SET capacite_hebergement = 1`;
       const session = await createSession();
