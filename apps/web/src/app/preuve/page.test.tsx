@@ -32,6 +32,16 @@ vi.mock('next/navigation', () => ({
   redirect: () => undefined,
 }));
 
+const serviceMock = vi.hoisted(() => ({
+  getMontantDu: vi.fn(),
+  getComptesPaiement: vi.fn(),
+}));
+
+vi.mock(
+  '@/modules/inscriptions/service',
+  () => serviceMock as unknown as typeof import('@/modules/inscriptions/service'),
+);
+
 import PreuvePage from './page';
 
 const SESSION_COUREUR = {
@@ -59,6 +69,8 @@ async function rendu(): Promise<string> {
 beforeEach(() => {
   sessionMock.requireRolePage.mockReset();
   proofServiceMock.getPreuveState.mockReset();
+  serviceMock.getMontantDu.mockReset().mockResolvedValue(null);
+  serviceMock.getComptesPaiement.mockReset().mockResolvedValue(null);
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_COUREUR,
@@ -156,5 +168,31 @@ describe('/preuve — dépôt refondu (story 9.4)', () => {
     expect(html).toContain('Inscris-toi d’abord');
     expect(html).not.toContain('Étapes du dossier');
     expect(html).not.toContain('type="file"');
+  });
+
+  it('rappelle les comptes CCP et Baridimob de l’édition, rien sinon', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en constitution',
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: true,
+    });
+    expect(await rendu()).not.toContain('Rappel des comptes de l’événement');
+
+    serviceMock.getComptesPaiement.mockResolvedValue({
+      ccp: '0000000/00',
+      titulaireCcp: 'TITULAIRE CCP TEST',
+      baridimob: '00799999000000000000',
+      titulaireBaridimob: 'TITULAIRE BARIDI TEST',
+    });
+    const html = await rendu();
+    expect(html).toContain('Rappel des comptes de l’événement');
+    expect(html).toContain('0000000/00');
+    expect(html).toContain('00799999000000000000');
+    expect(html).toContain('Un versement par personne');
+    expect(html).toContain('Ce numéro est unique');
+    expect(html).toContain('TITULAIRE CCP TEST');
+    expect(html).toContain('TITULAIRE BARIDI TEST');
   });
 });

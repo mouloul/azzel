@@ -122,6 +122,14 @@ export default async function AdminDossierDetailPage({
                 Déposée le {formatLocalDateTime(detail.preuveActive.depositedAt)} ·{' '}
                 {formatKiloBytes(detail.preuveActive.sizeBytes)} · {detail.preuveActive.mime}
               </p>
+              <p>
+                N° de transaction :{' '}
+                {detail.preuveActive.numeroTransaction !== null ? (
+                  <strong>{detail.preuveActive.numeroTransaction}</strong>
+                ) : (
+                  'non renseigné (preuve antérieure à la saisie)'
+                )}
+              </p>
               <div className="auth-alt">
                 <a
                   className="btn-contour"

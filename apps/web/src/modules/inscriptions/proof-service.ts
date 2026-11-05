@@ -3,12 +3,14 @@ import type { SessionRecord } from '@/modules/iam/store';
 import { dateCourseAffichee, isRegistrationOpen } from './domain';
 import {
   NoEditionError,
+  NumeroTransactionInvalideError,
   PreuveNotFoundError,
   PreuveStorageError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
 } from './errors';
+import { normaliserNumeroTransaction } from './numero-transaction';
 import { MAX_PROOF_BYTES, PROOF_FORMAT_LABELS, detectProofFormat, type ProofFormat } from './proof-format';
 import { getProofStore, type ProofStore } from './proof-store';
 import type { EditionSummary } from './service';
@@ -25,6 +27,8 @@ export interface PreuveSummary {
   sizeBytes: number;
   mime: string;
   format: string;
+  /** null : preuve déposée avant la saisie du numéro. */
+  numeroTransaction: string | null;
 }
 
 export interface PreuveState {
@@ -58,6 +62,7 @@ function toPreuveSummary(record: PreuveRecord): PreuveSummary {
     sizeBytes: record.sizeBytes,
     mime: record.mime,
     format: formatLabelForMime(record.mime),
+    numeroTransaction: record.numeroTransaction,
   };
 }
 
@@ -110,11 +115,28 @@ export async function getPreuveState(
   };
 }
 
+export interface UploadPreuveOptions extends PreuveServiceDeps {
+  /**
+   * Numéro de transaction du reçu. Le dépôt par l'API le EXIGE (voir la route) ;
+   * il reste optionnel ici pour les dépôts programmatiques (jeu de données de
+   * démonstration) qui n'ont pas de vrai reçu.
+   */
+  numeroTransaction?: string;
+}
+
 export async function uploadPreuve(
   session: SessionRecord,
   bytes: Uint8Array,
-  deps: PreuveServiceDeps = {},
+  deps: UploadPreuveOptions = {},
 ): Promise<PreuveSummary> {
+  let numeroTransaction: string | null = null;
+  if (deps.numeroTransaction !== undefined) {
+    const lu = normaliserNumeroTransaction(deps.numeroTransaction);
+    if (!lu.ok) {
+      throw new NumeroTransactionInvalideError({ numeroTransaction: lu.message });
+    }
+    numeroTransaction = lu.numero;
+  }
   const store = deps.store ?? getInscriptionsStore();
   const proofStore = deps.proofStore ?? getProofStore();
   const edition = await store.findCurrentEdition(session.organisationId);
@@ -139,6 +161,7 @@ export async function uploadPreuve(
       accountId: session.accountId,
       editionId: edition.id,
       file,
+      numeroTransaction,
     });
   } catch (error) {
     await proofStore.remove(file.storageKey).catch(() => undefined);

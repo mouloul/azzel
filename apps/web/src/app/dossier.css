@@ -235,6 +235,104 @@
   color: var(--az-texte);
 }
 
+.encart-comptes {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-5);
+  border: 1px solid var(--az-filet-controle);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}
+
+.encart-comptes__surtitre {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--az-succes);
+}
+
+.encart-comptes__titre {
+  margin: var(--az-space-1) 0 var(--az-space-2);
+  font-size: 1.125rem;
+}
+
+.encart-comptes__intro {
+  margin: 0 0 var(--az-space-4);
+}
+
+/* Deux comptes côte à côte quand la place le permet, « ou » entre les deux. */
+.encart-comptes__liste {
+  display: grid;
+  gap: var(--az-space-3);
+  align-items: stretch;
+}
+
+@media (min-width: 640px) {
+  .encart-comptes__liste {
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+
+  .encart-comptes__liste > .encart-comptes__compte:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.encart-comptes__compte {
+  display: grid;
+  gap: var(--az-space-1);
+  margin: 0;
+  padding: var(--az-space-4);
+  border-radius: var(--az-rayon-md);
+  background: var(--az-surface);
+}
+
+.encart-comptes__ou {
+  margin: 0;
+  text-align: center;
+  color: var(--az-texte-2);
+  font-style: italic;
+}
+
+.encart-comptes dt {
+  margin-top: var(--az-space-2);
+  font-size: 13px;
+  color: var(--az-texte-2);
+}
+
+.encart-comptes dt:first-child {
+  margin-top: 0;
+}
+
+.encart-comptes dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Numéro de compte : recopié à la main sur un bordereau, donc lisible et
+   sélectionnable d'un geste. */
+.encart-comptes__numero {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.encart-comptes__regles {
+  display: grid;
+  gap: var(--az-space-2);
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-3) 0 0 var(--az-space-5);
+  border-top: 1px solid var(--az-filet-controle);
+  font-size: 14px;
+}
+
 /* --- Habillage du formulaire d'inscription ------------------------------- */
 
 /* Les sections passent du cadre filaire au PANNEAU : fond propre, coins

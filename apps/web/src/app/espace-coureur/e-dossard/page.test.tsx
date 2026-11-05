@@ -91,12 +91,12 @@ describe('page /espace-coureur/e-dossard — coureur validé numéroté', () => 
     expect(html).not.toContain(EDOSSARD_VALIDE_NUMEROTE.jeton);
   });
 
-  it('marker data-edossard="pret" présent sur la carte sombre (lu par le SW)', async () => {
+  it('marker data-edossard="pret" présent sur la carte (lu par le SW)', async () => {
     const html = await rendu();
     expect(html).toContain('data-edossard="pret"');
   });
 
-  it('carte sombre : identité, épreuve, numéro de dossard, badge HORS-LIGNE PRÊT', async () => {
+  it('panneau dossard : identité, épreuve, numéro de dossard, badge HORS-LIGNE PRÊT', async () => {
     const html = await rendu();
     expect(html).toContain('E-dossard —');
     expect(html).toContain('Édition 2027');
@@ -107,6 +107,14 @@ describe('page /espace-coureur/e-dossard — coureur validé numéroté', () => 
     expect(html).toContain('>12</p>');
     expect(html).toContain('HORS-LIGNE PRÊT');
     expect(html).toContain('role="status"');
+  });
+
+  it('fil d’étapes : les quatre étapes sont franchies', async () => {
+    const html = await rendu();
+    expect(html).toContain('Ton e-dossard est prêt');
+    expect(html).toContain('Validation');
+    expect(html).not.toContain('en cours');
+    expect(html).toContain('href="/preuve"');
   });
 
   it('conseil raccourci système (écran d’accueil) + assistance + déconnexion', async () => {

@@ -23,6 +23,7 @@ import {
 import {
   DossierValidatedError,
   NoCoureurError,
+  NumeroTransactionDejaUtiliseError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
@@ -152,6 +153,7 @@ describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel
       'created_at',
       'id',
       'mime',
+      'numero_transaction',
       'organisation_id',
       'sha256',
       'size_bytes',
@@ -165,6 +167,7 @@ describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel
     const names = indexes.map((row) => row.indexname);
     expect(names).toContain('preuve_coureur_idx');
     expect(names).toContain('preuve_coureur_active_uidx');
+    expect(names).toContain('preuve_numero_transaction_actif_uidx');
   });
 
   it('dépôt image valide : ligne active + fichier ≤ 300 Ko sur disque + récap', async () => {
@@ -287,6 +290,32 @@ describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel
     const rows = await sql`SELECT count(*)::int AS count FROM preuve WHERE coureur_id = ${coureurId}`;
     expect(rows[0]?.count).toBe(1);
     expect(readdirSync(storageDir)).toHaveLength(filesBefore + 1);
+  });
+
+  it('numéro de transaction : un reçu ne justifie qu’un dossier, rien écrit pour le second', async () => {
+    const premier = await createCoureurSession();
+    const second = await createCoureurSession();
+    const numero = `TX${Date.now()}`;
+    const filesBefore = readdirSync(storageDir).length;
+    const deposee = await uploadPreuve(premier, jpegBytes(30_000), {
+      store,
+      proofStore,
+      numeroTransaction: numero,
+    });
+    expect(deposee.numeroTransaction).toBe(numero);
+
+    await expect(
+      uploadPreuve(second, jpegBytes(31_000), { store, proofStore, numeroTransaction: numero }),
+    ).rejects.toBeInstanceOf(NumeroTransactionDejaUtiliseError);
+    expect(readdirSync(storageDir)).toHaveLength(filesBefore + 1);
+
+    // Le même coureur peut redéposer avec le même numéro (remplacement).
+    const remplacement = await uploadPreuve(premier, jpegBytes(32_000), {
+      store,
+      proofStore,
+      numeroTransaction: numero,
+    });
+    expect(remplacement.id).not.toBe(deposee.id);
   });
 
   it('garde sans coureur : NoCoureurError, rien écrit', async () => {

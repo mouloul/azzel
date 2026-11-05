@@ -60,6 +60,51 @@ export function InscriptionsManager({ etat }: { etat: ReglagesAdminState }) {
   const [erreurs, setErreurs] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [comptes, setComptes] = useState({
+    ccp: etat.comptesPaiement.ccp ?? '',
+    titulaireCcp: etat.comptesPaiement.titulaireCcp ?? '',
+    baridimob: etat.comptesPaiement.baridimob ?? '',
+    titulaireBaridimob: etat.comptesPaiement.titulaireBaridimob ?? '',
+  });
+  const [erreursComptes, setErreursComptes] = useState<Record<string, string>>({});
+  const [messageComptes, setMessageComptes] = useState<string | null>(null);
+
+  async function enregistrerComptes(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    setPending(true);
+    setErreursComptes({});
+    setMessageComptes(null);
+    try {
+      const reponse = await fetch('/api/admin/inscriptions/comptes', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(comptes),
+      });
+      const charge = (await reponse.json()) as {
+        etat?: ReglagesAdminState;
+        error?: { message?: string };
+        fields?: Record<string, string>;
+      };
+      if (!reponse.ok) {
+        setErreursComptes(charge.fields ?? {});
+        setMessageComptes(charge.error?.message ?? 'Enregistrement impossible.');
+        return;
+      }
+      if (charge.etat) {
+        setComptes({
+          ccp: charge.etat.comptesPaiement.ccp ?? '',
+          titulaireCcp: charge.etat.comptesPaiement.titulaireCcp ?? '',
+          baridimob: charge.etat.comptesPaiement.baridimob ?? '',
+          titulaireBaridimob: charge.etat.comptesPaiement.titulaireBaridimob ?? '',
+        });
+      }
+      setMessageComptes('Comptes enregistrés.');
+    } catch {
+      setMessageComptes('Connexion au serveur impossible.');
+    } finally {
+      setPending(false);
+    }
+  }
 
   function appliquer(etatRecu: ReglagesAdminState): void {
     setCourant(etatRecu);
@@ -230,6 +275,52 @@ export function InscriptionsManager({ etat }: { etat: ReglagesAdminState }) {
         </fieldset>
         <button type="submit" className="btn-action" disabled={pending}>
           {pending ? 'Enregistrement…' : 'Enregistrer les réglages'}
+        </button>
+      </form>
+
+      <form onSubmit={enregistrerComptes} noValidate>
+        <fieldset className="fieldset">
+          <legend>Comptes de versement</legend>
+          <p className="socle-champ-aide">
+            Affichés au coureur sur l’écran de dépôt de la preuve, sous le montant à verser.
+            Laisse CCP et Baridimob vides pour ne rien afficher.
+          </p>
+          {(
+            [
+              ['ccp', 'Compte CCP'],
+              ['titulaireCcp', 'Titulaire du compte CCP'],
+              ['baridimob', 'RIP Baridimob'],
+              ['titulaireBaridimob', 'Titulaire du compte Baridimob'],
+            ] as const
+          ).map(([champ, libelle]) => (
+            <div className="socle-champ" key={champ}>
+              <label className="socle-etiquette" htmlFor={`compte-${champ}`}>
+                {libelle}
+              </label>
+              <input
+                id={`compte-${champ}`}
+                name={champ}
+                type="text"
+                maxLength={80}
+                value={comptes[champ]}
+                onChange={(event) =>
+                  setComptes((anciens) => ({ ...anciens, [champ]: event.target.value }))
+                }
+                aria-invalid={erreursComptes[champ] !== undefined || undefined}
+              />
+              {erreursComptes[champ] !== undefined && (
+                <p className="field-error">{erreursComptes[champ]}</p>
+              )}
+            </div>
+          ))}
+        </fieldset>
+        {messageComptes !== null && (
+          <p className="admin-message" role="status" aria-live="polite">
+            {messageComptes}
+          </p>
+        )}
+        <button type="submit" className="btn-action" disabled={pending}>
+          {pending ? 'Enregistrement…' : 'Enregistrer les comptes'}
         </button>
       </form>
 

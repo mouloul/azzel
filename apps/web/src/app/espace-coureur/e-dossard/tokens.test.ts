@@ -4,14 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 import { operationsTokens } from '@azzel/shared';
 
-// Story 4.1 (revue) puis 9.1 — la carte sombre et le QR utilisaient des
-// littéraux hex épinglés aux valeurs d'operationsTokens. Depuis la story 9.1,
-// la carte sombre lit les variables distinctes --az-*-sombre (invariantes de
-// thème) : la dérive est impossible PAR CONSTRUCTION (la variable résout
-// toujours vers le token). Ce garde vérifie donc que le CSS référence les
-// BONNES variables — une inversion de rôle resterait attrapée — et que les
-// seuls littéraux restants sont les blancs du support QR (contrainte de
-// lisibilité du scanner, pas une couleur de charte).
+// Le QR encode ses modules en encre operationsTokens.texte sur blanc, et les
+// seuls littéraux hex restants du CSS sont les blancs du support QR
+// (contrainte de lisibilité du scanner, pas une couleur de charte).
 
 const cssBrut = readFileSync(
   fileURLToPath(new URL('./e-dossard.css', import.meta.url)),
@@ -23,38 +18,9 @@ const pageSource = readFileSync(
   'utf8',
 );
 
-describe('e-dossard — carte sombre branchée sur les variables --az-*-sombre (story 9.1)', () => {
-  it('les 4 rôles de la carte pointent les variables des tokens sombres', () => {
-    const attendus: Record<string, string> = {
-      '--edossard-fond': 'var(--az-bg-sombre)',
-      '--edossard-encre': 'var(--az-texte-sombre)',
-      '--edossard-encre-2': 'var(--az-texte-2-sombre)',
-      '--edossard-accent': 'var(--az-action-sombre)',
-    };
-    for (const [variable, valeur] of Object.entries(attendus)) {
-      expect(css).toContain(`${variable}: ${valeur};`);
-    }
-    // Encre du badge : action-texte-sombre, via sa variable.
-    expect(css).toContain('color: var(--az-action-texte-sombre);');
-  });
-
-  it('les variables --az-*-sombre valent exactement les tokens sombres (épinglage amont)', () => {
-    // Ceinture et bretelles : tokens-css.test.ts vérifie l’émission ; ici on
-    // confirme que les variables référencées existent dans le fichier servi.
-    const cssGenere = readFileSync(
-      fileURLToPath(new URL('../../../app/tokens-synchronises.css', import.meta.url)),
-      'utf8',
-    );
-    const roles: Array<[string, string]> = [
-      ['bg-sombre', operationsTokens.colors['bg-sombre']],
-      ['texte-sombre', operationsTokens.colors['texte-sombre']],
-      ['texte-2-sombre', operationsTokens.colors['texte-2-sombre']],
-      ['action-sombre', operationsTokens.colors['action-sombre']],
-      ['action-texte-sombre', operationsTokens.colors['action-texte-sombre']],
-    ];
-    for (const [role, valeur] of roles) {
-      expect(cssGenere).toContain(`--az-${role}: ${valeur};`);
-    }
+describe('e-dossard — habillage aligné sur le parcours d’inscription', () => {
+  it('plus de carte sombre : le CSS ne référence plus les variables *-sombre', () => {
+    expect(css).not.toContain('-sombre)');
   });
 
   it('QR : modules encre = operationsTokens.texte, sur blanc', () => {

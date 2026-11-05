@@ -150,3 +150,15 @@ export function etapesPreuve(
     { libelle: LIBELLES_ETAPE.validation, etat: 'suite' },
   ];
 }
+
+/** /espace-coureur/e-dossard : le dossier est validé (le QR n'existe qu'à cette
+ *  condition) — les quatre étapes sont franchies. Inscription et Documents
+ *  restent retournables, comme sur /preuve. */
+export function etapesEdossard(): EtapeFil[] {
+  return [
+    { libelle: LIBELLES_ETAPE.inscription, etat: 'fait', href: '/inscription' },
+    { libelle: LIBELLES_ETAPE.documents, etat: 'fait', href: '/acceptations' },
+    { libelle: LIBELLES_ETAPE.paiement, etat: 'fait', href: '/preuve' },
+    { libelle: LIBELLES_ETAPE.validation, etat: 'fait' },
+  ];
+}

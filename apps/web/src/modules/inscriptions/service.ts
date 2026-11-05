@@ -52,6 +52,7 @@ import {
   type DossierDecision,
   type DossierListItem,
   type DossardsAttribution as DossardsAttributionStore,
+  type ComptesPaiement,
   type EditionRecord,
   type EpreuveRecord,
   type InscriptionsStore,
@@ -347,6 +348,7 @@ const REGLAGE_MAX = 100_000;
 
 export interface ReglagesAdminState {
   edition: { id: string; nom: string } | null;
+  comptesPaiement: ComptesPaiement;
   reglages: Record<ChampReglage, number>;
   placesOccupees: number;
   hebergementsOccupes: number;
@@ -375,6 +377,90 @@ export interface LigneJournalView {
 
 const JOURNAL_LIMITE = 50;
 
+const COMPTES_VIDES: ComptesPaiement = {
+  ccp: null,
+  titulaireCcp: null,
+  baridimob: null,
+  titulaireBaridimob: null,
+};
+
+/** Garde-fou de saisie : un numéro de compte ou un nom tient en quelques dizaines de caractères. */
+const COMPTE_MAX = 80;
+
+/**
+ * Comptes de versement : texte libre, facultatif. Vide = non renseigné (le
+ * coureur ne voit pas la ligne). Rien d'autre n'est imposé : un RIP Baridimob
+ * et un CCP n'ont pas le même format, et une règle trop stricte bloquerait
+ * l'organisation sur un compte valide.
+ */
+export function normaliserComptesPaiement(raw: unknown): {
+  comptes: ComptesPaiement;
+  erreurs: Record<string, string>;
+} {
+  const record =
+    typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const comptes: ComptesPaiement = { ...COMPTES_VIDES };
+  const erreurs: Record<string, string> = {};
+  for (const champ of ['ccp', 'titulaireCcp', 'baridimob', 'titulaireBaridimob'] as const) {
+    const brut = record[champ];
+    if (brut === undefined || brut === null) {
+      continue;
+    }
+    if (typeof brut !== 'string') {
+      erreurs[champ] = 'Indique un texte.';
+      continue;
+    }
+    const valeur = brut.trim().replace(/\s+/g, ' ');
+    if (valeur.length > COMPTE_MAX) {
+      erreurs[champ] = `${COMPTE_MAX} caractères au maximum.`;
+      continue;
+    }
+    comptes[champ] = valeur === '' ? null : valeur;
+  }
+  return { comptes, erreurs };
+}
+
+export async function updateComptesPaiementAdmin(
+  session: SessionRecord,
+  raw: unknown,
+  deps: InscriptionsServiceDeps = {},
+): Promise<ReglagesAdminState> {
+  const store = deps.store ?? getInscriptionsStore();
+  const { comptes, erreurs } = normaliserComptesPaiement(raw);
+  if (Object.keys(erreurs).length > 0) {
+    throw new ReglagesInvalidesError(erreurs);
+  }
+  const edition = await store.findCurrentEdition(session.organisationId);
+  if (!edition) {
+    throw new Error('Aucune édition configurée : exécute pnpm -F @azzel/web db:migrate');
+  }
+  await store.updateComptesPaiement({
+    organisationId: session.organisationId,
+    editionId: edition.id,
+    comptes,
+  });
+  return getReglagesAdmin(session, deps);
+}
+
+/** Comptes à afficher au coureur ; null si aucun n'est renseigné ou illisible. */
+export async function getComptesPaiement(
+  session: SessionRecord,
+  deps: InscriptionsServiceDeps = {},
+): Promise<ComptesPaiement | null> {
+  const store = deps.store ?? getInscriptionsStore();
+  try {
+    const edition = await store.findCurrentEdition(session.organisationId);
+    const comptes = edition?.comptesPaiement;
+    return comptes && (comptes.ccp !== null || comptes.baridimob !== null) ? comptes : null;
+  } catch (error) {
+    console.warn(
+      '[inscriptions] comptes de paiement indisponibles :',
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
 export async function getReglagesAdmin(
   session: SessionRecord,
   deps: InscriptionsServiceDeps = {},
@@ -384,6 +470,7 @@ export async function getReglagesAdmin(
   if (!edition) {
     return {
       edition: null,
+      comptesPaiement: COMPTES_VIDES,
       reglages: {
         capacite: 0,
         seuilAffichagePlaces: 0,
@@ -407,6 +494,7 @@ export async function getReglagesAdmin(
   ]);
   return {
     edition: { id: edition.id, nom: edition.nom },
+    comptesPaiement: edition.comptesPaiement ?? COMPTES_VIDES,
     reglages: {
       capacite: edition.capacite,
       seuilAffichagePlaces: edition.seuilAffichagePlaces,
@@ -923,6 +1011,7 @@ export interface AdminPreuveSummary {
   depositedAt: string;
   sizeBytes: number;
   mime: string;
+  numeroTransaction: string | null;
 }
 
 export interface DossierDetailSummary {
@@ -1000,6 +1089,7 @@ export async function getDossierDetail(
           depositedAt: detail.preuveActive.createdAt.toISOString(),
           sizeBytes: detail.preuveActive.sizeBytes,
           mime: detail.preuveActive.mime,
+          numeroTransaction: detail.preuveActive.numeroTransaction,
         }
       : null,
     decidePar: detail.decidePar

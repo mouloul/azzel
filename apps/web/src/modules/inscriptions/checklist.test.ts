@@ -31,6 +31,7 @@ const PREUVE: PreuveRecord = {
   sha256: 'abc',
   status: 'active',
   createdAt: new Date('2026-10-21T10:00:00.000Z'),
+  numeroTransaction: null,
 };
 
 interface ChecklistScenario {

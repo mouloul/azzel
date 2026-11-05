@@ -12,6 +12,7 @@ import {
   NoEditionError,
   PreuveIdenticalRefusedError,
   PreuveStorageError,
+  NumeroTransactionInvalideError,
   ProofFormatError,
   ProofTooLargeError,
   RegistrationClosedError,
@@ -267,6 +268,7 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
       sha256: sha256Hex(jpegBytes(2048)),
       status: 'active',
       createdAt: new Date('2026-10-21T10:30:00.000Z'),
+      numeroTransaction: null,
       ...overrides,
     };
   }
@@ -356,6 +358,28 @@ describe('uploadPreuve / getPreuveState — service avec store stubbé et vrai d
     expect(input.file.storageKey).toBe(key);
     expect(summary.mime).toBe('image/jpeg');
     expect(summary.format).toBe('JPEG');
+  });
+
+  it('numéro de transaction : normalisé puis transmis au store', async () => {
+    const store = buildStore();
+    await uploadPreuve(session, jpegBytes(1024), {
+      store,
+      proofStore,
+      numeroTransaction: ' 0125 9424 6237 ',
+    });
+    const input = (store.savePreuve.mock.calls[0] as unknown as [
+      { numeroTransaction: string | null },
+    ])[0];
+    expect(input.numeroTransaction).toBe('012594246237');
+  });
+
+  it('numéro de transaction invalide : refusé avant tout stockage', async () => {
+    const store = buildStore();
+    await expect(
+      uploadPreuve(session, jpegBytes(1024), { store, proofStore, numeroTransaction: '12' }),
+    ).rejects.toBeInstanceOf(NumeroTransactionInvalideError);
+    expect(store.savePreuve).not.toHaveBeenCalled();
+    expect(readdirSync(dir)).toHaveLength(0);
   });
 
   it('nom d’origine jamais utilisé : clé UUID sur disque', async () => {

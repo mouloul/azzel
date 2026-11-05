@@ -36,6 +36,7 @@ import {
   DossierValidatedError,
   DocumentsMissingError,
   NoCoureurError,
+  NumeroTransactionDejaUtiliseError,
   PreuveIdenticalRefusedError,
   RegistrationClosedError,
   RefusalReasonRequiredError,
@@ -52,6 +53,20 @@ export interface ReglagesEdition {
   delaiPreuveJours?: number;
   /** 0 ou 1. */
   dateCoursePublique?: number;
+}
+
+/** Comptes de versement de l'événement ; null = non renseigné. */
+export interface ComptesPaiement {
+  ccp: string | null;
+  titulaireCcp: string | null;
+  baridimob: string | null;
+  titulaireBaridimob: string | null;
+}
+
+export interface UpdateComptesPaiementInput {
+  organisationId: string;
+  editionId: string;
+  comptes: ComptesPaiement;
 }
 
 export interface UpdateReglagesInput {
@@ -111,6 +126,8 @@ export interface EditionRecord {
   delaiPreuveJours: number;
   /** La date exacte est-elle montrée au public ? Sinon : la saison seulement. */
   dateCoursePublique: boolean;
+  /** Absent = aucun compte renseigné. */
+  comptesPaiement?: ComptesPaiement;
 }
 
 export interface DocumentRecord {
@@ -155,7 +172,7 @@ export interface CoureurRecord {
   age: number;
   categorieAge: string;
   status: string;
-  /** Numéro de dossard (nullable : attribué par lot, story 3.4). */
+  /** Numéro de dossard : posé à la validation du dossier (nullable avant). */
   dossard: number | null;
   /**
    * Jeton e-dossard (story 4.1) : nullable, créé paresseusement à la première
@@ -214,6 +231,8 @@ export interface PreuveRecord {
   sha256: string;
   status: string;
   createdAt: Date;
+  /** null : preuve antérieure à la saisie du numéro. */
+  numeroTransaction: string | null;
 }
 
 export interface StoredProofFile {
@@ -228,6 +247,8 @@ export interface SavePreuveInput {
   accountId: string;
   editionId: string;
   file: StoredProofFile;
+  /** Déjà normalisé (voir numero-transaction.ts). */
+  numeroTransaction?: string | null;
 }
 
 export interface SavePreuveResult {
@@ -333,6 +354,7 @@ export interface InscriptionsStore {
   expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration>;
   enfilerRappelsPreuve(maintenant: Date): Promise<number>;
   updateReglagesEdition(input: UpdateReglagesInput): Promise<EditionRecord>;
+  updateComptesPaiement(input: UpdateComptesPaiementInput): Promise<void>;
   listListeAttente(editionId: string, organisationId: string): Promise<CoureurEnAttente[]>;
   attribuerPlace(input: AttribuerPlaceInput): Promise<ResultatAttribution>;
   listJournalReglages(
@@ -382,6 +404,7 @@ interface PreuveRow {
   sha256: string;
   status: string;
   created_at: Date;
+  numero_transaction: string | null;
 }
 
 function toPreuveRecord(row: PreuveRow): PreuveRecord {
@@ -395,10 +418,43 @@ function toPreuveRecord(row: PreuveRow): PreuveRecord {
     sha256: row.sha256,
     status: row.status,
     createdAt: row.created_at,
+    numeroTransaction: row.numero_transaction,
   };
 }
 
 type Queryable = Sql | postgres.TransactionSql;
+
+/** Sérialise toute attribution de numéro de l'édition (validation unitaire ou lot). */
+async function verrouillerNumerotation(
+  sql: Queryable,
+  organisationId: string,
+  editionId: string,
+): Promise<void> {
+  await sql`
+    SELECT id FROM edition
+    WHERE id = ${editionId} AND organisation_id = ${organisationId}
+    FOR UPDATE
+  `;
+}
+
+/** Numéro suivant de l'édition : incrémental, jamais réutilisé, plafonné. */
+async function prochainDossard(
+  sql: Queryable,
+  organisationId: string,
+  editionId: string,
+): Promise<number> {
+  await verrouillerNumerotation(sql, organisationId, editionId);
+  const maxRows = await sql<{ max: number }[]>`
+    SELECT COALESCE(MAX(dossard), 0)::int AS max
+    FROM coureur
+    WHERE edition_id = ${editionId}
+      AND organisation_id = ${organisationId}
+      AND dossard IS NOT NULL
+  `;
+  const base = maxRows[0]?.max ?? 0;
+  assertCapaciteDossards(base, 1);
+  return base + 1;
+}
 
 async function selectActivePreuve(
   sql: Queryable,
@@ -409,7 +465,7 @@ async function selectActivePreuve(
 ): Promise<PreuveRow | null> {
   const rows = await sql<PreuveRow[]>`
     SELECT p.id, p.organisation_id, p.coureur_id, p.storage_key, p.mime,
-           p.size_bytes, p.sha256, p.status, p.created_at
+           p.size_bytes, p.sha256, p.status, p.created_at, p.numero_transaction
     FROM preuve p
     JOIN coureur c ON c.id = p.coureur_id
     WHERE c.account_id = ${accountId}
@@ -588,12 +644,17 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               prix_hebergement_da: number;
               delai_preuve_jours: number;
               date_course_publique: number;
+              compte_ccp: string | null;
+              compte_baridimob: string | null;
+              titulaire_ccp: string | null;
+              titulaire_baridimob: string | null;
             }[]
           >`
             SELECT id, organisation_id, slug, name, race_date::text AS race_date,
                    registration_closes_at, capacite, seuil_affichage_places,
                    capacite_hebergement, prix_dossard_da, prix_hebergement_da,
-                   delai_preuve_jours, date_course_publique
+                   delai_preuve_jours, date_course_publique,
+                   compte_ccp, titulaire_ccp, compte_baridimob, titulaire_baridimob
             FROM edition
             WHERE organisation_id = ${organisationId}
             ORDER BY race_date DESC
@@ -617,6 +678,12 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             prixHebergementDa: row.prix_hebergement_da,
             delaiPreuveJours: row.delai_preuve_jours,
             dateCoursePublique: row.date_course_publique === 1,
+            comptesPaiement: {
+              ccp: row.compte_ccp,
+              titulaireCcp: row.titulaire_ccp,
+              baridimob: row.compte_baridimob,
+              titulaireBaridimob: row.titulaire_baridimob,
+            },
           };
         }),
       );
@@ -851,6 +918,21 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
      * transaction, sinon deux organisateurs qui enregistrent en même temps
      * produiraient un journal qui ne correspond à aucun état réel.
      */
+    async updateComptesPaiement(input: UpdateComptesPaiementInput): Promise<void> {
+      await withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          await tx`
+            UPDATE edition
+            SET compte_ccp = ${input.comptes.ccp},
+                titulaire_ccp = ${input.comptes.titulaireCcp},
+                compte_baridimob = ${input.comptes.baridimob},
+                titulaire_baridimob = ${input.comptes.titulaireBaridimob}
+            WHERE id = ${input.editionId}
+          `;
+        }),
+      );
+    },
+
     async updateReglagesEdition(input: UpdateReglagesInput): Promise<EditionRecord> {
       return withDb(() =>
         withOrg(sql, input.organisationId, async (tx) => {
@@ -1377,13 +1459,33 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             input.organisationId,
             true,
           );
+          const numeroTransaction = input.numeroTransaction ?? null;
           if (existing && existing.sha256 === input.file.sha256) {
             if (coureur.status === 'refusé') {
               // Octets identiques à la preuve déjà refusée : pas de « nouvelle preuve »,
               // le dossier reste refusé — le coureur doit déposer une version différente.
               throw new PreuveIdenticalRefusedError();
             }
-            return { preuve: toPreuveRecord(existing), replaced: null };
+            // Même fichier, même numéro : rejeu, rien à écrire. Même fichier avec
+            // un numéro corrigé : c'est une vraie mise à jour, on continue.
+            if (existing.numero_transaction === numeroTransaction) {
+              return { preuve: toPreuveRecord(existing), replaced: null };
+            }
+          }
+          if (numeroTransaction !== null) {
+            // Un reçu ne justifie qu'un dossier. Contrôle explicite pour répondre
+            // proprement ; l'index unique reste le filet en cas de dépôts simultanés.
+            const pris = await tx<{ id: string }[]>`
+              SELECT id FROM preuve
+              WHERE organisation_id = ${input.organisationId}
+                AND numero_transaction = ${numeroTransaction}
+                AND status = 'active'
+                AND coureur_id <> ${coureur.id}
+              LIMIT 1
+            `;
+            if (pris.length > 0) {
+              throw new NumeroTransactionDejaUtiliseError();
+            }
           }
           let replaced: PreuveRecord | null = null;
           if (existing) {
@@ -1391,24 +1493,37 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               UPDATE preuve SET status = 'replaced'
               WHERE id = ${existing.id} AND status = 'active'
               RETURNING id, organisation_id, coureur_id, storage_key, mime,
-                        size_bytes, sha256, status, created_at
+                        size_bytes, sha256, status, created_at, numero_transaction
             `;
             const replacedRow = replacedRows[0];
             if (replacedRow) {
               replaced = toPreuveRecord(replacedRow);
             }
           }
-          const insertedRows = await tx<PreuveRow[]>`
-            INSERT INTO preuve (
-              organisation_id, coureur_id, storage_key, mime, size_bytes, sha256, status
-            )
-            VALUES (
-              ${input.organisationId}, ${coureur.id}, ${input.file.storageKey},
-              ${input.file.mime}, ${input.file.sizeBytes}, ${input.file.sha256}, 'active'
-            )
-            RETURNING id, organisation_id, coureur_id, storage_key, mime,
-                      size_bytes, sha256, status, created_at
-          `;
+          let insertedRows: PreuveRow[];
+          try {
+            insertedRows = await tx<PreuveRow[]>`
+              INSERT INTO preuve (
+                organisation_id, coureur_id, storage_key, mime, size_bytes, sha256, status,
+                numero_transaction
+              )
+              VALUES (
+                ${input.organisationId}, ${coureur.id}, ${input.file.storageKey},
+                ${input.file.mime}, ${input.file.sizeBytes}, ${input.file.sha256}, 'active',
+                ${numeroTransaction}
+              )
+              RETURNING id, organisation_id, coureur_id, storage_key, mime,
+                        size_bytes, sha256, status, created_at, numero_transaction
+            `;
+          } catch (error) {
+            if (
+              (error as { constraint_name?: string }).constraint_name ===
+              'preuve_numero_transaction_actif_uidx'
+            ) {
+              throw new NumeroTransactionDejaUtiliseError();
+            }
+            throw error;
+          }
           const inserted = insertedRows[0];
           if (!inserted) {
             throw new Error('insertion de la preuve impossible');
@@ -1528,7 +1643,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             `,
             tx<PreuveRow[]>`
               SELECT id, organisation_id, coureur_id, storage_key, mime,
-                     size_bytes, sha256, status, created_at
+                     size_bytes, sha256, status, created_at, numero_transaction
               FROM preuve
               WHERE coureur_id = ${input.coureurId} AND status = 'active'
               LIMIT 1
@@ -1570,6 +1685,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           }
           let status: 'validé' | 'refusé';
           let refusalReason: string | null = null;
+          let dossardAttribue: number | null = null;
           if (input.decision === 'valider') {
             if (locked.status === 'validé') {
               // Re-validation idempotente : no-op, rien ne change.
@@ -1597,6 +1713,13 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               throw new DossierIncompletError(piecesManquantes);
             }
             status = 'validé';
+            // Le numéro naît avec la validation : suite du max de l'édition, lu
+            // sous le verrou d'édition pour que deux validations simultanées
+            // ne tirent pas le même numéro (la UNIQUE partielle 0022 reste le
+            // dernier recours). Un coureur déjà numéroté ne change jamais.
+            if (locked.dossard === null) {
+              dossardAttribue = await prochainDossard(tx, input.organisationId, input.editionId);
+            }
           } else if (input.decision === 'refuser') {
             const motif = input.refusalReason?.trim() ?? '';
             if (motif.length === 0) {
@@ -1614,6 +1737,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             UPDATE coureur
             SET status = ${status},
                 refusal_reason = ${refusalReason},
+                dossard = COALESCE(dossard, ${dossardAttribue}::int),
                 decided_by = ${input.decidedBy},
                 decided_at = now(),
                 updated_at = now()
@@ -1675,6 +1799,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           // condition après le commit du premier — les dossards fraîchement
           // posés quittent le lot). Les déjà numérotés ne sont JAMAIS touchés :
           // pas de renumérotation, pas de réutilisation.
+          await verrouillerNumerotation(tx, input.organisationId, input.editionId);
           const cibles = await tx<{ id: string }[]>`
             SELECT c.id
             FROM coureur c
@@ -1792,7 +1917,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         withOrg(sql, organisationId, async (tx) => {
           const rows = await tx<PreuveRow[]>`
             SELECT id, organisation_id, coureur_id, storage_key, mime,
-                   size_bytes, sha256, status, created_at
+                   size_bytes, sha256, status, created_at, numero_transaction
             FROM preuve
             WHERE id = ${preuveId}
               AND organisation_id = ${organisationId}
@@ -1824,6 +1949,7 @@ function createUnavailableStore(): InscriptionsStore {
     expirerInscriptionsEchues: unavailable,
     enfilerRappelsPreuve: unavailable,
     updateReglagesEdition: unavailable,
+    updateComptesPaiement: unavailable,
     listListeAttente: unavailable,
     attribuerPlace: unavailable,
     listJournalReglages: unavailable,

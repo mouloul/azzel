@@ -34,11 +34,20 @@ export function AcceptancesForm({
   children?: ReactNode;
 }) {
   const router = useRouter();
-  const [decharge, setDecharge] = useState(false);
-  const [reglement, setReglement] = useState(false);
+  // Retour sur l'écran après acceptation : les cases restent cochées (l'acceptation
+  // est déjà enregistrée côté serveur) et les documents comptent comme déroulés.
+  const [decharge, setDecharge] = useState(state.acceptances.decharge !== null);
+  const [reglement, setReglement] = useState(state.acceptances.reglement !== null);
   // Documents deja deroules. Un document refermé RESTE déroulé : on ne redemande
   // pas de le rouvrir, la condition est de l'avoir ouvert une fois.
-  const [deroules, setDeroules] = useState<ReadonlySet<string>>(new Set());
+  const [deroules, setDeroules] = useState<ReadonlySet<string>>(
+    () =>
+      new Set(
+        (['decharge', 'reglement'] as const).filter(
+          (slug) => state.acceptances[slug] !== null,
+        ),
+      ),
+  );
   const [missingError, setMissingError] = useState(false);
   const [serverError, setServerError] = useState<{ message: string; action: string } | null>(
     null,

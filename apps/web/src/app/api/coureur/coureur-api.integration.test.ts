@@ -290,7 +290,7 @@ describe.skipIf(testUrls === null)(
       };
       expect(etat.disponible).toBe(true);
       expect(etat.jeton).toMatch(/^[A-Za-z0-9_-]{22}$/);
-      expect(etat.dossard).toBeNull();
+      expect(etat.dossard).toEqual(expect.any(Number));
       expect(etat.payloadQr).toBe(`azzel-e1:${etat.jeton}`);
       expect(etat.editionNom).toBe('Édition 2027');
     });

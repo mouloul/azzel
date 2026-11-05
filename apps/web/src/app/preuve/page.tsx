@@ -9,7 +9,7 @@ import { requireRolePage } from '@/modules/iam/session';
 import { canDepositPreuve } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
-import { getMontantDu } from '@/modules/inscriptions/service';
+import { getComptesPaiement, getMontantDu } from '@/modules/inscriptions/service';
 
 import { PreuveForm } from './preuve-form';
 import '../dossier.css';
@@ -145,6 +145,7 @@ export default async function PreuvePage() {
     );
   }
 
+  const comptes = await getComptesPaiement(session);
   return (
     <>
       {state.coureurStatus === 'refusé' && state.refusalReason !== null ? (
@@ -172,6 +173,67 @@ export default async function PreuvePage() {
               ? ` — dossard ${montant.prixDossardDa} DA et hébergement ${montant.prixHebergementDa} DA, en un seul versement.`
               : ` — le dossard seul.`}
           </p>
+        ) : null}
+        {comptes !== null ? (
+          <section className="encart-comptes" aria-labelledby="titre-comptes">
+            <p className="encart-comptes__surtitre">Où verser</p>
+            <h2 id="titre-comptes" className="encart-comptes__titre">
+              Rappel des comptes de l’événement
+            </h2>
+            <p className="encart-comptes__intro">
+              Verse le montant ci-dessus sur{' '}
+              {comptes.ccp !== null && comptes.baridimob !== null
+                ? 'l’un des deux comptes ci-dessous, CCP ou Baridimob (pas les deux).'
+                : 'le compte ci-dessous.'}
+            </p>
+            <div className="encart-comptes__liste">
+              {comptes.ccp !== null ? (
+                <dl className="encart-comptes__compte">
+                  <dt>Compte CCP</dt>
+                  <dd className="encart-comptes__numero">{comptes.ccp}</dd>
+                  {comptes.titulaireCcp !== null ? (
+                    <>
+                      <dt>Titulaire</dt>
+                      <dd>{comptes.titulaireCcp}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              ) : null}
+              {comptes.ccp !== null && comptes.baridimob !== null ? (
+                <p className="encart-comptes__ou" aria-hidden="true">
+                  ou
+                </p>
+              ) : null}
+              {comptes.baridimob !== null ? (
+                <dl className="encart-comptes__compte">
+                  <dt>RIP Baridimob</dt>
+                  <dd className="encart-comptes__numero">{comptes.baridimob}</dd>
+                  {comptes.titulaireBaridimob !== null ? (
+                    <>
+                      <dt>Titulaire</dt>
+                      <dd>{comptes.titulaireBaridimob}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              ) : null}
+            </div>
+            <ul className="encart-comptes__regles">
+              <li>
+                <strong>Un versement par personne.</strong> Chaque coureur règle sa propre
+                participation, en un seul versement : un paiement ne vaut que pour une
+                inscription.
+              </li>
+              <li>
+                <strong>Le reçu CCP ou Baridimob</strong> porte un numéro de transaction.
+                Il doit être parfaitement lisible sur la pièce jointe.
+              </li>
+              <li>
+                <strong>Ce numéro est unique.</strong> Tu le saisis ci-dessous ; le système
+                vérifie qu’il n’a jamais servi, pour qu’un même reçu ne puisse pas valider
+                plusieurs inscriptions.
+              </li>
+            </ul>
+          </section>
         ) : null}
       </PreuveForm>
     </>

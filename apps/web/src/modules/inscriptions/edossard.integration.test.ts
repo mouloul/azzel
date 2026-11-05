@@ -149,14 +149,14 @@ describe.skipIf(testUrls === null)(
       return { coureurId, session };
     }
 
-    it('première consultation : jeton créé (22 car. base64url), dossard null tant qu’il n’est pas attribué', async () => {
+    it('première consultation : jeton créé (22 car. base64url), dossard attribué dès la validation', async () => {
       const { session } = await createCoureurValide();
 
       const etat = await obtenirEdossard(session, { store });
 
       expect(etat).not.toBeNull();
       expect(etat?.jeton).toMatch(/^[A-Za-z0-9_-]{22}$/);
-      expect(etat?.dossard).toBeNull();
+      expect(etat?.dossard).toEqual(expect.any(Number));
       expect(etat?.prenom).toBe('Yani');
       expect(etat?.nom).toBe('Ulahianne');
       expect(etat?.epreuveNom).toBe('La Longue');

@@ -15,6 +15,7 @@ import {
   formatKiloBytes,
   isAcceptedProofName,
 } from '@/modules/inscriptions/proof-format';
+import { normaliserNumeroTransaction } from '@/modules/inscriptions/numero-transaction';
 import type { PreuveState, PreuveSummary } from '@/modules/inscriptions/proof-service';
 
 const NETWORK_ERROR = {
@@ -96,6 +97,8 @@ export function PreuveForm({
   const [serverError, setServerError] = useState<{ message: string; action: string } | null>(null);
   const [reconnect, setReconnect] = useState(false);
   const [pending, setPending] = useState(false);
+  const [numeroSaisi, setNumeroSaisi] = useState(state.preuve?.numeroTransaction ?? '');
+  const [numeroError, setNumeroError] = useState<string | null>(null);
   const [deposited, setDeposited] = useState<PreuveSummary | null>(state.preuve);
   const previewRef = useRef<string | null>(null);
 
@@ -204,9 +207,17 @@ export function PreuveForm({
     }
     setServerError(null);
     setReconnect(false);
+    const numero = normaliserNumeroTransaction(numeroSaisi);
+    if (!numero.ok) {
+      setNumeroError(numero.message);
+      document.getElementById('preuve-numero')?.focus();
+      return;
+    }
+    setNumeroError(null);
     setPending(true);
     try {
       const body = new FormData();
+      body.append('numeroTransaction', numero.numero);
       body.append('fichier', draft.file, draft.file.name);
       const response = await fetch('/api/inscriptions/preuve', {
         method: 'POST',
@@ -273,12 +284,12 @@ export function PreuveForm({
   const edition = state.edition;
 
   return (
-    <section className="auth auth-wide">
+    <section className="auth auth-wide dossier-section">
       <article className="card">
         <p className="surtitre">Preuve de paiement</p>
-        <h1>{deposited !== null ? 'Remplacer ta preuve' : 'Dépose ta preuve de paiement CCP'}</h1>
+        <h1>{deposited !== null ? 'Remplacer ta preuve' : 'Dépose ta preuve de paiement CCP ou Baridimob'}</h1>
         <p className="lead">
-          Photographie ou capture de ton reçu de virement CCP : elle est compressée sur ton
+          Photographie ou document de ton reçu de virement : elle est compressée sur ton
           téléphone puis déposée ({formatKiloBytes(MAX_PROOF_BYTES)} maximum).
         </p>
         {children}
@@ -289,9 +300,47 @@ export function PreuveForm({
               Déposée le {formatLocalDateTime(deposited.depositedAt)} ·{' '}
               {formatKiloBytes(deposited.sizeBytes)} ({deposited.format})
             </p>
+            {deposited.numeroTransaction !== null && (
+              <p>N° de transaction : {deposited.numeroTransaction}</p>
+            )}
             <p className="meta">Tu peux la remplacer : l’ancienne reste conservée pour l’organisation.</p>
           </div>
         )}
+
+        <div className="socle-champ">
+          <label className="socle-etiquette" htmlFor="preuve-numero">
+            Numéro de transaction
+            <span className="champ-obligatoire"> (obligatoire)</span>
+          </label>
+          <input
+            id="preuve-numero"
+            name="numeroTransaction"
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCapitalize="characters"
+            maxLength={40}
+            value={numeroSaisi}
+            onChange={(event) => {
+              setNumeroSaisi(event.target.value);
+              setNumeroError(null);
+            }}
+            disabled={pending}
+            aria-invalid={numeroError !== null || undefined}
+            aria-describedby={
+              numeroError !== null ? 'preuve-numero-aide preuve-numero-erreur' : 'preuve-numero-aide'
+            }
+          />
+          <p id="preuve-numero-aide" className="socle-champ-aide">
+            Il figure sur ton reçu (« Identifiant de transaction »). Un numéro ne peut
+            justifier qu’un seul dossier.
+          </p>
+          {numeroError !== null && (
+            <p id="preuve-numero-erreur" className="field-error" role="alert">
+              {numeroError}
+            </p>
+          )}
+        </div>
 
         {draft !== null ? (
           <div className="recap" role="status" aria-live="polite">

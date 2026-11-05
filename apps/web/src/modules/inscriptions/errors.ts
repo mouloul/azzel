@@ -175,6 +175,20 @@ export class PreuveStorageError extends Error {
   }
 }
 
+export class NumeroTransactionInvalideError extends Error {
+  constructor(readonly fields: Record<string, string>) {
+    super('numéro de transaction invalide');
+    this.name = 'NumeroTransactionInvalideError';
+  }
+}
+
+export class NumeroTransactionDejaUtiliseError extends Error {
+  constructor() {
+    super('numéro de transaction déjà utilisé');
+    this.name = 'NumeroTransactionDejaUtiliseError';
+  }
+}
+
 export class PreuveIdenticalRefusedError extends Error {
   constructor() {
     super('preuve identique à celle déjà refusée');
@@ -333,6 +347,27 @@ export function toPreuveApiError(error: unknown): ApiError {
         code: 'preuve.format',
         message: `Ce format n’est pas accepté. Formats acceptés : ${ACCEPTED_PROOF_FORMATS_LABEL}.`,
         action: 'Prends ton reçu en photo (JPEG, PNG, WebP) ou exporte-le en PDF, puis renvoie-le.',
+      }),
+    };
+  }
+  if (error instanceof NumeroTransactionInvalideError) {
+    return {
+      status: 400,
+      fields: error.fields as FieldErrors,
+      envelope: createErrorEnvelope({
+        code: 'preuve.numero_transaction_invalide',
+        message: 'Le numéro de transaction est invalide.',
+        action: 'Recopie-le tel qu’il figure sur ton reçu, puis renvoie ta preuve.',
+      }),
+    };
+  }
+  if (error instanceof NumeroTransactionDejaUtiliseError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'preuve.numero_transaction_deja_utilise',
+        message: 'Ce numéro de transaction est déjà associé à un autre dossier.',
+        action: 'Vérifie le numéro sur ton reçu. Si c’est bien le tien, appelle l’équipe.',
       }),
     };
   }
