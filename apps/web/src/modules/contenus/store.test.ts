@@ -57,6 +57,21 @@ describe('getContenusStore', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  it('délai serveur dépassé (57014) : base indisponible, pas un bug qui casse le build', async () => {
+    const { sql } = fakeSql();
+    (sql as unknown as { begin: unknown }).begin = async () => {
+      throw Object.assign(new Error('canceling statement due to statement timeout'), {
+        code: '57014',
+      });
+    };
+    getDbClientMock.mockReturnValue(sql);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(
+      getContenusStore().listContenusBySlugs(ORGANISATION_ID, ['accueil']),
+    ).rejects.toBeInstanceOf(DbUnavailableError);
+  });
+
   it('sert le store indisponible quand la fabrique ne rend aucune connexion', () => {
     getDbClientMock.mockReturnValue(null);
 
