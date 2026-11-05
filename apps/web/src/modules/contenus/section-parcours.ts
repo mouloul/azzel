@@ -108,8 +108,11 @@ function fusionnerEpreuve(
   const servicesParId = new Map(doc.pointsDePassage.map((point) => [point.id, point.services]));
   return {
     ...epreuve,
-    // Décision produit 2026-11-04 : distance du RELEVÉ d’essai (ici 28,0 km),
-    // pas la base (35) — le nom « La Longue — 35 km » reste éditorial.
+    // Décision produit 2026-11-04, complétée le 05 : la distance publiée est
+    // celle du RELEVÉ d’essai (28,0 km), pas celle de la base. Le nom de
+    // l’épreuve ne porte plus de distance (migrations 0040 et contenus 0015) —
+    // la contradiction « La Longue — 35 km » au-dessus de « Distance 28 km »
+    // était le défaut B1 de la revue visuelle.
     distanceKm: vue.distanceM / 1000,
     metriques: {
       denivelePositifM: vue.dplusM,

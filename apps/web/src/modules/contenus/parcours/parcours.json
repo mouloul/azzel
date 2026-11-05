@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "source": {
     "fichier": "activity_24920331005.gpx",
     "nom": "essai trail ait ainsi 2027",
@@ -6504,6 +6504,35 @@
   ],
   "epreuves": {
     "longue": {
+      "distanceM": 28006.4,
+      "dplusM": 1186,
+      "dmoinsM": 1187,
+      "altitudeMinM": 221.6,
+      "altitudeMaxM": 835.7,
+      "tranches": [
+        {
+          "deIndex": 0,
+          "aIndex": 3221
+        }
+      ],
+      "pointsDePassage": [
+        {
+          "id": "depart",
+          "sM": 0,
+          "kilometre": 0,
+          "altitudeM": 677.4,
+          "dplusSegmentAmontM": 0
+        },
+        {
+          "id": "arrivee",
+          "sM": 28006.4,
+          "kilometre": 28.01,
+          "altitudeM": 676,
+          "dplusSegmentAmontM": 1186
+        }
+      ]
+    },
+    "moyenne": {
       "distanceM": 28006.4,
       "dplusM": 1186,
       "dmoinsM": 1187,

@@ -461,14 +461,14 @@ describe.skipIf(testUrls === null)(
       // Partants par épreuve : 5 longue (le 208 sans dossard n'est PAS
       // partant), 1 moyenne, 1 sprint — en constitution et refusé absents,
       // 231 nulle part (épreuve étrangère, aucune ligne « L’Ancienne »).
-      expect(lignes).toContain('Partants — La Longue — 35 km;5');
-      expect(lignes).toContain('Partants — La Moyenne — 12 km;1');
+      expect(lignes).toContain('Partants — La Longue;5');
+      expect(lignes).toContain('Partants — La Moyenne;1');
       expect(lignes).toContain('Partants — Le Sprint — 5 km;1');
       expect(lignes).not.toContain('L’Ancienne');
-      expect(lignes).toContain('Arrivées — La Longue — 35 km;0');
+      expect(lignes).toContain('Arrivées — La Longue;0');
       // Section Arrivées présente avec son en-tête, AUCUNE ligne fantôme.
       expect(lignes).toContain('Épreuve;Dossard;Rang;Temps');
-      expect(lignes).not.toContain('La Longue — 35 km;201;');
+      expect(lignes).not.toContain('La Longue;201;');
     });
 
     it('passages par checkpoint : coureurs DISTINCTS, arbitrés, annulations exclues — ré-arbitrage en lecture', async () => {
@@ -527,16 +527,16 @@ describe.skipIf(testUrls === null)(
       const lignes = await lignesRapport(organisateurA);
       const tempsLongueA = formaterTempsRapport(temps(departLongue, 'arrivee-a'));
       const tempsLongueB = formaterTempsRapport(temps(departLongue, 'arrivee-b'));
-      expect(lignes).toContain(`La Longue — 35 km;201;1;${tempsLongueA}`);
-      expect(lignes).toContain(`La Longue — 35 km;202;1;${tempsLongueA}`);
-      expect(lignes).toContain(`La Longue — 35 km;203;3;${tempsLongueB}`);
+      expect(lignes).toContain(`La Longue;201;1;${tempsLongueA}`);
+      expect(lignes).toContain(`La Longue;202;1;${tempsLongueA}`);
+      expect(lignes).toContain(`La Longue;203;3;${tempsLongueB}`);
       expect(lignes).toContain(
-        `La Moyenne — 12 km;211;1;${formaterTempsRapport(temps(departMoyenne, 'arrivee-b'))}`,
+        `La Moyenne;211;1;${formaterTempsRapport(temps(departMoyenne, 'arrivee-b'))}`,
       );
       // Sprint jamais configuré : arrivé SANS rang ni temps (jamais faux à zéro).
       expect(lignes).toContain('Le Sprint — 5 km;221;—;—');
-      expect(lignes).toContain('Arrivées — La Longue — 35 km;3');
-      expect(lignes).toContain('Arrivées — La Moyenne — 12 km;1');
+      expect(lignes).toContain('Arrivées — La Longue;3');
+      expect(lignes).toContain('Arrivées — La Moyenne;1');
       expect(lignes).toContain('Arrivées — Le Sprint — 5 km;1');
     });
 
@@ -555,7 +555,7 @@ describe.skipIf(testUrls === null)(
 
       const lignes = await lignesRapport(organisateurA);
       expect(lignes).toContain('Épreuve;Dossard;Lieu;Motif;Heure;Auteur');
-      const ligneAbandon = lignes.find((ligne) => ligne.startsWith('La Longue — 35 km;204;'));
+      const ligneAbandon = lignes.find((ligne) => ligne.startsWith('La Longue;204;'));
       expect(ligneAbandon).toBeDefined();
       // RFC 4180 : guillemets doublés, séparateur interne quoté —
       // l'injection `" ; =SOMME(...)` est neutralisée par le même mécanisme.
@@ -563,9 +563,9 @@ describe.skipIf(testUrls === null)(
       expect(ligneAbandon).toContain('Épuisement');
       expect(ligneAbandon).toContain(organisateurA.email);
       expect(ligneAbandon).toMatch(/\d{2}:\d{2}:\d{2}/);
-      expect(lignes).toContain('Abandons — La Longue — 35 km;1');
+      expect(lignes).toContain('Abandons — La Longue;1');
       // L'abandonné reste dans le rapport (épopée 5) : partant inchangé.
-      expect(lignes).toContain('Partants — La Longue — 35 km;5');
+      expect(lignes).toContain('Partants — La Longue;5');
     });
 
     it('portée des partages 7.2 : une ligne par jour + total honnête', async () => {
@@ -583,13 +583,13 @@ describe.skipIf(testUrls === null)(
       expect(lignes).toContain('Épreuve;XS;S;M;L;XL;XXL;Total');
       // Le 208 (validé SANS dossard) commande bien son XS ; les statuts non
       // validés (206 XXL en constitution, 207 L refusé) ne commandent RIEN.
-      expect(lignes).toContain('La Longue — 35 km;1;1;2;1;1;0;6');
-      expect(lignes).toContain('La Moyenne — 12 km;0;0;0;1;0;0;1');
+      expect(lignes).toContain('La Longue;1;1;2;1;1;0;6');
+      expect(lignes).toContain('La Moyenne;0;0;0;1;0;0;1');
       expect(lignes).toContain('Le Sprint — 5 km;0;0;1;0;0;0;1');
       expect(lignes).toContain('Toutes épreuves;1;1;3;2;1;0;8');
       expect(lignes).toContain('Médailles par épreuve');
-      expect(lignes).toContain('La Longue — 35 km;6');
-      expect(lignes).toContain('La Moyenne — 12 km;1');
+      expect(lignes).toContain('La Longue;6');
+      expect(lignes).toContain('La Moyenne;1');
       expect(lignes).toContain('Le Sprint — 5 km;1');
       expect(lignes).toContain('Total;8');
       expect(commande.contenu).toContain('Zéro stock : commandé = validé');

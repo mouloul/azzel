@@ -159,7 +159,7 @@ describe.skipIf(testUrls === null)(
       expect(etat?.dossard).toBeNull();
       expect(etat?.prenom).toBe('Yani');
       expect(etat?.nom).toBe('Ulahianne');
-      expect(etat?.epreuveNom).toBe('La Longue — 35 km');
+      expect(etat?.epreuveNom).toBe('La Longue');
       expect(etat?.editionNom).toBe('Édition 2027');
     });
 

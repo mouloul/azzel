@@ -39,16 +39,16 @@ const VUE_PARCOURS_ACCUEIL = {
   epreuves: [
     {
       slug: 'longue',
-      nom: 'La Longue — 35 km',
-      distanceKm: 35,
+      nom: 'La Longue',
+      distanceKm: 28,
       gpxUrl: 'https://files.exemple.dz/longue.gpx',
       metriques: null,
       pointsDePassage: null,
     },
     {
       slug: 'moyenne',
-      nom: 'La Moyenne — 12 km',
-      distanceKm: 12,
+      nom: 'La Moyenne',
+      distanceKm: 28,
       gpxUrl: null,
       metriques: null,
       pointsDePassage: null,
@@ -126,11 +126,21 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('dont 36 femmes');
   });
 
-  it('épreuves 2027 : trail long 35 km et trail moyen 12 km', () => {
+  /* Revue visuelle du 04/11/2026 (B1) : les distances ne sont plus figées dans
+   * les titres. Elles sont publiées par la section parcours, depuis le relevé,
+   * avec la mention « tracé provisoire » — un seul endroit à corriger quand le
+   * tracé définitif arrivera. */
+  it('épreuves 2027 : les cartes nomment les trails, sans distance figée', () => {
     const html = HTML_ACCUEIL;
-    expect(html).toContain('Trail long — 35 km');
-    expect(html).toContain('Trail moyen — 12 km');
+    expect(html).toContain('Trail long');
+    expect(html).toContain('Trail moyen');
     expect(html).toContain('Épreuve phare');
+    expect(html).not.toContain('Trail long — 35 km');
+    expect(html).not.toContain('Trail moyen — 12 km');
+  });
+
+  it('aucune distance contredisant le relevé ne subsiste dans l’accueil', () => {
+    expect(HTML_ACCUEIL).not.toContain('35 km');
   });
 
   it('navigation sobre : liens texte /parcours et /region dans la section épreuves (story 2.4)', () => {
@@ -199,7 +209,7 @@ describe('accueil vitrine — hero plein écran (modèle UTMB)', () => {
     const crete = html.indexOf('data-crete');
     const rail = html.indexOf('class="aa-hero__rail"');
     const date = html.indexOf('Printemps 2027');
-    const epreuves = html.indexOf('35 km · 12 km');
+    const epreuves = html.indexOf('Deux trails');
     const meta = html.indexOf('class="aa-hero__meta"');
     const actions = html.indexOf('class="aa-hero__actions"');
     expect(debut).toBeLessThan(titre);
@@ -305,8 +315,8 @@ describe('accueil vitrine — section parcours (story 9.3)', () => {
       expect(radio).toContain('name="epreuve-parcours-accueil"');
     }
     expect(radios[0]).toContain('checked');
-    expect(section).toContain('La Longue — 35 km');
-    expect(section).toContain('La Moyenne — 12 km');
+    expect(section).toContain('La Longue');
+    expect(section).toContain('La Moyenne');
     expect(section).toContain('href="https://files.exemple.dz/longue.gpx"');
   });
 

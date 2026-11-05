@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   readStoredTheme,
   resolveInitialTheme,
+  REQUETE_SOMBRE,
+  systemePrefereSombre,
   THEME_CHANGE_EVENT,
   writeStoredTheme,
   type Theme,
@@ -58,7 +60,7 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    setTheme(resolveInitialTheme(readStoredTheme()));
+    setTheme(resolveInitialTheme(readStoredTheme(), systemePrefereSombre()));
     const suivre = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
       if (detail === 'light' || detail === 'dark') {
@@ -66,7 +68,31 @@ export function ThemeToggle() {
       }
     };
     window.addEventListener(THEME_CHANGE_EVENT, suivre);
-    return () => window.removeEventListener(THEME_CHANGE_EVENT, suivre);
+
+    // UX-DR-2 : tant qu'AUCUN choix n'est mémorisé, la bascule suit le système
+    // en direct — l'utilisateur qui change son réglage à la tombée de la nuit
+    // voit la page suivre. Dès qu'il a choisi, son choix prime et cet
+    // écouteur ne fait plus rien.
+    let media: MediaQueryList | null = null;
+    const suivreSysteme = (event: MediaQueryListEvent) => {
+      if (readStoredTheme() !== null) {
+        return;
+      }
+      const resolu: Theme = event.matches ? 'dark' : 'light';
+      applyTheme(resolu);
+      setTheme(resolu);
+    };
+    try {
+      media = window.matchMedia(REQUETE_SOMBRE);
+      media.addEventListener('change', suivreSysteme);
+    } catch {
+      media = null;
+    }
+
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, suivre);
+      media?.removeEventListener('change', suivreSysteme);
+    };
   }, []);
 
   const choisir = useCallback((valeur: Theme) => {

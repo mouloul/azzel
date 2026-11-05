@@ -244,7 +244,7 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
     expect(row?.type).toBe('inscription_recue');
     expect(row?.statut).toBe('pending');
     expect(row?.destinataire).toBe(session.email);
-    expect(row?.payload).toEqual({ prenom: 'Yani', epreuve: 'La Longue — 35 km' });
+    expect(row?.payload).toEqual({ prenom: 'Yani', epreuve: 'La Longue' });
     expect(row?.attempts).toBe(0);
     expect(row?.sent_at).toBeNull();
   });
@@ -277,7 +277,7 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
       (row) => row.destinataire === valideSession.email && row.type === 'dossier_valide',
     );
     expect(validation).toBeDefined();
-    expect(validation?.payload).toEqual({ prenom: 'Yani', epreuve: 'La Longue — 35 km' });
+    expect(validation?.payload).toEqual({ prenom: 'Yani', epreuve: 'La Longue' });
     expect(validation?.statut).toBe('pending');
 
     const refus = rows.find(
@@ -286,7 +286,7 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
     expect(refus).toBeDefined();
     expect(refus?.payload).toEqual({
       prenom: 'Iness',
-      epreuve: 'La Longue — 35 km',
+      epreuve: 'La Longue',
       motif: 'Reçu de paiement illisible',
     });
   });
@@ -627,7 +627,7 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
       date2 = edition2[0]?.race_date as string;
       const epreuve2 = await sql<{ id: string }[]>`
         INSERT INTO epreuve (organisation_id, edition_id, slug, name, distance_km)
-        VALUES (${organisationId}, ${edition2Id}, 'longue', 'La Longue — 35 km', 35.0)
+        VALUES (${organisationId}, ${edition2Id}, 'longue', 'La Longue', 35.0)
         RETURNING id
       `;
       const epreuve2Id = epreuve2[0]?.id;

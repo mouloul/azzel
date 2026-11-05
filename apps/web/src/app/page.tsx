@@ -34,7 +34,7 @@ const PILIERS = [
   {
     Glyphe: GlypheYaz,
     titre: 'Sport',
-    texte: 'Deux trails — 35 km et 12 km — au départ du stade Agni Lhoudh.',
+    texte: 'Deux trails au départ du stade Agni Lhoudh, sur les sentiers de Yakouren.',
   },
   {
     Glyphe: GlypheTala,
@@ -56,7 +56,7 @@ const PILIERS = [
 export const metadata = {
   title: 'Week-end Sportif Aït Aïssi',
   description:
-    'Deux trails — 35 km et 12 km — au départ du stade Agni Lhoudh, au village d’Aït Aïssi. Dates, épreuves, parcours et informations pratiques de l’édition 2027.',
+    'Deux trails au départ du stade Agni Lhoudh, au village d’Aït Aïssi. Dates, épreuves, parcours et informations pratiques de l’édition 2027.',
 };
 
 // Section partenaires lue en base (bascule A/B « sans dev », FR-22). La page
@@ -88,6 +88,11 @@ export default async function HomePage() {
           de date et le badge des épreuves se fondent dans le rail. Les chiffres
           du rail sont les seuls officiels : date, épreuves, départ, cadre —
           D+ et tracés 2027 attendent la confirmation du comité (page /parcours).
+          Revue visuelle du 04/11/2026 (B1) : la clé « Épreuves » annonçait
+          « 35 km · 12 km » alors que la section parcours, plus bas sur la même
+          page, publie les 28 km du relevé d'essai. Aucune distance n'est plus
+          figée ici : elles viennent toutes de parcours.json, avec leur mention
+          « tracé provisoire ».
           Recette du 04/11/2026 : la date exacte n'est pas encore publique — la
           vitrine ne dit que « printemps 2027 », ici comme dans l'accroche et la
           section des épreuves. */}
@@ -121,7 +126,7 @@ export default async function HomePage() {
             <div className="aa-hero__rail-cles">
               <div className="aa-hero__cle">
                 <dt>Épreuves</dt>
-                <dd>35 km · 12 km</dd>
+                <dd>Deux trails</dd>
               </div>
               <div className="aa-hero__cle">
                 <dt>Départ</dt>
@@ -214,13 +219,13 @@ export default async function HomePage() {
           <div className="aa-cards">
             <article className="aa-card">
               <span className="aa-chip aa-chip--phare">Épreuve phare</span>
-              <h3 className="aa-card__title">Trail long — 35 km</h3>
+              <h3 className="aa-card__title">Trail long</h3>
               <p className="aa-card__text">
                 La grande course de l’édition 2027, au départ du stade Agni Lhoudh.
               </p>
             </article>
             <article className="aa-card">
-              <h3 className="aa-card__title">Trail moyen — 12 km</h3>
+              <h3 className="aa-card__title">Trail moyen</h3>
               <p className="aa-card__text">
                 Une distance plus courte, le même jour, sur les mêmes sentiers.
               </p>

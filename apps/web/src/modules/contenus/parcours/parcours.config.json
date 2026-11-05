@@ -12,6 +12,16 @@
           "a": "arrivee"
         }
       ]
+    },
+    {
+      "slug": "moyenne",
+      "portions": [
+        {
+          "de": "depart",
+          "a": "arrivee"
+        }
+      ],
+      "commentaire": "Tracé PROVISOIRE : duplication du relevé d'essai de la longue, décidé le 2026-11-05 faute de tracé court défini (12 à 15 km attendus). À remplacer dès que l'organisation fournit le vrai tracé — la fiche publique porte la mention « tracé provisoire »."
     }
   ]
 }

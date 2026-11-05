@@ -8,11 +8,15 @@ import type { ContenuRecord, ContenusStore, EpreuveParcoursRecord } from './stor
 
 /* Story 11.1 — raccordement de parcours.json au contrat 9.3.
  *
- * Le parcours.json RÉEL (généré par le pipeline, committé) ne déclare QUE
- * l’épreuve longue : la moyenne n’a pas de tracé fourni par l’organisation.
+ * Décision du PO du 2026-11-05 : faute de tracé court défini (12 à 15 km
+ * attendus), la moyenne reçoit dans parcours.json une DUPLICATION provisoire
+ * du relevé d’essai de la longue, pour que les stories 11.3 et 11.5 disposent
+ * de deux épreuves. Les deux fiches portent donc les mêmes chiffres, et la
+ * mention « tracé provisoire » les accompagne. À remplacer dès que
+ * l’organisation fournit le tracé court.
+ *
  * Le store est un FAKE (même convention que contenus.test.ts) qui sert les
- * deux épreuves : la fusion doit enrichir la longue et laisser la moyenne
- * SANS AUCUN chiffre. */
+ * deux épreuves. */
 
 const UPDATED_AT = new Date('2026-10-22T09:00:00.000Z');
 
@@ -42,11 +46,11 @@ function epreuves(): EpreuveParcoursRecord[] {
     {
       id: 'e1',
       slug: 'longue',
-      nom: 'La Longue — 35 km',
-      distanceKm: 35,
+      nom: 'La Longue',
+      distanceKm: 28,
       gpxUrl: 'https://files.exemple.dz/longue.gpx',
     },
-    { id: 'e2', slug: 'moyenne', nom: 'La Moyenne — 12 km', distanceKm: 12, gpxUrl: null },
+    { id: 'e2', slug: 'moyenne', nom: 'La Moyenne', distanceKm: 12, gpxUrl: null },
   ];
 }
 
@@ -71,9 +75,15 @@ function fakeStoreParcoursParametrable(contenus: ContenuRecord[], epreuvesServie
 }
 
 describe('section parcours — fusion parcours.json (story 11.1)', () => {
-  it('le parcours.json commis est valide et ne déclare QUE la longue', () => {
+  it('le parcours.json commis est valide et déclare les deux épreuves', () => {
     expect(PARCOURS_DOC).not.toBeNull();
-    expect(Object.keys(PARCOURS_DOC?.epreuves ?? {})).toEqual(['longue']);
+    expect(Object.keys(PARCOURS_DOC?.epreuves ?? {}).sort()).toEqual(['longue', 'moyenne']);
+    // Duplication provisoire assumée : tant que le tracé court n'existe pas,
+    // les deux épreuves partagent le même relevé. Quand le vrai tracé arrive,
+    // cette égalité DOIT tomber — le test le dira.
+    expect(PARCOURS_DOC?.epreuves.moyenne?.distanceM).toBe(
+      PARCOURS_DOC?.epreuves.longue?.distanceM,
+    );
   });
 
   it('la longue est fusionnée : métriques publiées + points de passage, horaires null', async () => {
@@ -98,19 +108,20 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     expect(points.every((p) => p.services === null)).toBe(true);
   });
 
-  it('la moyenne (absente du JSON) ne porte AUCUN chiffre', async () => {
+  it('la moyenne porte le relevé provisoire dupliqué, comme la longue', async () => {
     const vue = await getSectionParcours({ store: fakeStoreParcours() });
     const moyenne = vue.epreuves[1];
-    expect(moyenne?.metriques).toBeNull();
-    expect(moyenne?.pointsDePassage).toBeNull();
-    // Story 11.4 : pas de profil non plus — annonce texte de la coquille 9.3.
-    expect(moyenne?.profil).toBeNull();
-    // La fiche de base (nom, distance, GPX) reste intacte.
-    expect(moyenne?.nom).toBe('La Moyenne — 12 km');
-    expect(moyenne?.distanceKm).toBe(12);
+    expect(moyenne?.metriques).not.toBeNull();
+    expect(moyenne?.pointsDePassage).not.toBeNull();
+    expect(moyenne?.profil).not.toBeNull();
+    // Le nom vient de la base et ne porte plus de distance (migration 0040).
+    expect(moyenne?.nom).toBe('La Moyenne');
+    // Distance du relevé dupliqué, PAS les 12 km annoncés en base : les deux
+    // fiches doivent rester cohérentes avec le profil qu'elles affichent.
+    expect(moyenne?.distanceKm).toBeCloseTo(28.0, 1);
   });
 
-  it('décision produit 2026-11-04 : distance affichée du RELEVÉ pour la longue, de la base pour la moyenne', async () => {
+  it('décision produit : la distance affichée est celle du RELEVÉ dès qu’il existe', async () => {
     const vue = await getSectionParcours({ store: fakeStoreParcours() });
     // Présente dans parcours.json : distance du relevé (28 006,4 m → 28,0 km),
     // PAS la distance éditoriale de la base (35) — le panneau reste cohérent
@@ -119,8 +130,10 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
       (PARCOURS_DOC?.epreuves.longue?.distanceM ?? NaN) / 1000,
     );
     expect(vue.epreuves[0]?.distanceKm).toBeCloseTo(28.0, 1);
-    // Absente du JSON : la distance de la base (la moyenne) fait foi.
-    expect(vue.epreuves[1]?.distanceKm).toBe(12);
+    // La moyenne suit la même règle depuis sa duplication provisoire.
+    expect(vue.epreuves[1]?.distanceKm).toBe(
+      (PARCOURS_DOC?.epreuves.moyenne?.distanceM ?? NaN) / 1000,
+    );
   });
 
   it('story 11.4 : la longue porte un profil décimé complet, la moyenne aucun', async () => {

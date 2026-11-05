@@ -182,8 +182,20 @@ describe('construireProfilEpreuve — données réelles de la longue', () => {
     expect(Math.max(...pentes)).toBeCloseTo(28.5, 1);
   });
 
-  it('épreuve absente du JSON (la moyenne) : null, aucun chiffre', () => {
-    expect(construireProfilEpreuve(DOC, 'moyenne')).toBeNull();
+  /* La moyenne porte désormais une duplication provisoire du relevé (décision
+   * du 2026-11-05) : le garde-fou « aucun chiffre inventé » se vérifie donc
+   * sur un slug réellement absent du document. */
+  it('épreuve absente du JSON : null, aucun chiffre', () => {
+    expect(construireProfilEpreuve(DOC, 'courte')).toBeNull();
+    expect(construireProfilEpreuve(DOC, 'inconnue')).toBeNull();
+  });
+
+  it('la moyenne porte le relevé dupliqué, identique à la longue', () => {
+    const longue = construireProfilEpreuve(DOC, 'longue');
+    const moyenne = construireProfilEpreuve(DOC, 'moyenne');
+    expect(moyenne).not.toBeNull();
+    expect(moyenne?.distanceM).toBe(longue?.distanceM);
+    expect(moyenne?.dplusM).toBe(longue?.dplusM);
   });
 });
 

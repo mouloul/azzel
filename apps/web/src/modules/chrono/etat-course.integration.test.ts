@@ -328,8 +328,8 @@ describe.skipIf(testUrls === null)(
       // la numérotation n'y change rien ; l'en constitution ne part pas),
       // la Moyenne = 1.
       expect(etat.partants).toEqual([
-        { epreuveId: expect.any(String), epreuveNom: 'La Longue — 35 km', total: 3 },
-        { epreuveId: expect.any(String), epreuveNom: 'La Moyenne — 12 km', total: 1 },
+        { epreuveId: expect.any(String), epreuveNom: 'La Longue', total: 3 },
+        { epreuveId: expect.any(String), epreuveNom: 'La Moyenne', total: 1 },
       ]);
       expect(etat.retraits).toBe(0);
       expect(etat.arrives).toBe(0);
