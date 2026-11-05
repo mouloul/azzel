@@ -45,4 +45,10 @@ export interface ChecklistState {
   edition: EditionSummary | null;
   pieces: ChecklistPiece[];
   recap: ChecklistRecap | null;
+  /**
+   * Statut STOCKÉ du dossier (null sans inscription). Brut à dessein : le
+   * libellé affiché dépend aussi de la preuve (pièce « preuve »), et chaque
+   * surface — web, application — l'habille à sa façon.
+   */
+  statut?: string | null;
 }

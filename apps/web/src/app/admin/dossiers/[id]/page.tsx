@@ -7,10 +7,8 @@ import { requireRolePage } from '@/modules/iam/session';
 
 import {
   AGE_CATEGORY_LABELS,
-  COUREUR_STATUS_LABELS,
-  PASTILLE_STATUT,
   type AgeCategory,
-  type CoureurStatus,
+  statutAffiche,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
 import { formatKiloBytes } from '@/modules/inscriptions/proof-format';
@@ -77,12 +75,15 @@ export default async function AdminDossierDetailPage({
           {/* I9 (revue épopée 10) — même pastille socle que la liste : un seul
               langage visuel par statut (point + libellé, jamais la couleur
               seule) ; l'ancien vocabulaire aa-chip est retiré. */}
-          <span
-            className={`socle-pastille ${PASTILLE_STATUT[coureur.status as CoureurStatus] ?? ''}`}
-          >
-            <span className="socle-pastille-point" aria-hidden="true" />
-            {COUREUR_STATUS_LABELS[coureur.status as CoureurStatus] ?? coureur.status}
-          </span>
+          {(() => {
+            const statut = statutAffiche(coureur.status, detail.preuveActive !== null);
+            return (
+              <span className={`socle-pastille ${statut.pastille}`}>
+                <span className="socle-pastille-point" aria-hidden="true" />
+                {statut.libelle}
+              </span>
+            );
+          })()}
         </p>
         {coureur.dossard !== null ? (
           <p className="meta">

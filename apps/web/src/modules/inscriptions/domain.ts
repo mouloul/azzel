@@ -288,6 +288,42 @@ export const PASTILLE_STATUT: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_EXPIREE]: 'socle-pastille--sync-attente',
 };
 
+export const LIBELLE_ATTENTE_JUSTIFICATIF = 'En attente de justificatif de paiement';
+
+export const LIBELLE_ATTENTE_VALIDATION = 'En attente de validation par l’organisation';
+
+export interface StatutAffiche {
+  libelle: string;
+  /** Classe de pastille du socle : le point porte la couleur, le libellé le sens. */
+  pastille: string;
+}
+
+/**
+ * Statut tel que le lisent le coureur et l'organisation.
+ *
+ * « En constitution » recouvre deux situations que tout oppose : la place est
+ * tenue mais aucun versement n'est justifié (c'est au coureur d'agir), ou le
+ * justificatif est déposé (c'est à l'organisation d'agir). Le statut STOCKÉ
+ * reste unique — le décompte des places et l'expiration en dépendent — et
+ * l'affichage le dérive de la présence d'une preuve.
+ *
+ * Seul « en constitution » est dérivé : un dossier en liste d'attente n'a rien
+ * à verser, lui annoncer qu'on attend son justificatif reviendrait à lui
+ * réclamer un paiement.
+ */
+export function statutAffiche(status: string, preuveDeposee: boolean): StatutAffiche {
+  if (status === COUREUR_STATUS_EN_CONSTITUTION) {
+    return preuveDeposee
+      ? { libelle: LIBELLE_ATTENTE_VALIDATION, pastille: 'socle-pastille--sync-attente' }
+      : { libelle: LIBELLE_ATTENTE_JUSTIFICATIF, pastille: 'socle-pastille--attention' };
+  }
+  const connu = status as CoureurStatus;
+  return {
+    libelle: COUREUR_STATUS_LABELS[connu] ?? status,
+    pastille: PASTILLE_STATUT[connu] ?? '',
+  };
+}
+
 export function canDepositPreuve(status: string): boolean {
   return (
     status === COUREUR_STATUS_EN_CONSTITUTION ||

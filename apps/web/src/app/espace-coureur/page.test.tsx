@@ -63,12 +63,13 @@ function piece(id: string, fait: boolean): ChecklistPiece {
   return { id: id as ChecklistPiece['id'], libelle: `Pièce ${id}`, fait };
 }
 
-function checklistState(faites: number) {
+function checklistState(faites: number, statut: string | null = null) {
   const ids = ['email', 'epreuve', 'decharge', 'reglement', 'preuve', 'validation'];
   return {
     edition: EDITION,
     pieces: ids.map((id, index) => piece(id, index < faites)),
     recap: null,
+    statut,
   };
 }
 
@@ -83,6 +84,42 @@ beforeEach(() => {
   sessionMock.requireRolePage.mockResolvedValue({
     status: 'authenticated',
     session: SESSION_COUREUR,
+  });
+});
+
+describe('page /espace-coureur — statut du dossier', () => {
+  it('place tenue, preuve absente : « en attente de justificatif de paiement »', async () => {
+    // 4 pièces faites : la preuve (5ᵉ) ne l'est pas encore.
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(
+      checklistState(4, 'en constitution'),
+    );
+    const html = await rendu();
+    expect(html).toContain('En attente de justificatif de paiement');
+    expect(html).not.toContain('En attente de validation par l’organisation</span>');
+  });
+
+  it('preuve déposée : « en attente de validation par l’organisation »', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(
+      checklistState(5, 'en constitution'),
+    );
+    const html = await rendu();
+    expect(html).toMatch(/socle-pastille[^"]*"[^>]*>\s*<span[^>]*><\/span>En attente de validation par l’organisation/);
+    expect(html).not.toContain('En attente de justificatif de paiement');
+  });
+
+  it('liste d’attente : jamais « justificatif » — aucun versement n’est à faire', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(
+      checklistState(4, 'liste d’attente'),
+    );
+    const html = await rendu();
+    expect(html).toContain('Liste d’attente');
+    expect(html).not.toContain('En attente de justificatif de paiement');
+  });
+
+  it('aucune inscription (statut null) : pas de ligne « Statut »', async () => {
+    inscriptionsServiceMock.getChecklistState.mockResolvedValue(checklistState(1, null));
+    const html = await rendu();
+    expect(html).not.toContain('espace-statut');
   });
 });
 

@@ -65,11 +65,15 @@ function coureur(partial: Record<string, unknown> = {}) {
   };
 }
 
-function detail(status: string, extraCoureur: Record<string, unknown> = {}) {
+function detail(
+  status: string,
+  extraCoureur: Record<string, unknown> = {},
+  preuveActive: Record<string, unknown> | null = null,
+) {
   return {
     coureur: coureur({ status, ...extraCoureur }),
     email: 'amina@exemple.dz',
-    preuveActive: null,
+    preuveActive,
     decidePar: null,
   };
 }
@@ -101,7 +105,11 @@ describe('page /admin/dossiers/[id] — pastille de statut du socle (I9)', () =>
 
   it('les trois statuts mènent à leur variante — refusé → danger avec motif', async () => {
     for (const [status, variante, libelle] of [
-      ['en constitution', 'socle-pastille--attention', 'En constitution'],
+      [
+        'en constitution',
+        'socle-pastille--attention',
+        'En attente de justificatif de paiement',
+      ],
       ['refusé', 'socle-pastille--danger', 'Refusé'],
     ] as const) {
       inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
@@ -112,6 +120,25 @@ describe('page /admin/dossiers/[id] — pastille de statut du socle (I9)', () =>
       expect(html).toContain(libelle);
       expect(html).toContain('socle-pastille-point');
     }
+  });
+
+  it('preuve déposée : « en attente de validation par l’organisation », autre pastille', async () => {
+    inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
+      detail(
+        'en constitution',
+        {},
+        {
+          id: 'preuve-1',
+          format: 'PDF',
+          sizeBytes: 1024,
+          depositedAt: '2027-02-23T09:00:00.000Z',
+        },
+      ),
+    );
+    const html = await rendu();
+    expect(html).toContain('En attente de validation par l’organisation');
+    expect(html).toContain('socle-pastille--sync-attente');
+    expect(html).not.toContain('En attente de justificatif de paiement');
   });
 
   it('plus aucun vestige de l’ancien vocabulaire aa-chip sur cette page', async () => {

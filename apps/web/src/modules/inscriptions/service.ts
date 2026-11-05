@@ -833,7 +833,7 @@ export async function getChecklistState(
           dateCourse: edition.dateCourse,
         };
 
-  return { edition: toEditionSummary(edition), pieces, recap };
+  return { edition: toEditionSummary(edition), pieces, recap, statut: coureur?.status ?? null };
 }
 
 export interface DossierListEntry {

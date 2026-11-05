@@ -645,3 +645,14 @@
     margin-left: 0;
   }
 }
+
+/* Statut du dossier, juste sous le titre : c'est la première chose qu'un
+   coureur cherche en revenant sur son espace. */
+.espace-statut {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--az-space-2);
+  font-weight: 600;
+}

@@ -5,7 +5,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { requireRolePage } from '@/modules/iam/session';
 
-import { formatDateFrUtc } from '@/modules/inscriptions/domain';
+import { formatDateFrUtc, statutAffiche } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import {
   getChecklistState,
@@ -109,6 +109,7 @@ export default async function EspaceCoureurPage() {
           edition={state.edition}
           pieces={state.pieces}
           recap={state.recap}
+          statut={state.statut ?? null}
           assistancePhone={assistancePhone}
         />
       )}
@@ -120,19 +121,36 @@ function ChecklistCard({
   edition,
   pieces,
   recap,
+  statut,
   assistancePhone,
 }: {
   edition: EditionSummary;
   pieces: ChecklistPiece[];
   recap: ChecklistRecap | null;
+  statut: string | null;
   assistancePhone: string;
 }) {
   const complet = estComplet(pieces);
+  // La preuve se lit sur la pièce de la checklist : c'est elle qui sépare
+  // « en attente de justificatif » de « en attente de validation ».
+  const statutLu =
+    statut === null
+      ? null
+      : statutAffiche(statut, pieces.some((piece) => piece.id === 'preuve' && piece.fait));
 
   return (
     <article className="card espace-dossier">
       <p className="surtitre">Dossier</p>
       <h2>Ton dossier — {edition.nom}</h2>
+      {statutLu !== null && (
+        <p className="espace-statut">
+          Statut :{' '}
+          <span className={`socle-pastille ${statutLu.pastille}`}>
+            <span className="socle-pastille-point" aria-hidden="true" />
+            {statutLu.libelle}
+          </span>
+        </p>
+      )}
       <p className="checklist-compteur" aria-live="polite">
         {compteurPieces(pieces)}
       </p>

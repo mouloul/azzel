@@ -85,6 +85,23 @@ const DOSSIERS = [
     acceptationsCompletes: false,
     createdAt: '2027-02-22T12:00:00.000Z',
   },
+  {
+    // Preuve déposée, rien d'autre à faire côté coureur : le dossier attend
+    // l'organisation. Sans dossard ni acceptation manquante pour ne bouger
+    // aucun des autres compteurs.
+    coureurId: 'coureur-4',
+    prenom: 'Sofiane',
+    nom: 'Mebarki',
+    email: 'sofiane@exemple.dz',
+    epreuveNom: 'La Longue',
+    dossard: null,
+    status: 'en constitution',
+    refusalReason: null,
+    hasActivePreuve: true,
+    preuveDepositedAt: '2027-02-23T09:00:00.000Z',
+    acceptationsCompletes: true,
+    createdAt: '2027-02-23T08:00:00.000Z',
+  },
 ];
 
 async function rendu(): Promise<string> {
@@ -180,7 +197,11 @@ describe('page /admin/dossiers — gabarit tableau commun (story 10.3)', () => {
     // Le libellé textuel porte le sens dans tous les cas.
     expect(html).toContain('Validé');
     expect(html).toContain('Refusé');
-    expect(html).toContain('En constitution');
+    // « En constitution » n'est plus un libellé : il se dit en deux, selon que la
+    // preuve est déposée ou non.
+    expect(html).toContain('En attente de justificatif de paiement');
+    expect(html).toContain('En attente de validation par l’organisation');
+    expect(html).not.toContain('En constitution');
     // Le motif de refus reste affiché sous la pastille.
     expect(html).toContain('Preuve illisible');
   });
@@ -209,13 +230,14 @@ describe('page /admin/dossiers — compteurs de tête de page (story 10.3)', () 
     });
   });
 
-  it('quatre compteurs lisibles sans survol, chiffres exacts, libellés distincts', async () => {
+  it('cinq compteurs lisibles sans survol, chiffres exacts, libellés distincts', async () => {
     const html = await rendu();
     expect(html).toContain('dossiers-compteurs');
     // 1 validé, 1 en constitution, 1 acceptation manquante (M1 : le refusé
     // incomplet de la fixture SORT du compteur — jamais complétable), 2 dossards.
     expect(html).toMatch(/Validés<\/dt><dd[^>]*>1</);
-    expect(html).toMatch(/En constitution<\/dt><dd[^>]*>1</);
+    expect(html).toMatch(/En attente de justificatif<\/dt><dd[^>]*>1</);
+    expect(html).toMatch(/En attente de validation<\/dt><dd[^>]*>1</);
     expect(html).toMatch(/Acceptations manquantes<\/dt><dd[^>]*>1</);
     expect(html).toMatch(/Dossards attribués<\/dt><dd[^>]*>2</);
   });

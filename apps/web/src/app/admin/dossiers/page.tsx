@@ -5,10 +5,8 @@ import { formatLocalDateTime } from '@azzel/shared';
 import { requireRolePage } from '@/modules/iam/session';
 
 import {
-  COUREUR_STATUS_LABELS,
   LIST_COUREURS_LIMIT,
-  PASTILLE_STATUT,
-  type CoureurStatus,
+  statutAffiche,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
 import { getDossiersState } from '@/modules/inscriptions/service';
@@ -62,7 +60,12 @@ export default async function AdminDossiersPage({
   // compteurs ne sont donc PAS des liens (un compteur non cliquable vaut
   // mieux qu'un lien mort). Les libellés comptent ce qui est affiché.
   const valides = state.dossiers.filter((d) => d.status === 'validé').length;
-  const enConstitution = state.dossiers.filter((d) => d.status === 'en constitution').length;
+  const enAttenteJustificatif = state.dossiers.filter(
+    (d) => d.status === 'en constitution' && !d.hasActivePreuve,
+  ).length;
+  const enAttenteValidation = state.dossiers.filter(
+    (d) => d.status === 'en constitution' && d.hasActivePreuve,
+  ).length;
   // M1 (revue épopée 10) — un dossier REFUSÉ n'est jamais complétable : il
   // sort du compteur d'acceptations manquantes (le comité n'agit que sur
   // les dossiers encore ouverts).
@@ -86,8 +89,12 @@ export default async function AdminDossiersPage({
             <dd className="dossiers-compteur-nombre">{valides}</dd>
           </div>
           <div className="dossiers-compteur">
-            <dt className="dossiers-compteur-libelle">En constitution</dt>
-            <dd className="dossiers-compteur-nombre">{enConstitution}</dd>
+            <dt className="dossiers-compteur-libelle">En attente de justificatif</dt>
+            <dd className="dossiers-compteur-nombre">{enAttenteJustificatif}</dd>
+          </div>
+          <div className="dossiers-compteur">
+            <dt className="dossiers-compteur-libelle">En attente de validation</dt>
+            <dd className="dossiers-compteur-nombre">{enAttenteValidation}</dd>
           </div>
           <div className="dossiers-compteur">
             <dt className="dossiers-compteur-libelle">Acceptations manquantes</dt>
@@ -168,15 +175,15 @@ export default async function AdminDossiersPage({
                       )}
                     </td>
                     <td>
-                      <span
-                        className={`socle-pastille ${
-                          PASTILLE_STATUT[dossier.status as CoureurStatus] ?? ''
-                        }`}
-                      >
-                        <span className="socle-pastille-point" aria-hidden="true" />
-                        {COUREUR_STATUS_LABELS[dossier.status as CoureurStatus] ??
-                          dossier.status}
-                      </span>
+                      {(() => {
+                        const statut = statutAffiche(dossier.status, dossier.hasActivePreuve);
+                        return (
+                          <span className={`socle-pastille ${statut.pastille}`}>
+                            <span className="socle-pastille-point" aria-hidden="true" />
+                            {statut.libelle}
+                          </span>
+                        );
+                      })()}
                       {dossier.status === 'refusé' && dossier.refusalReason !== null ? (
                         <span className="meta dossier-motif">{dossier.refusalReason}</span>
                       ) : null}
