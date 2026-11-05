@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FOND_TOPO, RELIEF_TERRARIUM } from './fonds-carte';
+import { FOND_TOPO, RELIEF_TERRARIUM, fondSatellite } from './fonds-carte';
 import { PARCOURS_DOC } from './lecture';
 import {
   CAMERA_3D,
@@ -211,4 +211,23 @@ describe('traceCarte — slug fourni par un visiteur', () => {
       expect(traceCarte(PARCOURS_DOC, slug)).toBeNull();
     },
   );
+});
+
+describe('specificationStyle — fond satellite optionnel', () => {
+  const pts: [number, number, number][] = [[4, 36, 100], [4.01, 36.01, 120]];
+  const couleurs = { trace: '#000', halo: '#fff', cielHaut: '#000', cielHorizon: '#fff' } as never;
+  const sat = fondSatellite('CLE_DE_TEST_12345');
+
+  it('sans satellite : ni source ni couche satellite (aucun appel Esri)', () => {
+    const style = specificationStyle(pts, couleurs) as { sources: Record<string, unknown>; layers: { id: string }[] };
+    expect(style.sources[IDS.satellite]).toBeUndefined();
+    expect(style.layers.map((l) => l.id)).not.toContain(IDS.coucheSatellite);
+  });
+
+  it('avec satellite : couche masquée par défaut, visible sur demande', () => {
+    const masque = specificationStyle(pts, couleurs, undefined, sat) as { layers: { id: string; layout?: { visibility: string } }[] };
+    expect(masque.layers.find((l) => l.id === IDS.coucheSatellite)?.layout?.visibility).toBe('none');
+    const visible = specificationStyle(pts, couleurs, undefined, sat, true) as typeof masque;
+    expect(visible.layers.find((l) => l.id === IDS.coucheSatellite)?.layout?.visibility).toBe('visible');
+  });
 });

@@ -31,6 +31,7 @@ import {
   type CouleursTrace,
   type TraceCarte,
 } from '@/modules/contenus/parcours/carte';
+import { FOND_TOPO, type SourceTuiles } from '@/modules/contenus/parcours/fonds-carte';
 
 export interface OptionsCarte {
   conteneur: HTMLElement;
@@ -44,6 +45,10 @@ export interface OptionsCarte {
     lat: number;
     libelle: string;
   }[];
+  /** Fond satellite disponible (clé fournie), sinon null. */
+  satellite?: SourceTuiles | null;
+  /** Ouvrir directement sur le satellite. */
+  satelliteInitial?: boolean;
   /** `prefers-reduced-motion` : les transitions de caméra deviennent instantanées. */
   mouvementReduit: boolean;
 }
@@ -52,6 +57,7 @@ export interface OptionsCarte {
 export interface PiloteCarte {
   definirRelief(actif: boolean, exageration: number): void;
   definirExageration(exageration: number): void;
+  definirFond(fond: 'topo' | 'satellite'): void;
   placerCurseur(sM: number | null): void;
   recadrer(): void;
   detruire(): void;
@@ -59,12 +65,14 @@ export interface PiloteCarte {
 
 export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
   const { conteneur, trace, couleurs, reperes, mouvementReduit } = options;
+  const satellite = options.satellite ?? null;
+  const satelliteInitial = satellite !== null && options.satelliteInitial === true;
   const depart = trace.points[0];
   if (depart === undefined) throw new Error('tracé vide');
 
   const carte: CarteMapLibre = new maplibregl.Map({
     container: conteneur,
-    style: specificationStyle(trace.points, couleurs) as never,
+    style: specificationStyle(trace.points, couleurs, FOND_TOPO, satellite, satelliteInitial) as never,
     center: [depart[0], depart[1]],
     zoom: 12,
     pitch: CAMERA_3D.pitch,
@@ -157,6 +165,14 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
     definirExageration(exageration) {
       exagerationCourante = exageration;
       if (carte.getTerrain() !== null) poserRelief(true, exageration);
+    },
+    definirFond(fond) {
+      if (satellite === null) return;
+      carte.setLayoutProperty(
+        IDS.coucheSatellite,
+        'visibility',
+        fond === 'satellite' ? 'visible' : 'none',
+      );
     },
     placerCurseur,
     recadrer() {

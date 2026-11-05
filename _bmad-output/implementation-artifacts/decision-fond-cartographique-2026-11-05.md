@@ -45,3 +45,12 @@ Le critère « bascule entre fond satellite et fond topographique » **tombe** :
 - [ ] **Informer OpenTopoMap** de l'intégration et du volume attendu — courtoisie demandée par le projet, pas une obligation de licence.
 - [ ] **Revue annuelle** des conditions d'usage. Le retrait progressif des endpoints Esri anonymes montre que ces politiques changent sans préavis.
 - [ ] Rouvrir la question du satellite si l'organisation le réclame : prendre alors ArcGIS Location Platform avec clé, et vérifier les tarifs à la source le jour même.
+
+## Amendement — satellite sous clé (2026-11-05)
+
+Le responsable du projet autorise le fond satellite **à condition d'une clé** ArcGIS Location Platform
+(`NEXT_PUBLIC_ARCGIS_API_KEY`). L'endpoint anonyme `server.arcgisonline.com` du POC reste exclu.
+Sans clé : décision d'origine inchangée (OpenTopoMap seul, aucun appel Esri).
+Tuiles : `ibasemaps-api.arcgis.com/.../World_Imagery/MapServer/tile/{z}/{y}/{x}?token=…`, z18 max.
+La couche satellite est masquée tant que non choisie ; attribution Esri suit le fond actif.
+À faire à la mise en production : confronter l'attribution au `copyrightText` du service et restreindre la clé au domaine.

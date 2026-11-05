@@ -1,5 +1,11 @@
 /* Story 11.2 — fond cartographique de production et attributions.
  *
+ * AMENDEMENT (2026-11-05, responsable du projet) : le satellite est proposé
+ * SI ET SEULEMENT SI une clé ArcGIS Location Platform est fournie
+ * (NEXT_PUBLIC_ARCGIS_API_KEY). Sans clé, la décision d'origine tient telle
+ * quelle : OpenTopoMap seul, aucun appel vers Esri. La clé est un contrat avec
+ * Esri — c'est ce qui manquait à l'endpoint anonyme du POC.
+ *
  * DÉCISION DU 2026-11-05 (responsable du projet) : OpenTopoMap SEUL, sans
  * fond satellite. Voir
  * `_bmad-output/implementation-artifacts/decision-fond-cartographique-2026-11-05.md`.
@@ -64,6 +70,42 @@ export const FOND_TOPO: SourceTuiles = {
 };
 
 /**
+ * Une clé n'est acceptée que si elle ne peut RIEN injecter dans l'URL : la
+ * valeur vient d'une variable d'environnement, et un `&` ou un `?` y ajouterait
+ * un paramètre. Lettres, chiffres, tiret, souligné, point, tilde — les clés
+ * ArcGIS (« AAPK… ») tiennent dans ce jeu.
+ */
+export function cleArcgisValide(cle: string | null | undefined): cle is string {
+  return typeof cle === 'string' && /^[A-Za-z0-9_.~-]{8,512}$/.test(cle);
+}
+
+/**
+ * Imagerie satellite — ArcGIS Location Platform (Esri World Imagery), AVEC CLÉ.
+ *
+ * Service à clé (`ibasemaps-api.arcgis.com`), PAS l'endpoint anonyme du POC
+ * (`server.arcgisonline.com`) que rien ne contractualisait. La clé est visible
+ * dans le navigateur par construction : elle se restreint au domaine du site
+ * dans la console Esri, c'est son seul garde-fou.
+ *
+ * Résolution : jusqu'au z18 sur la zone (~0,6 m/px) ; z19 absent (note
+ * licences §2.3). Attribution : texte d'Esri reproduit tel quel — à confronter
+ * au `copyrightText` du service le jour de la mise en production.
+ */
+export function fondSatellite(cle: string): SourceTuiles {
+  return {
+    id: 'satellite',
+    nom: 'Satellite',
+    tuiles: [
+      `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${cle}`,
+    ],
+    tailleTuile: 256,
+    zoomMax: 18,
+    attribution: 'Powered by Esri | Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    licence: 'Esri — ArcGIS Location Platform (clé API)',
+  };
+}
+
+/**
  * Relief — domaine public (SRTM, GMTED2010, 3DEP de l'USGS), crédit demandé.
  *
  * C'est la source du relief 3D ET celle dont dérive le profil altimétrique :
@@ -92,13 +134,20 @@ export const MOTEUR_CARTE = {
 } as const;
 
 /**
- * Fonds proposés à l'utilisateur. Un seul aujourd'hui : la bascule
- * satellite/topo du POC n'a plus d'objet (amendement d'acceptation de la
- * story 11.3, 2026-11-05). Le tableau reste un tableau pour que l'ajout d'un
- * fond satellite, le jour où une licence est contractée, ne demande pas de
- * refondre l'interface.
+ * Fonds proposés à l'utilisateur : le topographique toujours ; le satellite
+ * seulement avec une clé valide. Le tableau reste un tableau pour que l'ajout
+ * d'un fond ne demande pas de refondre l'interface.
  */
-export const FONDS_DISPONIBLES: readonly SourceTuiles[] = [FOND_TOPO];
+export function fondsDisponibles(cleArcgis: string | null | undefined): readonly SourceTuiles[] {
+  return cleArcgisValide(cleArcgis) ? [FOND_TOPO, fondSatellite(cleArcgis)] : [FOND_TOPO];
+}
+
+/** Clé lue UNE fois, à la compilation : NEXT_PUBLIC_* est inlinée dans le bundle. */
+export const CLE_ARCGIS: string | null = cleArcgisValide(process.env.NEXT_PUBLIC_ARCGIS_API_KEY?.trim())
+  ? (process.env.NEXT_PUBLIC_ARCGIS_API_KEY?.trim() ?? null)
+  : null;
+
+export const FONDS_DISPONIBLES: readonly SourceTuiles[] = fondsDisponibles(CLE_ARCGIS);
 
 /** Fond actif par défaut. */
 export const FOND_PAR_DEFAUT = FOND_TOPO;
@@ -121,6 +170,11 @@ export function attributions(fond: SourceTuiles = FOND_PAR_DEFAUT): readonly str
  * courte — les deux coexistent, la courte reste visible en permanence.
  */
 export const ATTRIBUTION_COURTE = '© OpenStreetMap, OpenTopoMap, USGS, MapLibre';
+
+/** Mention courte du fond ACTIF : jamais OpenTopoMap quand c'est Esri qui s'affiche. */
+export function attributionCourte(fond: SourceTuiles = FOND_PAR_DEFAUT): string {
+  return fond.id === 'satellite' ? '© Esri, Maxar, Earthstar Geographics, USGS, MapLibre' : ATTRIBUTION_COURTE;
+}
 
 /** Aucune URL de tuile ne doit porter de clé : rien à tenir hors du dépôt. */
 export function exigeUneCle(source: SourceTuiles): boolean {

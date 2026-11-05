@@ -43,9 +43,11 @@ export const DUREE_TRANSITION_MS = 800;
 /** Identifiants de sources et de couches, partagés avec les tests. */
 export const IDS = {
   fond: 'fond',
+  satellite: 'satellite',
   relief: 'relief',
   trace: 'trace',
   coucheFond: 'couche-fond',
+  coucheSatellite: 'couche-satellite',
   coucheHalo: 'couche-trace-halo',
   coucheTrace: 'couche-trace',
 } as const;
@@ -121,6 +123,14 @@ export function specificationStyle(
   points: readonly PointTrace[],
   couleurs: CouleursTrace,
   fond: SourceTuiles = FOND_PAR_DEFAUT,
+  /**
+   * Fond satellite (clé ArcGIS requise), posé au-dessus du topographique et
+   * visible ou non selon `satelliteVisible`. MapLibre ne télécharge pas les
+   * tuiles d'une couche masquée : un visiteur qui reste en topo ne contacte
+   * jamais Esri.
+   */
+  satellite: SourceTuiles | null = null,
+  satelliteVisible = false,
 ): Record<string, unknown> {
   return {
     version: 8,
@@ -132,6 +142,17 @@ export function specificationStyle(
         tiles: [...fond.tuiles],
         attribution: fond.attribution,
       },
+      ...(satellite === null
+        ? {}
+        : {
+            [IDS.satellite]: {
+              type: 'raster',
+              tileSize: satellite.tailleTuile,
+              maxzoom: satellite.zoomMax,
+              tiles: [...satellite.tuiles],
+              attribution: satellite.attribution,
+            },
+          }),
       [IDS.relief]: {
         type: 'raster-dem',
         tileSize: RELIEF_TERRARIUM.tailleTuile,
@@ -151,6 +172,16 @@ export function specificationStyle(
     },
     layers: [
       { id: IDS.coucheFond, type: 'raster', source: IDS.fond },
+      ...(satellite === null
+        ? []
+        : [
+            {
+              id: IDS.coucheSatellite,
+              type: 'raster',
+              source: IDS.satellite,
+              layout: { visibility: satelliteVisible ? 'visible' : 'none' },
+            },
+          ]),
       {
         id: IDS.coucheHalo,
         type: 'line',

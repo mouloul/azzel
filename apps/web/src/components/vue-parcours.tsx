@@ -6,7 +6,12 @@ import type { KeyboardEvent, PointerEvent } from 'react';
 import { couleursDuTheme } from '@/components/carte-couleurs';
 import type { PiloteCarte } from '@/components/carte-maplibre';
 import { EXAGERATION, webglDisponible } from '@/modules/contenus/parcours/carte';
-import { ATTRIBUTION_COURTE, attributions } from '@/modules/contenus/parcours/fonds-carte';
+import {
+  FOND_TOPO,
+  FONDS_DISPONIBLES,
+  attributionCourte,
+  attributions,
+} from '@/modules/contenus/parcours/fonds-carte';
 import { BORNES_PENTE_PCT, LIBELLES_PALIERS, PALIERS, type ProfilEpreuve } from '@/modules/contenus/parcours/profil';
 import {
   PALETTE_PENTE_VUE,
@@ -88,6 +93,14 @@ export function VueParcours({
 }) {
   const [etat, setEtat] = useState<EtatCarte>('attente');
   const [message, setMessage] = useState<string | null>(null);
+  // Le satellite est le fond par défaut dès qu'il est disponible (vue du POC).
+  const fondSatellite = FONDS_DISPONIBLES.find((f) => f.id === 'satellite') ?? null;
+  const [fondActif, setFondActif] = useState<'topo' | 'satellite'>(
+    fondSatellite === null ? 'topo' : 'satellite',
+  );
+  // Lu à l'ouverture seulement : changer de fond ne doit pas relancer l'observateur.
+  const fondRef = useRef(fondActif);
+  fondRef.current = fondActif;
   const [relief3d, setRelief3d] = useState(true);
   const [exageration, setExageration] = useState<number>(EXAGERATION.defaut);
   const [profilReplie, setProfilReplie] = useState(false);
@@ -130,6 +143,8 @@ export function VueParcours({
         trace,
         couleurs: couleursDuTheme(),
         reperes,
+        satellite: fondSatellite,
+        satelliteInitial: fondRef.current === 'satellite',
         mouvementReduit,
       });
       setEtat('ouverte');
@@ -139,7 +154,7 @@ export function VueParcours({
         'La carte n’a pas pu se charger — fond de carte injoignable ou connexion interrompue. Le profil du parcours reste donné ci-dessous.',
       );
     }
-  }, [slug, version]);
+  }, [slug, version, fondSatellite]);
 
   // La carte est réclamée quand la section entre dans l'écran, pas avant :
   // une visite qui ne descend jamais jusque-là ne paie ni le moteur (~800 Ko)
@@ -178,6 +193,11 @@ export function VueParcours({
     setRelief3d(actif);
     piloteRef.current?.definirRelief(actif, exageration);
   }, [exageration, relief3d]);
+
+  const changerFond = useCallback((fond: 'topo' | 'satellite') => {
+    setFondActif(fond);
+    piloteRef.current?.definirFond(fond);
+  }, []);
 
   const changerExageration = useCallback((valeur: number) => {
     setExageration(valeur);
@@ -283,6 +303,28 @@ export function VueParcours({
         >
           Vue 3D
         </button>
+        {fondSatellite !== null ? (
+          <>
+            <button
+              aria-pressed={fondActif === 'satellite'}
+              className="vp__bouton"
+              disabled={etat !== 'ouverte'}
+              onClick={() => changerFond('satellite')}
+              type="button"
+            >
+              Satellite
+            </button>
+            <button
+              aria-pressed={fondActif === 'topo'}
+              className="vp__bouton"
+              disabled={etat !== 'ouverte'}
+              onClick={() => changerFond('topo')}
+              type="button"
+            >
+              Topo
+            </button>
+          </>
+        ) : null}
         <label className="vp__reglage" htmlFor={idExageration}>
           <span>Relief ×</span>
           <input
@@ -447,12 +489,12 @@ export function VueParcours({
           jamais recouvrir la carte ni être recouvertes (UX-DR-29). */}
       {etat === 'ouverte' ? (
         <ul className="vp__attributions">
-          {attributions().map((texte) => (
+          {attributions(fondActif === 'satellite' && fondSatellite !== null ? fondSatellite : FOND_TOPO).map((texte) => (
             <li key={texte}>{texte}</li>
           ))}
         </ul>
       ) : (
-        <p className="vp__attributions">{ATTRIBUTION_COURTE}</p>
+        <p className="vp__attributions">{attributionCourte(fondActif === 'satellite' && fondSatellite !== null ? fondSatellite : FOND_TOPO)}</p>
       )}
     </section>
   );
