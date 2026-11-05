@@ -19,6 +19,14 @@ vi.mock(
 
 const inscriptionsServiceMock = vi.hoisted(() => ({
   getInscriptionState: vi.fn(),
+  // Compteur de places : muet par defaut, les tests de cette suite portent sur
+  // le formulaire. Les cas du compteur vivent dans places.test.ts.
+  getPlacesState: vi.fn().mockResolvedValue({
+    capacite: 600,
+    restantes: 600,
+    afficher: false,
+    complet: false,
+  }),
 }));
 
 vi.mock(

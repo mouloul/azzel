@@ -56,6 +56,12 @@ function buildChecklistStore(scenario: ChecklistScenario = {}): InscriptionsStor
           nom: 'Édition 2027',
           dateCourse: RACE_DATE,
           registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+          capacite: 600,
+          seuilAffichagePlaces: 200,
+          capaciteHebergement: 200,
+          prixDossardDa: 2000,
+          prixHebergementDa: 1500,
+          delaiPreuveJours: 2,
           ...(scenario.edition ?? {}),
         };
   const coureur: CoureurRecord | null =

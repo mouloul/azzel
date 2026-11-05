@@ -27,6 +27,12 @@ const EDITION: EditionRecord = {
   nom: 'Édition 2027',
   dateCourse: '2027-03-26',
   registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+  capacite: 600,
+  seuilAffichagePlaces: 200,
+  capaciteHebergement: 200,
+  prixDossardDa: 2000,
+  prixHebergementDa: 1500,
+  delaiPreuveJours: 2,
 };
 
 const DONNEES: EdossardCoureurData = {

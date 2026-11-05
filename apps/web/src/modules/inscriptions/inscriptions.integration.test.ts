@@ -110,6 +110,81 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     };
   }
 
+  describe('contingent de places', () => {
+    afterEach(async () => {
+      await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200`;
+      await sql`DELETE FROM coureur`;
+    });
+
+    async function statutDe(session: SessionRecord): Promise<string | null> {
+      const rows = await sql<{ status: string }[]>`
+        SELECT status FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      return rows[0]?.status ?? null;
+    }
+
+    it('la dernière place n’est attribuée QU’UNE fois, même sur dix envois simultanés', async () => {
+      await sql`UPDATE edition SET capacite = 1`;
+      const sessions = await Promise.all(Array.from({ length: 10 }, () => createSession()));
+
+      // Envoi réellement concurrent : sans verrou côté base, chaque transaction
+      // lit « 0 place occupée » et les dix se croient admises.
+      const resultats = await Promise.allSettled(
+        sessions.map((session) => submitInscription(session, validInput(), { store })),
+      );
+      expect(resultats.every((r) => r.status === 'fulfilled')).toBe(true);
+
+      const statuts = await Promise.all(sessions.map(statutDe));
+      expect(statuts.filter((statut) => statut === 'en constitution')).toHaveLength(1);
+      expect(statuts.filter((statut) => statut === 'liste d’attente')).toHaveLength(9);
+    });
+
+    it('capacité atteinte : l’inscription est enregistrée en liste d’attente, pas refusée', async () => {
+      await sql`UPDATE edition SET capacite = 0`;
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      expect(await statutDe(session)).toBe('liste d’attente');
+    });
+
+    it('modifier son inscription ne consomme pas une seconde place', async () => {
+      await sql`UPDATE edition SET capacite = 1`;
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      await submitInscription(session, validInput({ prenom: 'Yanis' }), { store });
+      expect(await statutDe(session)).toBe('en constitution');
+
+      // La place reste prise par le même dossier : le suivant attend.
+      const autre = await createSession();
+      await submitInscription(autre, validInput(), { store });
+      expect(await statutDe(autre)).toBe('liste d’attente');
+    });
+
+    it('un coureur en liste d’attente peut corriger son inscription sans être promu', async () => {
+      await sql`UPDATE edition SET capacite = 0`;
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      await submitInscription(session, validInput({ prenom: 'Yanis' }), { store });
+      expect(await statutDe(session)).toBe('liste d’attente');
+      const rows = await sql<{ first_name: string }[]>`
+        SELECT first_name FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      expect(rows[0]?.first_name).toBe('Yanis');
+    });
+
+    it('un dossier refusé rend sa place', async () => {
+      await sql`UPDATE edition SET capacite = 1`;
+      const premier = await createSession();
+      await submitInscription(premier, validInput(), { store });
+      await sql`
+        UPDATE coureur SET status = 'refusé', refusal_reason = 'Preuve illisible.'
+        WHERE account_id = ${premier.accountId}
+      `;
+      const suivant = await createSession();
+      await submitInscription(suivant, validInput(), { store });
+      expect(await statutDe(suivant)).toBe('en constitution');
+    });
+  });
+
   it('migrations : toutes appliquées avec les seeds attendus', async () => {
     const rows =
       await sql`SELECT name FROM schema_migrations ORDER BY name`;

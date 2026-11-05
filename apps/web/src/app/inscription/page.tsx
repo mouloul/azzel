@@ -6,11 +6,17 @@ import { FilEtapes, etapesInscription } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 
 import {
-  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_LISTE_ATTENTE,
+  STATUTS_MODIFIABLES,
   formatDateFrUtc,
 } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
-import { getInscriptionState, type InscriptionState } from '@/modules/inscriptions/service';
+import {
+  getInscriptionState,
+  getPlacesState,
+  type InscriptionState,
+} from '@/modules/inscriptions/service';
+import { CompteurPlaces } from '@/components/compteur-places';
 
 import { InscriptionForm } from './inscription-form';
 import '../dossier.css';
@@ -108,7 +114,7 @@ export default async function InscriptionPage() {
     );
   }
 
-  if (state.coureur && state.coureur.status !== COUREUR_STATUS_EN_CONSTITUTION) {
+  if (state.coureur && !STATUTS_MODIFIABLES.includes(state.coureur.status)) {
     return (
       <section className="auth">
         <article className="card">
@@ -127,9 +133,21 @@ export default async function InscriptionPage() {
     );
   }
 
+  const places = await getPlacesState(result.session.organisationId);
+  const enAttente = state.coureur?.status === COUREUR_STATUS_LISTE_ATTENTE;
+
   return (
     <InscriptionForm state={state} assistancePhone={assistancePhone}>
       <FilEtapes etapes={etapesInscription(state.coureur)} />
+      <CompteurPlaces places={places} />
+      {enAttente ? (
+        <p className="encart-attente" role="status">
+          Les dossards sont tous pris : ton inscription est enregistrée en
+          <strong> liste d’attente</strong>. Tu peux encore la corriger. Aucun
+          versement n’est à faire tant qu’une place ne t’a pas été attribuée —
+          l’organisation te préviendra par email.
+        </p>
+      ) : null}
     </InscriptionForm>
   );
 }

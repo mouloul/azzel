@@ -9,12 +9,14 @@ import {
   GlypheTala,
   GlypheYaz,
 } from '@/components/glyphes-piliers';
+import { CompteurPlaces } from '@/components/compteur-places';
 import { SectionPartenaires } from '@/components/section-partenaires';
 import { SectionParcours } from '@/components/section-parcours';
 import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { getSectionParcours } from '@/modules/contenus/section-parcours';
 import { resolveTrailerPlayer } from '@/modules/retour-images/domain';
+import { getPlacesVitrine } from '@/modules/inscriptions/service';
 import { getRetourImagesPage } from '@/modules/retour-images/service';
 import { getPartenairesSection } from '@/modules/sponsors/service';
 
@@ -65,11 +67,12 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [telephone, partenaires, parcours, retourImages] = await Promise.all([
+  const [telephone, partenaires, parcours, retourImages, places] = await Promise.all([
     readAssistancePhone(),
     getPartenairesSection(),
     getSectionParcours(),
     getRetourImagesPage(),
+    getPlacesVitrine(),
   ]);
   // La vidéo de l'admin prime ; sans elle, le teaser provisoire. Le bloc ne
   // charge rien avant le clic : le budget de premier chargement est intact.
@@ -139,6 +142,7 @@ export default async function HomePage() {
             mobilisé, les sentiers de Yakouren pris d’assaut, une ambiance qu’on
             n’oublie pas. Le trail d’Aït Aïssi revient au printemps 2027.
           </p>
+          <CompteurPlaces places={places} />
           <div className="aa-hero__actions">
             {/* Recette du 04/11/2026 : « Participer » plutôt que « S'inscrire » —
                 le parcours derrière (connexion puis inscription) est inchangé. */}

@@ -35,11 +35,64 @@ export const COUREUR_STATUS_VALIDE = 'validé';
 
 export const COUREUR_STATUS_REFUSE = 'refusé';
 
+export const COUREUR_STATUS_LISTE_ATTENTE = 'liste d’attente';
+
 export const COUREUR_STATUSES = [
   COUREUR_STATUS_EN_CONSTITUTION,
   COUREUR_STATUS_VALIDE,
   COUREUR_STATUS_REFUSE,
+  COUREUR_STATUS_LISTE_ATTENTE,
 ] as const;
+
+/**
+ * Statuts qui consomment une place du contingent.
+ *
+ * « En constitution » en fait partie : la place est RÉSERVÉE au coureur le
+ * temps qu'il verse sa preuve, sinon deux cents dossiers en cours de paiement
+ * laisseraient croire à deux cents places libres, et l'organisation se
+ * retrouverait avec plus de versements que de dossards.
+ *
+ * « Refusé » et « liste d'attente » n'en consomment aucune : un refus doit
+ * rendre la place, une attente n'en a jamais pris.
+ */
+export const STATUTS_OCCUPANT_UNE_PLACE: readonly string[] = [
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_VALIDE,
+];
+
+/**
+ * Statuts dans lesquels le coureur peut encore corriger sa saisie. Un dossier
+ * validé ou refusé est figé ; un dossier en attente de place, non — il n'y a
+ * aucune raison de lui interdire de corriger son téléphone pendant l'attente.
+ */
+export const STATUTS_MODIFIABLES: readonly string[] = [
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_LISTE_ATTENTE,
+];
+
+/** Jamais négatif : une capacité abaissée sous le nombre d'inscrits donne 0. */
+export function placesRestantes(capacite: number, occupees: number): number {
+  return Math.max(0, capacite - occupees);
+}
+
+/**
+ * Le compteur reste muet tant qu'il reste beaucoup de places — afficher
+ * « 580 places restantes » le premier jour dit surtout que personne ne s'est
+ * inscrit. Il sort au seuil, et « 0 place » s'affiche toujours : c'est une
+ * information, pas un silence.
+ */
+export function doitAfficherPlaces(restantes: number, seuil: number): boolean {
+  return restantes <= seuil;
+}
+
+/**
+ * Statut d'une inscription qui arrive. Le nombre de places restantes DOIT
+ * avoir été lu sous verrou dans la même transaction que l'écriture : lu avant,
+ * deux coureurs obtiennent la même dernière place.
+ */
+export function statutInitial(restantes: number): string {
+  return restantes > 0 ? COUREUR_STATUS_EN_CONSTITUTION : COUREUR_STATUS_LISTE_ATTENTE;
+}
 
 export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
 
@@ -47,6 +100,7 @@ export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_EN_CONSTITUTION]: 'En constitution',
   [COUREUR_STATUS_VALIDE]: 'Validé',
   [COUREUR_STATUS_REFUSE]: 'Refusé',
+  [COUREUR_STATUS_LISTE_ATTENTE]: 'Liste d’attente',
 };
 
 /** M2 (revue épopée 10) — limite de la liste admin, vit ICI (domaine pur)
@@ -62,6 +116,9 @@ export const PASTILLE_STATUT: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_EN_CONSTITUTION]: 'socle-pastille--attention',
   [COUREUR_STATUS_VALIDE]: 'socle-pastille--succes',
   [COUREUR_STATUS_REFUSE]: 'socle-pastille--danger',
+  // En attente d'une place : ni acquis, ni refusé — le même langage visuel que
+  // l'attente de synchronisation, pas celui d'un problème à corriger.
+  [COUREUR_STATUS_LISTE_ATTENTE]: 'socle-pastille--sync-attente',
 };
 
 export function canDepositPreuve(status: string): boolean {

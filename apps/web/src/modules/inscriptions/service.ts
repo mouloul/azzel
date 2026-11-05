@@ -17,6 +17,8 @@ import {
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_VALIDE,
   canDepositPreuve,
+  doitAfficherPlaces,
+  placesRestantes,
   deriveAgeAndCategory,
   documentTitle,
   hasFieldErrors,
@@ -164,6 +166,85 @@ function toEpreuveSummary(epreuve: EpreuveRecord): EpreuveSummary {
     nom: epreuve.nom,
     distanceKm: epreuve.distanceKm,
   };
+}
+
+/**
+ * État du contingent, pour le compteur public.
+ *
+ * Ne lève JAMAIS : un compteur est un agrément. Qu'il manque parce que la base
+ * est indisponible ne doit empêcher personne de s'inscrire, ni faire tomber
+ * l'accueil — dans ce cas il se tait, et la page vaut ce qu'elle valait avant
+ * qu'il existe.
+ */
+export interface PlacesState {
+  capacite: number;
+  restantes: number;
+  /** Le compteur ne sort qu'au seuil : voir doitAfficherPlaces. */
+  afficher: boolean;
+  complet: boolean;
+}
+
+export const PLACES_MUETTES: PlacesState = {
+  capacite: 0,
+  restantes: 0,
+  afficher: false,
+  complet: false,
+};
+
+/**
+ * Variante vitrine : aucune session, donc aucune organisation en contexte.
+ * Même contrat de silence en cas de panne.
+ */
+export async function getPlacesVitrine(
+  deps: InscriptionsServiceDeps = {},
+): Promise<PlacesState> {
+  const store = deps.store ?? getInscriptionsStore();
+  try {
+    const places = await store.readDefaultOrgPlaces();
+    if (!places) {
+      return PLACES_MUETTES;
+    }
+    const restantes = placesRestantes(places.capacite, places.occupees);
+    return {
+      capacite: places.capacite,
+      restantes,
+      afficher: doitAfficherPlaces(restantes, places.seuil),
+      complet: restantes === 0,
+    };
+  } catch (error) {
+    console.warn(
+      '[vitrine] compteur de places indisponible :',
+      error instanceof Error ? error.message : error,
+    );
+    return PLACES_MUETTES;
+  }
+}
+
+export async function getPlacesState(
+  organisationId: string,
+  deps: InscriptionsServiceDeps = {},
+): Promise<PlacesState> {
+  const store = deps.store ?? getInscriptionsStore();
+  try {
+    const edition = await store.findCurrentEdition(organisationId);
+    if (!edition) {
+      return PLACES_MUETTES;
+    }
+    const occupees = await store.countPlacesOccupees(edition.id, organisationId);
+    const restantes = placesRestantes(edition.capacite, occupees);
+    return {
+      capacite: edition.capacite,
+      restantes,
+      afficher: doitAfficherPlaces(restantes, edition.seuilAffichagePlaces),
+      complet: restantes === 0,
+    };
+  } catch (error) {
+    console.warn(
+      '[inscriptions] compteur de places indisponible :',
+      error instanceof Error ? error.message : error,
+    );
+    return PLACES_MUETTES;
+  }
 }
 
 export async function getInscriptionState(

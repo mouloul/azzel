@@ -195,3 +195,16 @@
   background: var(--az-succes);
   border-color: var(--az-succes);
 }
+
+/* Encart « liste d'attente » : l'information est portée par le texte, le filet
+   latéral ne fait que l'isoler du reste du formulaire. Ni succès ni danger —
+   l'attente n'est pas un problème à corriger. */
+.encart-attente {
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-attention);
+  background: var(--az-surface);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--az-texte);
+}

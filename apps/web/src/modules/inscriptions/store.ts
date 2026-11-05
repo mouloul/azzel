@@ -9,12 +9,17 @@ import type { Sql } from 'postgres';
 
 import { DOSSARD_MAX } from '@azzel/shared';
 
-import { withOrg } from '@/db/org-scope';
+import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
+import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
 import {
   COUREUR_STATUS_EN_CONSTITUTION,
   COUREUR_STATUS_VALIDE,
+  STATUTS_MODIFIABLES,
+  STATUTS_OCCUPANT_UNE_PLACE,
+  placesRestantes,
+  statutInitial,
   LIST_COUREURS_LIMIT,
   canDepositPreuve,
   isRegistrationOpen,
@@ -40,6 +45,12 @@ export interface EditionRecord {
   nom: string;
   dateCourse: string;
   registrationClosesAt: Date;
+  capacite: number;
+  seuilAffichagePlaces: number;
+  capaciteHebergement: number;
+  prixDossardDa: number;
+  prixHebergementDa: number;
+  delaiPreuveJours: number;
 }
 
 export interface DocumentRecord {
@@ -250,6 +261,8 @@ export interface ListCoureursResult {
 
 export interface InscriptionsStore {
   findCurrentEdition(organisationId: string): Promise<EditionRecord | null>;
+  countPlacesOccupees(editionId: string, organisationId: string): Promise<number>;
+  readDefaultOrgPlaces(): Promise<{ capacite: number; seuil: number; occupees: number } | null>;
   listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]>;
   findDocuments(organisationId: string): Promise<DocumentRecord[]>;
   findCoureurByAccount(
@@ -484,9 +497,18 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               name: string;
               race_date: string;
               registration_closes_at: Date;
+              capacite: number;
+              seuil_affichage_places: number;
+              capacite_hebergement: number;
+              prix_dossard_da: number;
+              prix_hebergement_da: number;
+              delai_preuve_jours: number;
             }[]
           >`
-            SELECT id, organisation_id, slug, name, race_date::text AS race_date, registration_closes_at
+            SELECT id, organisation_id, slug, name, race_date::text AS race_date,
+                   registration_closes_at, capacite, seuil_affichage_places,
+                   capacite_hebergement, prix_dossard_da, prix_hebergement_da,
+                   delai_preuve_jours
             FROM edition
             WHERE organisation_id = ${organisationId}
             ORDER BY race_date DESC
@@ -503,9 +525,71 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             nom: row.name,
             dateCourse: row.race_date,
             registrationClosesAt: row.registration_closes_at,
+            capacite: row.capacite,
+            seuilAffichagePlaces: row.seuil_affichage_places,
+            capaciteHebergement: row.capacite_hebergement,
+            prixDossardDa: row.prix_dossard_da,
+            prixHebergementDa: row.prix_hebergement_da,
+            delaiPreuveJours: row.delai_preuve_jours,
           };
         }),
       );
+    },
+
+    async countPlacesOccupees(editionId: string, organisationId: string): Promise<number> {
+      return withDb(async () =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<{ occupees: number }[]>`
+            SELECT count(*)::int AS occupees
+            FROM coureur
+            WHERE edition_id = ${editionId}
+              AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
+          `;
+          return rows[0]?.occupees ?? 0;
+        }),
+      );
+    },
+
+    async readDefaultOrgPlaces(): Promise<{
+      capacite: number;
+      seuil: number;
+      occupees: number;
+    } | null> {
+      return withDb(async () => {
+        // Lecture publique pré-session : l'organisation par défaut est résolue
+        // hors GUC (même exception documentée que les sponsors), puis tout est
+        // lu scopé.
+        const organisationId = await findOrganisationIdBySlug(sql, DEFAULT_ORGANISATION_SLUG);
+        if (!organisationId) {
+          return null;
+        }
+        return withOrg(sql, organisationId, async (tx) => {
+          const editions = await tx<
+            { id: string; capacite: number; seuil_affichage_places: number }[]
+          >`
+            SELECT id, capacite, seuil_affichage_places
+            FROM edition
+            WHERE organisation_id = ${organisationId}
+            ORDER BY race_date DESC
+            LIMIT 1
+          `;
+          const edition = editions[0];
+          if (!edition) {
+            return null;
+          }
+          const occupees = await tx<{ occupees: number }[]>`
+            SELECT count(*)::int AS occupees
+            FROM coureur
+            WHERE edition_id = ${edition.id}
+              AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
+          `;
+          return {
+            capacite: edition.capacite,
+            seuil: edition.seuil_affichage_places,
+            occupees: occupees[0]?.occupees ?? 0,
+          };
+        });
+      });
     },
 
     async listEpreuves(editionId: string, organisationId: string): Promise<EpreuveRecord[]> {
@@ -575,8 +659,13 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
     async upsertCoureur(input: UpsertCoureurInput): Promise<CoureurRecord> {
       return withDb(() =>
         withOrg(sql, input.organisationId, async (tx) => {
-          const editionRows = await tx<{ registration_closes_at: Date }[]>`
-            SELECT registration_closes_at FROM edition WHERE id = ${input.editionId}
+          // FOR UPDATE : le verrou sérialise les candidats à la dernière place.
+          // Sans lui, dix formulaires envoyés dans la même seconde lisent tous
+          // « zéro place occupée » et se croient tous admis — mesuré.
+          const editionRows = await tx<{ registration_closes_at: Date; capacite: number }[]>`
+            SELECT registration_closes_at, capacite
+            FROM edition WHERE id = ${input.editionId}
+            FOR UPDATE
           `;
           const edition = editionRows[0];
           if (!edition) {
@@ -585,18 +674,31 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!isRegistrationOpen(edition.registration_closes_at)) {
             throw new RegistrationClosedError(edition.registration_closes_at);
           }
+          // Le dossier du coureur lui-même est exclu du décompte : modifier son
+          // inscription ne doit pas lui coûter une seconde place.
+          const occupeesRows = await tx<{ occupees: number }[]>`
+            SELECT count(*)::int AS occupees
+            FROM coureur
+            WHERE edition_id = ${input.editionId}
+              AND account_id <> ${input.accountId}
+              AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
+          `;
+          const statutSiNouveau = statutInitial(
+            placesRestantes(edition.capacite, occupeesRows[0]?.occupees ?? 0),
+          );
           const rows = await tx<{ id: string }[]>`
             INSERT INTO coureur (
               organisation_id, account_id, edition_id, epreuve_id,
               first_name, last_name, phone,
               emergency_contact_name, emergency_contact_phone,
-              birth_date, tshirt_size, genre, age, age_category
+              birth_date, tshirt_size, genre, age, age_category, status
             )
             VALUES (
               ${input.organisationId}, ${input.accountId}, ${input.editionId}, ${input.epreuveId},
               ${input.prenom}, ${input.nom}, ${input.telephone},
               ${input.contactUrgenceNom}, ${input.contactUrgenceTelephone},
-              ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre}, ${input.age}, ${input.categorieAge}
+              ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre}, ${input.age},
+              ${input.categorieAge}, ${statutSiNouveau}
             )
             ON CONFLICT (account_id, edition_id)
             DO UPDATE SET
@@ -612,7 +714,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               age = EXCLUDED.age,
               age_category = EXCLUDED.age_category,
               updated_at = now()
-            WHERE coureur.status = ${COUREUR_STATUS_EN_CONSTITUTION}
+            WHERE coureur.status = ANY(${STATUTS_MODIFIABLES as string[]})
             RETURNING id
           `;
           const row = rows[0];
@@ -1213,6 +1315,8 @@ function createUnavailableStore(): InscriptionsStore {
   };
   return {
     findCurrentEdition: unavailable,
+    countPlacesOccupees: unavailable,
+    readDefaultOrgPlaces: unavailable,
     listEpreuves: unavailable,
     findDocuments: unavailable,
     findCoureurByAccount: unavailable,

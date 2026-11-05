@@ -296,6 +296,12 @@ describe('submitInscription — service avec store stubbé', () => {
       nom: 'Édition 2027',
       dateCourse: RACE_DATE,
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
       ...edition,
     };
     const epreuves = [
@@ -589,6 +595,12 @@ describe('acceptDocuments — service avec store stubbé', () => {
       nom: 'Édition 2027',
       dateCourse: RACE_DATE,
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
       ...edition,
     };
     const store = {
@@ -728,6 +740,12 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       nom: 'Édition 2027',
       dateCourse: RACE_DATE,
       registrationClosesAt: new Date('2100-01-01T00:00:00.000Z'),
+      capacite: 600,
+      seuilAffichagePlaces: 200,
+      capaciteHebergement: 200,
+      prixDossardDa: 2000,
+      prixHebergementDa: 1500,
+      delaiPreuveJours: 2,
     };
     const record: CoureurRecord = {
       id: 'coureur-1',

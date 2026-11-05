@@ -363,6 +363,28 @@ main {
   color: var(--az-texte-2);
 }
 
+/* Compteur du contingent : discret dans le hero (le CTA reste la cible), mais
+   jamais porté par la seule couleur — le chiffre et le mot « complet »
+   portent l'information. */
+.compteur-places {
+  grid-area: compteur;
+  margin: 0 0 var(--space-4);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--az-texte-2);
+}
+
+.aa-hero--plein .compteur-places {
+  color: var(--on-forest);
+}
+
+.compteur-places strong {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+
 /* Relais vers la suite du parcours : volontairement SANS numéro — cet écran ne
    suit pas ces étapes-là, le fil du dossier s'en charge. */
 .guide-inscription__suite {
@@ -1481,6 +1503,7 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
     "titre rail"
     "crete rail"
     "meta rail"
+    "compteur rail"
     "actions rail";
   grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
   column-gap: var(--space-8);
@@ -1655,6 +1678,7 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
     "crete"
     "rail"
     "meta"
+    "compteur"
     "actions";
   grid-template-columns: minmax(0, 1fr);
 }
