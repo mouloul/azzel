@@ -15,10 +15,16 @@ import { PRESENTATIONS_EPREUVES } from '@/components/presentations-epreuves';
 import { SectionParcours } from '@/components/section-parcours';
 import { TrailerBloc } from '@/components/trailer-bloc';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBornee } from '@/lib/lecture-bornee';
 import { getParcoursDoc } from '@/modules/contenus/parcours/lecture';
 import { getSectionParcours } from '@/modules/contenus/section-parcours';
-import { resolveTrailerPlayer } from '@/modules/retour-images/domain';
-import { getDateCourseVitrine, getPlacesVitrine } from '@/modules/inscriptions/service';
+import { RETOUR_IMAGES_PAGE_VIDE, resolveTrailerPlayer } from '@/modules/retour-images/domain';
+import {
+  DATE_COURSE_INCONNUE,
+  getDateCourseVitrine,
+  getPlacesVitrine,
+  PLACES_MUETTES,
+} from '@/modules/inscriptions/service';
 import { getRetourImagesPage } from '@/modules/retour-images/service';
 import { getPartenairesSection } from '@/modules/sponsors/service';
 
@@ -94,13 +100,15 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
+  // Chaque lecture en base est bornée (lib/lecture-bornee) : une base muette
+  // ne doit ni bloquer le build, ni figer l'accueil.
   const [telephone, partenaires, parcours, retourImages, places, dateCourse] = await Promise.all([
     readAssistancePhone(),
-    getPartenairesSection(),
-    getSectionParcours(),
-    getRetourImagesPage(),
-    getPlacesVitrine(),
-    getDateCourseVitrine(),
+    lectureBornee(getPartenairesSection(), null, 'partenaires'),
+    lectureBornee(getSectionParcours(), { epreuves: [] }, 'parcours'),
+    lectureBornee(getRetourImagesPage(), RETOUR_IMAGES_PAGE_VIDE, 'retour en images'),
+    lectureBornee(getPlacesVitrine(), PLACES_MUETTES, 'places'),
+    lectureBornee(getDateCourseVitrine(), DATE_COURSE_INCONNUE, 'date de course'),
   ]);
   // La vidéo de l'admin prime ; sans elle, le teaser provisoire. Le bloc ne
   // charge rien avant le clic : le budget de premier chargement est intact.
