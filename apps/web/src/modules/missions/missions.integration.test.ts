@@ -19,11 +19,21 @@ import {
 } from '@/test/integration-db';
 
 import {
+  affecterVolontaire,
+  createMission,
+  createSecteur,
+  deleteVolontaire,
   importVolontaires,
   renvoyerInvitation,
   getVolontairesAdminState,
+  updateVolontaire,
 } from './service';
-import { VolontaireDejaActifError } from './errors';
+import {
+  VolontaireAffecteError,
+  VolontaireDejaActifError,
+  VolontaireEmailPrisError,
+  VolontaireNotFoundError,
+} from './errors';
 import { createMissionsStore, type MissionsStore } from './store';
 import { processOutbox } from '@/modules/notifications/worker';
 import { createOutboxStore } from '@/modules/notifications/outbox-store';
@@ -496,6 +506,255 @@ describe.skipIf(testUrls === null)(
         },
       });
       expect(envoyes.filter((to) => to === 'panne@exemple.dz')).toHaveLength(1);
+    });
+
+    // -------------------------------------------------------------------
+    // Story 3.5 — correction et suppression d'un volontaire.
+    // -------------------------------------------------------------------
+
+    /** Importe un volontaire isolé et rend son id (fixtures 3.5 indépendantes). */
+    async function armer(nom: string, email: string, telephone = ''): Promise<string> {
+      const rapport = await importVolontaires(
+        sessionAdmin(orgId),
+        {
+          bytes: await xlsxVolontaires([[nom, email, telephone]]),
+          filename: 'un.xlsx',
+        },
+        { store: missionsStore },
+      );
+      expect(rapport.resume.crees).toBe(1);
+      return volontaireIdPar(email);
+    }
+
+    async function statutsOutbox(email: string): Promise<string[]> {
+      const lignes = await sql<{ statut: string }[]>`
+        SELECT statut FROM email_outbox
+        WHERE destinataire = ${email} AND type = 'invitation_volontaire'
+        ORDER BY created_at ASC
+      `;
+      return lignes.map((ligne) => ligne.statut);
+    }
+
+    it('adresse mal saisie corrigée : compte à jour, invitation repartie sur la bonne adresse', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Kahina Ait', 'kahina35@exmeple.dz', '+213 555 010 111');
+
+      const resultat = await updateVolontaire(
+        session,
+        id,
+        { nom: 'Kahina Ait', email: 'kahina35@exemple.dz', telephone: '+213 555 010 222' },
+        { store: missionsStore },
+      );
+
+      expect(resultat.invitationRenvoyee).toBe(true);
+      expect(resultat.volontaire).toMatchObject({
+        email: 'kahina35@exemple.dz',
+        telephone: '+213 555 010 222',
+        statutInvitation: 'en_file',
+      });
+      // L'adresse fautive ne porte plus aucun compte : elle est libre.
+      const fautif = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM account
+        WHERE organisation_id = ${orgId} AND email = 'kahina35@exmeple.dz'
+      `;
+      expect(fautif[0]?.count).toBe(0);
+      // L'invitation partie dans le vide est annulée, la nouvelle est en file.
+      expect(await statutsOutbox('kahina35@exmeple.dz')).toEqual(['cancelled']);
+      expect(await statutsOutbox('kahina35@exemple.dz')).toEqual(['pending']);
+      // Une seule fiche : pas de second compte créé au passage.
+      const fiches = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM volontaire v
+        JOIN account a ON a.id = v.account_id
+        WHERE v.organisation_id = ${orgId} AND a.email = 'kahina35@exemple.dz'
+      `;
+      expect(fiches[0]?.count).toBe(1);
+    });
+
+    it('nom/téléphone seuls modifiés : aucune invitation remise en file', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Sfia', 'sfia35@exemple.dz');
+      const avant = await statutsOutbox('sfia35@exemple.dz');
+
+      const resultat = await updateVolontaire(
+        session,
+        id,
+        { nom: 'Sfia Bouzid', email: 'sfia35@exemple.dz', telephone: '0555 010 300' },
+        { store: missionsStore },
+      );
+
+      expect(resultat.invitationRenvoyee).toBe(false);
+      expect(resultat.volontaire).toMatchObject({
+        nom: 'Sfia Bouzid',
+        telephone: '0555 010 300',
+      });
+      expect(await statutsOutbox('sfia35@exemple.dz')).toEqual(avant);
+    });
+
+    it('adresse déjà portée par un autre compte : 409, aucune écriture (ni nom ni email)', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Amine', 'amine35@exemple.dz');
+      await armer('Dahbia', 'dahbia35@exemple.dz');
+
+      await expect(
+        updateVolontaire(
+          session,
+          id,
+          { nom: 'Amine Renommé', email: 'dahbia35@exemple.dz', telephone: null },
+          { store: missionsStore },
+        ),
+      ).rejects.toBeInstanceOf(VolontaireEmailPrisError);
+
+      // Transaction annulée : le nom non plus n'a pas bougé.
+      const fiches = await sql<{ nom: string; email: string }[]>`
+        SELECT v.nom, a.email FROM volontaire v
+        JOIN account a ON a.id = v.account_id
+        WHERE v.id = ${id} AND v.organisation_id = ${orgId}
+      `;
+      expect(fiches[0]).toMatchObject({ nom: 'Amine', email: 'amine35@exemple.dz' });
+    });
+
+    it('volontaire déjà activé : email modifiable, mais AUCUNE invitation en file (statut Activé)', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Massi', 'massi35@exemple.dz');
+      await connecterParCode('massi35@exemple.dz');
+      expect(await activatedAt('massi35@exemple.dz')).not.toBeNull();
+
+      const resultat = await updateVolontaire(
+        session,
+        id,
+        { nom: 'Massi', email: 'massi35.pro@exemple.dz', telephone: null },
+        { store: missionsStore },
+      );
+
+      expect(resultat.invitationRenvoyee).toBe(false);
+      expect(resultat.volontaire.statutInvitation).toBe('active');
+      expect(await statutsOutbox('massi35.pro@exemple.dz')).toEqual([]);
+      expect(await activatedAt('massi35.pro@exemple.dz')).not.toBeNull();
+    });
+
+    it('adresse changée : les codes en vol de l’ANCIENNE adresse sont invalidés, pas ceux de la nouvelle', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Tinhinane', 'tini35@exmeple.dz');
+      // Un code est demandé sur chaque adresse (l'ancienne par erreur de frappe,
+      // la nouvelle par la vraie personne) : seul celui de l'ancienne tombe.
+      await requestLoginCode('tini35@exmeple.dz', { store: iamStore, sendCode: async () => {} });
+      await requestLoginCode('tini35.vrai@exemple.dz', { store: iamStore, sendCode: async () => {} });
+
+      await updateVolontaire(
+        session,
+        id,
+        { nom: 'Tinhinane', email: 'tini35.vrai@exemple.dz', telephone: null },
+        { store: missionsStore },
+      );
+
+      const codes = await sql<{ email: string; invalidated_at: Date | null }[]>`
+        SELECT email, invalidated_at FROM login_code
+        WHERE organisation_id = ${orgId} AND email IN ('tini35@exmeple.dz', 'tini35.vrai@exemple.dz')
+      `;
+      const ancien = codes.find((code) => code.email === 'tini35@exmeple.dz');
+      const nouveau = codes.find((code) => code.email === 'tini35.vrai@exemple.dz');
+      expect(ancien?.invalidated_at).not.toBeNull();
+      expect(nouveau?.invalidated_at).toBeNull();
+    });
+
+    it('suppression : fiche et compte partis, sessions coupées, invitation annulée, adresse réutilisable', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Ferhat', 'ferhat35@exemple.dz');
+      await connecterParCode('ferhat35@exemple.dz');
+      const sessionsAvant = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM session s
+        JOIN account a ON a.id = s.account_id
+        WHERE a.organisation_id = ${orgId} AND a.email = 'ferhat35@exemple.dz'
+      `;
+      expect(sessionsAvant[0]?.count).toBe(1);
+
+      await expect(deleteVolontaire(session, id, { store: missionsStore })).resolves.toEqual({
+        ok: true,
+      });
+
+      const restes = await sql<{ comptes: number; fiches: number; sessions: number }[]>`
+        SELECT
+          (SELECT count(*)::int FROM account WHERE organisation_id = ${orgId} AND email = 'ferhat35@exemple.dz') AS comptes,
+          (SELECT count(*)::int FROM volontaire WHERE id = ${id}) AS fiches,
+          (SELECT count(*)::int FROM session WHERE account_id NOT IN (SELECT id FROM account)) AS sessions
+      `;
+      expect(restes[0]).toEqual({ comptes: 0, fiches: 0, sessions: 0 });
+      // Aucun email ne part après coup.
+      expect(await statutsOutbox('ferhat35@exemple.dz')).not.toContain('pending');
+
+      // L'adresse est libre : un import ultérieur la recrée (« créé », pas « ignoré »).
+      const rapport = await importVolontaires(
+        session,
+        { bytes: await xlsxVolontaires([['Ferhat Nouveau', 'ferhat35@exemple.dz', '']]), filename: 'r.xlsx' },
+        { store: missionsStore },
+      );
+      expect(rapport.lignes[0]).toMatchObject({ statut: 'créé' });
+    });
+
+    it('suppression d’un volontaire affecté : 409 chiffré, rien n’est supprimé', async () => {
+      const session = sessionAdmin(orgId);
+      const id = await armer('Nadir', 'nadir35@exemple.dz');
+      const secteur = await createSecteur(
+        session,
+        { nom: 'Secteur 3.5', lieu: 'Carrefour haut', contact: null },
+        { store: missionsStore },
+      );
+      const mission = await createMission(
+        session,
+        {
+          secteurId: secteur.id,
+          type: 'accueil',
+          titre: 'Accueil 3.5',
+          debutLe: '2027-05-01T05:00:00.000Z',
+          finLe: '2027-05-01T09:00:00.000Z',
+          consignes: null,
+          estArrivee: false,
+          barriereLe: null,
+        },
+        { store: missionsStore },
+      );
+      await affecterVolontaire(
+        session,
+        { missionId: mission.id, volontaireId: id },
+        { store: missionsStore },
+      );
+
+      const erreur = await deleteVolontaire(session, id, { store: missionsStore }).catch(
+        (error: unknown) => error,
+      );
+      expect(erreur).toBeInstanceOf(VolontaireAffecteError);
+      expect((erreur as VolontaireAffecteError).nombreAffectations).toBe(1);
+
+      const restes = await sql<{ fiches: number; affectations: number }[]>`
+        SELECT
+          (SELECT count(*)::int FROM volontaire WHERE id = ${id}) AS fiches,
+          (SELECT count(*)::int FROM affectation WHERE volontaire_id = ${id}) AS affectations
+      `;
+      expect(restes[0]).toEqual({ fiches: 1, affectations: 1 });
+    });
+
+    it('isolation : un volontaire d’une AUTRE organisation est introuvable (ni lu, ni modifié, ni supprimé)', async () => {
+      const id = await armer('Katia', 'katia35@exemple.dz');
+      const autre = sessionAdmin(randomUUID());
+
+      await expect(
+        updateVolontaire(
+          autre,
+          id,
+          { nom: 'Pirate', email: 'pirate35@exemple.dz', telephone: null },
+          { store: missionsStore },
+        ),
+      ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+      await expect(deleteVolontaire(autre, id, { store: missionsStore })).rejects.toBeInstanceOf(
+        VolontaireNotFoundError,
+      );
+
+      const fiches = await sql<{ nom: string; email: string }[]>`
+        SELECT v.nom, a.email FROM volontaire v
+        JOIN account a ON a.id = v.account_id
+        WHERE v.id = ${id}
+      `;
+      expect(fiches[0]).toMatchObject({ nom: 'Katia', email: 'katia35@exemple.dz' });
     });
   },
 );

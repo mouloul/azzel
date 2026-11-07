@@ -11,10 +11,13 @@ import {
   estUuidValide,
   hasMissionFieldErrors,
   hasSecteurFieldErrors,
+  hasVolontaireFieldErrors,
   normalizeMissionInput,
   normalizeSecteurInput,
+  normalizeVolontaireInput,
   validateMissionInput,
   validateSecteurInput,
+  validateVolontaireInput,
   validerLigne,
   type Couverture,
   type LigneFichier,
@@ -31,8 +34,10 @@ import {
   InvalidAffectationError,
   InvalidMissionFieldsError,
   InvalidSecteurFieldsError,
+  InvalidVolontaireFieldsError,
   MissionNotFoundError,
   SecteurNotFoundError,
+  VolontaireEmailReserveError,
   VolontaireNotFoundError,
 } from './errors';
 import {
@@ -47,6 +52,7 @@ import {
   type MissionRecord,
   type MissionsStore,
   type SecteurRecord,
+  type VolontaireRecord,
 } from './store';
 
 // Story 3.1 — service volontaires : armer 150–200 villageois sans saisie
@@ -82,17 +88,7 @@ export async function getVolontairesAdminState(
 ): Promise<VolontairesAdminState> {
   const store = deps.store ?? getMissionsStore();
   const records = await store.listVolontaires(session.organisationId);
-  return {
-    volontaires: records.map((record) => ({
-      id: record.id,
-      nom: record.nom,
-      email: record.email,
-      telephone: record.telephone,
-      statutInvitation: record.statutInvitation,
-      statutInvitationLabel: LIBELLES_STATUT_INVITATION[record.statutInvitation],
-      createdAt: record.createdAt.toISOString(),
-    })),
-  };
+  return { volontaires: records.map(toVolontaireSummary) };
 }
 
 /** Rapport d'une ligne rejetée par validation (fichier, format, doublon, quota). */
@@ -210,6 +206,82 @@ export async function renvoyerInvitation(
     volontaireId,
   });
   return { email: resultat.email };
+}
+
+// Story 3.5 — correction et suppression d'un volontaire. Sur 150–200 lignes
+// importées, une adresse mal saisie est certaine : sans correction elle crée un
+// compte fantôme permanent, et sans suppression elle bloque l'adresse pour un
+// futur coureur.
+
+export interface VolontaireModifieResultat {
+  volontaire: VolontaireSummary;
+  /** Adresse corrigée sur un volontaire jamais connecté → invitation repartie. */
+  invitationRenvoyee: boolean;
+}
+
+function toVolontaireSummary(record: VolontaireRecord): VolontaireSummary {
+  return {
+    id: record.id,
+    nom: record.nom,
+    email: record.email,
+    telephone: record.telephone,
+    statutInvitation: record.statutInvitation,
+    statutInvitationLabel: LIBELLES_STATUT_INVITATION[record.statutInvitation],
+    createdAt: record.createdAt.toISOString(),
+  };
+}
+
+export async function updateVolontaire(
+  session: SessionRecord,
+  volontaireId: string,
+  rawInput: unknown,
+  deps: MissionsServiceDeps = {},
+): Promise<VolontaireModifieResultat> {
+  const store = deps.store ?? getMissionsStore();
+  // Garde UUID : un id de chemin non-UUID provoquerait une 22P02 postgres (500).
+  if (!estUuidValide(volontaireId)) {
+    throw new VolontaireNotFoundError();
+  }
+  const input = normalizeVolontaireInput(rawInput);
+  const errors = validateVolontaireInput(input);
+  if (hasVolontaireFieldErrors(errors)) {
+    throw new InvalidVolontaireFieldsError(errors);
+  }
+  // Même règle qu'à l'import : une adresse AZZEL_ADMIN_EMAILS serait promue
+  // organisateur à sa première connexion. Si la correction l'acceptait, elle
+  // deviendrait la porte dérobée que l'import ferme.
+  if (new Set(readAdminEmails()).has(input.email)) {
+    throw new VolontaireEmailReserveError();
+  }
+  const resultat = await store.updateVolontaire(volontaireId, {
+    organisationId: session.organisationId,
+    nom: input.nom,
+    email: input.email,
+    telephone: input.telephone,
+  });
+  if (resultat === null) {
+    throw new VolontaireNotFoundError();
+  }
+  return {
+    volontaire: toVolontaireSummary(resultat.volontaire),
+    invitationRenvoyee: resultat.invitationRenvoyee,
+  };
+}
+
+export async function deleteVolontaire(
+  session: SessionRecord,
+  volontaireId: string,
+  deps: MissionsServiceDeps = {},
+): Promise<{ ok: true }> {
+  const store = deps.store ?? getMissionsStore();
+  if (!estUuidValide(volontaireId)) {
+    throw new VolontaireNotFoundError();
+  }
+  const supprime = await store.deleteVolontaire(volontaireId, session.organisationId);
+  if (!supprime) {
+    throw new VolontaireNotFoundError();
+  }
+  return { ok: true };
 }
 
 /** Gabarit .xlsx téléchargeable (en-tête Nom / Email / Téléphone). */

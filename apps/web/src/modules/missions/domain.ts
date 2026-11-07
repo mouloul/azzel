@@ -92,6 +92,56 @@ export const LIBELLES_STATUT_INVITATION: Record<StatutInvitation, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Story 3.5 — correction d'un volontaire : mêmes règles qu'à l'import (une
+// faute de frappe se corrige, elle ne se contourne pas par un second compte),
+// mais sous forme d'erreurs PAR CHAMP — l'organisateur voit quoi reprendre.
+// ---------------------------------------------------------------------------
+
+export const VOLONTAIRE_FIELD_ORDER = ['nom', 'email', 'telephone'] as const;
+
+export type VolontaireField = (typeof VOLONTAIRE_FIELD_ORDER)[number];
+
+export type VolontaireFieldErrors = Partial<Record<VolontaireField, string>>;
+
+export interface VolontaireInput {
+  nom: string;
+  email: string;
+  telephone: string | null;
+}
+
+export function normalizeVolontaireInput(raw: unknown): VolontaireInput {
+  const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const telephone = texteOuVide(record, 'telephone');
+  return {
+    nom: texteOuVide(record, 'nom'),
+    email: normaliserEmail(texteOuVide(record, 'email')),
+    telephone: telephone.length > 0 ? telephone : null,
+  };
+}
+
+export function validateVolontaireInput(input: VolontaireInput): VolontaireFieldErrors {
+  const errors: VolontaireFieldErrors = {};
+  if (input.nom.length === 0) {
+    errors.nom = 'Le nom du volontaire est obligatoire.';
+  } else if (input.nom.length > MAX_NOM_LENGTH) {
+    errors.nom = `${MAX_NOM_LENGTH} caractères maximum pour le nom.`;
+  }
+  if (input.email.length === 0) {
+    errors.email = 'L’email est obligatoire : c’est avec lui que le volontaire se connecte.';
+  } else if (input.email.length > MAX_EMAIL_LENGTH || !estEmailValide(input.email)) {
+    errors.email = 'Cet email n’est pas valide (forme attendue : prenom@domaine.dz).';
+  }
+  if (input.telephone !== null && !estTelephoneValide(input.telephone)) {
+    errors.telephone = 'Le téléphone doit être un numéro (ou rester vide).';
+  }
+  return errors;
+}
+
+export function hasVolontaireFieldErrors(errors: VolontaireFieldErrors): boolean {
+  return Object.values(errors).some((message) => typeof message === 'string');
+}
+
+// ---------------------------------------------------------------------------
 // Story 3.2 — types de mission FERMÉS (CHECK SQL 0020 + domaine) : aucun type
 // personnalisé, jamais.
 // ---------------------------------------------------------------------------

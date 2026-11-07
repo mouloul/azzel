@@ -342,6 +342,8 @@ function storeFactice(overrides: Partial<MissionsStore> = {}): MissionsStore {
     affecter: indisponible,
     desaffecter: indisponible,
     listCoureursAnnuaire: indisponible,
+    updateVolontaire: indisponible,
+    deleteVolontaire: indisponible,
     ...overrides,
   };
 }

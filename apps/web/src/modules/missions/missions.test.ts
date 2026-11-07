@@ -5,6 +5,11 @@ import type { SessionRecord } from '@/modules/iam/store';
 
 import {
   LIBELLES_STATUT_INVITATION,
+  MAX_EMAIL_LENGTH,
+  MAX_NOM_LENGTH,
+  hasVolontaireFieldErrors,
+  normalizeVolontaireInput,
+  validateVolontaireInput,
   validerLigne,
   statutInvitation,
   type LigneFichier,
@@ -12,7 +17,12 @@ import {
 import {
   ImportFileInvalidError,
   ImportFileTooLargeError,
+  InvalidVolontaireFieldsError,
+  VolontaireAffecteError,
   VolontaireDejaActifError,
+  VolontaireEmailPrisError,
+  VolontaireEmailReserveError,
+  VolontaireLieError,
   VolontaireNotFoundError,
   toMissionsApiError,
 } from './errors';
@@ -26,7 +36,7 @@ import {
   parseImportFile,
   parseLigneCsv,
 } from './import-format';
-import { importVolontaires } from './service';
+import { deleteVolontaire, importVolontaires, updateVolontaire } from './service';
 import type { ImportLigneOutcome, MissionsStore } from './store';
 
 // Story 3.1 — tests unitaires missions : parsing (xlsx/csv), validation ligne,
@@ -239,6 +249,8 @@ describe('importVolontaires — service (store factice)', () => {
       renvoyerInvitation: async () => {
         throw new VolontaireNotFoundError();
       },
+      updateVolontaire: indisponible,
+      deleteVolontaire: indisponible,
       findCurrentEdition: indisponible,
       createSecteur: indisponible,
       updateSecteur: indisponible,
@@ -396,5 +408,274 @@ describe('importVolontaires — service (store factice)', () => {
     const interne = toMissionsApiError(new Error('boom'));
     expect(interne.status).toBe(500);
     expect(interne.envelope.error.message).not.toContain('boom');
+  });
+});
+
+// Story 3.5 — correction et suppression d'un volontaire. Ici : validation des
+// champs, gardes de service (UUID, adresse réservée) et enveloppes d'erreur.
+// Les écritures (compte, invitation, codes en vol, cascade) vivent dans
+// missions.integration.test.ts.
+
+describe('normalizeVolontaireInput / validateVolontaireInput — champs du formulaire', () => {
+  it('normalise : nom trim, email trim + minuscules, téléphone vide → null', () => {
+    expect(
+      normalizeVolontaireInput({
+        nom: '  Kahina Ait  ',
+        email: ' Kahina@EXEMPLE.DZ ',
+        telephone: '   ',
+      }),
+    ).toEqual({ nom: 'Kahina Ait', email: 'kahina@exemple.dz', telephone: null });
+  });
+
+  it('champs non-chaîne : traités comme absents, jamais de coercition', () => {
+    expect(normalizeVolontaireInput({ nom: 42, email: null, telephone: {} })).toEqual({
+      nom: '',
+      email: '',
+      telephone: null,
+    });
+  });
+
+  it('accepte une saisie complète sans erreur', () => {
+    const input = normalizeVolontaireInput({
+      nom: 'Kahina Ait',
+      email: 'kahina@exemple.dz',
+      telephone: '+213 555 010 203',
+    });
+    expect(validateVolontaireInput(input)).toEqual({});
+    expect(hasVolontaireFieldErrors(validateVolontaireInput(input))).toBe(false);
+  });
+
+  it('erreurs PAR CHAMP : nom vide/trop long, email absent/malformé/trop long, téléphone invalide', () => {
+    const vide = validateVolontaireInput(normalizeVolontaireInput({}));
+    expect(vide.nom).toBeTypeOf('string');
+    expect(vide.email).toBeTypeOf('string');
+    expect(vide.telephone).toBeUndefined();
+
+    expect(
+      validateVolontaireInput(
+        normalizeVolontaireInput({ nom: 'x'.repeat(MAX_NOM_LENGTH + 1), email: 'a@b.dz' }),
+      ).nom,
+    ).toContain(String(MAX_NOM_LENGTH));
+    expect(
+      validateVolontaireInput(normalizeVolontaireInput({ nom: 'A', email: 'pas-un-email' })).email,
+    ).toBeTypeOf('string');
+    const trop = `${'a'.repeat(MAX_EMAIL_LENGTH)}@exemple.dz`;
+    expect(
+      validateVolontaireInput(normalizeVolontaireInput({ nom: 'A', email: trop })).email,
+    ).toBeTypeOf('string');
+    expect(
+      validateVolontaireInput(
+        normalizeVolontaireInput({ nom: 'A', email: 'a@b.dz', telephone: 'abc' }),
+      ).telephone,
+    ).toBeTypeOf('string');
+  });
+});
+
+describe('updateVolontaire / deleteVolontaire — gardes de service (store factice)', () => {
+  const SESSION = {
+    accountId: 'account-admin',
+    organisationId: '00000000-0000-0000-0000-000000000001',
+    email: 'organisateur@exemple.dz',
+    role: 'organisateur',
+    createdAt: new Date('2026-10-01T10:00:00.000Z'),
+  } as const satisfies SessionRecord;
+
+  const ID = '11111111-1111-1111-1111-111111111111';
+
+  const SAISIE = { nom: 'Kahina Ait', email: 'kahina@exemple.dz', telephone: null };
+
+  function storeEspion(overrides: Partial<MissionsStore> = {}): {
+    store: MissionsStore;
+    appels: string[];
+  } {
+    const appels: string[] = [];
+    const indisponible = (): never => {
+      throw new Error('store espion : méthode non attendue ici');
+    };
+    const store: MissionsStore = {
+      importVolontaires: indisponible,
+      listVolontaires: async () => [],
+      renvoyerInvitation: indisponible,
+      updateVolontaire: async (volontaireId) => {
+        appels.push(`update:${volontaireId}`);
+        return {
+          volontaire: {
+            id: volontaireId,
+            nom: SAISIE.nom,
+            email: SAISIE.email,
+            telephone: null,
+            statutInvitation: 'en_file',
+            createdAt: new Date('2026-10-01T10:00:00.000Z'),
+          },
+          invitationRenvoyee: true,
+        };
+      },
+      deleteVolontaire: async (volontaireId) => {
+        appels.push(`delete:${volontaireId}`);
+        return true;
+      },
+      findCurrentEdition: indisponible,
+      createSecteur: indisponible,
+      updateSecteur: indisponible,
+      deleteSecteur: indisponible,
+      createMission: indisponible,
+      updateMission: indisponible,
+      deleteMission: indisponible,
+      listMissionsEtat: indisponible,
+      findVolontaireIdByAccount: indisponible,
+      affecter: indisponible,
+      desaffecter: indisponible,
+      listCoureursAnnuaire: indisponible,
+      ...overrides,
+    };
+    return { store, appels };
+  }
+
+  it('id non-UUID : VolontaireNotFoundError AVANT tout appel au store (jamais une 22P02)', async () => {
+    const { store, appels } = storeEspion();
+    await expect(
+      updateVolontaire(SESSION as SessionRecord, 'pas-un-uuid', SAISIE, { store }),
+    ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+    await expect(
+      deleteVolontaire(SESSION as SessionRecord, 'pas-un-uuid', { store }),
+    ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+    expect(appels).toEqual([]);
+  });
+
+  it('champs invalides : InvalidVolontaireFieldsError par champ, store non appelé', async () => {
+    const { store, appels } = storeEspion();
+    const erreur = await updateVolontaire(SESSION as SessionRecord, ID, { nom: '', email: 'x' }, {
+      store,
+    }).catch((error: unknown) => error);
+    expect(erreur).toBeInstanceOf(InvalidVolontaireFieldsError);
+    expect((erreur as InvalidVolontaireFieldsError).fields.nom).toBeTypeOf('string');
+    expect((erreur as InvalidVolontaireFieldsError).fields.email).toBeTypeOf('string');
+    expect(appels).toEqual([]);
+  });
+
+  it('adresse AZZEL_ADMIN_EMAILS : refus explicite, store non appelé (même règle qu’à l’import)', async () => {
+    const precedent = process.env.AZZEL_ADMIN_EMAILS;
+    process.env.AZZEL_ADMIN_EMAILS = 'Boss@Exemple.dz';
+    try {
+      const { store, appels } = storeEspion();
+      await expect(
+        updateVolontaire(
+          SESSION as SessionRecord,
+          ID,
+          { nom: 'Boss', email: 'BOSS@exemple.dz', telephone: null },
+          { store },
+        ),
+      ).rejects.toBeInstanceOf(VolontaireEmailReserveError);
+      expect(appels).toEqual([]);
+    } finally {
+      if (precedent === undefined) {
+        delete process.env.AZZEL_ADMIN_EMAILS;
+      } else {
+        process.env.AZZEL_ADMIN_EMAILS = precedent;
+      }
+    }
+  });
+
+  it('nominal : l’id et la saisie normalisée descendent au store, le renvoi d’invitation remonte', async () => {
+    const recues: unknown[] = [];
+    const { store } = storeEspion({
+      updateVolontaire: async (volontaireId, input) => {
+        recues.push({ volontaireId, input });
+        return {
+          volontaire: {
+            id: volontaireId,
+            nom: 'Kahina Ait',
+            email: 'kahina@exemple.dz',
+            telephone: null,
+            statutInvitation: 'en_file',
+            createdAt: new Date('2026-10-01T10:00:00.000Z'),
+          },
+          invitationRenvoyee: true,
+        };
+      },
+    });
+    const resultat = await updateVolontaire(
+      SESSION as SessionRecord,
+      ID,
+      { nom: '  Kahina Ait ', email: ' Kahina@Exemple.DZ ', telephone: '' },
+      { store },
+    );
+    expect(recues).toEqual([
+      {
+        volontaireId: ID,
+        input: {
+          organisationId: SESSION.organisationId,
+          nom: 'Kahina Ait',
+          email: 'kahina@exemple.dz',
+          telephone: null,
+        },
+      },
+    ]);
+    expect(resultat.invitationRenvoyee).toBe(true);
+    expect(resultat.volontaire).toMatchObject({
+      email: 'kahina@exemple.dz',
+      statutInvitation: 'en_file',
+      statutInvitationLabel: LIBELLES_STATUT_INVITATION.en_file,
+    });
+  });
+
+  it('volontaire absent du store : 404 métier (null → VolontaireNotFoundError)', async () => {
+    const { store } = storeEspion({
+      updateVolontaire: async () => null,
+      deleteVolontaire: async () => false,
+    });
+    await expect(
+      updateVolontaire(SESSION as SessionRecord, ID, SAISIE, { store }),
+    ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+    await expect(
+      deleteVolontaire(SESSION as SessionRecord, ID, { store }),
+    ).rejects.toBeInstanceOf(VolontaireNotFoundError);
+  });
+
+  it('suppression nominale : l’organisation de la session borne l’appel', async () => {
+    const recues: unknown[] = [];
+    const { store } = storeEspion({
+      deleteVolontaire: async (volontaireId, organisationId) => {
+        recues.push({ volontaireId, organisationId });
+        return true;
+      },
+    });
+    await expect(deleteVolontaire(SESSION as SessionRecord, ID, { store })).resolves.toEqual({
+      ok: true,
+    });
+    expect(recues).toEqual([{ volontaireId: ID, organisationId: SESSION.organisationId }]);
+  });
+
+  it('enveloppes API : champs 400, adresse prise 409 champ email, réservée 409, affecté 409 chiffré, lié 409', () => {
+    const champs = toMissionsApiError(
+      new InvalidVolontaireFieldsError({ nom: 'Le nom est obligatoire.' }),
+    );
+    expect(champs.status).toBe(400);
+    expect(champs.envelope.error.code).toBe('admin.volontaires.champs_invalides');
+    expect(champs.fields).toEqual({ nom: 'Le nom est obligatoire.' });
+
+    const pris = toMissionsApiError(new VolontaireEmailPrisError());
+    expect(pris.status).toBe(409);
+    expect(pris.envelope.error.code).toBe('admin.volontaires.email_pris');
+    expect((pris.fields as { email?: string }).email).toBeTypeOf('string');
+    // Aucune énumération de comptes : le message ne dit PAS à qui l'adresse est.
+    for (const mot of ['coureur', 'organisateur', 'volontaire']) {
+      expect(pris.envelope.error.message.toLowerCase()).not.toContain(mot);
+    }
+
+    const reserve = toMissionsApiError(new VolontaireEmailReserveError());
+    expect(reserve.status).toBe(409);
+    expect(reserve.envelope.error.code).toBe('admin.volontaires.email_reserve');
+    expect((reserve.fields as { email?: string }).email).toBeTypeOf('string');
+
+    const affecte = toMissionsApiError(new VolontaireAffecteError(3));
+    expect(affecte.status).toBe(409);
+    expect(affecte.envelope.error.code).toBe('admin.volontaires.affecte');
+    expect(affecte.envelope.error.message).toContain('3');
+    expect(affecte.envelope.error.action).toContain('mission');
+
+    const lie = toMissionsApiError(new VolontaireLieError());
+    expect(lie.status).toBe(409);
+    expect(lie.envelope.error.code).toBe('admin.volontaires.lie');
   });
 });

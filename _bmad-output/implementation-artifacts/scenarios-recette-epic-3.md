@@ -111,6 +111,33 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 
 ---
 
+## S5 — Correction et suppression d'un volontaire (story 3-5)
+
+Ce module répare le cas le plus fréquent de l'import : une adresse mal saisie. À
+passer **après S1** (les volontaires de S1 servent de matière).
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 5.1 | Organisateur, `/admin/volontaires` | Chaque ligne porte **trois** actions : « Renvoyer l'invitation », « Modifier », « Supprimer » |
+| 5.2 | Importer un volontaire avec une faute de frappe : `Kahina;kahina@exmeple.dz;` (noter le `exmeple`) | « 1 créé · 1 invitation en file » ; Mailpit reçoit un email pour `kahina@exmeple.dz` |
+| 5.3 | Sur sa ligne, cliquer **Modifier** | Formulaire déplié sous la ligne, légende « Modifier « Kahina » », trois champs **pré-remplis** (nom, email, téléphone) |
+| 5.4 | Corriger l'email en `kahina@exemple.dz`, Enregistrer | Le formulaire se referme, la liste affiche la bonne adresse, statut « En file » |
+| 5.5 | Mailpit | **Un nouvel** email d'invitation pour `kahina@exemple.dz` ; aucun nouvel envoi vers l'adresse fautive |
+| 5.6 | (Base) `bash scripts/dev-db.sh psql -c "select statut, destinataire from email_outbox where type='invitation_volontaire' order by created_at"` | La ligne de l'adresse fautive est `cancelled`, la nouvelle `pending`/`sent` |
+| 5.7 | Modifier **seulement le nom** d'un autre volontaire (ex. ajouter un prénom), Enregistrer | Nom à jour dans la liste ; **aucun** nouvel email dans Mailpit |
+| 5.8 | Modifier un volontaire en lui donnant l'adresse d'un **autre** volontaire existant | Refus visible : « Cette adresse est déjà utilisée dans ton organisation. », le champ Email est signalé ; rien n'est enregistré (le nom non plus) |
+| 5.9 | Modifier un volontaire en saisissant l'adresse de l'organisateur (`orga@example.dz`) | Refus : « Cette adresse est réservée à l'organisation. » |
+| 5.10 | Vider le champ Email puis Enregistrer | Message **sous le champ** Email, focus placé dessus ; rien n'est envoyé |
+| 5.11 | Se connecter avec un volontaire (`/connexion`), revenir en organisateur, modifier **son** email | Email changé, statut toujours « Activé », **aucun** email d'invitation dans Mailpit |
+| 5.12 | Affecter un volontaire à une mission (module S2), puis cliquer **Supprimer** sur sa ligne | Après confirmation : refus « Ce volontaire tient encore 1 mission(s)… » ; il est toujours dans la liste |
+| 5.13 | Le retirer de sa mission (S2), puis **Supprimer** à nouveau | Fenêtre de confirmation **nommant** la personne (nom + adresse) ; après OK, la ligne disparaît |
+| 5.14 | Annuler la confirmation sur une autre ligne | Rien ne se passe, le volontaire reste |
+| 5.15 | Ré-importer un fichier contenant l'adresse du volontaire supprimé | Ligne « **Créé** » (et non « Ignoré ») : l'adresse a bien été libérée |
+| 5.16 | (Base) `bash scripts/dev-db.sh psql -c "select email, role from account where email='<adresse supprimée>'"` | Un seul compte, recréé par le ré-import |
+| 5.17 | Sur mobile ou fenêtre étroite (≤ 640 px) | Les trois actions restent espacées et cliquables au doigt (aucune superposition) |
+
+---
+
 ## Tableau de synthèse
 
 | Module | Story | Statut | Observations |
@@ -119,5 +146,6 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | S2 — Secteurs et missions typées | 3-2 | ☐ ☐ ☐ | |
 | S3 — Fiche mission hors-ligne PWA (dont 3.13 : session expirée → `/connexion`) | 3-3 | ☐ ☐ ☐ | |
 | S4 — Annuaire des coureurs | 3-4 | ☐ ☐ ☐ | |
+| S5 — Correction et suppression d'un volontaire | 3-5 | ☐ ☐ ☐ | |
 
 **Légende :** ☐ à cocher — tests passés / anomalies mineures / bloquantes. Toute anomalie bloquante : la noter avec le numéro d'étape (ex. « 1.3 : doublon non rejeté ») et préserver l'environnement.
