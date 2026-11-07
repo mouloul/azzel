@@ -99,9 +99,9 @@ const MISSION_GUICHET = {
   titre: 'Guichet dossards',
 };
 
-async function rendu(searchParams?: Promise<{ mode?: string | string[] }>): Promise<void> {
+async function rendu(searchParams?: Promise<{ mode?: string | string[] }>): Promise<string> {
   const flux = await renderToReadableStream(<ScanPage searchParams={searchParams} />);
-  await new Response(flux).text();
+  return await new Response(flux).text();
 }
 
 beforeEach(() => {
@@ -132,16 +132,55 @@ describe('page /volontaires/scan — checkpoint = mission scan en cours (story 4
     expect(scanClientMock.ScanClient.mock.calls[0]?.[0]?.mode).toBeUndefined();
   });
 
-  it('plusieurs missions scan hors fenêtre : la PREMIÈRE fournit le checkpoint (repli missionTypeEnCours)', async () => {
+  // Story 4.6 — ce test attendait l'inverse : « la PREMIÈRE fournit le
+  // checkpoint ». C'était le défaut — deux checkpoints, aucun créneau courant,
+  // et les passages partaient sur celui qui ouvrait la liste.
+  it('plusieurs missions scan hors créneau : AUCUN scanner, écran de blocage', async () => {
     missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
       editionNom: 'Édition 2027',
       mesMissions: [MISSION_SCAN_KM30, MISSION_SCAN],
       missions: [MISSION_SCAN_KM30, MISSION_SCAN],
     });
+    const html = await rendu();
+    expect(scanClientMock.ScanClient).not.toHaveBeenCalled();
+    expect(html).toContain('Aucune mission de scan en cours');
+    // Les deux missions sont nommées : le volontaire sait quand revenir.
+    expect(html).toContain('Scan km 30');
+    expect(html).toContain('Scan km 12');
+    // Jamais une impasse sans porte de sortie.
+    expect(html).toContain('Appeler le PC');
+    expect(html).toContain('Revenir à ma fiche');
+  });
+
+  it('plusieurs missions scan au MÊME créneau : écran de chevauchement, PC appelé', async () => {
+    const maintenant = new Date();
+    const enCours = (id: string, titre: string) => ({
+      ...MISSION_SCAN,
+      id,
+      titre,
+      debutLe: new Date(maintenant.getTime() - 60 * 60 * 1000).toISOString(),
+      finLe: new Date(maintenant.getTime() + 60 * 60 * 1000).toISOString(),
+    });
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [enCours('cp-a', 'Scan km 12'), enCours('cp-b', 'Scan km 30')],
+      missions: [],
+    });
+    const html = await rendu();
+    expect(scanClientMock.ScanClient).not.toHaveBeenCalled();
+    expect(html).toContain('Deux missions se chevauchent sur ce créneau');
+  });
+
+  it('une seule mission scan, même hors créneau : le scanner s’ouvre (non-régression)', async () => {
+    missionsServiceMock.getMissionsVolontaireState.mockResolvedValue({
+      editionNom: 'Édition 2027',
+      mesMissions: [MISSION_SCAN],
+      missions: [MISSION_SCAN],
+    });
     await rendu();
     expect(scanClientMock.ScanClient.mock.calls[0]?.[0]).toMatchObject({
-      checkpointId: 'mission-scan-km30',
-      missionLabel: 'Scan km 30',
+      checkpointId: 'mission-scan-km12',
+      missionLabel: 'Scan km 12',
     });
   });
 

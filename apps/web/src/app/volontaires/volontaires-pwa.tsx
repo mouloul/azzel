@@ -29,7 +29,7 @@ import {
   type ReponseEtatLue,
   type StatutSync,
 } from '@/lib/revalidation-etat';
-import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-scan';
+import { resoudreMissionRetrait, resoudreMissionScan } from '@/lib/scan/mission-scan';
 import {
   deferThemeInvitation,
   isThemeInvitationDeferred,
@@ -392,17 +392,23 @@ export function VolontairesPwa({
   // « Démarrer le scan » n'apparaît que si une mission scan_checkpoint est
   // affectée au volontaire. Le libellé suit la mission scan en cours (helper
   // pur partagé avec la page scanner).
-  const missionScan = missionScanEnCours(etat.mesMissions, new Date());
+  // Story 4.6 — l'entrée reste visible même quand la résolution bloque : le
+  // volontaire A bien une mission de scan. C'est la page scanner qui porte
+  // l'explication, en un seul endroit — ici, le libellé dit simplement que le
+  // créneau est à vérifier.
+  const resolutionScan = resoudreMissionScan(etat.mesMissions, new Date());
+  const missionScan = resolutionScan?.ok === true ? resolutionScan.mission : null;
   // Story 4.3 — même règle pour le guichet : « Scan retrait » n'apparaît que
   // si une mission distribution_dossards est affectée (le mode du scanner est
   // débloqué par la mission).
-  const missionRetrait = missionRetraitEnCours(etat.mesMissions, new Date());
+  const resolutionRetrait = resoudreMissionRetrait(etat.mesMissions, new Date());
+  const missionRetrait = resolutionRetrait?.ok === true ? resolutionRetrait.mission : null;
 
   // Story 4.3 — intitulé de section selon les missions : guichet pur →
   // « Retrait des dossards » ; sinon le libellé générique (scan seul ou les
   // deux modes ensemble).
   const titreSectionScan =
-    missionRetrait !== null && missionScan === null
+    resolutionRetrait !== null && resolutionScan === null
       ? 'Retrait des dossards'
       : 'Scan des e-dossards';
 
@@ -494,24 +500,28 @@ export function VolontairesPwa({
         </div>
       )}
 
-      {(missionScan !== null || missionRetrait !== null) && (
+      {(resolutionScan !== null || resolutionRetrait !== null) && (
         <section className="volontaires-scan" aria-labelledby="volontaires-scan-titre">
           <h2 className="volontaires-titre" id="volontaires-scan-titre">
             {titreSectionScan}
           </h2>
-          {missionScan !== null && (
+          {resolutionScan !== null && (
             <a className="socle-action volontaires-scan-lien" href="/volontaires/scan">
               <span className="volontaires-scan-libelle">Démarrer le scan</span>
-              <span className="volontaires-scan-mission">{missionScan.titre}</span>
+              <span className="volontaires-scan-mission">
+                {missionScan?.titre ?? 'créneau à vérifier'}
+              </span>
             </a>
           )}
-          {missionRetrait !== null && (
+          {resolutionRetrait !== null && (
             <a className="socle-action volontaires-scan-lien" href="/volontaires/scan?mode=retrait">
               <span className="volontaires-scan-libelle">Scan retrait</span>
-              <span className="volontaires-scan-mission">{missionRetrait.titre}</span>
+              <span className="volontaires-scan-mission">
+                {missionRetrait?.titre ?? 'créneau à vérifier'}
+              </span>
             </a>
           )}
-          {missionRetrait !== null ? (
+          {resolutionRetrait !== null ? (
             <p className="volontaires-annuaire-texte">
               Le scanner lit les e-dossards des coureurs et fonctionne même sans réseau — l’annuaire
               ci-dessous suffit. Au guichet, « Scan retrait » enregistre chaque dossard remis, même

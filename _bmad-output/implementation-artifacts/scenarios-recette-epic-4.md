@@ -89,6 +89,30 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 
 ---
 
+## S6 — Résolution non ambiguë du checkpoint (story 4-6)
+
+Ce module vérifie que le système **refuse de deviner** à quel point de contrôle
+rattacher un passage. À passer après S2 (le scanner fonctionne).
+
+**Préparation** : un volontaire de test, connecté sur un téléphone ou un second
+navigateur ; l'organisateur sur `/admin/missions`.
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 6.1 | Organisateur : affecter le volontaire à **une seule** mission « Scan checkpoint », horaires 9h–12h. Volontaire : ouvrir `/volontaires` à n'importe quelle heure | Entrée « Démarrer le scan » visible, libellé = titre de la mission. Le scanner s'ouvre, **même hors des horaires** (non-régression : une seule mission n'est jamais ambiguë) |
+| 6.2 | Affecter en plus une **deuxième** mission scan, horaires 16h–18h. Volontaire : recharger `/volontaires` puis ouvrir le scanner, **en dehors** des deux créneaux et à plus d'une heure de chacun | Écran « **Aucune mission de scan en cours** ». Les **deux** missions sont listées avec leurs horaires. Boutons « Appeler le PC » et « Revenir à ma fiche » présents |
+| 6.3 | Sur la fiche, regarder l'entrée « Démarrer le scan » | Toujours visible — le volontaire a bien une mission — mais le libellé indique « créneau à vérifier » |
+| 6.4 | Organisateur : modifier la première mission pour que son créneau **couvre l'heure actuelle**. Volontaire : recharger le scanner | Le scanner s'ouvre, badge du cadre caméra = titre de cette mission |
+| 6.5 | Organisateur : modifier la **seconde** mission pour qu'elle couvre AUSSI l'heure actuelle (l'avertissement de chevauchement s'affiche à l'affectation — l'ignorer). Volontaire : recharger le scanner | Écran « **Deux missions se chevauchent sur ce créneau** », les deux missions nommées avec leurs horaires, « Appeler le PC » présent. **Aucun scan possible** |
+| 6.6 | Organisateur : supprimer l'une des deux missions. Volontaire : recharger | Le scanner s'ouvre sur la mission restante |
+| 6.7 | Débordement : régler une mission unique sur un créneau **terminé depuis moins d'une heure**, l'autre supprimée | Le scanner s'ouvre (tolérance de 60 min — le dernier coureur n'est pas perdu) |
+| 6.8 | Même chose avec un créneau terminé depuis **plus de deux heures**, en gardant deux missions scan | Écran « Aucune mission de scan en cours » |
+| 6.9 | Mode retrait : affecter deux missions « Distribution des dossards » sur le même créneau, ouvrir `/volontaires/scan?mode=retrait` | Même écran de chevauchement — la règle vaut pour les deux scanners |
+| 6.10 | Mixte : une mission guichet 8h–10h **et** une mission scan 9h–12h (elles se chevauchent). Ouvrir les deux scanners | **Aucun blocage** : chaque scanner ouvre sur SA mission. Le chevauchement entre familles différentes est normal |
+| 6.11 | Sur mobile, écran de blocage affiché | Les deux boutons sont cliquables au doigt, le texte entier est lisible sans zoom |
+
+---
+
 ## Tableau de synthèse
 
 | Module | Story | Statut | Observations |
@@ -98,5 +122,6 @@ AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 | S3 — Scan de retrait | 4-3 | ☐ ☐ ☐ | |
 | S4 — Passages checkpoints | 4-4 | ☐ ☐ ☐ | |
 | S5 — Sync par lots | 4-5 | ☐ ☐ ☐ | |
+| S6 — Résolution non ambiguë du checkpoint | 4-6 | ☐ ☐ ☐ | |
 
 **Légende :** ☐ à cocher — tests passés / anomalies mineures / bloquantes. Toute anomalie bloquante : la noter avec le numéro d'étape (ex. « 2.7 : voyant inconnu sans bip ») et préserver l'environnement (ne pas purger IndexedDB ni la base).
