@@ -2,7 +2,12 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 import { DbUnavailableError, UnauthenticatedError } from '@/modules/iam/errors';
 
-import { MAX_IMPORT_LIBELLE, type MissionFieldErrors, type SecteurFieldErrors } from './domain';
+import {
+  MAX_IMPORT_LIBELLE,
+  type MissionFieldErrors,
+  type SecteurFieldErrors,
+  type VolontaireFieldErrors,
+} from './domain';
 
 export { DbUnavailableError, UnauthenticatedError };
 
@@ -50,6 +55,48 @@ export class VolontaireDejaActifError extends Error {
   constructor() {
     super('volontaire déjà activé (première connexion faite)');
     this.name = 'VolontaireDejaActifError';
+  }
+}
+
+// Story 3.5 — correction et suppression d'un volontaire.
+
+/** Champs du formulaire volontaire invalides — erreurs champ, jamais 500. */
+export class InvalidVolontaireFieldsError extends Error {
+  constructor(readonly fields: VolontaireFieldErrors) {
+    super('champs volontaire manquants ou invalides');
+    this.name = 'InvalidVolontaireFieldsError';
+  }
+}
+
+/** UNIQUE (organisation_id, email) violé : l'adresse est déjà portée par un compte. */
+export class VolontaireEmailPrisError extends Error {
+  constructor() {
+    super('adresse déjà portée par un compte de cette organisation');
+    this.name = 'VolontaireEmailPrisError';
+  }
+}
+
+/** Adresse de AZZEL_ADMIN_EMAILS : elle serait promue organisateur à la connexion. */
+export class VolontaireEmailReserveError extends Error {
+  constructor() {
+    super('adresse réservée à l’organisation');
+    this.name = 'VolontaireEmailReserveError';
+  }
+}
+
+/** Volontaire portant encore des affectations : suppression refusée (409). */
+export class VolontaireAffecteError extends Error {
+  constructor(readonly nombreAffectations: number) {
+    super(`volontaire portant encore ${nombreAffectations} affectation(s)`);
+    this.name = 'VolontaireAffecteError';
+  }
+}
+
+/** Compte référencé par une donnée de course : suppression refusée, jamais un 500. */
+export class VolontaireLieError extends Error {
+  constructor() {
+    super('compte volontaire référencé par une donnée de course');
+    this.name = 'VolontaireLieError';
   }
 }
 
@@ -144,7 +191,7 @@ export class AucuneEditionError extends Error {
 export interface ApiError {
   status: number;
   envelope: ErrorEnvelope;
-  fields?: SecteurFieldErrors | MissionFieldErrors;
+  fields?: SecteurFieldErrors | MissionFieldErrors | VolontaireFieldErrors;
 }
 
 export function toMissionsApiError(error: unknown): ApiError {
@@ -195,6 +242,61 @@ export function toMissionsApiError(error: unknown): ApiError {
         code: 'admin.volontaires.deja_actif',
         message: 'Ce volontaire s’est déjà connecté : l’invitation est inutile.',
         action: 'Aucune action nécessaire — le compte est déjà activé.',
+      }),
+    };
+  }
+  if (error instanceof InvalidVolontaireFieldsError) {
+    return {
+      status: 400,
+      fields: error.fields,
+      envelope: createErrorEnvelope({
+        code: 'admin.volontaires.champs_invalides',
+        message: 'Certains champs du volontaire sont manquants ou invalides.',
+        action: 'Corrige les champs signalés puis réessaie.',
+      }),
+    };
+  }
+  if (error instanceof VolontaireEmailPrisError) {
+    return {
+      status: 409,
+      // Pas d'énumération de comptes : on dit que l'adresse est prise, jamais
+      // par qui — la liste admin n'a pas à révéler les comptes des autres rôles.
+      fields: { email: 'Cette adresse est déjà utilisée dans ton organisation.' },
+      envelope: createErrorEnvelope({
+        code: 'admin.volontaires.email_pris',
+        message: 'Cette adresse est déjà utilisée dans ton organisation.',
+        action: 'Vérifie l’adresse saisie, ou cherche la personne dans la liste avant d’en créer une autre.',
+      }),
+    };
+  }
+  if (error instanceof VolontaireEmailReserveError) {
+    return {
+      status: 409,
+      fields: { email: 'Adresse réservée à l’organisation : un volontaire ne peut pas la porter.' },
+      envelope: createErrorEnvelope({
+        code: 'admin.volontaires.email_reserve',
+        message: 'Cette adresse est réservée à l’organisation.',
+        action: 'Donne au volontaire une adresse personnelle, pas une adresse d’organisateur.',
+      }),
+    };
+  }
+  if (error instanceof VolontaireAffecteError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.volontaires.affecte',
+        message: `Ce volontaire tient encore ${error.nombreAffectations} mission(s) : le supprimer les laisserait vacantes sans prévenir.`,
+        action: 'Retire-le de ses missions depuis « Secteurs et missions », puis supprime-le.',
+      }),
+    };
+  }
+  if (error instanceof VolontaireLieError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.volontaires.lie',
+        message: 'Ce compte est rattaché à des données de course : il ne peut pas être supprimé.',
+        action: 'Garde-le tel quel — son historique de course doit rester consultable.',
       }),
     };
   }

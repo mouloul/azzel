@@ -14,7 +14,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: () => undefined, replace: () => undefined, push: () => undefined }),
 }));
 
-import { RapportImport, VolontairesManager } from './volontaires-manager';
+import { MAX_EMAIL_LENGTH } from '@/modules/missions/domain';
+
+import { RapportImport, VolontaireForm, VolontairesManager } from './volontaires-manager';
 
 const VOLONTAIRES = [
   {
@@ -63,7 +65,7 @@ describe('VolontairesManager — liste sur le gabarit commun (story 10.3)', () =
     const html = await renduListe();
     expect(html).toContain('class="table-wrap"');
     expect(html).toContain('class="socle-table volontaires-table"');
-    for (const colonne of ['Nom', 'Email', 'Téléphone', 'Invitation', 'Action']) {
+    for (const colonne of ['Nom', 'Email', 'Téléphone', 'Invitation', 'Actions']) {
       expect(html).toMatch(new RegExp(`<th[^>]*scope="col"[^>]*>\\s*${colonne}`));
     }
   });
@@ -80,7 +82,8 @@ describe('VolontairesManager — liste sur le gabarit commun (story 10.3)', () =
 
   it('empilement mobile conservé : les td gardent data-libelle', async () => {
     const html = await renduListe();
-    for (const libelle of ['Nom', 'Email', 'Téléphone', 'Invitation', 'Action']) {
+    // « Actions » au pluriel depuis 3.5 : la cellule porte trois boutons.
+    for (const libelle of ['Nom', 'Email', 'Téléphone', 'Invitation', 'Actions']) {
       expect(html).toContain(`data-libelle="${libelle}"`);
     }
     expect(html).toContain('sr-only');
@@ -118,5 +121,56 @@ describe('RapportImport — gabarit tableau commun (story 10.3)', () => {
     expect(html).toContain('Créé');
     expect(html).toContain('Rejeté');
     expect(html).toContain('Ignoré');
+  });
+});
+
+// Story 3.5 — correction et suppression d'un volontaire : chaque ligne porte
+// les deux actions, et le formulaire de correction est pré-rempli.
+
+async function renduForm(): Promise<string> {
+  const flux = await renderToReadableStream(
+    <VolontaireForm volontaire={VOLONTAIRES[1]!} onTermine={() => undefined} />,
+  );
+  return await new Response(flux).text();
+}
+
+describe('VolontairesManager — correction et suppression (story 3.5)', () => {
+  it('chaque ligne porte Modifier et Supprimer, en plus du renvoi d’invitation', async () => {
+    const html = await renduListe();
+    expect(html.match(/>Modifier</g)?.length).toBe(VOLONTAIRES.length);
+    expect(html.match(/>Supprimer</g)?.length).toBe(VOLONTAIRES.length);
+    // Les actions vivent dans un conteneur dédié (cibles espacées).
+    expect(html.match(/class="volontaires-actions"/g)?.length).toBe(VOLONTAIRES.length);
+  });
+
+  it('les actions restent des cibles ≥ 44 px espacées d’au moins 8 px', () => {
+    const globals = readFileSync(
+      fileURLToPath(new URL('../../globals.css', import.meta.url)),
+      'utf8',
+    );
+    // .btn-lien porte la hauteur de cible (correctif I6 de l'épopée 10).
+    expect(globals).toMatch(/\.btn-lien\s*\{[^}]*min-height:\s*44px/);
+    const css = readFileSync(
+      fileURLToPath(new URL('./volontaires.css', import.meta.url)),
+      'utf8',
+    );
+    // --az-space-2 = 8px : gap minimal exigé entre deux cibles voisines.
+    expect(css).toMatch(/\.volontaires-actions\{[^}]*gap:var\(--az-space-[23]\)/);
+  });
+
+  it('formulaire de correction : les trois champs pré-remplis, étiquetés et bornés', async () => {
+    const html = await renduForm();
+    const volontaire = VOLONTAIRES[1]!;
+    expect(html).toContain(`value="${volontaire.nom}"`);
+    expect(html).toContain(`value="${volontaire.email}"`);
+    expect(html).toContain(`value="${volontaire.telephone}"`);
+    for (const champ of ['nom', 'email', 'telephone']) {
+      expect(html).toContain(`for="volontaire-${volontaire.id}-${champ}"`);
+      expect(html).toContain(`id="volontaire-${volontaire.id}-${champ}"`);
+    }
+    expect(html).toContain('type="email"');
+    expect(html).toContain(`maxLength="${MAX_EMAIL_LENGTH}"`);
+    // Le nom du volontaire est rappelé : on sait qui on modifie.
+    expect(html).toContain(volontaire.nom);
   });
 });

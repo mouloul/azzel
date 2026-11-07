@@ -61,6 +61,7 @@ development_status:
   3-2-secteurs-et-missions-typées: done
   3-3-fiche-mission-hors-ligne-pwa-volontaires: done
   3-4-préchargement-de-l-annuaire-des-coureurs: review
+  3-5-correction-et-suppression-d-un-volontaire: review
   epic-3-retrospective: optional
 
   epic-4: in-progress

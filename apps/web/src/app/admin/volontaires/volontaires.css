@@ -8,6 +8,7 @@
    (spécificité 0-1-2) pour rester AU-DESSUS des règles du socle (0-1-1)
    quel que soit l'ordre de concaténation des feuilles. */
 .volontaires-liste{display:grid;gap:var(--az-space-3)}
+.volontaires-actions{display:flex;flex-wrap:wrap;gap:var(--az-space-3);align-items:center}
 .volontaires-rapport{display:grid;gap:var(--az-space-2);margin-top:var(--az-space-3)}
 .volontaires-resume{border:1px solid var(--az-filet);border-radius:var(--az-rayon-md);padding:var(--az-space-3)}
 @media (max-width:640px){

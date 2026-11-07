@@ -16,7 +16,10 @@ import {
   SecteurNomDupliqueError,
   SecteurNotFoundError,
   SecteurOccupeError,
+  VolontaireAffecteError,
   VolontaireDejaActifError,
+  VolontaireEmailPrisError,
+  VolontaireLieError,
   VolontaireNotFoundError,
 } from './errors';
 
@@ -43,6 +46,19 @@ export interface VolontaireRecord {
 
 // Story 3.2 — enregistrements secteurs / missions / affectations. La couverture
 // n'est PAS un enregistrement : elle se dérive du nombre d'affectations.
+
+export interface SauverVolontaireInput {
+  organisationId: string;
+  nom: string;
+  email: string;
+  telephone: string | null;
+}
+
+export interface VolontaireModifieRecord {
+  volontaire: VolontaireRecord;
+  /** Adresse changée sur un volontaire non activé → nouvelle invitation en file. */
+  invitationRenvoyee: boolean;
+}
 
 export interface EditionCouranteRecord {
   id: string;
@@ -149,6 +165,13 @@ export interface MissionsStore {
     lignes: LigneValide[];
   }): Promise<ImportLigneOutcome[]>;
   listVolontaires(organisationId: string): Promise<VolontaireRecord[]>;
+  /** Story 3.5 — null = volontaire absent de CETTE organisation (jamais une fuite). */
+  updateVolontaire(
+    volontaireId: string,
+    input: SauverVolontaireInput,
+  ): Promise<VolontaireModifieRecord | null>;
+  /** Story 3.5 — false = volontaire déjà absent (idempotent côté appelant). */
+  deleteVolontaire(volontaireId: string, organisationId: string): Promise<boolean>;
   renvoyerInvitation(input: {
     organisationId: string;
     volontaireId: string;
@@ -361,6 +384,44 @@ function estViolationSecteurNomUnique(error: unknown): boolean {
   return nomContrainte.includes('secteur_edition_id_nom_key');
 }
 
+/** Détail d'erreur postgres.js : constraint_name, à défaut constraint, à défaut message. */
+function detailContrainte(error: unknown): { code: string; contrainte: string } | null {
+  if (typeof error !== 'object' || error === null) {
+    return null;
+  }
+  const candidat = error as {
+    code?: unknown;
+    constraint?: unknown;
+    constraint_name?: unknown;
+    message?: unknown;
+  };
+  if (typeof candidat.code !== 'string') {
+    return null;
+  }
+  const contrainte =
+    typeof candidat.constraint_name === 'string'
+      ? candidat.constraint_name
+      : typeof candidat.constraint === 'string'
+        ? candidat.constraint
+        : typeof candidat.message === 'string'
+          ? candidat.message
+          : '';
+  return { code: candidat.code, contrainte };
+}
+
+// Story 3.5 — UNIQUE (organisation_id, email) d'account : l'adresse voulue est
+// déjà portée par un compte (quel que soit son rôle) → refus champ, pas un 500.
+function estViolationAccountEmailUnique(error: unknown): boolean {
+  const detail = detailContrainte(error);
+  return detail?.code === '23505' && detail.contrainte.includes('account_organisation_id_email_key');
+}
+
+// Story 3.5 — le compte reste référencé par une donnée de course (dossier
+// décidé, journal de réglages…) : refus lisible, jamais une 500 opaque.
+function estViolationCleEtrangere(error: unknown): boolean {
+  return detailContrainte(error)?.code === '23503';
+}
+
 /**
  * Story 5.1 — « au plus UN checkpoint d'arrivée par édition ». Garde MÉTIER
  * (mission n'a pas de edition_id direct : une contrainte SQL croisant secteur
@@ -456,6 +517,20 @@ const LISTE_COLUMNS = `
   o.statut AS outbox_statut
 `;
 
+function toVolontaireRecord(row: VolontaireRow): VolontaireRecord {
+  return {
+    id: row.id,
+    nom: row.nom,
+    email: row.email,
+    telephone: row.telephone,
+    statutInvitation: statutInvitation({
+      activatedAt: row.activated_at,
+      outboxStatut: row.outbox_statut,
+    }),
+    createdAt: row.created_at,
+  };
+}
+
 export function createMissionsStore(sql: Sql): MissionsStore {
   return {
     async importVolontaires(input: {
@@ -542,17 +617,153 @@ export function createMissionsStore(sql: Sql): MissionsStore {
             WHERE v.organisation_id = ${organisationId}
             ORDER BY v.created_at ASC, v.id ASC
           `;
-          return rows.map((row) => ({
-            id: row.id,
-            nom: row.nom,
-            email: row.email,
-            telephone: row.telephone,
-            statutInvitation: statutInvitation({
-              activatedAt: row.activated_at,
-              outboxStatut: row.outbox_statut,
-            }),
-            createdAt: row.created_at,
-          }));
+          return rows.map(toVolontaireRecord);
+        }),
+      );
+    },
+
+    async updateVolontaire(
+      volontaireId: string,
+      input: SauverVolontaireInput,
+    ): Promise<VolontaireModifieRecord | null> {
+      return withDb(() =>
+        withOrg(sql, input.organisationId, async (tx) => {
+          const rows = await tx<
+            { id: string; account_id: string; email: string; activated_at: Date | null }[]
+          >`
+            SELECT v.id, v.account_id, a.email, a.activated_at
+            FROM volontaire v
+            JOIN account a ON a.id = v.account_id
+            WHERE v.id = ${volontaireId} AND v.organisation_id = ${input.organisationId}
+            LIMIT 1
+            FOR UPDATE OF v
+          `;
+          const actuel = rows[0];
+          if (!actuel) {
+            return null;
+          }
+          const adresseChangee = actuel.email !== input.email;
+          await tx`
+            UPDATE volontaire
+            SET nom = ${input.nom}, telephone = ${input.telephone}
+            WHERE id = ${actuel.id} AND organisation_id = ${input.organisationId}
+          `;
+          if (adresseChangee) {
+            try {
+              await tx`
+                UPDATE account SET email = ${input.email}
+                WHERE id = ${actuel.account_id} AND organisation_id = ${input.organisationId}
+              `;
+            } catch (error) {
+              if (estViolationAccountEmailUnique(error)) {
+                throw new VolontaireEmailPrisError();
+              }
+              throw error;
+            }
+            // login_code est indexé par EMAIL, pas par compte : un code encore
+            // valide émis pour l'ancienne adresse ouvrirait un compte NEUF
+            // (verifyCodeAndStartSession fait un INSERT … ON CONFLICT) pour une
+            // adresse que l'organisation vient de détacher.
+            await tx`
+              UPDATE login_code SET invalidated_at = now()
+              WHERE organisation_id = ${input.organisationId}
+                AND email = ${actuel.email}
+                AND consumed_at IS NULL
+                AND invalidated_at IS NULL
+            `;
+          }
+          // L'invitation ne repart QUE si l'adresse a changé ET que la personne
+          // ne s'est jamais connectée : en renvoyer une à un volontaire déjà
+          // activé serait un faux signal dans la liste admin.
+          const invitationRenvoyee = adresseChangee && actuel.activated_at === null;
+          if (invitationRenvoyee) {
+            await mettreEnFileInvitation(tx, {
+              organisationId: input.organisationId,
+              volontaireId: actuel.id,
+              email: input.email,
+              nom: input.nom,
+            });
+          }
+          const relus = await tx<VolontaireRow[]>`
+            SELECT ${tx.unsafe(LISTE_COLUMNS)}
+            FROM volontaire v
+            JOIN account a ON a.id = v.account_id
+            LEFT JOIN email_outbox o ON o.id = v.invitation_outbox_id
+            WHERE v.id = ${actuel.id} AND v.organisation_id = ${input.organisationId}
+            LIMIT 1
+          `;
+          const relu = relus[0];
+          if (!relu) {
+            throw new Error('relecture du volontaire modifié sans résultat');
+          }
+          return { volontaire: toVolontaireRecord(relu), invitationRenvoyee };
+        }),
+      );
+    },
+
+    async deleteVolontaire(volontaireId: string, organisationId: string): Promise<boolean> {
+      return withDb(() =>
+        withOrg(sql, organisationId, async (tx) => {
+          const rows = await tx<{ id: string; account_id: string; email: string }[]>`
+            SELECT v.id, v.account_id, a.email
+            FROM volontaire v
+            JOIN account a ON a.id = v.account_id
+            WHERE v.id = ${volontaireId} AND v.organisation_id = ${organisationId}
+            LIMIT 1
+            FOR UPDATE OF v
+          `;
+          const volontaire = rows[0];
+          if (!volontaire) {
+            return false;
+          }
+          // affectation.volontaire_id est en ON DELETE CASCADE : supprimer sans
+          // garde viderait les missions et ferait basculer leur couverture à
+          // « vacante » sans que personne ne le voie. Refus chiffré (pattern
+          // SecteurOccupeError) — le FOR UPDATE ci-dessus sérialise une
+          // affectation concurrente contre cette suppression.
+          const comptes = await tx<{ nombre: number }[]>`
+            SELECT count(*)::int AS nombre FROM affectation
+            WHERE volontaire_id = ${volontaire.id} AND organisation_id = ${organisationId}
+          `;
+          const nombreAffectations = comptes[0]?.nombre ?? 0;
+          if (nombreAffectations > 0) {
+            throw new VolontaireAffecteError(nombreAffectations);
+          }
+          // La file d'envoi ne doit pas expédier l'invitation d'une personne
+          // qu'on vient de retirer. Les lignes déjà 'sent' restent : elles
+          // tracent ce qui a réellement été envoyé.
+          await tx`
+            UPDATE email_outbox o
+            SET statut = 'cancelled'
+            FROM volontaire v
+            WHERE v.id = ${volontaire.id}
+              AND v.organisation_id = ${organisationId}
+              AND o.id = v.invitation_outbox_id
+              AND o.organisation_id = ${organisationId}
+              AND o.statut IN ('pending', 'failed')
+          `;
+          await tx`
+            UPDATE login_code SET invalidated_at = now()
+            WHERE organisation_id = ${organisationId}
+              AND email = ${volontaire.email}
+              AND consumed_at IS NULL
+              AND invalidated_at IS NULL
+          `;
+          // Le compte, pas seulement la fiche : la fiche seule laisserait
+          // l'adresse occupée (UNIQUE) et le bug entier. volontaire suit par
+          // account_id ON DELETE CASCADE, session aussi.
+          try {
+            await tx`
+              DELETE FROM account
+              WHERE id = ${volontaire.account_id} AND organisation_id = ${organisationId}
+            `;
+          } catch (error) {
+            if (estViolationCleEtrangere(error)) {
+              throw new VolontaireLieError();
+            }
+            throw error;
+          }
+          return true;
         }),
       );
     },
@@ -1023,6 +1234,8 @@ function createUnavailableStore(): MissionsStore {
   return {
     importVolontaires: unavailable,
     listVolontaires: unavailable,
+    updateVolontaire: unavailable,
+    deleteVolontaire: unavailable,
     renvoyerInvitation: unavailable,
     findCurrentEdition: unavailable,
     createSecteur: unavailable,
