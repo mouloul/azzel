@@ -1,13 +1,18 @@
 'use client';
 
-import { indexerAnnuaire, type CoureurAnnuaire } from '@azzel/shared';
+import { formatLocalDateTime, indexerAnnuaire, type CoureurAnnuaire } from '@azzel/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { assistancePhoneHref } from '@/components/assistance-button';
+import { repliPoche, type ReplipocheResultat } from '@/lib/scan/repli-poche';
+import type { FamilleScan } from '@/modules/missions/domain';
+
+import { EcranMissionAmbigue } from './ecran-mission-ambigue';
 import {
   lireAnnuaire,
+  lireEtatVolontaires,
   obtenirAppareilId,
   passagesParJetonCheckpoint,
   retraitsParJeton,
@@ -50,6 +55,12 @@ export { NOTE_NON_ENREGISTRE } from '@/lib/scan/etats-scan';
 
 /** Clignotement du voyant borné dans le temps : statique passé ce délai. */
 export const DUREE_CLIGNOTEMENT_MS = 6000;
+
+/** Famille de résolution par mode : le repli poche interroge la même que le serveur. */
+const FAMILLE_PAR_MODE: Record<ModeScan, FamilleScan> = {
+  checkpoint: 'chrono',
+  retrait: 'retrait',
+};
 
 /** Marqueur de scanner sain : seul ce rendu devient le scanner hors-ligne du SW. */
 export const MARQUEUR_SHELL_SCAN = 'scan';
@@ -100,7 +111,10 @@ type Phase =
   | 'active'
   | 'permission'
   | 'indisponible'
-  | 'module';
+  | 'module'
+  // Story 4.7 — repli poche : le serveur n'a pas pu résoudre l'affectation.
+  | 'poche-absente'
+  | 'poche-bloquee';
 
 interface Voyant {
   resultat: ResultatRetrait | ResultatPassage;
@@ -215,9 +229,11 @@ export function ScanClient({
   missionLabel,
   mode = 'checkpoint',
   checkpointId = null,
+  depuisLaPoche = false,
 }: {
   assistancePhone: string;
-  missionLabel: string;
+  /** Absent quand le serveur n'a pas pu résoudre : la poche fournit le titre. */
+  missionLabel?: string;
   mode?: ModeScan;
   /**
    * Story 4.4 — id de la mission scan_checkpoint en cours (LE checkpoint) :
@@ -225,6 +241,12 @@ export function ScanClient({
    * Null en mode retrait / hors mission.
    */
   checkpointId?: string | null;
+  /**
+   * Story 4.7 — la base n'a pas répondu : l'affectation est relue dans la
+   * poche avec la MÊME résolution que le serveur. Jamais vrai quand le
+   * serveur a tranché — deux réponses concurrentes n'ont pas lieu d'être.
+   */
+  depuisLaPoche?: boolean;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('chargement');
@@ -233,6 +255,9 @@ export function ScanClient({
   const [annonce, setAnnonce] = useState<string | null>(null);
   const [heureLive, setHeureLive] = useState<Date | null>(null);
   const [nombreCoureurs, setNombreCoureurs] = useState(0);
+  // Story 4.7 — affectation reprise de la poche : mission et date de l'état
+  // mémorisé (le bandeau de fraîcheur en dépend), plus le motif de blocage.
+  const [repli, setRepli] = useState<ReplipocheResultat | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const decodeurRef = useRef<Decodeur | null>(null);
@@ -250,6 +275,11 @@ export function ScanClient({
   const sequenceRef = useRef(0);
 
   const textes = TEXTES_SCAN[mode];
+  // Story 4.7 — le serveur d'abord, la poche seulement s'il s'est tu.
+  const missionReprise = repli?.statut === 'resolue' ? repli : null;
+  const checkpointEffectif = checkpointId ?? missionReprise?.mission.id ?? null;
+  const libelleMission = missionLabel ?? missionReprise?.mission.titre ?? '';
+
 
   // (Revue) — l'écran actif vit dans UN booléen : les effets et leurs deps
   // lisent `actif`, jamais un booléen inline recomposé.
@@ -263,6 +293,24 @@ export function ScanClient({
   useEffect(() => {
     let annule = false;
     (async () => {
+      // Story 4.7 — la poche d'abord : sans affectation, inutile de charger
+      // l'annuaire, et scanner à l'aveugle est pire que ne pas scanner.
+      if (depuisLaPoche) {
+        const etat = await lireEtatVolontaires().catch(() => null);
+        if (annule) {
+          return;
+        }
+        const resultat = repliPoche(etat, FAMILLE_PAR_MODE[mode], new Date());
+        setRepli(resultat);
+        if (resultat.statut === 'absente') {
+          setPhase('poche-absente');
+          return;
+        }
+        if (resultat.statut === 'bloquee') {
+          setPhase('poche-bloquee');
+          return;
+        }
+      }
       const annuaire = await lireAnnuaire();
       const index =
         annuaire !== null && annuaire.coureurs.length > 0 ? indexerAnnuaire(annuaire) : null;
@@ -294,7 +342,7 @@ export function ScanClient({
     return () => {
       annule = true;
     };
-  }, [mode]);
+  }, [mode, depuisLaPoche]);
 
   // Un payload décodé → resolution + enregistrement → voyant + bip +
   // vibration (< 1 s). Les DEUX modes passent par leur orchestrateur pur :
@@ -341,7 +389,7 @@ export function ScanClient({
         payload,
         index,
         passagesRef.current,
-        checkpointId,
+        checkpointEffectif,
         appareilIdRef.current,
         editionIdRef.current,
         maintenant,
@@ -375,7 +423,7 @@ export function ScanClient({
         });
       });
     },
-    [mode, checkpointId],
+    [mode, checkpointEffectif],
   );
 
   const emettreRetourAudio = useCallback((etat: ResultatPassage['etat']) => {
@@ -519,6 +567,42 @@ export function ScanClient({
     return <EcranAnnuaireAbsent mode={mode} />;
   }
 
+  // Story 4.7 — la base s'est tue ET la poche ne porte aucune affectation de
+  // cette famille : on ne sait pas où rattacher un scan. L'impasse est
+  // conservée, mais avec une porte de sortie.
+  if (phase === 'poche-absente') {
+    return (
+      <section className="scan-page-etat">
+        <article className="socle-carte scan-cadre">
+          <p className="surtitre">{textes.surtitre}</p>
+          <h1>Mission introuvable sur cet appareil</h1>
+          <p className="lead" role="status">
+            La connexion au serveur est interrompue et ta fiche mission n’est pas encore
+            enregistrée ici. Ouvre ta fiche une fois en ligne, puis reviens.
+          </p>
+          <div className="scan-etat-actions">
+            <a className="socle-action" href={assistancePhoneHref(assistancePhone)}>
+              Appeler le PC
+            </a>
+            <Link className="btn-lien" href="/volontaires">
+              Revenir à ma fiche
+            </Link>
+          </div>
+        </article>
+      </section>
+    );
+  }
+
+  if (phase === 'poche-bloquee' && repli?.statut === 'bloquee') {
+    return (
+      <EcranMissionAmbigue
+        raison={repli.raison}
+        missions={repli.missions}
+        assistancePhone={assistancePhone}
+      />
+    );
+  }
+
   if (phase === 'permission' || phase === 'indisponible') {
     return (
       <EcranCameraRefusee
@@ -563,6 +647,15 @@ export function ScanClient({
           <p className="surtitre">{textes.surtitre}</p>
           <h1>{textes.titrePret}</h1>
           <p className="lead">{textes.leadPret(nombreCoureurs)}</p>
+          {missionReprise !== null && (
+            <p className="scan-repli-poche" role="status">
+              Serveur injoignable — checkpoint repris de ta fiche du{' '}
+              <strong suppressHydrationWarning>
+                {formatLocalDateTime(missionReprise.repriseDe)}
+              </strong>
+              . Si le PC t’a réaffecté depuis, appelle-le avant de scanner.
+            </p>
+          )}
           <p className="hint">{textes.hintPret}</p>
           <button type="button" className="socle-action scan-demarrer" onClick={demarrer}>
             Démarrer le scan
@@ -595,7 +688,7 @@ export function ScanClient({
             <span className="scan-badge scan-badge--heure" suppressHydrationWarning>
               {heureLive !== null ? formatHeureVoyant(heureLive) : '--:--:--'}
             </span>
-            <span className="scan-badge scan-badge--mission">{missionLabel}</span>
+            <span className="scan-badge scan-badge--mission">{libelleMission}</span>
           </p>
           <p role="status" className="scan-annonce" suppressHydrationWarning>
             {annonce ?? 'Caméra en cours de démarrage…'}
