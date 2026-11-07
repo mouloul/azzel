@@ -20,11 +20,15 @@ import type { MissionVolontaireView } from '@/modules/missions/service';
 /**
  * Débordement toléré de part et d'autre d'un créneau. Symétrique à dessein :
  * le dernier coureur passe après l'heure, et le volontaire arrive en avance à
- * son poste suivant — une seule règle couvre les deux, et le creux se réduit à
- * la zone où personne, pas même le volontaire, ne peut trancher honnêtement.
- * Constante nommée : ajustable en une ligne après la recette.
+ * son poste suivant — une seule règle couvre les deux.
+ *
+ * 30 minutes, et pas plus : à 60 min, deux créneaux espacés de 2 h voyaient
+ * leurs tolérances se toucher, et un scan à 13h01 partait sur le checkpoint
+ * suivant alors que le volontaire finissait peut-être le précédent. Ici le
+ * creux reste ouvert (12h30 → 13h30 sur CP1 9h-12h puis CP4 14h-18h), et
+ * c'est le PC qui tranche. Constante nommée : ajustable après la recette.
  */
-export const TOLERANCE_CRENEAU_MS = 60 * 60 * 1000;
+export const TOLERANCE_CRENEAU_MS = 30 * 60 * 1000;
 
 export type RaisonBlocageMission = 'chevauchement' | 'hors-creneau';
 

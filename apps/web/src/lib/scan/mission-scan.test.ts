@@ -90,14 +90,14 @@ describe('resoudreMissionScan — plusieurs missions : la fenêtre décide, jama
     expect(verdict(resoudreMissionScan(deux, a(15)))).toBe('cp4');
   });
 
-  it('débordement : jusqu’à 60 min après finLe, la mission tient encore', () => {
+  it('débordement : jusqu’à 30 min après finLe, la mission tient encore', () => {
     expect(verdict(resoudreMissionScan(deux, a(12, 20)))).toBe('cp1');
-    expect(verdict(resoudreMissionScan(deux, a(12, 59)))).toBe('cp1');
+    expect(verdict(resoudreMissionScan(deux, a(12, 30)))).toBe('cp1');
   });
 
-  it('arrivée en avance : jusqu’à 60 min avant debutLe, la suivante est prise', () => {
+  it('arrivée en avance : jusqu’à 30 min avant debutLe, la suivante est prise', () => {
+    expect(verdict(resoudreMissionScan(deux, a(13, 45)))).toBe('cp4');
     expect(verdict(resoudreMissionScan(deux, a(13, 30)))).toBe('cp4');
-    expect(verdict(resoudreMissionScan(deux, a(13, 1)))).toBe('cp4');
   });
 
   it('creux franc (écart > 2 h) : AUCUNE candidate → blocage, jamais la première de la liste', () => {
@@ -109,13 +109,14 @@ describe('resoudreMissionScan — plusieurs missions : la fenêtre décide, jama
     expect(verdict(resoudreMissionScan(ecartes, a(13, 30)))).toBe('bloque:hors-creneau');
   });
 
-  it('écart de 2 h : les tolérances se touchent — un seul instant reste ambigu', () => {
-    // Conséquence assumée du ±60 min symétrique : jusqu'à 13h c'est encore
-    // CP1 (débordement), après 13h c'est déjà CP4 (avance), et 13h pile est
-    // le seul instant où les deux se valent.
-    expect(verdict(resoudreMissionScan(deux, a(12, 59)))).toBe('cp1');
-    expect(verdict(resoudreMissionScan(deux, a(13)))).toBe('bloque:chevauchement');
-    expect(verdict(resoudreMissionScan(deux, a(13, 1)))).toBe('cp4');
+  it('écart de 2 h : un vrai creux subsiste entre les deux tolérances', () => {
+    // ±30 min : CP1 tient jusqu'à 12h30, CP4 prend à partir de 13h30, et
+    // entre les deux personne ne peut dire où se trouve le volontaire.
+    expect(verdict(resoudreMissionScan(deux, a(12, 30)))).toBe('cp1');
+    expect(verdict(resoudreMissionScan(deux, a(12, 31)))).toBe('bloque:hors-creneau');
+    expect(verdict(resoudreMissionScan(deux, a(13)))).toBe('bloque:hors-creneau');
+    expect(verdict(resoudreMissionScan(deux, a(13, 29)))).toBe('bloque:hors-creneau');
+    expect(verdict(resoudreMissionScan(deux, a(13, 30)))).toBe('cp4');
   });
 
   it('bien après la dernière : blocage aussi', () => {
@@ -154,13 +155,20 @@ describe('resoudreMissionScan — ambiguïté : blocage, jamais un choix arbitra
     ]);
   });
 
-  it('tolérances qui se recouvrent (créneaux espacés de moins de 2 h) : blocage', () => {
+  it('tolérances qui se recouvrent (créneaux espacés de moins d’une heure) : blocage', () => {
     const serrees = [
       mission('cp1', 'scan_checkpoint', 9, 12),
-      mission('cp4', 'scan_checkpoint', 13, 16),
+      mission('cp4', 'scan_checkpoint', 12, 16),
     ];
-    // 12h30 : dans la tolérance des DEUX — personne ne peut trancher.
-    expect(verdict(resoudreMissionScan(serrees, a(12, 30)))).toBe('bloque:chevauchement');
+    // 12h00 : fin de l'une, début de l'autre — les deux fenêtres EXACTES se
+    // valent, personne ne peut trancher.
+    expect(verdict(resoudreMissionScan(serrees, a(12)))).toBe('bloque:chevauchement');
+    // 12h15 : hors des deux fenêtres mais dans les deux tolérances.
+    const presque = [
+      mission('cp1', 'scan_checkpoint', 9, 12),
+      mission('cp4', 'scan_checkpoint', 12, 16),
+    ];
+    expect(verdict(resoudreMissionScan(presque, a(12)))).toBe('bloque:chevauchement');
   });
 });
 
@@ -235,7 +243,7 @@ describe('resoudreMissionScan / resoudreMissionRetrait — familles séparées',
 });
 
 describe('TOLERANCE_CRENEAU_MS', () => {
-  it('vaut 60 minutes, exportée pour être ajustée après la recette', () => {
-    expect(TOLERANCE_CRENEAU_MS).toBe(60 * 60 * 1000);
+  it('vaut 30 minutes, exportée pour être ajustée après la recette', () => {
+    expect(TOLERANCE_CRENEAU_MS).toBe(30 * 60 * 1000);
   });
 });

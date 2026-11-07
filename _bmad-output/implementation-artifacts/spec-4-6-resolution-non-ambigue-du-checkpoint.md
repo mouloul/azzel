@@ -27,7 +27,7 @@ deferred: []
 
 Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passage enregistré », le bip part, l'événement entre dans l'outbox avec la clé naturelle (édition, coureur, **mauvais checkpoint**) et le serveur l'accepte — rien ne cloche de son point de vue. Les temps intermédiaires, les alertes hors-délais du PC (5.2) et les classements (7.1) en héritent.
 
-**Approach:** Remplacer le repli aveugle par une résolution qui **refuse de deviner**. Une seule mission de scan → comportement actuel conservé (aucune ambiguïté possible, le repli sert la préparation avant la course). Plusieurs missions → la fenêtre exacte décide ; à défaut une tolérance de débordement bornée et **symétrique** (±60 min) rattrape le dernier coureur et l'arrivée en avance ; et dès que deux missions restent candidates, ou qu'aucune ne l'est, le scanner **bloque** avec un écran qui dit quoi faire : appeler le PC. L'organisateur corrige l'affectation, le volontaire recharge.
+**Approach:** Remplacer le repli aveugle par une résolution qui **refuse de deviner**. Une seule mission de scan → comportement actuel conservé (aucune ambiguïté possible, le repli sert la préparation avant la course). Plusieurs missions → la fenêtre exacte décide ; à défaut une tolérance de débordement bornée et **symétrique** (±30 min) rattrape le dernier coureur et l'arrivée en avance ; et dès que deux missions restent candidates, ou qu'aucune ne l'est, le scanner **bloque** avec un écran qui dit quoi faire : appeler le PC. L'organisateur corrige l'affectation, le volontaire recharge.
 
 ## Boundaries & Constraints
 
@@ -35,7 +35,7 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 - Volontaire avec **une seule** mission du type : résolution inchangée — cette mission, à toute heure, fenêtre ou pas. C'est le cas majoritaire et il ne porte aucune ambiguïté.
 - Volontaire avec **plusieurs** missions du type, par ordre de priorité :
   1. les missions dont `[debutLe, finLe]` contient l'instant ;
-  2. à défaut, celles dont la fenêtre est à moins de `TOLERANCE_CRENEAU_MS` (60 min) avant `debutLe` ou après `finLe` ;
+  2. à défaut, celles dont la fenêtre est à moins de `TOLERANCE_CRENEAU_MS` (30 min) avant `debutLe` ou après `finLe` ;
   3. à défaut, aucune.
 - Exactement **une** candidate → c'est elle. **Deux ou plus** → blocage « chevauchement ». **Zéro** → blocage « hors créneau ». Jamais de choix par ordre de liste.
 - La résolution raisonne **par famille de mission** : deux `scan_checkpoint` qui se chevauchent bloquent ; une mission guichet et une mission checkpoint qui se chevauchent ne bloquent pas — ce sont deux scanners distincts, chacun sait quoi faire.
@@ -59,13 +59,12 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 | Mission unique, bien après | CP1 9h–12h | 20h00 | CP1 (inchangé) |
 | Deux missions, une en fenêtre | CP1 9h–12h, CP4 14h–18h | 10h30 | CP1 |
 | Deux missions, l'autre en fenêtre | idem | 15h00 | CP4 |
-| Débordement toléré | idem | 12h20 | CP1 (≤ 60 min après `finLe`) |
-| Arrivée en avance tolérée | idem | 13h30 | CP4 (≤ 60 min avant `debutLe`) |
-| Tolérances qui se touchent | idem (écart de 2 h) | 12h59 / 13h00 / 13h01 | CP1 / **blocage** chevauchement / CP4 — un seul instant reste ambigu |
-| Creux franc | CP1 9h–12h, CP4 16h–18h | 13h30 | **Blocage** « aucune mission en cours » |
+| Débordement toléré | idem | 12h20 | CP1 (≤ 30 min après `finLe`) |
+| Arrivée en avance tolérée | idem | 13h45 | CP4 (≤ 30 min avant `debutLe`) |
+| Creux franc | idem (écart de 2 h) | 12h31 → 13h29 | **Blocage** « aucune mission en cours » sur toute la plage |
 | Après la dernière, hors tolérance | idem | 19h30 | **Blocage** « aucune mission en cours » |
 | Chevauchement réel | CP1 9h–12h, CP4 11h–14h | 11h30 | **Blocage** « chevauchement », les deux missions nommées |
-| Tolérances qui se recouvrent | CP1 9h–12h, CP4 13h–16h | 12h30 | **Blocage** « chevauchement » (deux candidates tolérées) |
+| Tolérances qui se recouvrent | CP1 9h–12h, CP4 12h–16h | 12h00 | **Blocage** « chevauchement » (deux candidates) |
 | Familles différentes | guichet 8h–10h, CP1 9h–12h | 9h30 | Aucun blocage : guichet pour le retrait, CP1 pour les passages |
 | Aucune mission du type | — | — | Redirection douce vers la fiche (gating 4.3/4.4 inchangé) |
 | Bornes incluses | CP1 9h–12h | 9h00 et 12h00 | CP1 (fenêtre fermée des deux côtés, comme aujourd'hui) |
@@ -92,7 +91,7 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 | AC3 | Plusieurs missions, aucune en fenêtre, **une seule** dans la tolérance de ±`TOLERANCE_CRENEAU_MS` : c'est elle (débordement et avance en amont tous deux couverts). |
 | AC4 | Plusieurs missions, **deux ou plus** candidates (en fenêtre ou en tolérance) : blocage « chevauchement », aucune mission retournée, les missions concernées et leurs horaires nommés à l'écran. |
 | AC5 | Plusieurs missions, **aucune** candidate : blocage « hors créneau », avec les horaires des missions pour que le volontaire sache quand revenir. |
-| AC11 | Conséquence assumée du ±60 min symétrique : avec un écart de 2 h entre deux créneaux, le creux se referme — jusqu'à 13h c'est encore CP1 (débordement), après 13h c'est déjà CP4 (avance), et 13h pile bloque. Un blocage « hors créneau » n'apparaît qu'au-delà de 2 h d'écart, ou avant la première et après la dernière mission. |
+| AC11 | La tolérance est assez courte pour laisser un vrai creux : sur CP1 9h–12h puis CP4 14h–18h, la plage 12h31 → 13h29 bloque. Une tolérance qui refermerait le creux ferait basculer les scans sur le checkpoint suivant pendant que le volontaire finit le précédent. |
 | AC6 | Aucun blocage ne dépend de l'ordre de la liste : une même situation donne le même résultat quel que soit l'ordre des missions en entrée (test avec la liste inversée). |
 | AC7 | Les deux écrans de blocage portent le bouton d'appel PC et le retour fiche, cibles ≥ 44 px, texte intégral — jamais la couleur seule. |
 | AC8 | Le blocage s'apprécie **par famille** : une mission guichet et une mission checkpoint qui se chevauchent ne bloquent ni l'un ni l'autre scanner. |
@@ -115,7 +114,7 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 
 **Pourquoi une tolérance symétrique.** Le besoin terrain est asymétrique en apparence (le dernier coureur passe après l'heure), mais le volontaire arrive aussi en avance à son poste suivant. Une tolérance des deux côtés traite les deux cas avec une seule règle, et réduit le creux à la zone où personne — pas même le volontaire — ne peut trancher honnêtement.
 
-**Ce que la tolérance referme, et ce que ça implique.** Avec deux créneaux espacés de 2 h, les tolérances se touchent : il n'existe plus d'instant sans candidate, sauf le point de contact exact. Autrement dit, à 13h01 un scan part sur CP4 même si le volontaire finit encore CP1. C'est le prix du rattrapage de débordement : toute règle qui sauve le dernier coureur de 12h20 doit basculer quelque part, et 13h est le point le moins arbitraire — à mi-chemin, là où le volontaire lui-même ne saurait pas dire où il est. Le titre de la mission reste badgé sur le cadre caméra : c'est le dernier filet, humain.
+**Pourquoi 30 minutes et pas 60.** La première version tolérait une heure. Les tests ont montré la conséquence : avec deux créneaux espacés de 2 h, les tolérances se touchaient et il n'existait plus aucun instant sans candidate — un scan à 13h01 partait sur le checkpoint suivant alors que le volontaire finissait peut-être le précédent. La tolérance refermait le creux au lieu de le border. À 30 minutes, elle rattrape le dernier coureur de 12h20 et laisse la plage 12h31 → 13h29 sans réponse, donc au PC. Une tolérance doit couvrir un débordement, pas remplacer une décision d'organisation.
 
 **Pourquoi pas de sélecteur.** Laisser le volontaire choisir son checkpoint rouvrirait l'erreur par un autre chemin : un doigt qui dérape sur une liste vaut un `missionsDuType[0]`. Le checkpoint est une décision d'organisation, elle se corrige côté organisation.
 
