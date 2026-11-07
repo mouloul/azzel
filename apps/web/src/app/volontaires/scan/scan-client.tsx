@@ -51,6 +51,9 @@ export { NOTE_NON_ENREGISTRE } from '@/lib/scan/etats-scan';
 /** Clignotement du voyant borné dans le temps : statique passé ce délai. */
 export const DUREE_CLIGNOTEMENT_MS = 6000;
 
+/** Marqueur de scanner sain : seul ce rendu devient le scanner hors-ligne du SW. */
+export const MARQUEUR_SHELL_SCAN = 'scan';
+
 /** Mode du scanner : paramètre unique, pas une page séparée. */
 export type ModeScan = 'checkpoint' | 'retrait';
 
@@ -461,7 +464,10 @@ export function ScanClient({
     setVoyantClignote(true);
     const fin = setTimeout(() => setVoyantClignote(false), DUREE_CLIGNOTEMENT_MS);
     return () => clearTimeout(fin);
-  }, [voyant]);
+    // Dépendances sur le SCAN, pas sur l'objet : une note « NON enregistré »
+    // arrivée tard remplace l'objet voyant et relançait le clignotement pour
+    // six secondes de plus, alors que le scan, lui, n'a pas changé.
+  }, [voyant?.resultat, voyant?.heure]);
 
   // Premier geste utilisateur : audio + vibration débloqués, caméra lancée.
   const demarrer = useCallback(() => {
@@ -492,8 +498,12 @@ export function ScanClient({
       : libelleVoyantPassage(resultat, heure);
 
   if (phase === 'chargement') {
+    // Seul rendu émis par le serveur (état initial) : c'est donc lui qui porte
+    // le marqueur dont le service worker fait sa condition de mise en cache.
+    // Sans lui, la carte « Connexion indisponible » du scanner — rendue en 200
+    // — deviendrait le scanner hors-ligne.
     return (
-      <section className="scan-page-etat">
+      <section className="scan-page-etat" data-az-shell={MARQUEUR_SHELL_SCAN}>
         <article className="socle-carte scan-cadre">
           <p className="surtitre">{textes.surtitre}</p>
           <h1>{textes.titrePreparation}</h1>

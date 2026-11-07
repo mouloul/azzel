@@ -435,6 +435,20 @@ describe('page /volontaires — message du mode retrait refusé (story 4.3)', ()
     const html = await rendu();
     expect(html).not.toContain(MESSAGE_SCAN_RETRAIT);
   });
+
+  // Revue épopées 3/4 — la table des messages est un objet littéral : une clé
+  // héritée d'Object.prototype renvoyait une FONCTION, passée en prop à un
+  // composant client, et Next refusait de rendre la page.
+  it.each(['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty'])(
+    'clé héritée du prototype (?scan=%s) : aucun message, la fiche se rend',
+    async (cle) => {
+      missionsServiceMock.getMissionsVolontaireState.mockResolvedValue(ETAT);
+      const html = await rendu(Promise.resolve({ scan: cle }));
+      expect(html).toContain('data-az-shell="fiche"');
+      expect(html).not.toContain(MESSAGE_SCAN_RETRAIT);
+      expect(html).not.toContain(MESSAGE_SCAN_PASSAGE);
+    },
+  );
 });
 
 describe('page /volontaires — message du mode passages refusé (story 4.4)', () => {

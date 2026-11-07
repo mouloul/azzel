@@ -14,6 +14,7 @@ import {
   creerDepsSyncTerrain,
   enregistrerAppareilPourSync,
   synchroniserTerrainAvecEnregistrement,
+  type StatutMoteurSync,
 } from '@/lib/sync/sync-terrain';
 
 // Story 4.5 (UX-DR-8, AD-2/AD-5) — bandeau sync PERMANENT de la PWA
@@ -47,9 +48,29 @@ export function libellerBandeauSync(phase: PhaseSync, enAttente: number): string
     case 'revoque':
       return '⚠ Appareil bloqué par le PC';
     case 'attente':
-      // Story 10.1 — texte exact de la story : « ◷ N passages en attente ».
-      return `◷ ${enAttente} passages en attente`;
+      // Story 10.1 — texte exact de la story : « ◷ N passages en attente »,
+      // avec l'accord au singulier (« ◷ 1 passage en attente »).
+      return `◷ ${enAttente} passage${enAttente > 1 ? 's' : ''} en attente`;
   }
+}
+
+/**
+ * Phase après un passage de sync (pure, testée). Une révocation ne se lève
+ * qu'au PC (AD-5) : aucun statut ultérieur ne la masque — sans cette garde, un
+ * simple échec réseau après révocation faisait disparaître « Appelle le PC » et
+ * le volontaire relançait un appareil bloqué. Hors révocation, la phase suit le
+ * restant RÉEL de la file : des rejets non marqués gardent « N en attente »,
+ * jamais un « file : 0 » mensonger.
+ */
+export function phaseApresSync(
+  precedente: PhaseSync,
+  statut: StatutMoteurSync,
+  restant: number,
+): PhaseSync {
+  if (statut === 'appareil-revoque' || precedente === 'revoque') {
+    return 'revoque';
+  }
+  return restant > 0 ? 'attente' : 'envoye';
 }
 
 /** Rendu pur du bandeau (testé phase par phase hors effets). */
@@ -179,13 +200,7 @@ export function BandeauSync({
       if (restant === false) {
         return;
       }
-      if (resultat.statut === 'appareil-revoque') {
-        setPhase('revoque');
-        return;
-      }
-      // « ✓ envoyés — file : 0 » SEULEMENT si la file est réellement vide —
-      // des rejets restants (non marqués) gardent « ◷ N passages en attente ».
-      setPhase(restant > 0 ? 'attente' : 'envoye');
+      setPhase((precedente) => phaseApresSync(precedente, resultat.statut, restant));
     } finally {
       enCours.current = false;
       if (relance.current) {

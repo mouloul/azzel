@@ -107,7 +107,12 @@ export default async function VolontairesPage({
   const parametres = (await searchParams) ?? {};
   const scanBrut = parametres.scan;
   const scan = Array.isArray(scanBrut) ? scanBrut[0] : scanBrut;
-  const noticeScan = scan === undefined ? null : (MESSAGES_SCAN[scan] ?? null);
+  // Object.hasOwn, jamais un accès direct : la table est un objet littéral, et
+  // une clé héritée du prototype (?scan=constructor, toString…) renverrait une
+  // fonction ou un objet que `?? null` ne filtre pas — il finirait en prop d'un
+  // composant client, et la fiche ne se rendrait plus.
+  const noticeScan =
+    scan !== undefined && Object.hasOwn(MESSAGES_SCAN, scan) ? MESSAGES_SCAN[scan]! : null;
 
   return (
     <VolontairesPwa
