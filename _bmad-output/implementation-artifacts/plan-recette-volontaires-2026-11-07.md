@@ -91,19 +91,52 @@ maladroit ou un focus mal placé.
 
 ## Séance 2 — Terrain, avec un téléphone (60 min)
 
-Il te faut un téléphone sur le même réseau Wi-Fi que ton poste, et l'application
-servie en HTTPS ou sur `localhost` — **la caméra ne démarre pas en HTTP sur une IP
-locale**, c'est une règle du navigateur, pas un défaut.
+L'application doit être servie en **HTTPS** : caméra, service worker et installation
+PWA exigent tous un contexte sécurisé. Une IP locale en HTTP ne suffit pas — c'est une
+règle du navigateur, pas un défaut du produit.
 
-Deux façons de contourner :
+### Monter le tunnel (ngrok)
 
-- **Chrome Android** : `chrome://flags` → *Insecure origins treated as secure* →
-  ajouter `http://192.168.x.x:3000` → relancer le navigateur.
-- **Ou** tester le scan depuis le navigateur du poste avec une webcam, et réserver le
-  téléphone aux modules sans caméra.
+```bash
+# terminal 1 — l'application, déjà lancée depuis l'étape 0
+AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web
 
-Note dans le relevé laquelle des deux tu as utilisée : ça change la valeur des
-observations sur la latence.
+# terminal 2 — le tunnel
+ngrok http 3000
+```
+
+ngrok affiche une ligne `Forwarding  https://xxxx.ngrok-free.app -> http://localhost:3000`.
+C'est cette adresse **https** que tu ouvres sur le téléphone.
+
+`next.config.ts` autorise déjà les domaines ngrok et Cloudflare Tunnel
+(`allowedDevOrigins`) : sans cette entrée, Next refuserait les requêtes du tunnel.
+
+### Quatre choses à savoir, elles vont te coûter du temps sinon
+
+1. **Ne redémarre pas ngrok au milieu d'une séance.** En version gratuite, l'adresse
+   change à chaque lancement — et pour le navigateur, une nouvelle adresse est un
+   **site différent** : poche IndexedDB vide, service worker à réinstaller, PWA à
+   réinstaller. Les modules 3-S3, 3-S4 et 4-S7 reposent justement sur la poche. Si tu
+   dois couper, prévois de reprendre la séance au début.
+2. **Première visite : ngrok affiche une page d'avertissement.** Clique « Visit Site ».
+   Elle ne polluera pas le cache hors-ligne — c'est précisément ce que le correctif de
+   marqueur livré aujourd'hui empêche.
+3. **Mailpit reste sur ton poste** (`http://localhost:8026`). Les codes de connexion
+   s'y lisent depuis le portable, pas depuis le téléphone. Ouvre les deux côte à côte.
+4. **La latence du tunnel ne fausse PAS la mesure clé.** Les pages chargeront plus
+   lentement, mais la confirmation du scan est entièrement locale — annuaire et boîte
+   d'envoi en IndexedDB, zéro réseau. Le « moins d'une seconde » du module 4-S2 reste
+   mesurable tel quel.
+
+### Si ngrok n'est pas disponible
+
+Replis, par ordre de fidélité décroissante : un tunnel Cloudflare
+(`cloudflared tunnel --url http://localhost:3000`, également autorisé dans la config),
+ou le flag Chrome Android `chrome://flags` → *Insecure origins treated as secure* →
+ajouter `http://192.168.x.x:3000`. Le flag débloque la caméra mais **pas** le service
+worker ni l'installation PWA : les modules hors-ligne deviennent intestables.
+
+Note dans le relevé la méthode retenue : elle change la portée de tes observations.
 
 | Ordre | Module | Où | Ce qu'on vérifie | Durée |
 |---|---|---|---|---|
@@ -199,7 +232,7 @@ Ces cinq points relèvent d'un dry-run sur le terrain, pas d'une recette au bure
 | 12 | 4-S7 — Scanner depuis la poche | ☐ | |
 
 **Appareil utilisé :** ………………………………
-**Méthode caméra** (flag Chrome / webcam du poste / autre) : ………………………………
+**Méthode d'accès** (ngrok / Cloudflare / flag Chrome / autre) : ………………………………
 **Date et durée réelle :** ………………………………
 
 ---

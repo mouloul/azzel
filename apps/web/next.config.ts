@@ -2,6 +2,18 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@azzel/shared'],
+  // Recette terrain : le serveur de développement n'accepte que localhost et
+  // l'hôte de démarrage. Un tunnel HTTPS (ngrok) est indispensable pour tester
+  // la caméra, le service worker et l'installation PWA depuis un téléphone —
+  // tous exigent un contexte sécurisé, qu'une IP locale en HTTP ne donne pas.
+  // Sans effet en production : Next ne lit cette clé qu'en développement.
+  allowedDevOrigins: [
+    '*.ngrok-free.app',
+    '*.ngrok-free.dev',
+    '*.ngrok.app',
+    '*.ngrok.io',
+    '*.trycloudflare.com',
+  ],
   async headers() {
     return [
       {
