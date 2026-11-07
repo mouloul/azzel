@@ -127,12 +127,24 @@ beforeEach(() => {
 });
 
 describe('page /volontaires/scan — garde serveur et mission', () => {
-  it('garde db-unavailable : message dédié, jamais le scanner', async () => {
+  // Story 4.7 — ce test gardait une impasse : base muette, aucun scanner,
+  // alors que l'annuaire, l'outbox et le jeton d'appareil sont en IndexedDB et
+  // que le scan ne dépend d'aucun réseau (NFR-8). Le scanner est désormais
+  // rendu en mode repli poche — c'est lui qui tranche, avec l'affectation
+  // mémorisée, ou qui bloque s'il n'en a pas.
+  it('garde db-unavailable : le scanner est rendu en repli poche, jamais une impasse', async () => {
     sessionMock.requireRolePage.mockResolvedValue({ status: 'db-unavailable' });
     const html = await rendu();
-    expect(html).toContain('Connexion indisponible.');
-    expect(html).not.toContain('Préparation du scanner');
-    expect(html).not.toContain('Lecture de l’annuaire');
+    expect(html).not.toContain('Connexion indisponible.');
+    expect(html).toContain('Préparation du scanner');
+    // Aucune lecture de missions côté serveur : la base est justement muette.
+    expect(missionsServiceMock.getMissionsVolontaireState).not.toHaveBeenCalled();
+  });
+
+  it('garde db-unavailable en mode retrait : le repli poche garde le mode demandé', async () => {
+    sessionMock.requireRolePage.mockResolvedValue({ status: 'db-unavailable' });
+    const html = await rendu(Promise.resolve({ mode: 'retrait' }));
+    expect(html).toContain('Retrait des dossards');
   });
 
   it('session volontaire avec mission scan : scanner rendu, aucun appel réseau dans la page', async () => {

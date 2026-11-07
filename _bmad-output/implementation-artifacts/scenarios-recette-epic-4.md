@@ -113,6 +113,25 @@ navigateur ; l'organisateur sur `/admin/missions`.
 
 ---
 
+## S7 — Scanner depuis la poche, base muette (story 4-7)
+
+Vérifie que le scan survit à une base de données injoignable **avec le réseau
+actif** — le cas d'un serveur sous charge le jour J. À passer après S2 et S6.
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 7.1 | Volontaire avec une mission scan : ouvrir `/volontaires` **en ligne**, puis `/volontaires/scan`, laisser le scanner atteindre « Scanner les e-dossards » | Fonctionnement normal, **aucun** bandeau de fraîcheur |
+| 7.2 | Couper la base en gardant le réseau : `docker stop azzel-postgres`. Recharger `/volontaires/scan` | Le scanner se rend quand même. Bandeau **« Serveur injoignable — checkpoint repris de ta fiche du JJ/MM à HH:MM »** avec le rappel d'appeler le PC en cas de réaffectation |
+| 7.3 | Démarrer le scan et scanner un e-dossard | Voyant et bip normaux : « ✓ Passage enregistré ». Le compteur du bandeau sync monte |
+| 7.4 | Relancer la base : `docker start azzel-postgres`, attendre 10 s, revenir sur `/volontaires` | Le bandeau sync vide la file. En base : `select checkpoint_id from passage order by created_at desc limit 1` — **l'identifiant de la bonne mission** |
+| 7.5 | Recharger `/volontaires/scan` base relancée | Plus de bandeau de fraîcheur : le serveur a repris la main |
+| 7.6 | Purger la poche (DevTools → Application → IndexedDB → supprimer `azzel-volontaires`), couper la base, ouvrir `/volontaires/scan` | Écran **« Mission introuvable sur cet appareil »** + « Appeler le PC » + « Revenir à ma fiche ». **Aucun scan possible** |
+| 7.7 | Base coupée, poche garnie avec **deux** missions scan hors créneau (cf. S6) | Écran « Aucune mission de scan en cours » — les blocages de 4.6 s'appliquent à l'identique depuis la poche |
+| 7.8 | Base coupée, mode retrait : `/volontaires/scan?mode=retrait` | Même comportement, surtitre « Retrait des dossards » |
+| 7.9 | Hors-ligne **total** (DevTools → Offline), base coupée aussi | Le service worker ressert la page en cache : inchangé par rapport à S2 |
+
+---
+
 ## Tableau de synthèse
 
 | Module | Story | Statut | Observations |
@@ -123,5 +142,6 @@ navigateur ; l'organisateur sur `/admin/missions`.
 | S4 — Passages checkpoints | 4-4 | ☐ ☐ ☐ | |
 | S5 — Sync par lots | 4-5 | ☐ ☐ ☐ | |
 | S6 — Résolution non ambiguë du checkpoint | 4-6 | ☐ ☐ ☐ | |
+| S7 — Scanner depuis la poche, base muette | 4-7 | ☐ ☐ ☐ | |
 
 **Légende :** ☐ à cocher — tests passés / anomalies mineures / bloquantes. Toute anomalie bloquante : la noter avec le numéro d'étape (ex. « 2.7 : voyant inconnu sans bip ») et préserver l'environnement (ne pas purger IndexedDB ni la base).

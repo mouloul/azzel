@@ -71,7 +71,7 @@ development_status:
   4-4-scan-de-passage-aux-checkpoints: review
   4-5-synchronisation-par-lots-idempotente: review
   4-6-résolution-non-ambiguë-du-checkpoint: review
-  4-7-scanner-depuis-la-poche: backlog
+  4-7-scanner-depuis-la-poche: review
   epic-4-retrospective: optional
 
   epic-5: in-progress

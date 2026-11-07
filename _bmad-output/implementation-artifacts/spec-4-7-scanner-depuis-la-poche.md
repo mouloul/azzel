@@ -2,7 +2,7 @@
 title: 'Story 4.7 — Scanner depuis la poche quand la base est muette'
 type: 'feature'
 created: '2026-11-07'
-status: 'draft'
+status: 'review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_revision: '534452c'
@@ -70,9 +70,10 @@ deferred: []
 | `apps/web/src/app/volontaires/scan/scan-client.tsx` | `checkpointId` et `missionLabel` deviennent facultatifs ; nouvelle phase de résolution depuis la poche avant `'chargement'` ; rend le bandeau de fraîcheur. |
 | `apps/web/src/lib/scan/mission-scan.ts` | Inchangé — réutilisé tel quel côté client (c'est l'intérêt de la story). |
 | `apps/web/src/lib/idb-volontaires.ts` | Lecture de l'état déjà existante (`lireEtatVolontaires`) ; aucun nouveau store. |
-| `apps/web/src/lib/scan/repli-poche.ts` *(nouveau)* | Fonction **pure** : (état en poche, mode, maintenant) → `{ checkpointId, missionLabel, repriseDe } | null`. C'est elle qui porte toute la décision, et elle se teste sans DOM. |
+| `apps/web/src/lib/scan/repli-poche.ts` *(nouveau)* | Fonction **pure** : (état en poche, famille, maintenant) → `resolue` / `bloquee` / `absente`. Délègue à `resoudreMissionDeFamille` (4.6) : aucune règle n'est réécrite ici. |
 | `apps/web/src/app/volontaires/scan/page.test.tsx` | Nouveaux cas serveur : `db-unavailable` rend bien `ScanClient` en mode repli. |
-| `apps/web/src/lib/scan/repli-poche.test.ts` *(nouveau)* | Tous les cas de la matrice, en pur. |
+| `apps/web/src/lib/scan/repli-poche.test.ts` *(nouveau)* | Tous les cas de la matrice, en pur — dont une table comparative client/serveur qui exige le MÊME verdict. |
+| `apps/web/src/app/volontaires/scan/ecran-mission-ambigue.tsx` *(nouveau)* | Écran de blocage extrait de la page serveur (4.6) pour être partagé avec le client : un seul libellé, deux surfaces. |
 
 ## Tasks & Acceptance
 

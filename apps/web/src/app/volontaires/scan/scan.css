@@ -39,6 +39,18 @@
   line-height: var(--az-line-height-body-lg);
 }
 
+/* Story 4.7 — bandeau de fraîcheur : le checkpoint vient de la poche, pas du
+   serveur. L'information doit être visible sans être alarmante — c'est un
+   repli légitime, pas une panne du scanner. */
+.scan-repli-poche {
+  margin: 0 0 var(--az-space-3);
+  padding: var(--az-space-3);
+  border-left: 4px solid var(--az-sync-attente, var(--az-action));
+  background: color-mix(in srgb, var(--az-action) 8%, transparent);
+  border-radius: var(--az-radius-sm);
+  line-height: var(--az-line-height-body-lg);
+}
+
 /* Story 4.6 — missions en cause d'un blocage de résolution : l'organisateur
    doit voir quoi corriger, le volontaire quand revenir. Lecture une colonne,
    horaires lisibles au doigt. */
