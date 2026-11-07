@@ -41,6 +41,10 @@ const URL_ETAT = '/api/volontaires/etat';
 
 // Marqueur posé par la fiche saine (app/volontaires/volontaires-pwa.tsx).
 const MARQUEUR_SHELL_FICHE = 'data-az-shell="fiche"';
+// Marqueur générique : TOUTE page volontaires saine en porte un (le scanner
+// pose "scan"). Les pages d'erreur rendues en 200 n'en portent aucun — c'est
+// ce qui les empêche de devenir le shell hors-ligne de leur propre route.
+const MARQUEUR_SHELL = 'data-az-shell="';
 // En-tête des réponses fabriquées par le SW (lib/revalidation-etat.ts).
 const ENTETE_SOURCE = 'X-Azzel-Source';
 // Message du client après une purge de changement de compte (lib/pwa-volontaires.ts).
@@ -82,16 +86,21 @@ function estReponseSaine(reponse, cheminAttendu) {
   return true;
 }
 
+/** Corps contenant le marqueur attendu, lu sur un clone (jamais la réponse servie). */
+async function porteMarqueur(reponse, marqueur) {
+  try {
+    return (await reponse.clone().text()).includes(marqueur);
+  } catch (erreur) {
+    return false;
+  }
+}
+
 /** Shell /volontaires cacheable : réponse saine ET fiche rendue (marqueur lu sur un clone). */
 async function estShellFiche(reponse) {
   if (!estReponseSaine(reponse, URL_SHELL)) {
     return false;
   }
-  try {
-    return (await reponse.clone().text()).includes(MARQUEUR_SHELL_FICHE);
-  } catch (erreur) {
-    return false;
-  }
+  return porteMarqueur(reponse, MARQUEUR_SHELL_FICHE);
 }
 
 /** Écriture cache protégée : un échec de quota n'invalide jamais la réponse. */
@@ -201,12 +210,16 @@ async function navigationVolontaires(request) {
   try {
     const reponse = await fetch(request);
     if (reponse && reponse.ok) {
-      // Le shell fiche n'est caché que sain (marqueur) : une page d'erreur
-      // rendue en 200 est montrée en ligne, jamais rejouée hors-ligne.
+      // Aucune page volontaires n'est cachée sans son marqueur : une page
+      // d'erreur rendue en 200 est montrée en ligne, jamais rejouée
+      // hors-ligne — vrai pour la fiche comme pour le scanner, dont chaque
+      // mode a sa propre clé (donc sa propre entrée à protéger).
       const cacheable =
         !reponse.redirected &&
         new URL(reponse.url).pathname === chemin &&
-        (chemin !== URL_SHELL || (await estShellFiche(reponse)));
+        (chemin === URL_SHELL
+          ? await estShellFiche(reponse)
+          : await porteMarqueur(reponse, MARQUEUR_SHELL));
       if (cacheable) {
         await mettreEnCache(CACHE_SHELL, cle, reponse);
       }
@@ -220,6 +233,14 @@ async function navigationVolontaires(request) {
       return enCache;
     }
     if (chemin === URL_SHELL) {
+      // Le précache écrit sous le chemin nu : une fiche rouverte avec une
+      // querystring (?scan=…, produit par la redirection douce du scanner)
+      // doit retrouver SON shell, pas la page d'explication. Repli borné au
+      // seul chemin de la fiche — une autre page volontaires garde le sien.
+      const shell = await caches.match(URL_SHELL, { cacheName: CACHE_SHELL });
+      if (shell) {
+        return shell;
+      }
       return pageHorsLigne();
     }
     return pageScannerNonEnregistre();

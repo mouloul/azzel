@@ -36,3 +36,6 @@ apps/web/data/
 
 # Documents internes (bilan financier) — hors dépôt
 docs/bilan moral et financier du weekend sportif.docx
+
+# Claude Code — reglages personnels, non versionnes
+.claude/settings.local.json

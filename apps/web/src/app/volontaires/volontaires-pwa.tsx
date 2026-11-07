@@ -165,7 +165,10 @@ function FicheMission({ mission }: { mission: MissionVolontaireView }) {
 function libelleAnnuaire(statut: StatutAnnuaire, annuaire: AnnuaireEdition | null): string {
   switch (statut) {
     case 'pret':
-      return `Annuaire prêt — ${annuaire?.coureurs.length ?? 0} coureurs`;
+      {
+        const total = annuaire?.coureurs.length ?? 0;
+        return `Annuaire prêt — ${total} coureur${total > 1 ? 's' : ''}`;
+      }
     case 'hors-ligne':
       return annuaire !== null ? libelleHorsLigneAnnuaire(annuaire.genereA) : 'hors-ligne';
     case 'aucun':
@@ -245,7 +248,13 @@ export function VolontairesPwa({
       await assurerLiaison();
       let lue: ReponseEtatLue | null = null;
       try {
-        const response = await fetch('/api/volontaires/etat', { cache: 'no-store' });
+        // Délai maximal comme pour l'annuaire : sans lui, un portail captif
+        // laisse la promesse en suspens et le badge reste « à jour » sur des
+        // données périmées — le volontaire croit sa fiche fraîche.
+        const response = await fetch('/api/volontaires/etat', {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(30_000),
+        });
         const payload: unknown = await response.json().catch(() => null);
         lue = { status: response.status, source: response.headers.get(ENTETE_SOURCE_SW), payload };
       } catch {

@@ -8,7 +8,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { EntreeJournalSync } from '@/lib/idb-volontaires';
 
-import { BandeauSync, VueBandeauSync, libellerBandeauSync } from './bandeau-sync';
+import {
+  BandeauSync,
+  VueBandeauSync,
+  libellerBandeauSync,
+  phaseApresSync,
+} from './bandeau-sync';
 
 // Story 4.5 (UX-DR-8) — tests du bandeau sync : libellés purs par phase
 // (◷/⏳/✓/⚠ — jamais la couleur seule), rendu « Appelle le PC » sur révocation
@@ -45,6 +50,10 @@ describe('libellerBandeauSync — états ◷/⏳/✓/⚠ (textes intégraux, AD 
   it('attente : « ◷ N passages en attente », envoi : progression, envoyé : file à 0', () => {
     // Story 10.1 — textes exacts du bandeau, verbatim.
     expect(libellerBandeauSync('attente', 217)).toBe('◷ 217 passages en attente');
+    // Revue épopées 3/4 — accord au singulier : « 1 passages » se lisait au
+    // guichet. Le gabarit « N passages » de la story notait le pluriel par
+    // défaut, il n'imposait pas un pluriel invariable.
+    expect(libellerBandeauSync('attente', 1)).toBe('◷ 1 passage en attente');
     expect(libellerBandeauSync('envoi', 12)).toBe('⏳ Envoi en cours — 12 en attente');
     expect(libellerBandeauSync('envoye', 0)).toBe('✓ envoyés — file : 0');
   });
@@ -141,6 +150,30 @@ describe('BandeauSync — rendu initial (SSR, avant effets)', () => {
     expect(html).toContain('Envoyer maintenant');
     expect(html).toMatch(/Journal sync \((?:<!-- -->)?0/);
     expect(html).toContain('volontaires-sync');
+  });
+});
+
+describe('phaseApresSync — une révocation ne se lève qu’au PC (revue épopées 3/4)', () => {
+  // AD-5 : « un appareil révoqué reçoit un 401 dédié, le client affiche
+  // Appelle le PC ». Le ternaire restant > 0 écrasait cette phase dès qu'un
+  // déclenchement ultérieur échouait autrement (réseau) : le lien disparaissait
+  // et le volontaire relançait un appareil bloqué au lieu d'appeler.
+  it('révocation signalée : phase revoque, quel que soit le restant', () => {
+    expect(phaseApresSync('envoi', 'appareil-revoque', 0)).toBe('revoque');
+    expect(phaseApresSync('envoi', 'appareil-revoque', 7)).toBe('revoque');
+  });
+
+  it('déjà révoqué : AUCUN statut ultérieur ne remet le bandeau en attente', () => {
+    for (const statut of ['reseau-indisponible', 'envoye', 'rien-a-envoyer', 'sans-jeton'] as const) {
+      expect(phaseApresSync('revoque', statut, 0)).toBe('revoque');
+      expect(phaseApresSync('revoque', statut, 4)).toBe('revoque');
+    }
+  });
+
+  it('hors révocation : la phase suit le restant RÉEL de la file', () => {
+    expect(phaseApresSync('envoi', 'envoye', 0)).toBe('envoye');
+    expect(phaseApresSync('envoi', 'envoye', 3)).toBe('attente');
+    expect(phaseApresSync('envoi', 'reseau-indisponible', 3)).toBe('attente');
   });
 });
 

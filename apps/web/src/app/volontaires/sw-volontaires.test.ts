@@ -453,7 +453,8 @@ describe('sw-volontaires — navigations /volontaires', () => {
 });
 
 describe('sw-volontaires — navigation /volontaires/scan (story 4.2)', () => {
-  const SCAN_HTML = '<!doctype html><html><body>scanner e-dossards</body></html>';
+  const SCAN_HTML =
+    '<!doctype html><html><body><section data-az-shell="scan">scanner e-dossards</section></body></html>';
 
   it('en ligne : la page scan ok non redirigée est cachée SOUS SON PROPRE chemin', async () => {
     const ctx = chargerServiceWorker(async (entree) =>
@@ -526,6 +527,84 @@ describe('sw-volontaires — navigation /volontaires/scan (story 4.2)', () => {
     expect(await reponse?.text()).toBe('page de connexion');
     expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.size ?? 0).toBe(0);
   });
+
+  // Revue épopées 3/4 — la garde anti-empoisonnement ne couvrait que
+  // /volontaires : la carte « Connexion indisponible » du scanner, rendue en
+  // 200, devenait son shell hors-ligne jusqu'à une visite en ligne réussie.
+  it('page scan d’erreur rendue en 200 (base indisponible) : servie, JAMAIS cachée', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(ERREUR_HTML, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      }),
+    );
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan', 'navigate'),
+    );
+    expect(await reponse?.text()).toBe(ERREUR_HTML);
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.size ?? 0).toBe(0);
+  });
+
+  it('même garde sur le mode retrait (clé distincte, donc deuxième entrée empoisonnable)', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(ERREUR_HTML, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      }),
+    );
+    await declencherFetch(ctx, requete(ORIGINE + '/volontaires/scan?mode=retrait', 'navigate'));
+    expect(ctx.cachesParNom.get(CACHE_SHELL)?.stock.size ?? 0).toBe(0);
+  });
+
+  it('après une erreur en ligne, le scanner reste servi depuis sa dernière version saine', async () => {
+    const ctx = chargerServiceWorker(async (entree) =>
+      reponseFactice(ERREUR_HTML, {
+        url: typeof entree === 'string' ? ORIGINE + entree : entree.url,
+      }),
+    );
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires/scan', reponseFactice(SCAN_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    await declencherFetch(ctx, requete(ORIGINE + '/volontaires/scan', 'navigate'));
+    expect(await cache.stock.get('/volontaires/scan')?.text()).toBe(SCAN_HTML);
+  });
+});
+
+describe('sw-volontaires — fiche ouverte avec une query string (revue épopées 3/4)', () => {
+  // Le précache écrit sous '/volontaires', la navigation lit sous
+  // chemin + querystring : la redirection douce du scanner
+  // (/volontaires?scan=passage-sans-mission) ratait donc le shell en poche.
+  it('hors-ligne : /volontaires?scan=… sert le shell précaché, pas la page d’explication', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires?scan=passage-sans-mission', 'navigate'),
+    );
+    expect(await reponse?.text()).toContain('shell volontaires');
+  });
+
+  it('hors-ligne sans shell en poche : la page d’explication reste le dernier recours', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires?scan=retrait-sans-mission', 'navigate'),
+    );
+    expect(await reponse?.text()).toContain('Ta fiche n’est pas encore dans la poche');
+  });
+
+  it('le repli ne déborde pas sur une autre page volontaires', async () => {
+    const ctx = chargerServiceWorker(HORS_LIGNE);
+    const cache = new CacheFactice(HORS_LIGNE);
+    cache.stock.set('/volontaires', reponseFactice(SHELL_HTML));
+    ctx.cachesParNom.set(CACHE_SHELL, cache);
+    const { reponse } = await declencherFetch(
+      ctx,
+      requete(ORIGINE + '/volontaires/scan?mode=retrait', 'navigate'),
+    );
+    expect(await reponse?.text()).toContain('Scanner non enregistré sur cet appareil');
+  });
 });
 
 describe('sw-volontaires — statiques cache-first', () => {
@@ -550,8 +629,10 @@ describe('sw-volontaires — statiques cache-first', () => {
 });
 
 describe('sw-volontaires — variantes ?mode= du scanner (story 4.3)', () => {
-  const SCAN_HTML = '<!doctype html><html><body>scanner checkpoints</body></html>';
-  const RETRAIT_HTML = '<!doctype html><html><body>scanner retrait</body></html>';
+  const SCAN_HTML =
+    '<!doctype html><html><body><section data-az-shell="scan">scanner checkpoints</section></body></html>';
+  const RETRAIT_HTML =
+    '<!doctype html><html><body><section data-az-shell="scan">scanner retrait</section></body></html>';
 
   it('en ligne : la variante ?mode=retrait est cachée sous SA clé (chemin + querystring)', async () => {
     const ctx = chargerServiceWorker(async (entree) =>
