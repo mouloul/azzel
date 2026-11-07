@@ -170,6 +170,26 @@ export function estMissionType(valeur: unknown): valeur is MissionType {
   return typeof valeur === 'string' && (MISSION_TYPES as readonly string[]).includes(valeur);
 }
 
+/**
+ * Story 4.6 — famille de scan d'un type de mission : quel scanner la mission
+ * ouvre, ou aucun. Posée UNE fois ici, les résolveurs en dérivent — avant,
+ * chacun testait l'égalité de type de son côté, et rien ne reliait les deux.
+ *
+ * `Record<MissionType, …>` exhaustif à dessein : ajouter un septième type sans
+ * le classer casse la compilation plutôt que de le ranger en silence dans
+ * « aucun scanner ».
+ */
+export const FAMILLE_SCAN: Record<MissionType, 'chrono' | 'retrait' | null> = {
+  scan_checkpoint: 'chrono',
+  distribution_dossards: 'retrait',
+  accueil: null,
+  securite_troncon: null,
+  securite_arrivee: null,
+  communication: null,
+};
+
+export type FamilleScan = NonNullable<(typeof FAMILLE_SCAN)[MissionType]>;
+
 // ---------------------------------------------------------------------------
 // Couverture DÉRIVÉE des affectations (≥ 1 affectation = couverte), jamais
 // stockée : la source de vérité est l'ensemble des affectations.

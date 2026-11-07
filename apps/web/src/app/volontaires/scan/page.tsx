@@ -1,7 +1,15 @@
+import { formatLocalHeure } from '@azzel/shared';
+
+import { assistancePhoneHref } from '@/components/assistance-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
-import { missionRetraitEnCours, missionScanEnCours } from '@/lib/scan/mission-scan';
+import {
+  resoudreMissionRetrait,
+  resoudreMissionScan,
+  type ResolutionMission,
+} from '@/lib/scan/mission-scan';
 import { requireRolePage } from '@/modules/iam/session';
 import { getMissionsVolontaireState } from '@/modules/missions/service';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { ScanClient, type ModeScan } from './scan-client';
@@ -42,6 +50,56 @@ export const NOTICE_SCAN_RETRAIT = 'retrait-sans-mission' as const;
 
 /** Clé d'URL du message renvoyé à la fiche volontaires (mode passages). */
 export const NOTICE_SCAN_PASSAGE = 'passage-sans-mission' as const;
+
+/**
+ * Story 4.6 — écran de blocage : la résolution refuse de choisir un checkpoint
+ * plutôt que d'en deviner un. Le libellé nomme les missions EN CAUSE avec leurs
+ * horaires, pour que l'organisateur sache quoi corriger et que le volontaire
+ * sache quand revenir. Assistance et retour fiche toujours offerts : une
+ * impasse sans porte de sortie n'en est pas une.
+ */
+function EcranMissionAmbigue({
+  resolution,
+  assistancePhone,
+}: {
+  resolution: Extract<ResolutionMission, { ok: false }>;
+  assistancePhone: string;
+}) {
+  const chevauchement = resolution.raison === 'chevauchement';
+  return (
+    <section className="auth scan-page-etat">
+      <article className="socle-carte scan-cadre">
+        <p className="surtitre">Scan des e-dossards</p>
+        <h1>
+          {chevauchement
+            ? 'Deux missions se chevauchent sur ce créneau'
+            : 'Aucune mission de scan en cours'}
+        </h1>
+        <p className="lead" role="status">
+          {chevauchement
+            ? 'Impossible de savoir à quel point de contrôle rattacher les passages : le PC doit corriger tes affectations avant que tu scannes.'
+            : 'Aucune de tes missions de scan ne couvre cette heure. Scanner maintenant rattacherait les passages au mauvais point de contrôle.'}
+        </p>
+        <ul className="scan-missions-cause">
+          {resolution.missions.map((mission) => (
+            <li key={mission.id}>
+              <strong>{mission.titre}</strong> — {mission.secteurNom}, de{' '}
+              {formatLocalHeure(mission.debutLe)} à {formatLocalHeure(mission.finLe)}
+            </li>
+          ))}
+        </ul>
+        <div className="scan-etat-actions">
+          <a className="socle-action" href={assistancePhoneHref(assistancePhone)}>
+            Appeler le PC
+          </a>
+          <Link className="btn-lien" href="/volontaires">
+            Revenir à ma fiche
+          </Link>
+        </div>
+      </article>
+    </section>
+  );
+}
 
 export default async function ScanPage({
   searchParams,
@@ -89,18 +147,22 @@ export default async function ScanPage({
   }
 
   if (modeScan === 'retrait') {
-    const missionGuichet = etatMissionsPret
-      ? missionRetraitEnCours(mesMissions, new Date())
+    const resolution = etatMissionsPret
+      ? resoudreMissionRetrait(mesMissions, new Date())
       : null;
-    if (missionGuichet === null) {
+    if (resolution === null) {
       // Le mode est débloqué par la mission : retour à la fiche — avec
       // message seulement si l'état missions a répondu (absence réelle).
       redirect(etatMissionsPret ? `/volontaires?scan=${NOTICE_SCAN_RETRAIT}` : '/volontaires');
     }
+    // Ambiguïté : refus explicite, jamais un guichet choisi par ordre de liste.
+    if (!resolution.ok) {
+      return <EcranMissionAmbigue resolution={resolution} assistancePhone={assistancePhone} />;
+    }
     return (
       <ScanClient
         assistancePhone={assistancePhone}
-        missionLabel={missionGuichet.titre}
+        missionLabel={resolution.mission.titre}
         mode="retrait"
       />
     );
@@ -112,15 +174,21 @@ export default async function ScanPage({
   // naturelle édition+coureur+checkpoint), son titre badge le cadre caméra.
   // Gating identique au retrait : URL directe sans mission scan → redirection
   // douce AVEC message dédié ; échec d'état → silencieuse.
-  const missionPassage = etatMissionsPret ? missionScanEnCours(mesMissions, new Date()) : null;
-  if (missionPassage === null) {
+  const resolution = etatMissionsPret ? resoudreMissionScan(mesMissions, new Date()) : null;
+  if (resolution === null) {
     redirect(etatMissionsPret ? `/volontaires?scan=${NOTICE_SCAN_PASSAGE}` : '/volontaires');
+  }
+  // Story 4.6 — un passage mal attribué est pire qu'un passage non pris : il
+  // est silencieux, il porte une clé naturelle valide et il ressort dans un
+  // classement. Hors de toute certitude, on bloque.
+  if (!resolution.ok) {
+    return <EcranMissionAmbigue resolution={resolution} assistancePhone={assistancePhone} />;
   }
   return (
     <ScanClient
       assistancePhone={assistancePhone}
-      missionLabel={missionPassage.titre}
-      checkpointId={missionPassage.id}
+      missionLabel={resolution.mission.titre}
+      checkpointId={resolution.mission.id}
     />
   );
 }

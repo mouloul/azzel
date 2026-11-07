@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import {
+  FAMILLE_SCAN,
   LIBELLES_STATUT_INVITATION,
+  MISSION_TYPES,
   MAX_EMAIL_LENGTH,
   MAX_NOM_LENGTH,
   hasVolontaireFieldErrors,
@@ -677,5 +679,27 @@ describe('updateVolontaire / deleteVolontaire — gardes de service (store facti
     const lie = toMissionsApiError(new VolontaireLieError());
     expect(lie.status).toBe(409);
     expect(lie.envelope.error.code).toBe('admin.volontaires.lie');
+  });
+});
+
+// Story 4.6 — le regroupement des types par scanner, posé une fois dans le
+// domaine : avant, chaque résolveur testait l'égalité de type de son côté et
+// rien ne reliait les deux.
+
+describe('FAMILLE_SCAN — quel type ouvre quel scanner', () => {
+  it('couvre les SIX types, sans exception', () => {
+    expect(Object.keys(FAMILLE_SCAN).sort()).toEqual([...MISSION_TYPES].sort());
+  });
+
+  it('un seul type par famille de scan, le reste n’ouvre aucun scanner', () => {
+    expect(FAMILLE_SCAN.scan_checkpoint).toBe('chrono');
+    expect(FAMILLE_SCAN.distribution_dossards).toBe('retrait');
+    const sansScanner = MISSION_TYPES.filter((type) => FAMILLE_SCAN[type] === null);
+    expect(sansScanner).toEqual([
+      'accueil',
+      'securite_troncon',
+      'securite_arrivee',
+      'communication',
+    ]);
   });
 });

@@ -39,6 +39,23 @@
   line-height: var(--az-line-height-body-lg);
 }
 
+/* Story 4.6 — missions en cause d'un blocage de résolution : l'organisateur
+   doit voir quoi corriger, le volontaire quand revenir. Lecture une colonne,
+   horaires lisibles au doigt. */
+.scan-missions-cause {
+  display: grid;
+  gap: var(--az-space-2);
+  margin: 0 0 var(--az-space-3);
+  padding: var(--az-space-3);
+  list-style: none;
+  border: 1px solid var(--az-filet);
+  border-radius: var(--az-radius-sm);
+}
+
+.scan-missions-cause li {
+  line-height: var(--az-line-height-body-lg);
+}
+
 .scan-etat-actions {
   display: flex;
   flex-wrap: wrap;

@@ -61,7 +61,8 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 | Deux missions, l'autre en fenêtre | idem | 15h00 | CP4 |
 | Débordement toléré | idem | 12h20 | CP1 (≤ 60 min après `finLe`) |
 | Arrivée en avance tolérée | idem | 13h30 | CP4 (≤ 60 min avant `debutLe`) |
-| Creux franc | idem | 13h00 | **Blocage** « aucune mission en cours » |
+| Tolérances qui se touchent | idem (écart de 2 h) | 12h59 / 13h00 / 13h01 | CP1 / **blocage** chevauchement / CP4 — un seul instant reste ambigu |
+| Creux franc | CP1 9h–12h, CP4 16h–18h | 13h30 | **Blocage** « aucune mission en cours » |
 | Après la dernière, hors tolérance | idem | 19h30 | **Blocage** « aucune mission en cours » |
 | Chevauchement réel | CP1 9h–12h, CP4 11h–14h | 11h30 | **Blocage** « chevauchement », les deux missions nommées |
 | Tolérances qui se recouvrent | CP1 9h–12h, CP4 13h–16h | 12h30 | **Blocage** « chevauchement » (deux candidates tolérées) |
@@ -91,6 +92,7 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 | AC3 | Plusieurs missions, aucune en fenêtre, **une seule** dans la tolérance de ±`TOLERANCE_CRENEAU_MS` : c'est elle (débordement et avance en amont tous deux couverts). |
 | AC4 | Plusieurs missions, **deux ou plus** candidates (en fenêtre ou en tolérance) : blocage « chevauchement », aucune mission retournée, les missions concernées et leurs horaires nommés à l'écran. |
 | AC5 | Plusieurs missions, **aucune** candidate : blocage « hors créneau », avec les horaires des missions pour que le volontaire sache quand revenir. |
+| AC11 | Conséquence assumée du ±60 min symétrique : avec un écart de 2 h entre deux créneaux, le creux se referme — jusqu'à 13h c'est encore CP1 (débordement), après 13h c'est déjà CP4 (avance), et 13h pile bloque. Un blocage « hors créneau » n'apparaît qu'au-delà de 2 h d'écart, ou avant la première et après la dernière mission. |
 | AC6 | Aucun blocage ne dépend de l'ordre de la liste : une même situation donne le même résultat quel que soit l'ordre des missions en entrée (test avec la liste inversée). |
 | AC7 | Les deux écrans de blocage portent le bouton d'appel PC et le retour fiche, cibles ≥ 44 px, texte intégral — jamais la couleur seule. |
 | AC8 | Le blocage s'apprécie **par famille** : une mission guichet et une mission checkpoint qui se chevauchent ne bloquent ni l'un ni l'autre scanner. |
@@ -112,6 +114,8 @@ Dans les deux cas l'erreur est **silencieuse** : le voyant affiche « ✓ Passag
 **Pourquoi refuser plutôt que choisir.** Une attribution fausse est pire qu'un scan manqué : elle est silencieuse, elle entre dans l'outbox avec une clé valide, le serveur l'accepte, et elle ressort dans un classement. Un refus, lui, est visible immédiatement et se corrige en trente secondes côté admin. Le produit a déjà ce réflexe ailleurs — un secteur portant des missions refuse d'être supprimé plutôt que de cascader en silence.
 
 **Pourquoi une tolérance symétrique.** Le besoin terrain est asymétrique en apparence (le dernier coureur passe après l'heure), mais le volontaire arrive aussi en avance à son poste suivant. Une tolérance des deux côtés traite les deux cas avec une seule règle, et réduit le creux à la zone où personne — pas même le volontaire — ne peut trancher honnêtement.
+
+**Ce que la tolérance referme, et ce que ça implique.** Avec deux créneaux espacés de 2 h, les tolérances se touchent : il n'existe plus d'instant sans candidate, sauf le point de contact exact. Autrement dit, à 13h01 un scan part sur CP4 même si le volontaire finit encore CP1. C'est le prix du rattrapage de débordement : toute règle qui sauve le dernier coureur de 12h20 doit basculer quelque part, et 13h est le point le moins arbitraire — à mi-chemin, là où le volontaire lui-même ne saurait pas dire où il est. Le titre de la mission reste badgé sur le cadre caméra : c'est le dernier filet, humain.
 
 **Pourquoi pas de sélecteur.** Laisser le volontaire choisir son checkpoint rouvrirait l'erreur par un autre chemin : un doigt qui dérape sur une liste vaut un `missionsDuType[0]`. Le checkpoint est une décision d'organisation, elle se corrige côté organisation.
 
