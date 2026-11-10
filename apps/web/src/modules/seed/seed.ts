@@ -441,6 +441,8 @@ async function peupler(deps: PeuplementDeps): Promise<void> {
           dateNaissance: coureur.dateNaissance,
           tailleTshirt: coureur.tailleTshirt,
           genre: coureur.genre,
+          wilaya: coureur.wilaya,
+          pays: coureur.pays ?? '',
         },
         sansOutbox,
       );

@@ -16,10 +16,19 @@ import {
   validateInscriptionInput,
   GENRES,
   GENRE_LABELS,
+  MESSAGE_HEBERGEMENT_TIZI_OUZOU,
+  choisirWilaya,
+  hebergementOuvertA,
   type FieldErrors,
   type InscriptionFormInput,
   type TshirtSize,
 } from '@/modules/inscriptions/domain';
+import {
+  PAYS,
+  WILAYAS,
+  WILAYA_ETRANGER,
+  libelleProvenance,
+} from '@/modules/inscriptions/provenance';
 
 import type { HebergementState, InscriptionState } from '@/modules/inscriptions/service';
 
@@ -33,6 +42,8 @@ const EMPTY_INPUT: InscriptionFormInput = {
   dateNaissance: '',
   tailleTshirt: '',
   genre: '',
+  wilaya: '',
+  pays: '',
   hebergement: '',
 };
 
@@ -70,6 +81,10 @@ function prefill(state: InscriptionState): InscriptionFormInput {
     dateNaissance: coureur.dateNaissance,
     tailleTshirt: coureur.tailleTshirt,
     genre: coureur.genre ?? '',
+    // Dossier antérieur à la question : vide, le coureur devra choisir avant
+    // de pouvoir enregistrer sa modification.
+    wilaya: coureur.wilaya ?? '',
+    pays: coureur.pays ?? '',
     hebergement: coureur.hebergement ? 'oui' : '',
   };
 }
@@ -112,6 +127,20 @@ export function InscriptionForm({
       return previous;
     });
   }
+
+  // Choisir une wilaya touche trois champs (pays, hébergement) : leurs
+  // erreurs affichées deviennent caduques en même temps.
+  function updateWilaya(wilaya: string): void {
+    setValues((previous) => choisirWilaya(previous, wilaya));
+    setFieldErrors((previous) =>
+      previous
+        ? { ...previous, wilaya: undefined, pays: undefined, hebergement: undefined }
+        : previous,
+    );
+  }
+
+  const hebergementFerme = !hebergementOuvertA(values.wilaya);
+  const etranger = values.wilaya === WILAYA_ETRANGER;
 
   const errorFor = (key: keyof InscriptionFormInput): string | null => {
     const message = fieldErrors?.[key];
@@ -359,6 +388,68 @@ export function InscriptionForm({
                   </p>
                 )}
               </div>
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor={fieldId('wilaya')}>
+                  Wilaya de provenance{OBLIGATOIRE}
+                </label>
+                <select
+                  id={fieldId('wilaya')}
+                  name="wilaya"
+                  required
+                  value={values.wilaya}
+                  onChange={(event) => updateWilaya(event.target.value)}
+                  aria-invalid={errorFor('wilaya') !== null || undefined}
+                  aria-describedby={
+                    [aideId('wilaya'), errorFor('wilaya') !== null ? errorId('wilaya') : null]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                >
+                  <option value="">Choisir ta wilaya</option>
+                  {WILAYAS.map((wilaya) => (
+                    <option key={wilaya.code} value={wilaya.code}>
+                      {`${wilaya.code} — ${wilaya.nom}`}
+                    </option>
+                  ))}
+                  <option value={WILAYA_ETRANGER}>Étranger</option>
+                </select>
+                <p id={aideId('wilaya')} className="socle-champ-aide">
+                  Là où tu résides. Tu vis hors d’Algérie : choisis « Étranger ».
+                </p>
+                {errorFor('wilaya') !== null && (
+                  <p id={errorId('wilaya')} className="field-error">
+                    {errorFor('wilaya')}
+                  </p>
+                )}
+              </div>
+              {etranger && (
+                <div className="socle-champ">
+                  <label className="socle-etiquette" htmlFor={fieldId('pays')}>
+                    Pays de résidence{OBLIGATOIRE}
+                  </label>
+                  <select
+                    id={fieldId('pays')}
+                    name="pays"
+                    required
+                    value={values.pays}
+                    onChange={(event) => update('pays', event.target.value)}
+                    aria-invalid={errorFor('pays') !== null || undefined}
+                    aria-describedby={errorFor('pays') !== null ? errorId('pays') : undefined}
+                  >
+                    <option value="">Choisir ton pays</option>
+                    {PAYS.map((pays) => (
+                      <option key={pays.code} value={pays.code}>
+                        {pays.nom}
+                      </option>
+                    ))}
+                  </select>
+                  {errorFor('pays') !== null && (
+                    <p id={errorId('pays')} className="field-error">
+                      {errorFor('pays')}
+                    </p>
+                  )}
+                </div>
+              )}
             </fieldset>
 
             <fieldset className="fieldset">
@@ -503,21 +594,44 @@ export function InscriptionForm({
                   name="hebergement"
                   value="oui"
                   checked={values.hebergement === 'oui'}
-                  disabled={hebergement.complet && values.hebergement !== 'oui'}
+                  disabled={
+                    hebergementFerme ||
+                    // « Complet » ne ferme pas la case à qui détient déjà un lit :
+                    // le serveur exclut son dossier du décompte, et un aller-retour
+                    // par Tizi Ouzou ne doit pas lui coûter ce lit.
+                    (hebergement.complet &&
+                      values.hebergement !== 'oui' &&
+                      state.coureur?.hebergement !== true)
+                  }
                   onChange={(event) =>
                     update('hebergement', event.target.checked ? 'oui' : '')
                   }
-                  aria-describedby={aideId('hebergement')}
+                  aria-invalid={errorFor('hebergement') !== null || undefined}
+                  aria-describedby={
+                    [
+                      aideId('hebergement'),
+                      errorFor('hebergement') !== null ? errorId('hebergement') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                 />
                 <span className="option-label">
                   {`Je souhaite un hébergement (${hebergement.prixDa} DA)`}
                 </span>
               </label>
               <p id={aideId('hebergement')} className="socle-champ-aide">
-                {hebergement.complet
-                  ? 'Hébergement complet : tous les lits sont pris. Tu peux t’inscrire sans.'
-                  : `Il reste ${hebergement.restantes} place${hebergement.restantes > 1 ? 's' : ''} sur ${hebergement.capacite}. Le montant s’ajoute à ton versement : un seul paiement, une seule preuve.`}
+                {hebergementFerme
+                  ? MESSAGE_HEBERGEMENT_TIZI_OUZOU
+                  : hebergement.complet
+                    ? 'Hébergement complet : tous les lits sont pris. Tu peux t’inscrire sans.'
+                    : `Réservé aux participants venant d’une autre wilaya que Tizi Ouzou. Il reste ${hebergement.restantes} place${hebergement.restantes > 1 ? 's' : ''} sur ${hebergement.capacite}. Le montant s’ajoute à ton versement : un seul paiement, une seule preuve.`}
               </p>
+              {errorFor('hebergement') !== null && (
+                <p id={errorId('hebergement')} className="field-error" role="alert">
+                  {errorFor('hebergement')}
+                </p>
+              )}
             </fieldset>
 
             {/* Barre d'envoi collante : le formulaire fait plus d'un écran,
@@ -555,6 +669,7 @@ export function InscriptionForm({
                 <p>
                   Contact d’urgence : {values.contactUrgenceNom} · {values.contactUrgenceTelephone}
                 </p>
+                <p>Provenance : {libelleProvenance(values.wilaya, values.pays)}</p>
                 <p>T-shirt : {values.tailleTshirt}</p>
               </div>
             ) : (

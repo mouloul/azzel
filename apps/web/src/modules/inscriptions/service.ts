@@ -73,6 +73,10 @@ export interface CoureurSummary {
   dateNaissance: string;
   tailleTshirt: string;
   genre: string | null;
+  /** Code de wilaya ('15') ou 'ETR' ; null pour un dossier antérieur à la question. */
+  wilaya: string | null;
+  /** Code ISO du pays de résidence, seulement pour 'ETR'. */
+  pays: string | null;
   /** ISO, ou null si aucune échéance (liste d'attente). */
   preuveDueAt: string | null;
   hebergement: boolean;
@@ -150,6 +154,8 @@ function toCoureurSummary(record: CoureurRecord): CoureurSummary {
     dateNaissance: record.dateNaissance,
     tailleTshirt: record.tailleTshirt,
     genre: record.genre,
+    wilaya: record.wilaya,
+    pays: record.pays,
     preuveDueAt: record.preuveDueAt?.toISOString() ?? null,
     hebergement: record.hebergement,
     age: record.age,
@@ -725,6 +731,9 @@ export async function submitInscription(
     dateNaissance: input.dateNaissance,
     tailleTshirt: input.tailleTshirt,
     genre: input.genre,
+    wilaya: input.wilaya,
+    // Hors étranger, le store écrit NULL (au plus près du CHECK 0044).
+    pays: input.pays,
     hebergement: input.hebergement === 'oui',
     age: derived.age,
     categorieAge: derived.category,

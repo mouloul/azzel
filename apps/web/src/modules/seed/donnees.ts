@@ -40,6 +40,10 @@ export interface CoureurFictif {
   epreuve: 'longue' | 'moyenne';
   tailleTshirt: TshirtSize;
   genre: Genre;
+  /** Code de wilaya ('15') ou 'ETR' — voir PROVENANCES. */
+  wilaya: string;
+  /** Code ISO du pays, seulement pour 'ETR'. */
+  pays: string | null;
   stade: StadeDossier;
   /** Obligatoire si et seulement si `stade === 'refusé'`. */
   motifRefus: string | null;
@@ -178,6 +182,28 @@ const LIGNES: readonly Ligne[] = [
   ],
 ];
 
+/**
+ * Provenances, cyclées sur la table : déterministes (même coureur, même
+ * wilaya à chaque seed), à dominante Tizi Ouzou comme la vraie course, avec
+ * des wilayas voisines et des participants de l'étranger. Aucun coureur
+ * fictif ne demande l'hébergement : un Tizi-Ouzéen n'y a pas droit, et le
+ * contingent reste entier pour la recette.
+ */
+const PROVENANCES: readonly { wilaya: string; pays: string | null }[] = [
+  { wilaya: '15', pays: null }, // Tizi Ouzou
+  { wilaya: '06', pays: null }, // Béjaïa
+  { wilaya: '15', pays: null },
+  { wilaya: '16', pays: null }, // Alger
+  { wilaya: '10', pays: null }, // Bouira
+  { wilaya: '15', pays: null },
+  { wilaya: '35', pays: null }, // Boumerdès
+  { wilaya: 'ETR', pays: 'FR' }, // Étranger — France
+  { wilaya: '15', pays: null },
+  { wilaya: '19', pays: null }, // Sétif
+  { wilaya: '15', pays: null },
+  { wilaya: 'ETR', pays: 'CA' }, // Étranger — Canada
+];
+
 /** Prénoms des contacts d'urgence, cyclés sur la table — tout aussi inventés. */
 const CONTACTS_URGENCE = ['Lounis', 'Ouiza', 'Mouloud', 'Farida', 'Saïd', 'Nouara'];
 
@@ -197,6 +223,7 @@ function cleCoureur(index: number): string {
 export const COUREURS_FICTIFS: readonly CoureurFictif[] = LIGNES.map((ligne, index) => {
   const [prenom, nom, dateNaissance, epreuve, tailleTshirt, genre, stade, motifRefus] =
     ligne;
+  const provenance = PROVENANCES[index % PROVENANCES.length] as (typeof PROVENANCES)[number];
   return {
     cle: cleCoureur(index),
     prenom,
@@ -205,6 +232,8 @@ export const COUREURS_FICTIFS: readonly CoureurFictif[] = LIGNES.map((ligne, ind
     epreuve,
     tailleTshirt,
     genre,
+    wilaya: provenance.wilaya,
+    pays: provenance.pays,
     stade,
     motifRefus: motifRefus ?? null,
   };

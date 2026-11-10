@@ -74,6 +74,38 @@ const EPREUVES = [
   { id: 'ep-2', slug: 'moyenne', nom: 'La Moyenne — 12 km', distanceKm: 12 },
 ];
 
+/** Dossier en constitution, modifiable : le formulaire est pré-rempli avec. */
+function coureurModifiable(partial: Record<string, unknown> = {}) {
+  return {
+    id: 'coureur-1',
+    epreuve: 'longue',
+    epreuveNom: 'La Longue — 35 km',
+    distanceKm: 35,
+    prenom: 'Yani',
+    nom: 'Ulahianne',
+    telephone: '+213555010203',
+    contactUrgenceNom: 'Lounis Ulahianne',
+    contactUrgenceTelephone: '0555010204',
+    dateNaissance: '1990-05-12',
+    tailleTshirt: 'M',
+    genre: 'H',
+    wilaya: '16',
+    pays: null,
+    preuveDueAt: null,
+    hebergement: false,
+    age: 36,
+    categorie: 'Senior',
+    status: 'en constitution',
+    dossard: null,
+    refusalReason: null,
+    dechargeAccepte: null,
+    reglementAccepte: null,
+    createdAt: '2026-10-21T08:00:00.000Z',
+    updatedAt: '2026-10-21T08:00:00.000Z',
+    ...partial,
+  };
+}
+
 async function rendu(): Promise<string> {
   const flux = await renderToReadableStream(<InscriptionPage />);
   return await new Response(flux).text();
@@ -134,14 +166,15 @@ describe('/inscription — formulaire refondu (story 9.4)', () => {
     expect(html).toContain('course le 26 mars 2027');
   });
 
-  it('champs obligatoires annoncés EN TEXTE : neuf mentions « (obligatoire) », zéro astérisque', async () => {
+  it('champs obligatoires annoncés EN TEXTE : dix mentions « (obligatoire) », zéro astérisque', async () => {
     inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
       edition: EDITION,
       epreuves: EPREUVES,
       coureur: null,
     });
     const html = await rendu();
-    expect((html.match(/\(obligatoire\)/g) ?? []).length).toBe(9);
+    // Le pays n'est demandé (et compté) que pour « Étranger ».
+    expect((html.match(/\(obligatoire\)/g) ?? []).length).toBe(10);
     // Revue 9 (M9) : assertion ciblée sur les LABELS — l’obligation se lit
     // en texte dans l’étiquette, jamais par un astérisque (où qu’il soit
     // dans le label, y compris dans son span de mention).
@@ -177,6 +210,80 @@ describe('/inscription — formulaire refondu (story 9.4)', () => {
     const recap = html.indexOf('dossier-recap');
     expect(finFormulaire).toBeGreaterThan(-1);
     expect(recap).toBeGreaterThan(finFormulaire);
+  });
+
+  it('wilaya : liste obligatoire après le téléphone, 69 wilayas puis « Étranger », sans pays', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: EDITION,
+      epreuves: EPREUVES,
+      coureur: null,
+    });
+    const html = await rendu();
+    expect(html).toContain('for="inscription-wilaya"');
+    expect(html.indexOf('id="inscription-telephone"')).toBeLessThan(
+      html.indexOf('id="inscription-wilaya"'),
+    );
+    const select = html.match(/<select[^>]*id="inscription-wilaya"[\s\S]*?<\/select>/)?.[0] ?? '';
+    expect((select.match(/<option/g) ?? []).length).toBe(1 + 69 + 1);
+    expect(select).toContain('15 — Tizi Ouzou');
+    expect(select).toContain('69 — Messaad');
+    expect(select).toContain('value="ETR"');
+    expect(html).not.toContain('id="inscription-pays"');
+  });
+
+  it('Tizi Ouzou : case hébergement désactivée, décochée, et l’aide explique pourquoi', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: EDITION,
+      epreuves: EPREUVES,
+      coureur: coureurModifiable({ wilaya: '15', hebergement: false }),
+    });
+    const html = await rendu();
+    const caseHebergement = html.match(/<input[^>]*id="inscription-hebergement"[^>]*>/)?.[0] ?? '';
+    expect(caseHebergement).toContain('disabled');
+    expect(caseHebergement).not.toContain('checked');
+    expect(html).toContain(
+      'L’hébergement est réservé aux participants venant d’une autre wilaya que Tizi Ouzou.',
+    );
+  });
+
+  it('autre wilaya : case hébergement active, la réserve est annoncée', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: EDITION,
+      epreuves: EPREUVES,
+      coureur: coureurModifiable({ wilaya: '06', hebergement: true }),
+    });
+    const html = await rendu();
+    const caseHebergement = html.match(/<input[^>]*id="inscription-hebergement"[^>]*>/)?.[0] ?? '';
+    expect(caseHebergement).not.toContain('disabled');
+    expect(caseHebergement).toContain('checked');
+    expect(html).toContain('Réservé aux participants venant d’une autre wilaya que Tizi Ouzou.');
+  });
+
+  it('étranger : liste des pays affichée, obligatoire, sans l’Algérie ; provenance au récapitulatif', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: EDITION,
+      epreuves: EPREUVES,
+      coureur: coureurModifiable({ wilaya: 'ETR', pays: 'FR' }),
+    });
+    const html = (await rendu()).replaceAll('<!-- -->', '');
+    const select = html.match(/<select[^>]*id="inscription-pays"[\s\S]*?<\/select>/)?.[0] ?? '';
+    expect(select).not.toBe('');
+    expect(select).toContain('value="FR"');
+    expect(select).not.toContain('value="DZ"');
+    expect((html.match(/\(obligatoire\)/g) ?? []).length).toBe(11);
+    expect(html).toContain('Provenance : Étranger — France');
+  });
+
+  it('dossier antérieur sans wilaya : liste vide, pas de récapitulatif tant qu’elle n’est pas choisie', async () => {
+    inscriptionsServiceMock.getInscriptionState.mockResolvedValue({
+      edition: EDITION,
+      epreuves: EPREUVES,
+      coureur: coureurModifiable({ wilaya: null, pays: null, hebergement: true }),
+    });
+    const html = await rendu();
+    expect(html).toContain('Le récapitulatif apparaît quand tous les champs obligatoires sont remplis.');
+    const caseHebergement = html.match(/<input[^>]*id="inscription-hebergement"[^>]*>/)?.[0] ?? '';
+    expect(caseHebergement).toContain('checked');
   });
 
   it('clôture J-10 : écran dédié avec la date, SANS fil d’étapes ni formulaire', async () => {

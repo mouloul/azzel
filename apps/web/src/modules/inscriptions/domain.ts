@@ -1,3 +1,10 @@
+import {
+  WILAYA_ETRANGER,
+  WILAYA_TIZI_OUZOU,
+  estPaysValide,
+  estProvenanceValide,
+} from './provenance';
+
 export const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'] as const;
 
 export type TshirtSize = (typeof TSHIRT_SIZES)[number];
@@ -438,6 +445,10 @@ export interface InscriptionFormInput {
   dateNaissance: string;
   tailleTshirt: string;
   genre: string;
+  /** Code de wilaya à deux chiffres ('15'), ou 'ETR' pour l'étranger. */
+  wilaya: string;
+  /** Code ISO 3166-1 alpha-2 ('FR'), exigé si et seulement si wilaya = 'ETR'. */
+  pays: string;
   /** « oui » si le coureur demande un hébergement ; toute autre valeur = non. */
   hebergement: string;
 }
@@ -450,11 +461,44 @@ export const FIELD_ORDER: readonly (keyof InscriptionFormInput)[] = [
   'nom',
   'dateNaissance',
   'telephone',
+  'wilaya',
+  'pays',
   'contactUrgenceNom',
   'contactUrgenceTelephone',
   'tailleTshirt',
   'genre',
+  // L'hébergement est facultatif, mais il PEUT être refusé (Tizi Ouzou) :
+  // sans lui dans l'ordre, le focus d'erreur l'ignorerait.
+  'hebergement',
 ];
+
+/** Message unique de la règle « hébergement hors Tizi Ouzou » : client, serveur, tests. */
+export const MESSAGE_HEBERGEMENT_TIZI_OUZOU =
+  'L’hébergement est réservé aux participants venant d’une autre wilaya que Tizi Ouzou.';
+
+/** L'hébergement est-il ouvert à cette provenance ? Une provenance inconnue ne ferme rien. */
+export function hebergementOuvertA(wilaya: string): boolean {
+  return wilaya !== WILAYA_TIZI_OUZOU;
+}
+
+/**
+ * Saisie après le choix d'une wilaya, côté formulaire.
+ *
+ * Tizi Ouzou décoche l'hébergement : la case est alors désactivée, et un
+ * coureur qui ne peut plus la décocher lui-même enverrait une demande que le
+ * serveur refuserait. Hors étranger, le pays n'a plus de sens et s'efface.
+ */
+export function choisirWilaya(
+  input: InscriptionFormInput,
+  wilaya: string,
+): InscriptionFormInput {
+  return {
+    ...input,
+    wilaya,
+    pays: wilaya === WILAYA_ETRANGER ? input.pays : '',
+    hebergement: hebergementOuvertA(wilaya) ? input.hebergement : '',
+  };
+}
 
 export function parseIsoDate(value: string): string | null {
   if (!ISO_DATE_PATTERN.test(value)) {
@@ -556,6 +600,10 @@ export function normalizeInscriptionInput(raw: unknown): InscriptionFormInput {
     // jusqu'à la validation, qui la nomme, plutôt que d'être effacée ici et
     // de ressortir en « champ obligatoire » trompeur.
     genre: text('genre').toUpperCase(),
+    // Même principe : « etr » ou « fr » passent, une valeur inconnue arrive
+    // jusqu'à la validation qui la refuse en la nommant.
+    wilaya: text('wilaya').toUpperCase(),
+    pays: text('pays').toUpperCase(),
     // Case à cocher : seule « oui » vaut demande. Rien à valider — une valeur
     // inattendue signifie simplement que la case n'était pas cochée.
     hebergement: text('hebergement').toLowerCase() === 'oui' ? 'oui' : '',
@@ -639,6 +687,19 @@ export function validateInscriptionInput(
 
   if (!(GENRES as readonly string[]).includes(input.genre)) {
     errors.genre = 'Indique si tu cours en femme ou en homme.';
+  }
+
+  if (!estProvenanceValide(input.wilaya)) {
+    errors.wilaya = 'Choisis ta wilaya, ou « Étranger ».';
+  } else if (input.wilaya === WILAYA_ETRANGER && !estPaysValide(input.pays)) {
+    // L'Algérie n'est pas dans la liste : un résident choisit sa wilaya.
+    errors.pays = 'Indique ton pays de résidence.';
+  }
+
+  // Erreur NOMMÉE, jamais une correction silencieuse : décocher à la place du
+  // coureur lui ferait payer moins que ce qu'il croit avoir demandé.
+  if (input.hebergement === 'oui' && !hebergementOuvertA(input.wilaya)) {
+    errors.hebergement = MESSAGE_HEBERGEMENT_TIZI_OUZOU;
   }
 
   return errors;

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -59,6 +60,8 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    wilaya: '16',
+    pays: '',
     hebergement: '',
     ...overrides,
   };
@@ -490,6 +493,142 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     });
   });
 
+  describe('provenance et hébergement hors Tizi Ouzou', () => {
+    afterEach(async () => {
+      await sql`DELETE FROM coureur`;
+    });
+
+    async function provenanceDe(
+      session: SessionRecord,
+    ): Promise<{ wilaya: string | null; pays: string | null; hebergement: boolean } | null> {
+      const rows = await sql<{ wilaya: string | null; pays: string | null; hebergement: boolean }[]>`
+        SELECT wilaya, pays, hebergement FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      return rows[0] ?? null;
+    }
+
+    it('hors Tizi Ouzou + hébergement : inscrit avec hébergement, wilaya enregistrée', async () => {
+      const session = await createSession();
+      const summary = await submitInscription(
+        session,
+        validInput({ wilaya: '16', hebergement: 'oui' }),
+        { store },
+      );
+      expect(summary.wilaya).toBe('16');
+      expect(summary.pays).toBeNull();
+      expect(await provenanceDe(session)).toEqual({ wilaya: '16', pays: null, hebergement: true });
+    });
+
+    it('Tizi Ouzou + hébergement : refus nommé sur hebergement, aucun coureur créé', async () => {
+      const session = await createSession();
+      const error = await submitInscription(
+        session,
+        validInput({ wilaya: '15', hebergement: 'oui' }),
+        { store },
+      ).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(InvalidFieldsError);
+      expect(Object.keys((error as InvalidFieldsError).fields)).toEqual(['hebergement']);
+      expect(await provenanceDe(session)).toBeNull();
+    });
+
+    it('Tizi Ouzou sans hébergement : inscrit', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ wilaya: '15' }), { store });
+      expect(await provenanceDe(session)).toEqual({ wilaya: '15', pays: null, hebergement: false });
+    });
+
+    it('étranger avec pays : pays enregistré', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ wilaya: 'ETR', pays: 'FR' }), { store });
+      expect(await provenanceDe(session)).toEqual({ wilaya: 'ETR', pays: 'FR', hebergement: false });
+    });
+
+    it('pays envoyé hors étranger : inscrit, pays NULL', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ wilaya: '16', pays: 'FR' }), { store });
+      expect(await provenanceDe(session)).toEqual({ wilaya: '16', pays: null, hebergement: false });
+    });
+
+    it('quitter « Étranger » à la modification efface le pays', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ wilaya: 'ETR', pays: 'CA' }), { store });
+      await submitInscription(session, validInput({ wilaya: '06', pays: 'CA' }), { store });
+      expect(await provenanceDe(session)).toEqual({ wilaya: '06', pays: null, hebergement: false });
+    });
+
+    it('dossier antérieur avec hébergement et sans wilaya : intact, puis Tizi Ouzou sans hébergement à la modification', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ wilaya: '16', hebergement: 'oui' }), { store });
+      // Dossier saisi avant la question : aucune remise en cause automatique.
+      await sql`UPDATE coureur SET wilaya = NULL WHERE account_id = ${session.accountId}`;
+      expect(await provenanceDe(session)).toEqual({ wilaya: null, pays: null, hebergement: true });
+      const relu = await getInscriptionState(session, { store });
+      expect(relu.coureur?.wilaya).toBeNull();
+
+      await submitInscription(session, validInput({ wilaya: '15', hebergement: '' }), { store });
+      expect(await provenanceDe(session)).toEqual({ wilaya: '15', pays: null, hebergement: false });
+    });
+
+    it('la base refuse ce que le domaine refuse (CHECK 0044)', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput({ wilaya: '16', hebergement: 'oui' }), { store });
+      const tenter = (requete: Promise<unknown>) =>
+        requete.then(
+          () => null,
+          (caught: { code?: string; constraint_name?: string }) => caught.constraint_name ?? caught.code,
+        );
+      const compte = session.accountId;
+      expect(await tenter(sql`UPDATE coureur SET wilaya = '15' WHERE account_id = ${compte}`)).toBe(
+        'coureur_hebergement_hors_tizi_check',
+      );
+      expect(await tenter(sql`UPDATE coureur SET wilaya = '70' WHERE account_id = ${compte}`)).toBe(
+        'coureur_wilaya_check',
+      );
+      expect(await tenter(sql`UPDATE coureur SET pays = 'FR' WHERE account_id = ${compte}`)).toBe(
+        'coureur_pays_etranger_check',
+      );
+      expect(await tenter(sql`UPDATE coureur SET wilaya = 'ETR' WHERE account_id = ${compte}`)).toBe(
+        'coureur_pays_etranger_check',
+      );
+      expect(
+        await tenter(sql`UPDATE coureur SET wilaya = 'ETR', pays = 'DZ' WHERE account_id = ${compte}`),
+      ).toBe('coureur_pays_check');
+      expect(
+        await tenter(sql`UPDATE coureur SET wilaya = NULL, pays = 'FR' WHERE account_id = ${compte}`),
+      ).toBe('coureur_pays_etranger_check');
+      // Les cas permis passent.
+      expect(
+        await tenter(sql`UPDATE coureur SET wilaya = 'ETR', pays = 'FR' WHERE account_id = ${compte}`),
+      ).toBeNull();
+      expect(
+        await tenter(sql`UPDATE coureur SET wilaya = NULL, pays = NULL WHERE account_id = ${compte}`),
+      ).toBeNull();
+    });
+
+    it('migration 0044 rejouée telle quelle : sans erreur (idempotente)', async () => {
+      const fichier = path.join(
+        MIGRATION_DIRS.find((dir) => dir.endsWith(path.join('inscriptions', 'migrations'))) ?? '',
+        '0044_wilaya_pays.sql',
+      );
+      const contenu = await readFile(fichier, 'utf8');
+      await sql.unsafe(contenu);
+      await sql.unsafe(contenu);
+      const contraintes = await sql<{ conname: string }[]>`
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'coureur'::regclass AND conname IN (
+          'coureur_wilaya_check', 'coureur_pays_check',
+          'coureur_pays_etranger_check', 'coureur_hebergement_hors_tizi_check'
+        ) ORDER BY conname
+      `;
+      expect(contraintes.map((row) => row.conname)).toEqual([
+        'coureur_hebergement_hors_tizi_check',
+        'coureur_pays_check',
+        'coureur_pays_etranger_check',
+        'coureur_wilaya_check',
+      ]);
+    });
+  });
+
   describe('réglages d’édition et liste d’attente (administration)', () => {
     afterEach(async () => {
       await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200, capacite_hebergement = 200, prix_dossard_da = 2000, prix_hebergement_da = 1500, delai_preuve_jours = 2, date_course_publique = 0`;
@@ -716,7 +855,7 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     );
     expect(error).toBeInstanceOf(InvalidFieldsError);
     expect(Object.keys((error as InvalidFieldsError).fields).sort()).toEqual(
-      ['epreuve', 'nom', 'telephone', 'contactUrgenceNom', 'contactUrgenceTelephone', 'dateNaissance', 'tailleTshirt', 'genre'].sort(),
+      ['epreuve', 'nom', 'telephone', 'contactUrgenceNom', 'contactUrgenceTelephone', 'dateNaissance', 'tailleTshirt', 'genre', 'wilaya'].sort(),
     );
     const rows = await sql`SELECT count(*)::int AS count FROM coureur WHERE account_id = ${session.accountId}`;
     expect(rows[0]?.count).toBe(0);

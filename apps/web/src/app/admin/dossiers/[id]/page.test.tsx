@@ -147,6 +147,25 @@ describe('page /admin/dossiers/[id] — pastille de statut du socle (I9)', () =>
     expect(html).not.toContain('aa-chip');
   });
 
+  it('provenance : wilaya avec son code, étranger avec son pays', async () => {
+    inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
+      detail('validé', { wilaya: '06', pays: null }),
+    );
+    expect((await rendu()).replaceAll('<!-- -->', '')).toContain('Provenance : Béjaïa (06)');
+
+    inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
+      detail('validé', { wilaya: 'ETR', pays: 'FR' }),
+    );
+    expect((await rendu()).replaceAll('<!-- -->', '')).toContain('Provenance : Étranger — France');
+  });
+
+  it('dossier antérieur sans wilaya : provenance « non renseignée », sans erreur', async () => {
+    inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
+      detail('en constitution', { wilaya: null, pays: null }),
+    );
+    expect((await rendu()).replaceAll('<!-- -->', '')).toContain('Provenance : non renseignée');
+  });
+
   it('dossier introuvable : notFound (404) plutôt qu’un écran vide', async () => {
     inscriptionsServiceMock.getDossierDetail.mockResolvedValue(null);
     await expect(rendu('coureur-x')).rejects.toMatchObject({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
