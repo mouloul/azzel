@@ -1,4 +1,5 @@
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { resoudreMissionRetrait, resoudreMissionScan } from '@/lib/scan/mission-scan';
 import { requireRolePage } from '@/modules/iam/session';
 import { getMissionsVolontaireState } from '@/modules/missions/service';
@@ -81,7 +82,10 @@ export default async function ScanPage({
   let mesMissions: Awaited<ReturnType<typeof getMissionsVolontaireState>>['mesMissions'] = [];
   let etatMissionsPret = true;
   try {
-    const state = await getMissionsVolontaireState(guard.session);
+    const state = await lectureBorneeOuIndisponible(
+      getMissionsVolontaireState(guard.session),
+      'missions scan',
+    );
     mesMissions = state.mesMissions;
   } catch {
     // Dégradation isolée (4.2) devenue gating (4.3/4.4) : sans état missions,

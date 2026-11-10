@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { toContenusApiError } from '@/modules/contenus/errors';
 import { getContenusAdminState } from '@/modules/contenus/service';
@@ -27,7 +28,7 @@ export default async function AdminContenusPage() {
 
   let state: Awaited<ReturnType<typeof getContenusAdminState>>;
   try {
-    state = await getContenusAdminState(session);
+    state = await lectureBorneeOuIndisponible(getContenusAdminState(session), 'admin contenus');
   } catch (error) {
     const { envelope } = toContenusApiError(error);
     return (

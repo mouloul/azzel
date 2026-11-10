@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { formatDateFrUtc } from '@/modules/inscriptions/domain';
 import { requireRolePage } from '@/modules/iam/session';
 import { toRapportsApiError } from '@/modules/rapports/errors';
@@ -38,7 +39,7 @@ export default async function AdminRapportsPage() {
 
   let etat: Awaited<ReturnType<typeof getEtatRapports>>;
   try {
-    etat = await getEtatRapports(session);
+    etat = await lectureBorneeOuIndisponible(getEtatRapports(session), 'admin rapports');
   } catch (error) {
     const { envelope } = toRapportsApiError(error);
     return (

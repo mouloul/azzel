@@ -91,6 +91,12 @@ const CONNECTION_ERROR_CODES = new Set([
   'ENOTFOUND',
   'ETIMEDOUT',
   'EAI_AGAIN',
+  // SQLSTATE côté serveur : délai dépassé (57014), arrêt (57P01), démarrage
+  // (57P03), connexions saturées (53300).
+  '57014',
+  '57P01',
+  '57P03',
+  '53300',
 ]);
 
 const CONNECTION_ERROR_PATTERN =

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { formatLocalDateTime } from '@azzel/shared';
 
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 
 import {
@@ -43,7 +44,7 @@ export default async function AdminDossierDetailPage({
 
   let detail: Awaited<ReturnType<typeof getDossierDetail>>;
   try {
-    detail = await getDossierDetail(session, id);
+    detail = await lectureBorneeOuIndisponible(getDossierDetail(session, id), 'admin dossier');
   } catch (error) {
     const { envelope } = toAdminApiError(error);
     return (

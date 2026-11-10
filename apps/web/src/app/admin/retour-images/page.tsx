@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { toRetourImagesApiError } from '@/modules/retour-images/errors';
 import { getRetourImagesAdminState } from '@/modules/retour-images/service';
@@ -27,7 +28,10 @@ export default async function AdminRetourImagesPage() {
 
   let state: Awaited<ReturnType<typeof getRetourImagesAdminState>>;
   try {
-    state = await getRetourImagesAdminState(session);
+    state = await lectureBorneeOuIndisponible(
+      getRetourImagesAdminState(session),
+      'admin retour en images',
+    );
   } catch (error) {
     const { envelope } = toRetourImagesApiError(error);
     return (

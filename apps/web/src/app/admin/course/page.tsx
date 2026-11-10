@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { toCourseApiError } from '@/modules/chrono/errors';
 import { getEtatCourse, getHeuresDepart } from '@/modules/chrono/service';
@@ -29,10 +30,10 @@ export default async function AdminCoursePage() {
   let etat: Awaited<ReturnType<typeof getEtatCourse>>;
   let heures: Awaited<ReturnType<typeof getHeuresDepart>>;
   try {
-    [etat, heures] = await Promise.all([
-      getEtatCourse(session),
-      getHeuresDepart(session),
-    ]);
+    [etat, heures] = await lectureBorneeOuIndisponible(
+      Promise.all([getEtatCourse(session), getHeuresDepart(session)]),
+      'admin course',
+    );
   } catch (error) {
     const { envelope } = toCourseApiError(error);
     return (

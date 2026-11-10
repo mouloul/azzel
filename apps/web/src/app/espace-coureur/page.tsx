@@ -3,6 +3,7 @@ import { formatLocalDateTime } from '@azzel/shared';
 import { AssistanceButton } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 
 import { libelleEpreuve, statutAffiche } from '@/modules/inscriptions/domain';
@@ -52,7 +53,7 @@ export default async function EspaceCoureurPage() {
   let state: Awaited<ReturnType<typeof getChecklistState>> | null = null;
   let failure: ReturnType<typeof toInscriptionsApiError> | null = null;
   try {
-    state = await getChecklistState(session);
+    state = await lectureBorneeOuIndisponible(getChecklistState(session), 'checklist coureur');
   } catch (error) {
     failure = toInscriptionsApiError(error);
   }

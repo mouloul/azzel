@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { AaPhoto } from '@/components/aa-photo';
 import { Crete, Frise } from '@/components/frise';
+import { lectureBornee } from '@/lib/lecture-bornee';
 import {
   RETOUR_IMAGES_PAGE_VIDE,
   type RetourImagesPageView,
@@ -32,7 +33,7 @@ export default async function RetourEnImagesPage() {
   // elle aussi la page sans matière — le bug reste tracé en console.error.
   let vue: RetourImagesPageView = RETOUR_IMAGES_PAGE_VIDE;
   try {
-    vue = await getRetourImagesPage();
+    vue = await lectureBornee(getRetourImagesPage(), RETOUR_IMAGES_PAGE_VIDE, 'retour en images');
   } catch (error) {
     console.error(
       '[vitrine] page retour en images : lecture impossible, page rendue sans matière —',
