@@ -4,6 +4,7 @@ import { toVolontairesApiError } from '@/app/api/volontaires/guard';
 import { AssistanceButton } from '@/components/assistance-button';
 import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { getAnnuaireEdition, getMissionsVolontaireState } from '@/modules/missions/service';
 
@@ -65,7 +66,10 @@ export default async function VolontairesPage({
 
   let state: Awaited<ReturnType<typeof getMissionsVolontaireState>>;
   try {
-    state = await getMissionsVolontaireState(session);
+    state = await lectureBorneeOuIndisponible(
+      getMissionsVolontaireState(session),
+      'missions volontaire',
+    );
   } catch (error) {
     // Enveloppe terrain (volontaires.*, tutoiement), jamais admin.*.
     const { envelope } = toVolontairesApiError(error);
@@ -95,7 +99,8 @@ export default async function VolontairesPage({
   // la revalidation client tranche (null = état « en cours de préchargement »).
   let annuaireInitial: AnnuaireEdition | null = null;
   try {
-    annuaireInitial = (await getAnnuaireEdition(session)) ?? null;
+    annuaireInitial =
+      (await lectureBorneeOuIndisponible(getAnnuaireEdition(session), 'annuaire')) ?? null;
   } catch {
     annuaireInitial = null;
   }

@@ -7,6 +7,8 @@ import {
   homePathForRole,
   type AccountRole,
 } from './constants';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
+
 import { DbUnavailableError } from './errors';
 import { getSession } from './service';
 import type { SessionRecord } from './store';
@@ -50,7 +52,7 @@ export async function requireSession(): Promise<RequireSessionResult> {
   let session: SessionRecord | null = null;
   if (token) {
     try {
-      session = await getSession(token);
+      session = await lectureBorneeOuIndisponible(getSession(token), 'session');
     } catch (error) {
       if (error instanceof DbUnavailableError) {
         return { status: 'db-unavailable' };
@@ -79,7 +81,7 @@ export async function requireRole(
   }
   let session: SessionRecord | null = null;
   try {
-    session = await getSession(token);
+    session = await lectureBorneeOuIndisponible(getSession(token), 'session');
   } catch (error) {
     if (error instanceof DbUnavailableError) {
       return { status: 'db-unavailable' };

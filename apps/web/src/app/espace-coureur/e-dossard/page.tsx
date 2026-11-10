@@ -5,6 +5,7 @@ import { AssistanceButton } from '@/components/assistance-button';
 import { etapesEdossard, FilEtapes } from '@/components/fil-etapes';
 import { LogoutButton } from '@/components/logout-button';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { NoEditionError } from '@/modules/inscriptions/errors';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
@@ -54,7 +55,7 @@ export default async function EdossardPage() {
   let failure: ReturnType<typeof toInscriptionsApiError> | null = null;
   let sansEdition = false;
   try {
-    edossard = await obtenirEdossard(session);
+    edossard = await lectureBorneeOuIndisponible(obtenirEdossard(session), 'e-dossard');
     if (edossard !== null) {
       // Jeton corrompu en base (CHECK contourné) ou lib QR en échec : la
       // même enveloppe d'échec que le service — jamais un 500 brut.

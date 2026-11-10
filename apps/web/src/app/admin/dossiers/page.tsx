@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { formatLocalDateTime } from '@azzel/shared';
 
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 
 import {
@@ -42,7 +43,7 @@ export default async function AdminDossiersPage({
 
   let state: Awaited<ReturnType<typeof getDossiersState>>;
   try {
-    state = await getDossiersState(session, search);
+    state = await lectureBorneeOuIndisponible(getDossiersState(session, search), 'admin dossiers');
   } catch (error) {
     const { envelope } = toAdminApiError(error);
     return (

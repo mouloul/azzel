@@ -3,6 +3,7 @@ import { formatLocalDateTime } from '@azzel/shared';
 import { AssistanceButton } from '@/components/assistance-button';
 import { FilEtapes, etapesPreuve } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBornee, lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
 
@@ -44,11 +45,11 @@ export default async function PreuvePage() {
 
   // Le montant ne fait jamais tomber la page : getMontantDu rend null plutôt
   // que de lever, et l'encart disparaît.
-  const montant = await getMontantDu(session);
+  const montant = await lectureBornee(getMontantDu(session), null, 'montant dû');
 
   let state: PreuveState;
   try {
-    state = await getPreuveState(session);
+    state = await lectureBorneeOuIndisponible(getPreuveState(session), 'preuve');
   } catch (error) {
     const { envelope } = toInscriptionsApiError(error);
     return (
@@ -145,7 +146,7 @@ export default async function PreuvePage() {
     );
   }
 
-  const comptes = await getComptesPaiement(session);
+  const comptes = await lectureBornee(getComptesPaiement(session), null, 'comptes CCP');
   return (
     <>
       {state.coureurStatus === 'refusé' && state.refusalReason !== null ? (

@@ -33,6 +33,8 @@ const inscriptionsServiceMock = vi.hoisted(() => ({
     complet: false,
     prixDa: 1500,
   }),
+  PLACES_MUETTES: { capacite: 0, restantes: 0, afficher: false, complet: false },
+  HEBERGEMENT_INDISPONIBLE: { restantes: 0, capacite: 0, complet: true, prixDa: 0 },
 }));
 
 vi.mock(

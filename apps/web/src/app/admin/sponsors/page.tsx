@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { toSponsorsApiError } from '@/modules/sponsors/errors';
 import { getSponsorsAdminState } from '@/modules/sponsors/service';
@@ -27,7 +28,7 @@ export default async function AdminSponsorsPage() {
 
   let state: Awaited<ReturnType<typeof getSponsorsAdminState>>;
   try {
-    state = await getSponsorsAdminState(session);
+    state = await lectureBorneeOuIndisponible(getSponsorsAdminState(session), 'admin sponsors');
   } catch (error) {
     const { envelope } = toSponsorsApiError(error);
     return (

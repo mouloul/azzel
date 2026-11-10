@@ -6,6 +6,7 @@ import { requireRolePage } from '@/modules/iam/session';
 import { AssistanceButton } from '@/components/assistance-button';
 import { FilEtapes, etapesAcceptations } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 
 import { COUREUR_STATUS_EN_CONSTITUTION, DOCUMENT_SLUGS } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
@@ -47,7 +48,7 @@ export default async function AcceptancesPage() {
 
   let state: AcceptancesState;
   try {
-    state = await getAcceptancesState(session);
+    state = await lectureBorneeOuIndisponible(getAcceptancesState(session), 'acceptations');
   } catch (error) {
     const { envelope } = toInscriptionsApiError(error);
     return (

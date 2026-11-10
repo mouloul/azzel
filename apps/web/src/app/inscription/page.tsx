@@ -4,6 +4,7 @@ import { requireRolePage } from '@/modules/iam/session';
 import { AssistanceButton } from '@/components/assistance-button';
 import { FilEtapes, etapesInscription } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBornee, lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 
 import {
   COUREUR_STATUS_LISTE_ATTENTE,
@@ -16,6 +17,8 @@ import {
   getHebergementState,
   getInscriptionState,
   getPlacesState,
+  HEBERGEMENT_INDISPONIBLE,
+  PLACES_MUETTES,
   type InscriptionState,
 } from '@/modules/inscriptions/service';
 import { CompteurPlaces } from '@/components/compteur-places';
@@ -56,7 +59,7 @@ export default async function InscriptionPage() {
 
   let state: InscriptionState;
   try {
-    state = await getInscriptionState(session);
+    state = await lectureBorneeOuIndisponible(getInscriptionState(session), 'inscription');
   } catch (error) {
     const { envelope } = toInscriptionsApiError(error);
     return (
@@ -136,8 +139,12 @@ export default async function InscriptionPage() {
   }
 
   const [places, hebergement] = await Promise.all([
-    getPlacesState(result.session.organisationId),
-    getHebergementState(result.session.organisationId),
+    lectureBornee(getPlacesState(result.session.organisationId), PLACES_MUETTES, 'places'),
+    lectureBornee(
+      getHebergementState(result.session.organisationId),
+      HEBERGEMENT_INDISPONIBLE,
+      'hébergement',
+    ),
   ]);
   const enAttente = state.coureur?.status === COUREUR_STATUS_LISTE_ATTENTE;
   // Échéance rendue à l'heure de la course : l'instant est stocké en UTC,

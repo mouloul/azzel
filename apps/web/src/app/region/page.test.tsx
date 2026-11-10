@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const contenusServiceMock = vi.hoisted(() => ({
   getRegionPage: vi.fn(),
+  REGION_PAGE_VIDE: { blocs: [] },
 }));
 
 vi.mock(

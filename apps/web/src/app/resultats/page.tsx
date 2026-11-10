@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Crete, Frise } from '@/components/frise';
 import { assistancePhoneHref } from '@/components/assistance-button';
 import { DEFAULT_ASSISTANCE_PHONE, readAssistancePhone } from '@/lib/assistance-phone';
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { compterVisitePartage, getResultatsPublic } from '@/modules/chrono/service';
 
 import { CarteCourse } from './carte-course';
@@ -47,9 +48,13 @@ export default async function ResultatsPage({
   // assistance en PARALLÈLE (allSettled) : le comptage best effort
   // n'ajoute JAMAIS de latence au premier octet, et un échec de l'une des
   // voix n'affecte jamais les autres — le rendu reste entier.
+  // allSettled attendrait indéfiniment une promesse qui ne se règle jamais :
+  // chaque lecture est bornée, un délai dépassé compte comme un échec.
   const [resultatsIssue, , telephoneIssue] = await Promise.allSettled([
-    getResultatsPublic(),
-    params.partage === '1' ? compterVisitePartage() : Promise.resolve(null),
+    lectureBorneeOuIndisponible(getResultatsPublic(), 'résultats'),
+    params.partage === '1'
+      ? lectureBorneeOuIndisponible(compterVisitePartage(), 'comptage partage')
+      : Promise.resolve(null),
     readAssistancePhone(),
   ]);
   const resultats = resultatsIssue.status === 'fulfilled' ? resultatsIssue.value : null;

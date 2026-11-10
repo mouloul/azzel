@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { toMissionsApiError } from '@/modules/missions/errors';
 import { getMissionsAdminState } from '@/modules/missions/service';
@@ -27,7 +28,7 @@ export default async function AdminMissionsPage() {
 
   let state: Awaited<ReturnType<typeof getMissionsAdminState>>;
   try {
-    state = await getMissionsAdminState(session);
+    state = await lectureBorneeOuIndisponible(getMissionsAdminState(session), 'admin missions');
   } catch (error) {
     const { envelope } = toMissionsApiError(error);
     return (

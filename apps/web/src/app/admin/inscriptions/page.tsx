@@ -1,3 +1,4 @@
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
 import { getReglagesAdmin } from '@/modules/inscriptions/service';
@@ -25,7 +26,7 @@ export default async function AdminInscriptionsPage() {
 
   let etat: Awaited<ReturnType<typeof getReglagesAdmin>>;
   try {
-    etat = await getReglagesAdmin(guard.session);
+    etat = await lectureBorneeOuIndisponible(getReglagesAdmin(guard.session), 'admin inscriptions');
   } catch (error) {
     const { envelope } = toAdminApiError(error);
     return (

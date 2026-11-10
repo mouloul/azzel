@@ -2,7 +2,8 @@ import Link from 'next/link';
 
 import { CorpsContenu } from '@/components/corps-contenu';
 import { Crete, Frise } from '@/components/frise';
-import { getRegionPage } from '@/modules/contenus/service';
+import { lectureBornee } from '@/lib/lecture-bornee';
+import { getRegionPage, REGION_PAGE_VIDE } from '@/modules/contenus/service';
 
 import '../vitrine-textes.css';
 
@@ -15,7 +16,10 @@ export const metadata = {
 };
 
 export default async function RegionPage() {
-  const { blocs } = await getRegionPage();
+  // Lecture bornée (lib/lecture-bornee) : une base muette rendait la page
+  // jusqu'au timeout de 300 s de la fonction Vercel (504) au lieu du repli
+  // déjà appliqué sur l'accueil pour cette même lecture.
+  const { blocs } = await lectureBornee(getRegionPage(), REGION_PAGE_VIDE, 'région');
 
   return (
     <>

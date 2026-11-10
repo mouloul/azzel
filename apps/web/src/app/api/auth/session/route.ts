@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { toApiError, UnauthenticatedError } from '@/modules/iam/errors';
 import { getSession } from '@/modules/iam/service';
 import { sessionTokenFromRequest } from '@/modules/iam/session';
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
     });
   }
   try {
-    const session = await getSession(token);
+    const session = await lectureBorneeOuIndisponible(getSession(token), 'session');
     if (!session) {
       const apiError = toApiError(new UnauthenticatedError());
       return NextResponse.json(apiError.envelope, {
