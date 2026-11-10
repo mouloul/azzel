@@ -3,7 +3,12 @@
 //
 // MODÈLE (décision d’épopée) : UNE géométrie de base (le relevé, gardé une
 // seule fois dans coords/profile), des épreuves = COMPOSITIONS ORDONNÉES de
-// portions de cette base (bornes = identifiants de points de passage). L’
+// portions de cette base (bornes = identifiants de points de passage).
+// Exception : une épreuve dont le tracé s’écarte de la base (la petite boucle
+// coupe par un raccourci absent du relevé de la longue) déclare son PROPRE
+// relevé (`source`) ; sa géométrie est appendue après la base dans
+// coords/profile et l’épreuve la parcourt en une seule tranche — les
+// lecteurs (carte, profil, repères) ne voient que des tranches. L’
 // abscisse curviligne `s` (FR-38) est calculée PAR ÉPREUVE, jamais
 // globalement : un point de passage partagé porte un kilométrage différent
 // dans chaque épreuve qui le traverse (UX-DR-31).
@@ -43,11 +48,16 @@ export interface ConfigPortion {
   a: string;
 }
 
-/** Une épreuve : composition ordonnée de portions de la base (FR-38 : `s` propre à l’épreuve). */
+/**
+ * Une épreuve (FR-38 : `s` propre à l’épreuve) : SOIT une composition
+ * ordonnée de portions de la base, SOIT son propre relevé parcouru en entier.
+ */
 export interface ConfigEpreuve {
   /** Slug de l’épreuve tel qu’il vit dans la base vitrine (ex. « longue »). */
   slug: string;
-  portions: readonly ConfigPortion[];
+  portions?: readonly ConfigPortion[];
+  /** Relevé propre (chemin depuis la racine du dépôt), exclusif de `portions`. */
+  source?: { gpx: string };
 }
 
 /** Schéma de parcours.config.json. */
@@ -67,6 +77,11 @@ export class ConfigInvalideError extends Error {
 
 /** Ids réservés, déduits de la géométrie — jamais déclarables. */
 export const IDS_RESERVES = { depart: 'Départ', arrivee: 'Arrivée' } as const;
+
+/** Ids du départ et de l’arrivée d’une épreuve sur son propre relevé (réservés eux aussi). */
+export function idsBornesEpreuve(slug: string): { depart: string; arrivee: string } {
+  return { depart: `${slug}-depart`, arrivee: `${slug}-arrivee` };
+}
 
 function estTexte(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0;
@@ -125,8 +140,34 @@ export function validerConfig(config: unknown): ParcoursConfig {
       throw new ConfigInvalideError(`slug d’épreuve dupliqué : « ${epreuve.slug} »`);
     }
     slugs.add(epreuve.slug);
+    if (epreuve.source !== undefined) {
+      if (epreuve.portions !== undefined) {
+        throw new ConfigInvalideError(
+          `épreuve « ${epreuve.slug} » : soit portions, soit source (relevé propre) — pas les deux`,
+        );
+      }
+      const sourceEpreuve = epreuve.source;
+      if (
+        typeof sourceEpreuve !== 'object' ||
+        sourceEpreuve === null ||
+        !estTexte((sourceEpreuve as Record<string, unknown>).gpx)
+      ) {
+        throw new ConfigInvalideError(`épreuve « ${epreuve.slug} » : source.gpx (chemin du relevé) requis`);
+      }
+      const reserves = idsBornesEpreuve(epreuve.slug);
+      for (const id of [reserves.depart, reserves.arrivee]) {
+        if (ids.has(id)) {
+          throw new ConfigInvalideError(
+            `l’id « ${id} » est réservé (borne du relevé de l’épreuve « ${epreuve.slug} ») — renomme le point`,
+          );
+        }
+      }
+      continue;
+    }
     if (!Array.isArray(epreuve.portions) || epreuve.portions.length === 0) {
-      throw new ConfigInvalideError(`épreuve « ${epreuve.slug} » : portions (tableau non vide) requis`);
+      throw new ConfigInvalideError(
+        `épreuve « ${epreuve.slug} » : portions (tableau non vide) ou source (relevé propre) requis`,
+      );
     }
     for (const portion of epreuve.portions) {
       if (
@@ -178,6 +219,15 @@ export interface PointDePassageEpreuveDoc {
   dplusSegmentAmontM: number;
 }
 
+/** Provenance d’un relevé (base ou relevé propre d’une épreuve) — auditabilité. */
+export interface SourceReleveDoc {
+  fichier: string;
+  nom: string;
+  dateReleve: string | null;
+  pointsBruts: number;
+  pointsGardes: number;
+}
+
 /** Vue d’épreuve : tranches de base + mesures propres + points de passage au référentiel de l’épreuve. */
 export interface EpreuveDoc {
   distanceM: number;
@@ -189,18 +239,21 @@ export interface EpreuveDoc {
   /** Tranches [deIndex, aIndex] de la géométrie de base, dans l’ordre du parcours. */
   tranches: readonly { deIndex: number; aIndex: number }[];
   pointsDePassage: readonly PointDePassageEpreuveDoc[];
+  /** Présent seulement pour une épreuve sur son propre relevé (sinon : `source` du document). */
+  source?: SourceReleveDoc & {
+    porte: {
+      pasMedianS: number;
+      partDistanceSegmentsLongs: number;
+      pointsVitesseImplausible: number;
+      accepte: boolean;
+    };
+  };
 }
 
 /** parcours.json — la trace gelée versionnée (une version = une publication). */
 export interface ParcoursDoc {
   version: number;
-  source: {
-    fichier: string;
-    nom: string;
-    dateReleve: string | null;
-    pointsBruts: number;
-    pointsGardes: number;
-  };
+  source: SourceReleveDoc;
   constantes: {
     seuilDplusM: number;
     seuilFusionM: number;
@@ -226,9 +279,16 @@ export interface ParcoursDoc {
       accepte: boolean;
     };
   };
-  /** Géométrie de base UNE fois : [lon, lat, altitude_lissée]. */
+  /**
+   * Géométrie de base UNE fois : [lon, lat, altitude_lissée] ; les relevés
+   * propres des épreuves suivent, dans l’ordre de la config.
+   */
   coords: number[][];
-  /** Profil sur la base : [distance_m, altitude_lissée], même longueur que coords. */
+  /**
+   * Profil : [distance_m, altitude_lissée], même longueur que coords. Sur un
+   * relevé appendu, la distance CONTINUE celle qui précède (abscisse
+   * croissante) : seules les différences au sein d’une tranche ont un sens.
+   */
   profile: number[][];
   pointsDePassage: readonly PointDePassageBaseDoc[];
   epreuves: Readonly<Record<string, EpreuveDoc>>;
@@ -238,11 +298,17 @@ export interface ParcoursDoc {
 /* Construction                                                         */
 /* ------------------------------------------------------------------ */
 
-export interface EntreeConstruction {
-  config: ParcoursConfig;
+/** Relevé déjà accepté par la porte et préparé. */
+export interface ReleveTraite {
   releve: ReleveGpx;
   geometrie: GeometrieBase;
   rapportQualite: RapportQualite;
+}
+
+export interface EntreeConstruction extends ReleveTraite {
+  config: ParcoursConfig;
+  /** Relevés propres, par slug, des épreuves déclarant une `source`. */
+  relevesEpreuves?: Readonly<Record<string, ReleveTraite>>;
   version: number;
 }
 
@@ -333,14 +399,86 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
     });
   }
   base.sort((a, b) => a.positionBaseM - b.positionBaseM);
+  // Bornes des portions : points de la base SEULEMENT — une portion ne
+  // peut pas puiser dans le relevé propre d’une autre épreuve.
   const parId = new Map(base.map((p) => [p.id, p]));
+
+  // --- Relevés propres : appendus après la base, abscisse continue.
+  const coords = points.map((p) => [arrondi(p.lon, 6), arrondi(p.lat, 6), p.altitudeM]);
+  const profile = points.map((p) => [arrondi(p.distanceM, 1), p.altitudeM]);
+  const distancesGlobales = [...distances];
+  const altitudesGlobales = [...altitudesLissees];
+  const tranchesPropres = new Map<string, { deIndex: number; aIndex: number }>();
+  const sourcesPropres = new Map<string, NonNullable<EpreuveDoc['source']>>();
+  for (const epreuve of config.epreuves) {
+    if (epreuve.source === undefined) {
+      continue;
+    }
+    const traite = entree.relevesEpreuves !== undefined && Object.hasOwn(entree.relevesEpreuves, epreuve.slug)
+      ? entree.relevesEpreuves[epreuve.slug]
+      : undefined;
+    if (traite === undefined || traite.geometrie.points.length < 2) {
+      throw new ConfigInvalideError(
+        `épreuve « ${epreuve.slug} » : relevé ${epreuve.source.gpx} non fourni ou sans géométrie exploitable`,
+      );
+    }
+    const g = traite.geometrie;
+    const decalageIndex = coords.length;
+    const decalageM = distancesGlobales[distancesGlobales.length - 1] ?? 0;
+    g.points.forEach((p, i) => {
+      coords.push([arrondi(p.lon, 6), arrondi(p.lat, 6), p.altitudeM]);
+      profile.push([arrondi(decalageM + p.distanceM, 1), p.altitudeM]);
+      distancesGlobales.push(decalageM + (g.distances[i] ?? p.distanceM));
+      altitudesGlobales.push(g.altitudesLissees[i] ?? p.altitudeM);
+    });
+    const finIndex = coords.length - 1;
+    const premierPropre = g.points[0];
+    const dernierPropre = g.points[g.points.length - 1];
+    const bornes = idsBornesEpreuve(epreuve.slug);
+    for (const [id, nom, point, indexBase] of [
+      [bornes.depart, IDS_RESERVES.depart, premierPropre, decalageIndex],
+      [bornes.arrivee, IDS_RESERVES.arrivee, dernierPropre, finIndex],
+    ] as const) {
+      if (point === undefined) {
+        continue;
+      }
+      base.push({
+        id,
+        nom,
+        positionBaseM: arrondi(decalageM + point.distanceM, 1),
+        indexBase,
+        lon: arrondi(point.lon, 6),
+        lat: arrondi(point.lat, 6),
+        altitudeM: point.altitudeM,
+        services: null,
+      });
+    }
+    tranchesPropres.set(epreuve.slug, { deIndex: decalageIndex, aIndex: finIndex });
+    sourcesPropres.set(epreuve.slug, {
+      fichier: epreuve.source.gpx.split('/').pop() ?? epreuve.source.gpx,
+      nom: traite.releve.nom,
+      dateReleve: traite.releve.dateReleveIso,
+      pointsBruts: traite.releve.points.length,
+      pointsGardes: g.points.length,
+      porte: {
+        pasMedianS: traite.rapportQualite.pasMedianS,
+        partDistanceSegmentsLongs: traite.rapportQualite.partDistanceSegmentsLongs,
+        pointsVitesseImplausible: traite.rapportQualite.pointsVitesseImplausible,
+        accepte: traite.rapportQualite.accepte,
+      },
+    });
+  }
 
   // --- Vues d’épreuve.
   const epreuves: Record<string, EpreuveDoc> = {};
   for (const epreuve of config.epreuves) {
     // Tranches : bornes résolues en index, ordre du relevé imposé.
     const tranches: { deIndex: number; aIndex: number }[] = [];
-    for (const portion of epreuve.portions) {
+    const tranchePropre = tranchesPropres.get(epreuve.slug);
+    if (tranchePropre !== undefined) {
+      tranches.push(tranchePropre);
+    }
+    for (const portion of epreuve.portions ?? []) {
       const de = parId.get(portion.de);
       const a = parId.get(portion.a);
       if (de === undefined) {
@@ -367,16 +505,16 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
     let sDepartTranche = 0;
     for (const tranche of tranches) {
       for (let i = tranche.deIndex; i <= tranche.aIndex; i++) {
-        const distance = distances[i];
-        const altitudeLissee = altitudesLissees[i];
+        const distance = distancesGlobales[i];
+        const altitudeLissee = altitudesGlobales[i];
         if (distance === undefined || altitudeLissee === undefined) {
           continue;
         }
-        const debut = distances[tranche.deIndex] ?? 0;
+        const debut = distancesGlobales[tranche.deIndex] ?? 0;
         sequence.push({ indexBase: i, sM: sDepartTranche + (distance - debut), altitudeLissee });
       }
-      const fin = distances[tranche.aIndex] ?? 0;
-      const debut = distances[tranche.deIndex] ?? 0;
+      const fin = distancesGlobales[tranche.aIndex] ?? 0;
+      const debut = distancesGlobales[tranche.deIndex] ?? 0;
       sDepartTranche += fin - debut;
     }
 
@@ -419,6 +557,7 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
 
     const denivelesEpreuve = calculerDeniveles(altitudesSequence);
     const distanceEpreuveM = sDepartTranche; // somme des tranches
+    const sourcePropre = sourcesPropres.get(epreuve.slug);
     epreuves[epreuve.slug] = {
       distanceM: arrondi(distanceEpreuveM, 1),
       dplusM: arrondi(denivelesEpreuve.dPlusSeuilM, 0),
@@ -427,6 +566,7 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
       altitudeMaxM: arrondi(Math.max(...altitudesSequence), 1),
       tranches,
       pointsDePassage: pointsEpreuve,
+      ...(sourcePropre !== undefined ? { source: sourcePropre } : {}),
     };
   }
 
@@ -455,8 +595,8 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
         accepte: rapportQualite.accepte,
       },
     },
-    coords: points.map((p) => [arrondi(p.lon, 6), arrondi(p.lat, 6), p.altitudeM]),
-    profile: points.map((p) => [arrondi(p.distanceM, 1), p.altitudeM]),
+    coords,
+    profile,
     pointsDePassage: base,
     epreuves,
   };

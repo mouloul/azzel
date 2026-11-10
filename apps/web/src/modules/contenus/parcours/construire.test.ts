@@ -208,3 +208,139 @@ describe('parcours — config typée (garde de compilation)', () => {
     expect(config.source.gpx).toContain('fixture');
   });
 });
+
+/* Relevé PROPRE à une épreuve (tracé distinct de la base, ex. la petite
+ * boucle qui coupe par un raccourci) : ligne de 4 000 m, 41 points, montée
+ * régulière 200 → 240 m. Sa géométrie est APPENDUE à la base dans
+ * coords/profile ; l’épreuve la parcourt en une seule tranche. */
+const NB_POINTS_ANNEXE = 41;
+
+function geometrieAnnexe(): GeometrieBase {
+  const altitudes = Array.from({ length: NB_POINTS_ANNEXE }, (_, i) => 200 + i);
+  const distances = Array.from({ length: NB_POINTS_ANNEXE }, (_, i) => i * PAS_M);
+  return {
+    points: altitudes.map((altitudeM, i) => ({
+      lon: 5 + i / 1000,
+      lat: 37,
+      altitudeM,
+      distanceM: distances[i] ?? 0,
+      indexBrut: i,
+    })),
+    altitudesLissees: altitudes,
+    altitudes,
+    distances,
+    distanceTotaleM: (NB_POINTS_ANNEXE - 1) * PAS_M,
+    deniveles: calculerDeniveles(altitudes),
+    altitudeMinM: 200,
+    altitudeMaxM: 240,
+  };
+}
+
+const RAPPORT_OK = {
+  pasMedianS: 1,
+  partDistanceSegmentsLongs: 0,
+  pointsVitesseImplausible: 0,
+  defauts: [],
+  accepte: true,
+};
+
+function configAvecReleveAnnexe(): Record<string, unknown> {
+  return {
+    source: { gpx: 'docs/GPX/fixture.test.gpx' },
+    pointsDePassage: [{ id: 'x', nom: 'Croisement de X', positionBaseM: 3000 }],
+    epreuves: [
+      { slug: 'longue', portions: [{ de: 'depart', a: 'arrivee' }] },
+      { slug: 'moyenne', source: { gpx: 'docs/GPX/annexe.test.gpx' } },
+    ],
+  };
+}
+
+function construireAvecAnnexe(config: unknown, avecReleve = true) {
+  return construireParcoursDoc({
+    config: validerConfig(config),
+    releve: RELEVE_FIXTURE,
+    geometrie: geometrieSynthetique(),
+    rapportQualite: RAPPORT_OK,
+    relevesEpreuves: avecReleve
+      ? {
+          moyenne: {
+            releve: { nom: 'Annexe', dateReleveIso: '2026-11-10T07:30:03.000Z', points: [] },
+            geometrie: geometrieAnnexe(),
+            rapportQualite: RAPPORT_OK,
+          },
+        }
+      : {},
+    version: 1,
+  });
+}
+
+describe('parcours — épreuve sur son propre relevé', () => {
+  it('config : source propre acceptée, exclusive des portions', () => {
+    const config = validerConfig(configAvecReleveAnnexe());
+    expect(config.epreuves[1]?.source?.gpx).toBe('docs/GPX/annexe.test.gpx');
+    const lesDeux = configAvecReleveAnnexe();
+    (lesDeux.epreuves as Record<string, unknown>[])[1]!.portions = [{ de: 'depart', a: 'arrivee' }];
+    expect(() => validerConfig(lesDeux)).toThrow(/soit portions, soit source/);
+    const aucun = configAvecReleveAnnexe();
+    delete (aucun.epreuves as Record<string, unknown>[])[1]!.source;
+    expect(() => validerConfig(aucun)).toThrow(/portions \(tableau non vide\) ou source/);
+  });
+
+  it('config : un point déclaré ne peut pas prendre l’id réservé du départ d’une épreuve', () => {
+    const config = configAvecReleveAnnexe();
+    config.pointsDePassage = [{ id: 'moyenne-depart', nom: 'Faux départ', positionBaseM: 3000 }];
+    expect(() => validerConfig(config)).toThrow(/réservé/);
+  });
+
+  it('géométrie appendue après la base : coords/profile alignés, profil monotone', () => {
+    const doc = construireAvecAnnexe(configAvecReleveAnnexe());
+    expect(doc.coords).toHaveLength(NB_POINTS + NB_POINTS_ANNEXE);
+    expect(doc.profile).toHaveLength(NB_POINTS + NB_POINTS_ANNEXE);
+    expect(doc.coords[NB_POINTS]).toEqual([5, 37, 200]);
+    // Le profil continue après la base : l’abscisse reste croissante.
+    expect(doc.profile[NB_POINTS]?.[0]).toBe(DISTANCE_TOTALE);
+    expect(doc.profile.at(-1)?.[0]).toBe(DISTANCE_TOTALE + 4000);
+  });
+
+  it('vue d’épreuve : une tranche sur son relevé, mesures et source propres', () => {
+    const doc = construireAvecAnnexe(configAvecReleveAnnexe());
+    const moyenne = doc.epreuves.moyenne!;
+    expect(moyenne.tranches).toEqual([
+      { deIndex: NB_POINTS, aIndex: NB_POINTS + NB_POINTS_ANNEXE - 1 },
+    ]);
+    expect(moyenne.distanceM).toBe(4000);
+    expect(moyenne.dplusM).toBe(40);
+    expect(moyenne.altitudeMinM).toBe(200);
+    expect(moyenne.altitudeMaxM).toBe(240);
+    expect(moyenne.source).toEqual({
+      fichier: 'annexe.test.gpx',
+      nom: 'Annexe',
+      dateReleve: '2026-11-10T07:30:03.000Z',
+      pointsBruts: 0,
+      pointsGardes: NB_POINTS_ANNEXE,
+      porte: { pasMedianS: 1, partDistanceSegmentsLongs: 0, pointsVitesseImplausible: 0, accepte: true },
+    });
+    // La base et la longue ne bougent pas.
+    expect(doc.epreuves.longue?.distanceM).toBe(DISTANCE_TOTALE);
+    expect(doc.epreuves.longue?.source).toBeUndefined();
+    expect(doc.mesures.distanceM).toBe(DISTANCE_TOTALE);
+  });
+
+  it('départ et arrivée propres à l’épreuve, nommés, à son kilomètre 0 et final', () => {
+    const doc = construireAvecAnnexe(configAvecReleveAnnexe());
+    const ids = doc.pointsDePassage.map((p) => p.id);
+    expect(ids).toEqual(['depart', 'x', 'arrivee', 'moyenne-depart', 'moyenne-arrivee']);
+    const departMoyenne = doc.pointsDePassage.find((p) => p.id === 'moyenne-depart')!;
+    expect(departMoyenne).toMatchObject({ nom: 'Départ', indexBase: NB_POINTS, lon: 5, lat: 37 });
+    expect(doc.epreuves.moyenne?.pointsDePassage).toEqual([
+      { id: 'moyenne-depart', sM: 0, kilometre: 0, altitudeM: 200, dplusSegmentAmontM: 0 },
+      { id: 'moyenne-arrivee', sM: 4000, kilometre: 4, altitudeM: 240, dplusSegmentAmontM: 40 },
+    ]);
+  });
+
+  it('relevé de l’épreuve non fourni à la construction ⇒ erreur nommée', () => {
+    expect(() => construireAvecAnnexe(configAvecReleveAnnexe(), false)).toThrow(
+      /épreuve « moyenne » : relevé .*annexe\.test\.gpx/,
+    );
+  });
+});

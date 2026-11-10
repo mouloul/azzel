@@ -250,3 +250,75 @@ describe('parcours — refus direct par la porte (pipeline, pas CLI)', () => {
     expect(releve.points).toHaveLength(3);
   });
 });
+
+describe('parcours — épreuve sur son propre relevé (pipeline et CLI)', () => {
+  const CONFIG_ANNEXE = {
+    ...CONFIG_TEST,
+    epreuves: [
+      ...CONFIG_TEST.epreuves,
+      { slug: 'moyenne', source: { gpx: 'fixtures/annexe.test.gpx' } },
+    ],
+  };
+
+  it('pipeline : le relevé de l’épreuve est parsé, préparé et appendu', async () => {
+    const fs = fsMemoire();
+    const resultat = await executerPipeline({
+      fs,
+      xmlGpx: gpxDeTest(),
+      xmlGpxEpreuves: { moyenne: gpxDeTest(20) },
+      config: CONFIG_ANNEXE,
+      existant: null,
+      cheminSortie: CHEMIN_SORTIE,
+      nouvelleVersion: false,
+    });
+    const { doc } = resultat;
+    expect(doc.epreuves.moyenne?.source?.fichier).toBe('annexe.test.gpx');
+    expect(doc.epreuves.moyenne?.source?.pointsBruts).toBe(20);
+    expect(doc.coords.length).toBe(
+      doc.source.pointsGardes + (doc.epreuves.moyenne?.source?.pointsGardes ?? 0),
+    );
+  });
+
+  it('pipeline : relevé d’épreuve refusé par la porte ⇒ défauts nommés AVEC le fichier, rien écrit', async () => {
+    const xmlVitesse = `<?xml version="1.0"?><gpx><trk><name>Vitesse</name><trkseg>
+<trkpt lat="0" lon="0"><ele>100</ele><time>2026-01-01T08:00:00.000Z</time></trkpt>
+<trkpt lat="0" lon="0.0018"><ele>100</ele><time>2026-01-01T08:00:01.000Z</time></trkpt>
+<trkpt lat="0" lon="0.0036"><ele>100</ele><time>2026-01-01T08:00:02.000Z</time></trkpt>
+</trkseg></trk></gpx>`;
+    const fs = fsMemoire();
+    const appel = executerPipeline({
+      fs,
+      xmlGpx: gpxDeTest(),
+      xmlGpxEpreuves: { moyenne: xmlVitesse },
+      config: CONFIG_ANNEXE,
+      existant: null,
+      cheminSortie: CHEMIN_SORTIE,
+      nouvelleVersion: false,
+    });
+    await expect(appel).rejects.toThrow(ReleveRefuseError);
+    await expect(appel).rejects.toThrow(/annexe\.test\.gpx/);
+    expect(fs.ecrits.size).toBe(0);
+  });
+
+  it('CLI : lit le GPX de l’épreuve, l’annonce ; absent ⇒ exit 3', async () => {
+    const racineWeb = '/web';
+    const racineRepo = '/repo';
+    const cheminConfig = path.join(racineWeb, 'src/modules/contenus/parcours/parcours.config.json');
+    const fichiers = {
+      [cheminConfig]: JSON.stringify(CONFIG_ANNEXE),
+      [path.join(racineRepo, CONFIG_TEST.source.gpx)]: gpxDeTest(),
+    };
+    const absent = await executerCli({ args: [], racineWeb, racineRepo, fs: fsMemoire(fichiers) });
+    expect(absent.code).toBe(CODES_SORTIE.entreeInvalide);
+    expect(absent.lignes.join('\n')).toContain('annexe.test.gpx');
+
+    const ok = await executerCli({
+      args: [],
+      racineWeb,
+      racineRepo,
+      fs: fsMemoire({ ...fichiers, [path.join(racineRepo, 'fixtures/annexe.test.gpx')]: gpxDeTest(20) }),
+    });
+    expect(ok.code).toBe(CODES_SORTIE.ok);
+    expect(ok.lignes.join('\n')).toMatch(/épreuve moyenne : relevé annexe\.test\.gpx/);
+  });
+});

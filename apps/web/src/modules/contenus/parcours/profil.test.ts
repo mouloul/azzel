@@ -190,12 +190,14 @@ describe('construireProfilEpreuve — données réelles de la longue', () => {
     expect(construireProfilEpreuve(DOC, 'inconnue')).toBeNull();
   });
 
-  it('la moyenne porte le relevé dupliqué, identique à la longue', () => {
-    const longue = construireProfilEpreuve(DOC, 'longue');
+  it('la moyenne a son propre profil, tiré de son relevé (petite boucle)', () => {
     const moyenne = construireProfilEpreuve(DOC, 'moyenne');
     expect(moyenne).not.toBeNull();
-    expect(moyenne?.distanceM).toBe(longue?.distanceM);
-    expect(moyenne?.dplusM).toBe(longue?.dplusM);
+    expect(moyenne?.distanceM).toBe(DOC.epreuves.moyenne?.distanceM);
+    expect(moyenne?.dplusM).toBe(525);
+    // Abscisse propre à l'épreuve : le profil part de 0, pas de la fin de la base.
+    expect(moyenne?.points[0]?.sM).toBe(0);
+    expect(moyenne?.points.at(-1)?.sM).toBeCloseTo(12_724.5, 0);
   });
 });
 

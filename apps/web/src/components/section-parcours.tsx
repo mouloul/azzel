@@ -104,7 +104,7 @@ function PanneauEpreuve({
     epreuve.gpxUrl !== null && isHttpsUrl(epreuve.gpxUrl) ? epreuve.gpxUrl : null;
   const points = epreuve.pointsDePassage;
   // Données issues du relevé d’essai (parcours.json) : métriques ou profil.
-  // La moyenne (aucun tracé fourni) ne porte JAMAIS la mention.
+  // Une épreuve sans relevé publié ne porte JAMAIS la mention.
   const profil = epreuve.profil ?? null;
   const duReleve = epreuve.metriques !== null || profil !== null;
   return (
