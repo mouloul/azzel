@@ -4,8 +4,9 @@ import { Crete, Frise } from '@/components/frise';
 import { PRESENTATIONS_EPREUVES } from '@/components/presentations-epreuves';
 import { RavitaillementsListe } from '@/components/ravitaillements-liste';
 import { SectionParcours } from '@/components/section-parcours';
+import { lectureBornee } from '@/lib/lecture-bornee';
 import { getParcoursDoc } from '@/modules/contenus/parcours/lecture';
-import { getSectionParcours } from '@/modules/contenus/section-parcours';
+import { getSectionParcours, SECTION_PARCOURS_VIDE } from '@/modules/contenus/section-parcours';
 
 import '../vitrine-textes.css';
 import '../vue-parcours.css';
@@ -22,7 +23,10 @@ export const metadata = {
 };
 
 export default async function ParcoursPage() {
-  const parcours = await getSectionParcours();
+  // Lecture bornée (lib/lecture-bornee) : une base muette rendait la page
+  // jusqu'au timeout de 300 s de la fonction Vercel (504) au lieu du repli
+  // déjà appliqué sur l'accueil pour cette même lecture.
+  const parcours = await lectureBornee(getSectionParcours(), SECTION_PARCOURS_VIDE, 'parcours');
 
   if (parcours.epreuves.length === 0) {
     return (
