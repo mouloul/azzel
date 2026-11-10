@@ -92,7 +92,7 @@ export const SECTION_PARCOURS_VIDE: SectionParcoursView = { epreuves: [] };
  * distance de la base. L’heure de départ et la barrière horaire restent
  * `null` tant que l’organisation ne les a pas fournies — aucun chiffre
  * inventé. Les services inconnus restent `null`. Une épreuve ABSENTE du
- * JSON (ex. la moyenne, tracé non fourni) garde `metriques: null` /
+ * JSON (aucun relevé publié) garde `metriques: null` /
  * `pointsDePassage: null` / `profil: null` : sa fiche n’affiche aucun chiffre.
  */
 function fusionnerEpreuve(

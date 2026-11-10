@@ -13,13 +13,22 @@
 // NOMME chaque défaut mesuré — jamais d’échec muet.
 
 import { parserGpx } from './gpx';
-import { construireParcoursDoc, validerConfig, type ParcoursConfig, type ParcoursDoc } from './construire';
+import {
+  ConfigInvalideError,
+  construireParcoursDoc,
+  validerConfig,
+  type ParcoursConfig,
+  type ParcoursDoc,
+  type ReleveTraite,
+} from './construire';
 import { evaluerQualiteReleve, preparerGeometrie } from './traitement';
 
 /** Relevé refusé par la porte de qualité — le message nomme chaque défaut et son chiffre. */
 export class ReleveRefuseError extends Error {
-  constructor(defauts: readonly string[]) {
-    super(`relevé refusé par la porte de qualité :\n  - ${defauts.join('\n  - ')}`);
+  constructor(defauts: readonly string[], fichier?: string) {
+    super(
+      `relevé${fichier !== undefined ? ` ${fichier}` : ''} refusé par la porte de qualité :\n  - ${defauts.join('\n  - ')}`,
+    );
     this.name = 'ReleveRefuseError';
   }
 }
@@ -43,6 +52,8 @@ export interface EntreePipeline {
   fs: FsPipeline;
   /** Contenu brut du GPX source (déjà lu par l’appelant). */
   xmlGpx: string;
+  /** GPX bruts des épreuves déclarant leur propre relevé, par slug. */
+  xmlGpxEpreuves?: Readonly<Record<string, string>>;
   /** Contenu de parcours.config.json (déjà lu, validé ici). */
   config: unknown;
   /** Contenu actuel de parcours.json, ou null s’il n’existe pas. */
@@ -218,6 +229,34 @@ export async function executerPipeline(entree: EntreePipeline): Promise<Resultat
 
   const geometrie = preparerGeometrie(releve.points);
 
+  // Relevés propres des épreuves : même porte, même chaîne, refus nommé
+  // avec le fichier fautif.
+  const relevesEpreuves: Record<string, ReleveTraite> = {};
+  for (const epreuve of config.epreuves) {
+    if (epreuve.source === undefined) {
+      continue;
+    }
+    const xml =
+      entree.xmlGpxEpreuves !== undefined && Object.hasOwn(entree.xmlGpxEpreuves, epreuve.slug)
+        ? entree.xmlGpxEpreuves[epreuve.slug]
+        : undefined;
+    if (xml === undefined) {
+      throw new ConfigInvalideError(
+        `épreuve « ${epreuve.slug} » : contenu du relevé ${epreuve.source.gpx} non fourni`,
+      );
+    }
+    const releveEpreuve = parserGpx(xml);
+    const rapportEpreuve = evaluerQualiteReleve(releveEpreuve.points);
+    if (!rapportEpreuve.accepte) {
+      throw new ReleveRefuseError(rapportEpreuve.defauts, epreuve.source.gpx.split('/').pop());
+    }
+    relevesEpreuves[epreuve.slug] = {
+      releve: releveEpreuve,
+      geometrie: preparerGeometrie(releveEpreuve.points),
+      rapportQualite: rapportEpreuve,
+    };
+  }
+
   // Version : existant illisible ⇒ refus (trace gelée corrompue, jamais
   // réécrite en silence) ; contenu identique hors version ⇒ no-op.
   let versionExistante: number | null = null;
@@ -245,6 +284,7 @@ export async function executerPipeline(entree: EntreePipeline): Promise<Resultat
     releve,
     geometrie,
     rapportQualite: rapport,
+    relevesEpreuves,
     version: prochaineVersion,
   });
 

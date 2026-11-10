@@ -78,11 +78,11 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
   it('le parcours.json commis est valide et déclare les deux épreuves', () => {
     expect(PARCOURS_DOC).not.toBeNull();
     expect(Object.keys(PARCOURS_DOC?.epreuves ?? {}).sort()).toEqual(['longue', 'moyenne']);
-    // Duplication provisoire assumée : tant que le tracé court n'existe pas,
-    // les deux épreuves partagent le même relevé. Quand le vrai tracé arrive,
-    // cette égalité DOIT tomber — le test le dira.
-    expect(PARCOURS_DOC?.epreuves.moyenne?.distanceM).toBe(
-      PARCOURS_DOC?.epreuves.longue?.distanceM,
+    // La petite boucle a son propre relevé (10/11/2026) : elle n'est plus
+    // une duplication de la longue.
+    expect(PARCOURS_DOC?.epreuves.moyenne?.source?.fichier).toBe('activity_petite_boucle.gpx');
+    expect(PARCOURS_DOC?.epreuves.moyenne?.distanceM).toBeLessThan(
+      PARCOURS_DOC?.epreuves.longue?.distanceM ?? 0,
     );
   });
 
@@ -108,7 +108,7 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     expect(points.every((p) => p.services === null)).toBe(true);
   });
 
-  it('la moyenne porte le relevé provisoire dupliqué, comme la longue', async () => {
+  it('la moyenne porte son propre relevé (petite boucle)', async () => {
     const vue = await getSectionParcours({ store: fakeStoreParcours() });
     const moyenne = vue.epreuves[1];
     expect(moyenne?.metriques).not.toBeNull();
@@ -116,9 +116,10 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     expect(moyenne?.profil).not.toBeNull();
     // Le nom vient de la base et ne porte plus de distance (migration 0040).
     expect(moyenne?.nom).toBe('La Moyenne');
-    // Distance du relevé dupliqué, PAS les 12 km annoncés en base : les deux
-    // fiches doivent rester cohérentes avec le profil qu'elles affichent.
-    expect(moyenne?.distanceKm).toBeCloseTo(28.0, 1);
+    // Distance de SON relevé (12,7 km), pas celle de la base : la fiche
+    // reste cohérente avec le profil qu'elle affiche.
+    expect(moyenne?.distanceKm).toBeCloseTo(12.7, 1);
+    expect(moyenne?.metriques?.denivelePositifM).toBe(525);
   });
 
   it('décision produit : la distance affichée est celle du RELEVÉ dès qu’il existe', async () => {
@@ -130,7 +131,7 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
       (PARCOURS_DOC?.epreuves.longue?.distanceM ?? NaN) / 1000,
     );
     expect(vue.epreuves[0]?.distanceKm).toBeCloseTo(28.0, 1);
-    // La moyenne suit la même règle depuis sa duplication provisoire.
+    // La moyenne suit la même règle, sur son propre relevé.
     expect(vue.epreuves[1]?.distanceKm).toBe(
       (PARCOURS_DOC?.epreuves.moyenne?.distanceM ?? NaN) / 1000,
     );

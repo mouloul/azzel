@@ -15,13 +15,10 @@
     },
     {
       "slug": "moyenne",
-      "portions": [
-        {
-          "de": "depart",
-          "a": "arrivee"
-        }
-      ],
-      "commentaire": "Tracé PROVISOIRE : duplication du relevé d'essai de la longue, décidé le 2026-11-05 faute de tracé court défini (12 à 15 km attendus). À remplacer dès que l'organisation fournit le vrai tracé — la fiche publique porte la mention « tracé provisoire »."
+      "source": {
+        "gpx": "docs/GPX/activity_petite_boucle.gpx"
+      },
+      "commentaire": "Relevé propre de la petite boucle (« Yakouren Trail », 10/11/2026) : elle suit la longue jusque vers le km 10, coupe par un raccourci absent du relevé de la longue, puis reprend les derniers kilomètres. Relevé de terrain, pas un tracé officiel — la fiche publique garde la mention « tracé provisoire »."
     }
   ]
 }

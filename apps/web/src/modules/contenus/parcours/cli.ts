@@ -95,6 +95,22 @@ export async function executerCli(opts: OptionsCli): Promise<ResultatCli> {
     };
   }
 
+  const xmlGpxEpreuves: Record<string, string> = {};
+  for (const epreuve of config.epreuves) {
+    if (epreuve.source === undefined) {
+      continue;
+    }
+    const chemin = path.join(opts.racineRepo, epreuve.source.gpx);
+    try {
+      xmlGpxEpreuves[epreuve.slug] = await opts.fs.lireFichier(chemin);
+    } catch (error) {
+      return {
+        code: CODES_SORTIE.entreeInvalide,
+        lignes: [`GPX de l’épreuve « ${epreuve.slug} » introuvable ou illisible (${chemin}) : ${message(error)}`],
+      };
+    }
+  }
+
   let existant: string | null = null;
   if (await opts.fs.fichierExiste(cheminSortie)) {
     try {
@@ -111,6 +127,7 @@ export async function executerCli(opts: OptionsCli): Promise<ResultatCli> {
     const resultat = await executerPipeline({
       fs: opts.fs,
       xmlGpx,
+      xmlGpxEpreuves,
       config: configBrute,
       existant,
       cheminSortie,
@@ -130,6 +147,14 @@ export async function executerCli(opts: OptionsCli): Promise<ResultatCli> {
     lignes.push(
       `distance ${(mesures.distanceM / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} km — D+ brut ${mesures.dplusBrutM} m → ${mesures.dplusM} m au seuil ${resultat.doc.constantes.seuilDplusM} m (chiffre publié).`,
     );
+    for (const [slug, vue] of Object.entries(resultat.doc.epreuves)) {
+      if (vue.source === undefined) {
+        continue;
+      }
+      lignes.push(
+        `épreuve ${slug} : relevé ${vue.source.fichier} — ${vue.source.pointsBruts.toLocaleString('fr-FR')} points bruts → ${vue.source.pointsGardes.toLocaleString('fr-FR')} gardés, distance ${(vue.distanceM / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} km, D+ ${vue.dplusM} m.`,
+      );
+    }
     return { code: CODES_SORTIE.ok, lignes };
   } catch (error) {
     if (error instanceof ReleveRefuseError) {
