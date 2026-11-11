@@ -24,11 +24,14 @@ export const SEED_EMAIL_SUFFIXE = `@${SEED_EMAIL_DOMAINE}`;
 export type StadeDossier =
   /** Inscription saisie, rien d'autre : le dossier est « en constitution » nu. */
   | 'inscription seule'
-  /** Inscription + preuve CCP + décharge/règlement : prêt à être validé. */
+  /**
+   * Inscription + décharge/règlement + preuve CCP : le dépôt de la preuve
+   * place le dossier « en validation », prêt à être examiné.
+   */
   | 'dossier complet'
   /** Dossier complet puis validé par l'organisateur (dossard + e-dossard). */
   | 'validé'
-  /** Dossier complet puis refusé, avec motif. */
+  /** Dossier complet (en validation) puis refusé, avec motif. */
   | 'refusé';
 
 export interface CoureurFictif {
@@ -54,7 +57,7 @@ export interface CoureurFictif {
  * Volume FIXE (50) : personne n'a demandé à le faire varier, et un paramètre
  * serait une entrée à valider de plus.
  *
- * Répartition : 22 validés · 10 dossiers complets à valider · 12 inscriptions
+ * Répartition : 22 validés · 10 dossiers en validation (à décider) · 12 inscriptions
  * nues · 6 refusés avec motif.
  */
 type Ligne = readonly [
@@ -93,7 +96,7 @@ const LIGNES: readonly Ligne[] = [
   ['Damya', 'Zelmati', '1987-05-30', 'longue', 'S', 'F', 'validé'],
   ['Akli', 'Ghebrit-Nath', '1971-08-04', 'moyenne', 'L', 'H', 'validé'],
 
-  // ——— 10 dossiers complets, en attente de décision ———
+  // ——— 10 dossiers complets, « en validation » : en attente de décision ———
   ['Siham', 'Boudjellal', '1998-01-25', 'longue', 'S', 'F', 'dossier complet'],
   ['Mehdi', 'Tabouche', '1985-10-13', 'moyenne', 'M', 'H', 'dossier complet'],
   ['Lydia', 'Aït-Ferroudj', '2002-06-07', 'moyenne', 'XS', 'F', 'dossier complet'],
@@ -138,7 +141,7 @@ const LIGNES: readonly Ligne[] = [
     'S',
     'F',
     'refusé',
-    'Le versement CCP correspond à une autre épreuve : redéposer une preuve au tarif de La Moyenne.',
+    'Le versement CCP correspond à une autre épreuve : modifier l’inscription, puis déposer une preuve au tarif de La Moyenne.',
   ],
   [
     'Smail',
@@ -148,7 +151,7 @@ const LIGNES: readonly Ligne[] = [
     'L',
     'H',
     'refusé',
-    'Montant incomplet : il manque les frais de dossier. Déposer une nouvelle preuve après régularisation.',
+    'Montant incomplet : il manque les frais de dossier. Après régularisation, modifier l’inscription puis déposer une nouvelle preuve.',
   ],
   [
     'Imane',

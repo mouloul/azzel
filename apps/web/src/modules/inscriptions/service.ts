@@ -14,6 +14,9 @@ import type {
 
 import {
   AGE_CATEGORY_LABELS,
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_EXPIREE,
+  COUREUR_STATUS_LISTE_ATTENTE,
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_VALIDE,
   CHAMPS_REGLAGES,
@@ -22,6 +25,8 @@ import {
   REGLAGES_OUI_NON,
   LIBELLES_REGLAGES,
   canDepositPreuve,
+  estModifiable,
+  peutAccepterDocuments,
   type ChampReglage,
   doitAfficherPlaces,
   montantDuDa,
@@ -856,6 +861,12 @@ export const CHECKLIST_VALIDATION_APRES_PREUVE = 'Après ton justificatif de pai
 
 export const CHECKLIST_PREUVE_INDISPONIBLE = 'Indisponible (réessaie plus tard)';
 
+/** Dossier expiré : rien à valider tant que le coureur ne l'a pas repris. */
+export const CHECKLIST_VALIDATION_EXPIREE =
+  'Inscription expirée faute de preuve dans le délai — modifie ton inscription pour la reprendre';
+
+export const ACTION_MODIFIER_INSCRIPTION = 'Modifier mon inscription';
+
 function checklistPiece(
   id: ChecklistPieceId,
   libelle: string,
@@ -917,8 +928,16 @@ export async function getChecklistState(
     coureur.reglementAcceptedAt !== null &&
     coureur.reglementVersion !== null;
   const refuse = coureur !== null && coureur.status === COUREUR_STATUS_REFUSE;
+  const expiree = coureur !== null && coureur.status === COUREUR_STATUS_EXPIREE;
   const validationFait = coureur !== null && coureur.status === COUREUR_STATUS_VALIDE;
   const peutDeposer = coureur === null || canDepositPreuve(coureur.status);
+  // Refusé ou expiré : la seule action proposée est « Modifier mon
+  // inscription », qui reprend le dossier (décision PO du 11/11/2026). Aucun
+  // dépôt ni acceptation tant que la reprise n'est pas faite.
+  const aReprendre = refuse || expiree;
+  const peutAccepter = coureur !== null && peutAccepterDocuments(coureur.status);
+  const enValidation = coureur !== null && coureur.status === COUREUR_STATUS_EN_VALIDATION;
+  const enAttente = coureur !== null && coureur.status === COUREUR_STATUS_LISTE_ATTENTE;
 
   let actionPreuve: { label: string; href?: string } | null = null;
   if (!preuveIndisponible) {
@@ -936,40 +955,48 @@ export async function getChecklistState(
   const pieces: ChecklistPiece[] = [
     checklistPiece('email', 'Email vérifié', true),
     checklistPiece('epreuve', 'Épreuve choisie', coureur !== null, {
+      // Refusé ou expiré : l'action vit sur la pièce « validation », à côté
+      // du motif — une seule action proposée, pas deux liens identiques.
       action: neutraliseSiFermees(
         coureur === null
           ? { label: `M’inscrire à l’édition ${edition.slug}`, href: '/inscription' }
-          : inscriptionsOuvertes
-            ? { label: 'Modifier mon inscription', href: '/inscription' }
+          : inscriptionsOuvertes && estModifiable(coureur.status) && !aReprendre
+            ? { label: ACTION_MODIFIER_INSCRIPTION, href: '/inscription' }
             : null,
       ),
     }),
     checklistPiece('decharge', 'Décharge acceptée', dechargeFait, {
-      action: dechargeFait
-        ? null
-        : { label: 'Accepter la décharge et le règlement', href: '/acceptations' },
+      action:
+        dechargeFait || (coureur !== null && !peutAccepter)
+          ? null
+          : { label: 'Accepter la décharge et le règlement', href: '/acceptations' },
     }),
     checklistPiece('reglement', 'Règlement accepté', reglementFait, {
-      action: reglementFait
-        ? null
-        : { label: 'Les deux documents s’acceptent ensemble' },
+      action:
+        reglementFait || (coureur !== null && !peutAccepter)
+          ? null
+          : { label: 'Les deux documents s’acceptent ensemble' },
     }),
-    checklistPiece('preuve', 'Preuve de paiement CCP déposée', preuve !== null, {
+    // Une preuve refusée n'est pas une pièce « faite » : elle a été écartée.
+    checklistPiece('preuve', 'Preuve de paiement CCP déposée', preuve !== null && !refuse, {
       action: preuveIndisponible ? null : actionPreuve,
       texteSecondaire: preuveIndisponible ? CHECKLIST_PREUVE_INDISPONIBLE : null,
     }),
     checklistPiece('validation', 'Dossier validé', validationFait, {
       action: neutraliseSiFermees(
-        refuse && coureur !== null && canDepositPreuve(coureur.status)
-          ? { label: 'Déposer une nouvelle preuve', href: '/preuve' }
-          : null,
+        aReprendre ? { label: ACTION_MODIFIER_INSCRIPTION, href: '/inscription' } : null,
       ),
+      // Liste d'attente : rien n'est dû, aucun texte n'évoque un paiement.
+      // En validation : l'organisation examine, même si la preuve est
+      // momentanément illisible.
       texteSecondaire:
-        coureur !== null && !validationFait && !refuse
-          ? preuve !== null
-            ? CHECKLIST_VALIDATION_EN_ATTENTE
-            : CHECKLIST_VALIDATION_APRES_PREUVE
-          : null,
+        coureur === null || validationFait || refuse || enAttente
+          ? null
+          : expiree
+            ? CHECKLIST_VALIDATION_EXPIREE
+            : enValidation || preuve !== null
+              ? CHECKLIST_VALIDATION_EN_ATTENTE
+              : CHECKLIST_VALIDATION_APRES_PREUVE,
       motifRefus: refuse ? coureur.refusalReason : null,
     }),
   ];

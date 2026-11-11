@@ -187,6 +187,75 @@ describe('/acceptations — formulaire refondu (story 9.4)', () => {
     expect(html).not.toContain('type="checkbox"');
   });
 
+  it('en validation, acceptations complètes : « Dossier en cours de validation », pas « déjà validé »', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en validation',
+      documents: DOCUMENTS,
+      acceptances: {
+        decharge: { acceptedAt: '2026-10-21T09:30:00.000Z', version: 'v1' },
+        reglement: { acceptedAt: '2026-10-21T09:30:00.000Z', version: 'v1' },
+      },
+    });
+    const html = await rendu();
+    expect(html).toContain('Dossier en cours de validation');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it('en validation, même sans acceptations : figé, aucune case (acceptations avant la preuve)', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en validation',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    const html = await rendu();
+    expect(html).toContain('Dossier en cours de validation');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it('liste d’attente : titre dédié, jamais « Dossier déjà validé », aucune case', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'liste d’attente',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    const html = await rendu();
+    expect(html).toContain('Inscription en liste d’attente');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it('expirée : « Inscription expirée », renvoi vers « Modifier mon inscription »', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'expirée',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    const html = await rendu();
+    expect(html).toContain('Inscription expirée');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).toContain('href="/inscription"');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it('refusé : « Dossier refusé », renvoi vers « Modifier mon inscription »', async () => {
+    inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'refusé',
+      documents: DOCUMENTS,
+      acceptances: ACCEPTANCES_VIERGES,
+    });
+    const html = await rendu();
+    expect(html).toContain('Dossier refusé');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).toContain('href="/inscription"');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
   it('inscriptions fermées : écran dédié avec la date de clôture', async () => {
     inscriptionsServiceMock.getAcceptancesState.mockResolvedValue({
       edition: { ...EDITION, registrationOpen: false },

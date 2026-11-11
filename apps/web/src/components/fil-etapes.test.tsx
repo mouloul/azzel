@@ -151,6 +151,15 @@ describe('etapesPreuve — /preuve : Documents marqué depuis documentsAcceptes'
     expect(etapes[3]?.href).toBeUndefined();
   });
 
+  it('en validation : Paiement fait, Validation courante, aucun lien vers une page figée', () => {
+    const etapes = etapesPreuve('en validation', true);
+    expect(etapes.map((etape) => etape.etat)).toEqual(['fait', 'fait', 'fait', 'courante']);
+    expect(etapes[0]?.href).toBeUndefined();
+    expect(etapes[1]?.href).toBeUndefined();
+    expect(etapes[3]?.href).toBeUndefined();
+    expect(etapesInscription({ status: 'en validation', dechargeAccepte: null, reglementAccepte: null })).toEqual(etapes);
+  });
+
   it('documents manquants : étape Documents « À faire » (exact), toujours retournable', () => {
     const etapes = etapesPreuve('refusé', false);
     expect(etapes[1]).toEqual({

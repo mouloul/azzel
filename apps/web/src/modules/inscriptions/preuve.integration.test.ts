@@ -32,7 +32,7 @@ import { MAX_PROOF_BYTES } from './proof-format';
 import { LocalDiskProofStore, sha256Hex } from './proof-store';
 import { getPreuveState, uploadPreuve } from './proof-service';
 import { createInscriptionsStore, type InscriptionsStore } from './store';
-import { submitInscription } from './service';
+import { acceptDocuments, submitInscription } from './service';
 import type { InscriptionFormInput } from './domain';
 
 const testUrls = resolveTestDatabaseUrls('preuve');
@@ -122,6 +122,8 @@ describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel
   async function createCoureurSession(): Promise<SessionRecord> {
     const session = await createSession();
     await submitInscription(session, validInput(), { store });
+    // Acceptations avant la preuve (PO, 11/11/2026).
+    await acceptDocuments(session, { decharge: true, reglement: true }, { store });
     return session;
   }
 

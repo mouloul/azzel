@@ -5,7 +5,7 @@ import postgres from 'postgres';
 
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { createChronoStore } from '@/modules/chrono/store';
-import { COUREUR_STATUS_EN_CONSTITUTION, isRegistrationOpen } from '@/modules/inscriptions/domain';
+import { COUREUR_STATUS_EN_VALIDATION, isRegistrationOpen } from '@/modules/inscriptions/domain';
 import { LocalDiskProofStore, getProofStore, type ProofStore } from '@/modules/inscriptions/proof-store';
 import {
   PROOF_STORAGE_DRIVER_ENV,
@@ -459,21 +459,27 @@ async function peupler(deps: PeuplementDeps): Promise<void> {
       continue;
     }
 
+    // Ordre du parcours coureur : documents d'abord, puis la preuve — dont le
+    // dépôt fait passer le dossier « en validation ».
+    if (dossier.dechargeAcceptedAt === null || dossier.reglementAcceptedAt === null) {
+      await acceptDocuments(coureurSession, { decharge: true, reglement: true }, sansOutbox);
+    }
+
     // Preuve de paiement : une seule active par coureur (index unique partiel).
     const preuve = await store.findActivePreuveByAccount(compte.id, edition.id, organisationId);
     if (preuve === null) {
       await uploadPreuve(coureurSession, octetsPreuveFictive(), { store, proofStore });
     }
 
-    if (dossier.dechargeAcceptedAt === null || dossier.reglementAcceptedAt === null) {
-      await acceptDocuments(coureurSession, { decharge: true, reglement: true }, sansOutbox);
-    }
-
     if (coureur.stade === 'dossier complet') {
       continue;
     }
 
-    if (dossier.status === COUREUR_STATUS_EN_CONSTITUTION) {
+    // Statut relu APRÈS le dépôt : l'organisation ne décide que d'un dossier
+    // en validation, et un rejeu interrompu entre dépôt et décision doit
+    // reprendre la décision là où elle s'était arrêtée.
+    const aDecider = await store.findCoureurByAccount(compte.id, edition.id, organisationId);
+    if (aDecider?.status === COUREUR_STATUS_EN_VALIDATION) {
       await decideDossier(
         organisateur,
         dossier.id,

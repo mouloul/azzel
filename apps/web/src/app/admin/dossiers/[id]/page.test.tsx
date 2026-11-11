@@ -23,10 +23,11 @@ vi.mock(
   () => inscriptionsServiceMock as unknown as typeof import('@/modules/inscriptions/service'),
 );
 
-// Le formulaire de décision est un composant client (router) : hors propos
-// ici — la page est testée pour sa pastille de statut.
+// Le formulaire de décision est un composant client (router) : remplacé par
+// un marqueur — la page est testée pour sa pastille et pour QUAND elle
+// propose de décider.
 vi.mock('./decision-form', () => ({
-  DecisionForm: () => null,
+  DecisionForm: () => <p>FORMULAIRE-DECISION</p>,
 }));
 
 import AdminDossierDetailPage from './page';
@@ -122,10 +123,10 @@ describe('page /admin/dossiers/[id] — pastille de statut du socle (I9)', () =>
     }
   });
 
-  it('preuve déposée : « en attente de validation par l’organisation », autre pastille', async () => {
+  it('en validation : « en attente de validation par l’organisation », autre pastille', async () => {
     inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
       detail(
-        'en constitution',
+        'en validation',
         {},
         {
           id: 'preuve-1',
@@ -169,5 +170,41 @@ describe('page /admin/dossiers/[id] — pastille de statut du socle (I9)', () =>
   it('dossier introuvable : notFound (404) plutôt qu’un écran vide', async () => {
     inscriptionsServiceMock.getDossierDetail.mockResolvedValue(null);
     await expect(rendu('coureur-x')).rejects.toMatchObject({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+  });
+});
+
+describe('page /admin/dossiers/[id] — décision depuis « en validation » seulement', () => {
+  it('en validation : le formulaire de décision est proposé', async () => {
+    inscriptionsServiceMock.getDossierDetail.mockResolvedValue(detail('en validation'));
+    const html = await rendu();
+    expect(html).toContain('FORMULAIRE-DECISION');
+  });
+
+  it('en constitution, refusé, expirée, liste d’attente, validé : aucun formulaire', async () => {
+    for (const [status, explication] of [
+      ['en constitution', 'pas encore déposé sa preuve'],
+      ['refusé', 'modifie son inscription'],
+      ['expirée', 'modifiant son inscription'],
+      ['liste d’attente', 'liste d’attente'],
+      ['validé', null],
+    ] as const) {
+      inscriptionsServiceMock.getDossierDetail.mockResolvedValue(
+        detail(status, { refusalReason: status === 'refusé' ? 'Preuve illisible' : null }),
+      );
+      const html = await rendu();
+      expect(html, status).not.toContain('FORMULAIRE-DECISION');
+      if (explication !== null) {
+        expect(html, status).toContain(explication);
+      }
+    }
+  });
+
+  it('dossier repris (en constitution) : la trace d’un ancien refus n’est pas annoncée « décidé »', async () => {
+    inscriptionsServiceMock.getDossierDetail.mockResolvedValue({
+      ...detail('en constitution'),
+      decidePar: { email: 'pc@exemple.dz', decidedAt: '2027-02-21T10:00:00.000Z' },
+    });
+    const html = await rendu();
+    expect(html).not.toContain('Décidé par');
   });
 });

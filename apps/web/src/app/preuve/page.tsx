@@ -7,7 +7,13 @@ import { lectureBornee, lectureBorneeOuIndisponible } from '@/lib/lecture-bornee
 import { DbUnavailableError, toApiError } from '@/modules/iam/errors';
 import { requireRolePage } from '@/modules/iam/session';
 
-import { canDepositPreuve } from '@/modules/inscriptions/domain';
+import {
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_EXPIREE,
+  COUREUR_STATUS_LISTE_ATTENTE,
+  COUREUR_STATUS_REFUSE,
+  canDepositPreuve,
+} from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getPreuveState, type PreuveState } from '@/modules/inscriptions/proof-service';
 import { getComptesPaiement, getMontantDu } from '@/modules/inscriptions/service';
@@ -127,18 +133,68 @@ export default async function PreuvePage() {
   }
 
   if (!canDepositPreuve(state.coureurStatus)) {
+    const refuse = state.coureurStatus === COUREUR_STATUS_REFUSE;
+    const aReprendre = refuse || state.coureurStatus === COUREUR_STATUS_EXPIREE;
+    const enAttente = state.coureurStatus === COUREUR_STATUS_LISTE_ATTENTE;
     return (
       <section className="auth">
         <article className="card">
           <p className="surtitre">Preuve de paiement</p>
-          <h1>Dossier déjà validé</h1>
+          <h1>
+            {aReprendre
+              ? refuse
+                ? 'Dossier refusé'
+                : 'Inscription expirée'
+              : enAttente
+                ? 'Inscription en liste d’attente'
+                : 'Dossier déjà validé'}
+          </h1>
+          {refuse && state.refusalReason !== null ? (
+            <div role="alert" aria-live="assertive" className="error-box">
+              <p className="error-message">Ta preuve a été refusée.</p>
+              <p className="error-action">Motif : {state.refusalReason}</p>
+            </div>
+          ) : null}
           <p className="lead">
-            Ton dossier a été validé par l’organisation : la preuve de paiement ne peut plus
-            être modifiée en ligne.
+            {aReprendre
+              ? 'Ton dossier doit d’abord être repris : modifie ton inscription. S’il reste une place, elle t’est réservée avec un nouveau délai pour déposer une nouvelle preuve.'
+              : enAttente
+                ? 'Aucun versement n’est à faire tant qu’une place ne t’a pas été attribuée : l’organisation te préviendra par email.'
+                : 'Ton dossier a été validé par l’organisation : la preuve de paiement ne peut plus être modifiée en ligne.'}
           </p>
           <div className="auth-alt">
-            <a className="btn-contour" href="/espace-coureur">
-              Voir mon inscription
+            {aReprendre ? (
+              <a className="btn-action" href="/inscription">
+                Modifier mon inscription
+              </a>
+            ) : (
+              <a className="btn-contour" href="/espace-coureur">
+                Voir mon inscription
+              </a>
+            )}
+            {aReprendre ? <AssistanceButton phone={assistancePhone} /> : null}
+          </div>
+        </article>
+      </section>
+    );
+  }
+
+  if (!state.documentsAcceptes) {
+    // Acceptations AVANT la preuve (PO, 11/11/2026) : le dépôt serait refusé.
+    // On renvoie vers les documents plutôt que d'ouvrir un formulaire inutile.
+    return (
+      <section className="auth">
+        <article className="card">
+          <p className="surtitre">Preuve de paiement</p>
+          <FilEtapes etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)} />
+          <h1>Accepte d’abord la décharge et le règlement</h1>
+          <p className="lead">
+            Ta preuve de paiement se dépose une fois la décharge de bonne santé et le règlement
+            intérieur acceptés.
+          </p>
+          <div className="auth-alt">
+            <a className="btn-action" href="/acceptations">
+              Accepter la décharge et le règlement
             </a>
           </div>
         </article>
@@ -149,23 +205,17 @@ export default async function PreuvePage() {
   const comptes = await lectureBornee(getComptesPaiement(session), null, 'comptes CCP');
   return (
     <>
-      {state.coureurStatus === 'refusé' && state.refusalReason !== null ? (
-        <section className="auth">
-          <article className="card">
-            <div role="alert" aria-live="assertive" className="error-box">
-              <p className="error-message">Ta preuve a été refusée.</p>
-              <p className="error-action">Motif : {state.refusalReason}</p>
-              <div className="auth-alt">
-                <AssistanceButton phone={assistancePhone} />
-              </div>
-            </div>
-          </article>
-        </section>
-      ) : null}
       <PreuveForm state={state} assistancePhone={assistancePhone}>
         <FilEtapes
           etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)}
         />
+        {state.coureurStatus === COUREUR_STATUS_EN_VALIDATION ? (
+          <p className="encart-attente" role="status">
+            Ta preuve est déposée : ton dossier est <strong>en cours de validation</strong> par
+            l’organisation. Tu peux encore la remplacer si tu t’es trompé de fichier — le
+            dossier reste en validation.
+          </p>
+        ) : null}
         {montant !== null ? (
           <p className="encart-montant" role="status">
             Montant à verser :{' '}

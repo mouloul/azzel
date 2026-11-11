@@ -38,6 +38,15 @@ export const MAX_AGE_AT_RACE = 100;
 
 export const COUREUR_STATUS_EN_CONSTITUTION = 'en constitution';
 
+/**
+ * Preuve déposée, décision de l'organisation attendue. Distinct de « en
+ * constitution » : là c'est au coureur d'agir (verser, déposer), ici c'est à
+ * l'organisation. Occupe sa place et n'expire jamais — le coureur a fait sa
+ * part dans les temps, on ne lui reprend pas sa place parce que personne n'a
+ * encore regardé son reçu.
+ */
+export const COUREUR_STATUS_EN_VALIDATION = 'en validation';
+
 export const COUREUR_STATUS_VALIDE = 'validé';
 
 export const COUREUR_STATUS_REFUSE = 'refusé';
@@ -48,6 +57,7 @@ export const COUREUR_STATUS_EXPIREE = 'expirée';
 
 export const COUREUR_STATUSES = [
   COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_EN_VALIDATION,
   COUREUR_STATUS_VALIDE,
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_LISTE_ATTENTE,
@@ -60,25 +70,50 @@ export const COUREUR_STATUSES = [
  * « En constitution » en fait partie : la place est RÉSERVÉE au coureur le
  * temps qu'il verse sa preuve, sinon deux cents dossiers en cours de paiement
  * laisseraient croire à deux cents places libres, et l'organisation se
- * retrouverait avec plus de versements que de dossards.
+ * retrouverait avec plus de versements que de dossards. « En validation »
+ * aussi : le versement est fait, la décision seule manque.
  *
- * « Refusé » et « liste d'attente » n'en consomment aucune : un refus doit
- * rendre la place, une attente n'en a jamais pris.
+ * « Refusé », « expirée » et « liste d'attente » n'en consomment aucune : un
+ * refus ou une expiration rend la place, une attente n'en a jamais pris.
  */
 export const STATUTS_OCCUPANT_UNE_PLACE: readonly string[] = [
   COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_EN_VALIDATION,
   COUREUR_STATUS_VALIDE,
 ];
 
 /**
- * Statuts dans lesquels le coureur peut encore corriger sa saisie. Un dossier
- * validé ou refusé est figé ; un dossier en attente de place, non — il n'y a
- * aucune raison de lui interdire de corriger son téléphone pendant l'attente.
+ * Statuts depuis lesquels « Modifier mon inscription » ROUVRE le dossier : il
+ * repart du début du cycle (place si disponible, sinon liste d'attente), comme
+ * une inscription neuve. Décision PO du 11/11/2026.
+ */
+export const STATUTS_REPRISE: readonly string[] = [
+  COUREUR_STATUS_REFUSE,
+  COUREUR_STATUS_EXPIREE,
+];
+
+/**
+ * Statuts dans lesquels le coureur peut encore enregistrer sa saisie.
+ *
+ * « Validé » est figé pour de bon ; « en validation » l'est jusqu'à la
+ * décision (seule la preuve peut y être remplacée). Un dossier en attente de
+ * place reste corrigeable — aucune raison de lui interdire de corriger son
+ * téléphone. Un dossier refusé ou expiré l'est aussi : l'enregistrer est
+ * justement ce qui le reprend (voir STATUTS_REPRISE).
  */
 export const STATUTS_MODIFIABLES: readonly string[] = [
   COUREUR_STATUS_EN_CONSTITUTION,
   COUREUR_STATUS_LISTE_ATTENTE,
+  ...STATUTS_REPRISE,
 ];
+
+export function estModifiable(status: string): boolean {
+  return STATUTS_MODIFIABLES.includes(status);
+}
+
+export function estReprise(status: string): boolean {
+  return STATUTS_REPRISE.includes(status);
+}
 
 /** Jamais négatif : une capacité abaissée sous le nombre d'inscrits donne 0. */
 export function placesRestantes(capacite: number, occupees: number): number {
@@ -102,6 +137,25 @@ export function doitAfficherPlaces(restantes: number, seuil: number): boolean {
  */
 export function statutInitial(restantes: number): string {
   return restantes > 0 ? COUREUR_STATUS_EN_CONSTITUTION : COUREUR_STATUS_LISTE_ATTENTE;
+}
+
+/**
+ * Statut d'un dossier EXISTANT après « Modifier mon inscription ».
+ *
+ * - Figé (validé, en validation) : null — l'enregistrement est refusé.
+ * - Refusé ou expiré : reprise, règle commune avec une inscription neuve —
+ *   une place s'il en reste (en constitution), sinon la liste d'attente.
+ * - En constitution, liste d'attente : inchangé. Corriger son téléphone ne
+ *   doit ni coûter ni rapporter une place.
+ *
+ * Même exigence que statutInitial : `restantes` lu sous le verrou d'édition,
+ * hors le dossier du coureur lui-même.
+ */
+export function statutApresModification(statutActuel: string, restantes: number): string | null {
+  if (!estModifiable(statutActuel)) {
+    return null;
+  }
+  return estReprise(statutActuel) ? statutInitial(restantes) : statutActuel;
 }
 
 /** Fuseau de la course : toutes les échéances se lisent à l'heure d'Alger. */
@@ -273,6 +327,7 @@ export type CoureurStatus = (typeof COUREUR_STATUSES)[number];
 
 export const COUREUR_STATUS_LABELS: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_EN_CONSTITUTION]: 'En constitution',
+  [COUREUR_STATUS_EN_VALIDATION]: 'En validation',
   [COUREUR_STATUS_VALIDE]: 'Validé',
   [COUREUR_STATUS_REFUSE]: 'Refusé',
   [COUREUR_STATUS_LISTE_ATTENTE]: 'Liste d’attente',
@@ -290,6 +345,9 @@ export const LIST_COUREURS_LIMIT = 200;
  *  par statut (remplace l'ancien vocabulaire aa-chip). */
 export const PASTILLE_STATUT: Record<CoureurStatus, string> = {
   [COUREUR_STATUS_EN_CONSTITUTION]: 'socle-pastille--attention',
+  // La balle est dans le camp de l'organisation : registre de l'attente, pas
+  // celui d'une action à faire par le coureur.
+  [COUREUR_STATUS_EN_VALIDATION]: 'socle-pastille--sync-attente',
   [COUREUR_STATUS_VALIDE]: 'socle-pastille--succes',
   [COUREUR_STATUS_REFUSE]: 'socle-pastille--danger',
   // En attente d'une place : ni acquis, ni refusé — le même langage visuel que
@@ -381,21 +439,16 @@ export interface StatutAffiche {
 /**
  * Statut tel que le lisent le coureur et l'organisation.
  *
- * « En constitution » recouvre deux situations que tout oppose : la place est
- * tenue mais aucun versement n'est justifié (c'est au coureur d'agir), ou le
- * justificatif est déposé (c'est à l'organisation d'agir). Le statut STOCKÉ
- * reste unique — le décompte des places et l'expiration en dépendent — et
- * l'affichage le dérive de la présence d'une preuve.
- *
- * Seul « en constitution » est dérivé : un dossier en liste d'attente n'a rien
- * à verser, lui annoncer qu'on attend son justificatif reviendrait à lui
- * réclamer un paiement.
+ * Les deux attentes se disent par QUI doit agir : « en constitution », c'est
+ * au coureur (verser, déposer son justificatif) ; « en validation », c'est à
+ * l'organisation. Les autres statuts se lisent tels quels.
  */
-export function statutAffiche(status: string, preuveDeposee: boolean): StatutAffiche {
+export function statutAffiche(status: string): StatutAffiche {
   if (status === COUREUR_STATUS_EN_CONSTITUTION) {
-    return preuveDeposee
-      ? { libelle: LIBELLE_ATTENTE_VALIDATION, pastille: 'socle-pastille--sync-attente' }
-      : { libelle: LIBELLE_ATTENTE_JUSTIFICATIF, pastille: 'socle-pastille--attention' };
+    return { libelle: LIBELLE_ATTENTE_JUSTIFICATIF, pastille: PASTILLE_STATUT[status] };
+  }
+  if (status === COUREUR_STATUS_EN_VALIDATION) {
+    return { libelle: LIBELLE_ATTENTE_VALIDATION, pastille: PASTILLE_STATUT[status] };
   }
   const connu = status as CoureurStatus;
   return {
@@ -404,11 +457,23 @@ export function statutAffiche(status: string, preuveDeposee: boolean): StatutAff
   };
 }
 
+/**
+ * Dépôt (ou remplacement) de la preuve : en constitution, le dépôt fait
+ * passer le dossier en validation ; en validation, le remplacement le laisse
+ * en validation. Refusé ou expiré : le dossier doit d'abord être repris par
+ * « Modifier mon inscription » — une nouvelle preuve seule ne suffit plus.
+ */
 export function canDepositPreuve(status: string): boolean {
-  return (
-    status === COUREUR_STATUS_EN_CONSTITUTION ||
-    status === COUREUR_STATUS_REFUSE
-  );
+  return status === COUREUR_STATUS_EN_CONSTITUTION || status === COUREUR_STATUS_EN_VALIDATION;
+}
+
+/**
+ * Acceptation de la décharge et du règlement : en constitution seulement.
+ * Elles sont exigées AVANT le dépôt de la preuve (PO, 11/11/2026) ; en
+ * validation, le dossier est figé et aucune acceptation n'est possible.
+ */
+export function peutAccepterDocuments(status: string): boolean {
+  return status === COUREUR_STATUS_EN_CONSTITUTION;
 }
 
 export const MAX_REFUSAL_REASON_LENGTH = 280;

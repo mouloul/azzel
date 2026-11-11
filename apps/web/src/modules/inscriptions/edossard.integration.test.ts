@@ -144,8 +144,8 @@ describe.skipIf(testUrls === null)(
         createdAt: new Date(),
       };
       await submitInscription(session, validInput(input), { store });
-      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       const coureurId = await coureurIdFor(accountId);
       await decideDossier(organisateur, coureurId, { decision: 'valider' }, { store });
       return { coureurId, session };
@@ -218,8 +218,8 @@ describe.skipIf(testUrls === null)(
         createdAt: new Date(),
       };
       await submitInscription(refuse, validInput(), { store });
-      await uploadPreuve(refuse, jpegBytes(20_000), { store, proofStore: proofStoreRefus });
       await acceptDocuments(refuse, { decharge: true, reglement: true }, { store });
+      await uploadPreuve(refuse, jpegBytes(20_000), { store, proofStore: proofStoreRefus });
       const coureurRefuse = await coureurIdFor(accountIdRefuse);
       await decideDossier(organisateur, coureurRefuse, {
         decision: 'refuser',

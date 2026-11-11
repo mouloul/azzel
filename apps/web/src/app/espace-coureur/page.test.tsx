@@ -141,9 +141,9 @@ describe('page /espace-coureur — statut du dossier', () => {
     expect(html).not.toContain('En attente de validation par l’organisation</span>');
   });
 
-  it('preuve déposée : « en attente de validation par l’organisation »', async () => {
+  it('en validation : « en attente de validation par l’organisation »', async () => {
     inscriptionsServiceMock.getChecklistState.mockResolvedValue(
-      checklistState(5, 'en constitution'),
+      checklistState(5, 'en validation'),
     );
     const html = await rendu();
     expect(html).toMatch(/socle-pastille[^"]*"[^>]*>\s*<span[^>]*><\/span>En attente de validation par l’organisation/);

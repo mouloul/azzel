@@ -132,12 +132,7 @@ function ChecklistCard({
   assistancePhone: string;
 }) {
   const complet = estComplet(pieces);
-  // La preuve se lit sur la pièce de la checklist : c'est elle qui sépare
-  // « en attente de justificatif » de « en attente de validation ».
-  const statutLu =
-    statut === null
-      ? null
-      : statutAffiche(statut, pieces.some((piece) => piece.id === 'preuve' && piece.fait));
+  const statutLu = statut === null ? null : statutAffiche(statut);
 
   return (
     <article className="card espace-dossier">

@@ -122,7 +122,7 @@ describe('/preuve — dépôt refondu (story 9.4)', () => {
       coureurStatus: 'en constitution',
       refusalReason: null,
       preuve: null,
-      documentsAcceptes: false,
+      documentsAcceptes: true,
     });
     const html = await rendu();
     expect(html).toContain('for="preuve-fichier"');
@@ -153,6 +153,91 @@ describe('/preuve — dépôt refondu (story 9.4)', () => {
     expect(html).toMatch(/Motif : (<!-- -->)?Reçu de paiement illisible/);
     expect(html).toContain('Appeler l’équipe');
     expect(html).toContain('href="tel:+213555010200"');
+  });
+
+  it('dossier refusé : aucun dépôt direct, seule action « Modifier mon inscription »', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'refusé',
+      refusalReason: 'Reçu de paiement illisible',
+      preuve: null,
+      documentsAcceptes: true,
+    });
+    const html = await rendu();
+    expect(html).toContain('Dossier refusé');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).toContain('href="/inscription"');
+    expect(html).toContain('Modifier mon inscription');
+    expect(html).not.toContain('type="file"');
+  });
+
+  it('inscription expirée : « Inscription expirée », reprise par « Modifier mon inscription »', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'expirée',
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: false,
+    });
+    const html = await rendu();
+    expect(html).toContain('Inscription expirée');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).toContain('href="/inscription"');
+    expect(html).not.toContain('type="file"');
+  });
+
+  it('en validation : dépôt ouvert (remplacement), encart « en cours de validation »', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en validation',
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: true,
+    });
+    const html = await rendu();
+    expect(html).toContain('en cours de validation');
+    expect(html).toContain('type="file"');
+  });
+
+  it('acceptations manquantes : renvoi vers /acceptations au lieu du formulaire', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'en constitution',
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: false,
+    });
+    const html = await rendu();
+    expect(html).toContain('Accepte d’abord la décharge et le règlement');
+    expect(html).toContain('href="/acceptations"');
+    expect(html).not.toContain('type="file"');
+  });
+
+  it('liste d’attente : titre dédié, jamais « Dossier déjà validé », aucun dépôt', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'liste d’attente',
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: false,
+    });
+    const html = await rendu();
+    expect(html).toContain('Inscription en liste d’attente');
+    expect(html).not.toContain('Dossier déjà validé');
+    expect(html).not.toContain('type="file"');
+  });
+
+  it('validé : « Dossier déjà validé » réservé à ce statut', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: EDITION,
+      coureurStatus: 'validé',
+      refusalReason: null,
+      preuve: null,
+      documentsAcceptes: true,
+    });
+    const html = await rendu();
+    expect(html).toContain('Dossier déjà validé');
+    expect(html).not.toContain('type="file"');
   });
 
   it('pas encore inscrit : « Inscris-toi d’abord », sans fil ni champ fichier', async () => {

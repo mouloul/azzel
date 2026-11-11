@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
-import { COUREUR_STATUS_VALIDE, MAX_REFUSAL_REASON_LENGTH } from '@/modules/inscriptions/domain';
+import { MAX_REFUSAL_REASON_LENGTH } from '@/modules/inscriptions/domain';
 
 const NETWORK_ERROR = {
   message: 'Connexion au serveur impossible.',
@@ -17,13 +17,8 @@ const TIMEOUT_ERROR = {
 
 type Decision = 'valider' | 'refuser';
 
-export function DecisionForm({
-  coureurId,
-  status,
-}: {
-  coureurId: string;
-  status: string;
-}) {
+/** Rendu par la page uniquement pour un dossier en validation. */
+export function DecisionForm({ coureurId }: { coureurId: string }) {
   const router = useRouter();
   const [decision, setDecision] = useState<Decision>('valider');
   const [motif, setMotif] = useState('');
@@ -35,11 +30,9 @@ export function DecisionForm({
   const [pending, setPending] = useState(false);
   const [enregistre, setEnregistre] = useState<string | null>(null);
 
-  const immuable = status === COUREUR_STATUS_VALIDE;
-
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (pending || (immuable && decision === 'refuser')) {
+    if (pending) {
       return;
     }
     setServerError(null);
@@ -124,11 +117,8 @@ export function DecisionForm({
             value="refuser"
             checked={decision === 'refuser'}
             onChange={() => setDecision('refuser')}
-            disabled={immuable}
           />
-          <span className="option-label">
-            Refuser le dossier (motif obligatoire{immuable ? ' — dossier déjà validé' : ''})
-          </span>
+          <span className="option-label">Refuser le dossier (motif obligatoire)</span>
         </label>
         {decision === 'refuser' ? (
           <div className="field">

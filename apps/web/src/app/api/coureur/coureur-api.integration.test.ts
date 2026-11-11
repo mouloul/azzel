@@ -242,12 +242,12 @@ describe.skipIf(testUrls === null)(
         createdAt: new Date(),
       };
       await submitInscription(session, validInput(), { store: inscriptionsStore });
+      await acceptDocuments(session, { decharge: true, reglement: true }, {
+        store: inscriptionsStore,
+      });
       await uploadPreuve(session, jpegBytes(20_000), {
         store: inscriptionsStore,
         proofStore,
-      });
-      await acceptDocuments(session, { decharge: true, reglement: true }, {
-        store: inscriptionsStore,
       });
       const rows = await sql`SELECT id FROM coureur WHERE account_id = ${accountId}`;
       const organisateur: SessionRecord = {

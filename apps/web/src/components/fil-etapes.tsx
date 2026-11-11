@@ -84,14 +84,36 @@ function acceptationsCompletes(decharge: unknown, reglement: unknown): boolean {
   return decharge != null && reglement != null;
 }
 
+/** Dossier en validation : figé jusqu'à la décision, la preuve est déposée. */
+const STATUT_EN_VALIDATION = 'en validation';
+
+/**
+ * En validation, trois étapes sont franchies et c'est à l'organisation d'agir :
+ * Validation est courante. Inscription et Documents ne portent aucun lien —
+ * leurs pages sont figées jusqu'à la décision ; seul Paiement (remplacement
+ * de la preuve) reste atteignable.
+ */
+function etapesEnValidation(): EtapeFil[] {
+  return [
+    { libelle: LIBELLES_ETAPE.inscription, etat: 'fait' },
+    { libelle: LIBELLES_ETAPE.documents, etat: 'fait' },
+    { libelle: LIBELLES_ETAPE.paiement, etat: 'fait', href: '/preuve' },
+    { libelle: LIBELLES_ETAPE.validation, etat: 'courante' },
+  ];
+}
+
 /** /inscription : étape 1 courante ; Documents marqué Fait seulement si le
  *  coureur existant a déjà les deux acceptations — franchie, l'étape devient
  *  retournable (matrice 9.4 : href '/acceptations', revue 9 M2) ; jamais de
  *  lien ni de promesse sur Paiement/Validation. */
 export function etapesInscription(coureur: {
+  status?: string;
   dechargeAccepte: { acceptedAt: string; version: string } | null;
   reglementAccepte: { acceptedAt: string; version: string } | null;
 } | null): EtapeFil[] {
+  if (coureur?.status === STATUT_EN_VALIDATION) {
+    return etapesEnValidation();
+  }
   const documentsFaits = acceptationsCompletes(
     coureur?.dechargeAccepte,
     coureur?.reglementAccepte,
@@ -130,6 +152,9 @@ export function etapesPreuve(
   coureurStatus: string | null,
   documentsAcceptesDossier: boolean,
 ): EtapeFil[] {
+  if (coureurStatus === STATUT_EN_VALIDATION) {
+    return etapesEnValidation();
+  }
   return [
     {
       libelle: LIBELLES_ETAPE.inscription,

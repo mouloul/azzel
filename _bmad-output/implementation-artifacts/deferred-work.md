@@ -305,3 +305,15 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-inscriptions-wilaya-hebergement.md`
   summary: Décider du sort des dossiers déjà validés avec hébergement et sans wilaya (éventuellement de Tizi Ouzou).
   evidence: Un dossier validé n'est plus modifiable : il garde son lit indéfiniment ; décision PO requise (tri manuel ou outil admin).
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Empêcher l'organisateur de valider une preuve remplacée après l'ouverture de la fiche (contrôle de concurrence sur l'identifiant de preuve).
+  evidence: `decideDossier` ne reçoit pas la preuve examinée ; le remplacement reste permis en validation.
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Garder l'historique des refus (date, auteur, motif) visible côté admin après la reprise d'un dossier.
+  evidence: La reprise efface `refusal_reason` ; seule une preuve au statut « refusée » en garde trace.
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Décider si un dossier refusé ou expiré peut être repris après la clôture des inscriptions, et adapter emails et pages en conséquence.
+  evidence: `submitInscription` lève `RegistrationClosedError` ; les emails de refus/expiration renvoient pourtant vers « Modifier mon inscription ».
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Aligner l'ordre des verrous (édition puis coureur) dans `decideDossier` pour éviter un interblocage avec `upsertCoureur`.
+  evidence: `decideDossier` verrouille le coureur puis l'édition (dossard) ; `upsertCoureur` fait l'inverse.

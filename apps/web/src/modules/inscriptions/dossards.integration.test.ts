@@ -134,8 +134,8 @@ describe.skipIf(testUrls === null)(
         createdAt: new Date(),
       };
       await submitInscription(session, validInput({ ...input, prenom }), { store });
-      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       const coureurId = await coureurIdFor(accountId);
       await decideDossier(organisateur, coureurId, { decision: 'valider' }, { store });
       // Story 4.1 — ces coureurs ont consulté leur e-dossard : leur jeton

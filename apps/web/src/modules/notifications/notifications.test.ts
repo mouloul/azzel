@@ -23,6 +23,7 @@ import {
   DEFAULT_APP_URL,
   DOSSIER_REFUSE_SUBJECT,
   DOSSIER_VALIDE_SUBJECT,
+  INSCRIPTION_EXPIREE_SUBJECT,
   INSCRIPTION_RECUE_SUBJECT,
   INVITATION_VOLONTAIRE_SUBJECT,
   RAPPEL_J7_SUBJECT,
@@ -85,6 +86,25 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
     expect(email.text).toContain('Appeler l’équipe');
     expect(email.text).toContain(ASSISTANCE_PHONE);
     expect(email.text).toContain(OPTIONS.espaceCoureurUrl);
+    // Cycle de vie (PO, 11/11/2026) : la reprise passe par « Modifier mon
+    // inscription », plus par un simple redépôt de preuve.
+    expect(email.text).toContain('« Modifier mon inscription »');
+    expect(email.text).toContain('nouvelle preuve');
+  });
+
+  it('inscription expirée : place rendue, reprise par « Modifier mon inscription » depuis l’espace', () => {
+    const email = buildNotificationEmail(
+      'inscription_expiree',
+      { coureurId: 'c1', prenom: 'Yani', edition: 'Édition 2027' },
+      OPTIONS,
+    );
+    expect(email.subject).toBe(INSCRIPTION_EXPIREE_SUBJECT);
+    expect(email.text).toContain('Salut Yani');
+    expect(email.text).toContain('ta place a été rendue');
+    expect(email.text).toContain('« Modifier mon inscription »');
+    expect(email.text).toContain('liste d’attente');
+    expect(email.text).toContain(OPTIONS.espaceCoureurUrl);
+    expect(email.text).toContain(ASSISTANCE_PHONE);
   });
 
   it('readEspaceCoureurUrl : APP_URL lue, slash final retiré', () => {

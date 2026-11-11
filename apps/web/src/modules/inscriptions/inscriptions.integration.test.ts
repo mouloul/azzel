@@ -21,6 +21,7 @@ import {
 import { applyAllMigrations, MIGRATION_DIRS } from './migrate';
 import {
   BothAcceptancesRequiredError,
+  DossierAReprendreError,
   DossierValidatedError,
   InvalidFieldsError,
   NoCoureurError,
@@ -917,23 +918,22 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     expect(rows[0]?.slug).toBe('longue');
   });
 
-  it('dossier refusé : submitInscription rejeté, ligne inchangée (seule une preuve ou une décision rouvrent)', async () => {
+  it('dossier refusé : submitInscription le reprend (en constitution, motif effacé, saisie appliquée)', async () => {
     const session = await createSession();
     const summary = await submitInscription(session, validInput(), { store });
     await sql`UPDATE coureur SET status = 'refusé', refusal_reason = 'dossier incomplet' WHERE id = ${summary.id}`;
 
-    await expect(
-      submitInscription(session, validInput({ epreuve: 'moyenne' }), { store }),
-    ).rejects.toBeInstanceOf(DossierValidatedError);
+    const repris = await submitInscription(session, validInput({ epreuve: 'moyenne' }), { store });
 
+    expect(repris.status).toBe('en constitution');
     const rows = await sql`
       SELECT e.slug, c.status, c.refusal_reason
       FROM coureur c JOIN epreuve e ON e.id = c.epreuve_id
       WHERE c.account_id = ${session.accountId}
     `;
-    expect(rows[0]?.slug).toBe('longue');
-    expect(rows[0]?.status).toBe('refusé');
-    expect(rows[0]?.refusal_reason).toBe('dossier incomplet');
+    expect(rows[0]?.slug).toBe('moyenne');
+    expect(rows[0]?.status).toBe('en constitution');
+    expect(rows[0]?.refusal_reason).toBeNull();
   });
 
   it('dossier refusé : acceptDocuments rejeté, acceptations inchangées', async () => {
@@ -946,9 +946,11 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     );
     await sql`UPDATE coureur SET status = 'refusé', refusal_reason = 'dossier incomplet' WHERE id = ${summary.id}`;
 
+    // Refusé : rien ne bouge tant que le dossier n'est pas repris par
+    // « Modifier mon inscription ».
     await expect(
       acceptDocuments(session, { decharge: true, reglement: true }, { store }),
-    ).rejects.toBeInstanceOf(DossierValidatedError);
+    ).rejects.toBeInstanceOf(DossierAReprendreError);
 
     const rows = await sql`
       SELECT decharge_accepted_at, reglement_accepted_at, refusal_reason
