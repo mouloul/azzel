@@ -8,7 +8,14 @@ import { FilEtapes, etapesAcceptations } from '@/components/fil-etapes';
 import { readAssistancePhone } from '@/lib/assistance-phone';
 import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 
-import { COUREUR_STATUS_EN_CONSTITUTION, DOCUMENT_SLUGS } from '@/modules/inscriptions/domain';
+import {
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_EXPIREE,
+  COUREUR_STATUS_LISTE_ATTENTE,
+  COUREUR_STATUS_REFUSE,
+  DOCUMENT_SLUGS,
+  peutAccepterDocuments,
+} from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
 import { getAcceptancesState, type AcceptancesState } from '@/modules/inscriptions/service';
 
@@ -124,19 +131,17 @@ export default async function AcceptancesPage() {
     );
   }
 
-  if (state.coureurStatus !== COUREUR_STATUS_EN_CONSTITUTION) {
+  if (state.coureurStatus === null || !peutAccepterDocuments(state.coureurStatus)) {
+    const fige = pageFigee(state.coureurStatus);
     return (
       <section className="auth">
         <article className="card">
           <p className="surtitre">Documents</p>
-          <h1>Dossier déjà validé</h1>
-          <p className="lead">
-            Ton dossier a été validé par l’organisation : les acceptations ne peuvent plus
-            être modifiées en ligne.
-          </p>
+          <h1>{fige.titre}</h1>
+          <p className="lead">{fige.texte}</p>
           <div className="auth-alt">
-            <a className="btn-contour" href="/espace-coureur">
-              Voir mon inscription
+            <a className="btn-contour" href={fige.href}>
+              {fige.lien}
             </a>
           </div>
         </article>
@@ -164,4 +169,58 @@ export default async function AcceptancesPage() {
       <FilEtapes etapes={etapesAcceptations(state.coureurStatus)} />
     </AcceptancesForm>
   );
+}
+
+/**
+ * Page affichée quand les acceptations ne sont pas ouvertes : le titre dit
+ * POURQUOI, statut par statut. « Dossier déjà validé » est réservé au validé.
+ */
+function pageFigee(statut: string | null): {
+  titre: string;
+  texte: string;
+  href: string;
+  lien: string;
+} {
+  if (statut === null) {
+    return {
+      titre: 'Inscris-toi d’abord',
+      texte: 'La décharge et le règlement s’acceptent après ton inscription à l’édition.',
+      href: '/inscription',
+      lien: 'M’inscrire',
+    };
+  }
+  if (statut === COUREUR_STATUS_EN_VALIDATION) {
+    return {
+      titre: 'Dossier en cours de validation',
+      texte:
+        'Ta preuve est déposée : l’organisation examine ton dossier. Les acceptations ne peuvent plus être modifiées en attendant sa décision.',
+      href: '/espace-coureur',
+      lien: 'Voir mon inscription',
+    };
+  }
+  if (statut === COUREUR_STATUS_REFUSE || statut === COUREUR_STATUS_EXPIREE) {
+    return {
+      titre: statut === COUREUR_STATUS_REFUSE ? 'Dossier refusé' : 'Inscription expirée',
+      texte:
+        'Ton dossier doit d’abord être repris : modifie ton inscription, puis accepte les documents.',
+      href: '/inscription',
+      lien: 'Modifier mon inscription',
+    };
+  }
+  if (statut === COUREUR_STATUS_LISTE_ATTENTE) {
+    return {
+      titre: 'Inscription en liste d’attente',
+      texte:
+        'Les documents s’acceptent une fois une place attribuée : l’organisation te préviendra par email.',
+      href: '/espace-coureur',
+      lien: 'Voir mon inscription',
+    };
+  }
+  return {
+    titre: 'Dossier déjà validé',
+    texte:
+      'Ton dossier a été validé par l’organisation : les acceptations ne peuvent plus être modifiées en ligne.',
+    href: '/espace-coureur',
+    lien: 'Voir mon inscription',
+  };
 }

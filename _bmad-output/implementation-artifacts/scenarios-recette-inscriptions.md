@@ -1,7 +1,7 @@
 # Scénarios de recette — Inscriptions : contingent, expiration, genre, hébergement
 
-**Produit :** Azzel · **Périmètre :** lots 1 → 5 de `spec-inscriptions-contingent-hebergement.md` · **Date :** 2026-11-05
-**Durée estimée :** 75–100 min (module par module, arrêt/reprise possible)
+**Produit :** Azzel · **Périmètre :** lots 1 → 5 de `spec-inscriptions-contingent-hebergement.md`, plus le module I9 (`spec-dossier-refuse-modifiable.md`) · **Date :** 2026-11-05, I9 ajouté le 2026-11-11
+**Durée estimée :** 100–130 min (module par module, arrêt/reprise possible)
 
 Chaque module se teste indépendamment : cochez au fur et à mesure et notez les écarts dans la colonne Observations du tableau final.
 
@@ -14,7 +14,7 @@ Plusieurs modules demandent de **modifier des réglages** (capacité, contingent
 ```bash
 bash scripts/dev-db.sh up         # Postgres 54329
 bash scripts/dev-mail.sh up       # faux SMTP — UI http://localhost:8026
-pnpm -F @azzel/web db:migrate     # jusqu'à 0038_reglages_journal.sql
+pnpm -F @azzel/web db:migrate     # jusqu'à 0044_statut_en_validation.sql (module I9)
 AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 ```
 
@@ -121,11 +121,11 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 | 5.1 | Avant toute manipulation, ouvrir `/inscription` en coureur | Un encart annonce la date limite : « Dépose ta preuve de paiement avant le … : passé ce délai, l'inscription expire et la place repart » |
 | 5.2 | Ouvrir `/preuve` | Un encart « Montant à verser : **2000 DA** — le dossard seul. » |
 | 5.3 | Jouer la commande ci-dessus, puis `pnpm -F @azzel/web inscriptions:echeances` | Sortie : « Expirations : **1** inscription(s) expirée(s), 1 email(s) enfilé(s) — autant de places rendues. » |
-| 5.4 | Ouvrir Mailpit (http://localhost:8026) | Un email « Azzel — ton inscription a expiré », qui dit que la place a été rendue et invite à se réinscrire |
+| 5.4 | Ouvrir Mailpit (http://localhost:8026) | Un email « Azzel — ton inscription a expiré », qui dit que la place a été rendue et invite à cliquer sur « Modifier mon inscription » depuis l'espace coureur |
 | 5.5 | Relancer la **même** commande | « Expirations : **0** » — rien n'est fait deux fois |
 | 5.6 | Vérifier Mailpit | **Toujours un seul** email d'expiration, pas deux |
 | 5.7 | Sur `/admin/inscriptions` | « Dossards pris » a **diminué de 1** : la place est rendue |
-| 5.8 | **Cas à ne pas casser :** reprendre un coureur en constitution, lui faire **déposer une preuve** sur `/preuve`, puis forcer son échéance dans le passé et relancer la commande | « Expirations : **0** ». Un dossier déposé à temps **ne doit jamais expirer**, même s'il n'a pas encore été validé par l'équipe |
+| 5.8 | **Cas à ne pas casser :** reprendre un coureur en constitution, lui faire **déposer une preuve** sur `/preuve` (il passe « en validation »), puis forcer son échéance dans le passé et relancer la commande | « Expirations : **0** ». Un dossier déposé à temps **ne doit jamais expirer**, même s'il n'a pas encore été validé par l'équipe |
 | 5.9 | **Rappel de la veille :** forcer `preuve_due_at` à `now() + interval '20 hours'` sur un coureur sans preuve, lancer la commande | « Rappels de preuve : 1 ». Un email « ta place t'attend encore jusqu'à demain » dans Mailpit |
 | 5.10 | Relancer la commande trois fois | Toujours **un seul** email de rappel — un cron horaire ne doit pas en envoyer vingt-quatre |
 
@@ -184,6 +184,126 @@ Ce module vérifie le point le plus délicat : deux personnes qui s'inscrivent *
 
 ---
 
+## I9 — Cycle de vie du dossier : en validation, reprise après refus ou expiration
+
+**Référence :** `spec-dossier-refuse-modifiable.md` (décision PO du 11/11/2026).
+
+```
+en constitution (place réservée, 48 h) ── preuve déposée ──▶ en validation
+en constitution ── preuve manquante à l'échéance ──▶ expirée (place rendue)
+en validation ──▶ validé  |  refusé (place rendue)
+refusé / expirée ── « Modifier mon inscription » ──▶ en constitution (nouveau délai) ou liste d'attente
+```
+
+**Préconditions :** migrations appliquées jusqu'à `0044_statut_en_validation.sql`, Mailpit démarré, une fenêtre **organisateur** (`/admin/dossiers`) et une fenêtre privée **coureur**. Préparez **deux fichiers images différents** (deux photos de reçu, A et B). Capacité remise à 600.
+
+Commande utile pour lire l'état d'un dossier (remplacer `EMAIL`) :
+
+```bash
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "SELECT c.status, c.refusal_reason, c.preuve_due_at, c.expired_at, \
+          (SELECT string_agg(p.status, ', ' ORDER BY p.created_at) FROM preuve p WHERE p.coureur_id = c.id) AS preuves \
+   FROM coureur c JOIN account a ON a.id = c.account_id WHERE a.email = 'EMAIL';"
+```
+
+### 9.A — Dépôt de preuve et validation
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 9.1 | Coureur neuf : s'inscrire sur `/inscription` | `/espace-coureur` affiche le statut **« En attente de justificatif de paiement »**, pastille à **point ambre** (orange foncé) |
+| 9.1b | **Sans** accepter les documents, ouvrir `/preuve` | Page **« Accepte d'abord la décharge et le règlement »** avec un bouton vers `/acceptations`. **Aucun** champ de dépôt : la preuve ne se dépose qu'après les acceptations |
+| 9.2 | Accepter les documents sur `/acceptations`, puis déposer le fichier **A** sur `/preuve` | Le statut devient **« En attente de validation par l'organisation »**, pastille à **point brun-gris** (le même que « Liste d'attente » : c'est à l'organisation d'agir). En base : `en validation` |
+| 9.3 | Ouvrir `/inscription` | Page **« Dossier en cours de validation »** — et **pas** « Dossier déjà validé ». Un bouton « Remplacer ma preuve de paiement » |
+| 9.3b | Ouvrir `/acceptations` | Page **« Dossier en cours de validation »**, aucune case à cocher : rien ne change pendant l'examen |
+| 9.4 | Ouvrir `/preuve` | Encart « Ta preuve est déposée : ton dossier est en cours de validation… ». Le fil d'étapes montre Paiement « Fait » et Validation en cours. Le dépôt reste possible |
+| 9.5 | Déposer le fichier **B** (remplacement) | Accepté. Le statut **reste** « en validation ». En base, preuves : `replaced, active` |
+| 9.6 | Organisateur : `/admin/dossiers` | Le compteur **« À examiner (en validation) »** compte ce dossier. « En attente de justificatif » compte les dossiers sans preuve |
+| 9.7 | Organisateur : ouvrir un dossier **en constitution** (sans preuve) | **Pas de formulaire de décision** ; message « Aucune décision à prendre : le coureur n'a pas encore déposé sa preuve de paiement. » |
+| 9.8 | Organisateur : ouvrir le dossier du coureur (en validation) | Le formulaire Valider / Refuser est proposé |
+| 9.9 | Forcer l'échéance du coureur dans le passé (commande du module I5), lancer `pnpm -F @azzel/web inscriptions:echeances` | « Expirations : **0** » : un dossier en validation **n'expire jamais** |
+
+### 9.B — Refus puis reprise
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 9.10 | Organisateur : **refuser** le dossier avec le motif « Montant incomplet » | Statut « Refusé ». Dans Mailpit, l'email « ton dossier est refusé » porte le motif et dit de cliquer sur **« Modifier mon inscription »** puis de déposer une **nouvelle** preuve |
+| 9.11 | Coureur : ouvrir `/espace-coureur` | Statut « Refusé », motif « Montant incomplet » affiché, et **une seule action** : « Modifier mon inscription ». Aucun lien vers `/preuve` ni `/acceptations` |
+| 9.12 | Coureur : ouvrir directement `/preuve` | Page **« Dossier refusé »** avec le motif et un bouton « Modifier mon inscription ». **Aucun** champ de dépôt |
+| 9.13 | Organisateur : rouvrir le dossier refusé | Pas de formulaire de décision ; message « Dossier refusé : il repassera en validation si le coureur modifie son inscription… » |
+| 9.14 | Coureur : cliquer « Modifier mon inscription » | Le formulaire s'ouvre (pas « Dossier déjà validé »). Un encadré rappelle le motif et explique : place réservée avec un nouveau délai s'il en reste, sinon liste d'attente |
+| 9.15 | Enregistrer sans rien changer | Retour à l'espace. Statut **« En attente de justificatif de paiement »**. En base : `en constitution`, `refusal_reason` vide, `preuve_due_at` = **nouvelle** échéance (fin du surlendemain d'aujourd'hui), preuves : `replaced, refusée` |
+| 9.16 | Sur `/preuve`, redéposer **le fichier B** (celui qui a été refusé) | Refus : « Cette preuve identique a déjà été refusée — dépose une version différente… ». Le statut reste en constitution |
+| 9.17 | Déposer le fichier **A** | Accepté. Statut « en validation ». Le dossier réapparaît dans « À examiner » |
+| 9.18 | Organisateur : **valider** | Statut « Validé », dossard attribué |
+| 9.19 | Coureur : ouvrir `/inscription` | Page **« Dossier déjà validé »** — c'est le seul statut qui l'affiche |
+
+### 9.C — Expiration puis reprise
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 9.20 | Nouveau coureur inscrit, **sans** preuve. Forcer son échéance dans le passé, lancer la commande d'échéances | Statut « Expirée ». Email « ton inscription a expiré » : il invite à cliquer sur « Modifier mon inscription » depuis l'espace coureur |
+| 9.21 | Coureur : `/espace-coureur` | Pièce « Dossier validé » : « Inscription expirée faute de preuve dans le délai… » et l'action « Modifier mon inscription », seule |
+| 9.22 | Ouvrir `/inscription` | Formulaire ouvert, encart « Ton inscription a expiré… Enregistre de nouveau ton inscription pour la reprendre » ; **aucune** échéance passée annoncée |
+| 9.23 | Enregistrer | Statut « En attente de justificatif ». En base : `en constitution`, nouvelle `preuve_due_at`, **`expired_at` conservé** (trace de l'expiration) |
+| 9.23b | **Second cycle** — sur ce même coureur, forcer `preuve_due_at` à `now() + interval '20 hours'`, lancer la commande d'échéances | « Rappels de preuve : **1** » — un second email « ta place t'attend encore » dans Mailpit (le premier cycle n'empêche pas le rappel de la nouvelle échéance). Relancer : toujours un seul nouveau rappel |
+| 9.23c | Forcer `preuve_due_at` à `now() - interval '1 minute'`, relancer la commande | « Expirations : **1** », et un **second** email « ton inscription a expiré » dans Mailpit |
+
+### 9.D — Reprise sans place disponible
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 9.24 | Préparer un coureur refusé (9.10) ou expiré (9.20). Sur `/admin/inscriptions`, régler la capacité au nombre de **dossards pris** | « Places restantes : 0 » |
+| 9.25 | Coureur : « Modifier mon inscription », enregistrer | Statut **« Liste d'attente »**, aucune échéance, aucun versement demandé |
+| 9.26 | Remettre la capacité à 600 | — |
+
+### 9.E — Migration des données existantes
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+La migration étant déjà appliquée, on **fabrique** la situation qu'elle corrige (un dossier « en constitution » avec une preuve active, comme avant ce changement), puis on la rejoue. Remplacer `EMAIL` par l'adresse d'un coureur **en constitution sans preuve** (module 9.20 avant expiration, ou un coureur neuf).
+
+```bash
+# 1. Fabriquer un dossier hérité : preuve active sur un dossier en constitution
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "INSERT INTO preuve (organisation_id, coureur_id, storage_key, mime, size_bytes, sha256, status) \
+   SELECT c.organisation_id, c.id, 'recette-heritee.jpg', 'image/jpeg', 1024, md5(random()::text), 'active' \
+   FROM coureur c JOIN account a ON a.id = c.account_id \
+   WHERE a.email = 'EMAIL' AND c.status = 'en constitution';"
+
+# 2. Oublier la migration 0044 pour pouvoir la rejouer
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "DELETE FROM schema_migrations WHERE name = '0044_statut_en_validation.sql';"
+
+# 3. Compter les dossiers en constitution avec preuve active
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "SELECT count(*) FROM coureur c WHERE c.status = 'en constitution' \
+   AND EXISTS (SELECT 1 FROM preuve p WHERE p.coureur_id = c.id AND p.status = 'active');"
+```
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 9.27 | Jouer les commandes 1 et 2, puis la commande 3 | La commande 3 affiche **1** (au moins) : le dossier hérité |
+| 9.28 | Lancer `pnpm -F @azzel/web db:migrate`, puis la commande 3 | « Migration appliquée : 0044_statut_en_validation.sql », puis **0**. Le coureur `EMAIL` est désormais **« en validation »** ; les coureurs sans preuve restent « en constitution » |
+| 9.29 | Rejouer les commandes 2 puis `db:migrate` | La migration repasse **sans erreur** (elle est rejouable), la commande 3 affiche toujours **0** |
+| 9.30 | Relancer `pnpm -F @azzel/web db:migrate` | « Migrations déjà appliquées : rien à faire. » |
+
+### Remise en état après I9
+
+```bash
+# Capacité d'origine (si modifiée en 9.24)
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "UPDATE edition SET capacite = 600;"
+# Retirer la preuve fabriquée en 9.E (le fichier n'existe pas sur le disque)
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "DELETE FROM preuve WHERE storage_key = 'recette-heritee.jpg';"
+```
+
+Le coureur dont la preuve fabriquée a été retirée reste « en validation » sans preuve : l'organisation ne peut pas le valider (« il manque la preuve de paiement »). Le refuser, ou repartir d'une base propre avec la commande de réinitialisation du seed. Les comptes coureurs créés pendant I9 peuvent rester : ils n'affectent aucun autre module.
+
+- [ ] I9 conforme — Observations : …………
+
+---
+
 ## Remise en état après recette
 
 ```bash
@@ -209,10 +329,12 @@ L'historique des réglages conserve la trace de vos manipulations : c'est normal
 | I6 | Hébergement optionnel contingenté | ☐ Conforme ☐ Écart | |
 | I7 | Concurrence sur la dernière place | ☐ Conforme ☐ Écart | |
 | I8 | Dégradations et droits d'accès | ☐ Conforme ☐ Écart | |
+| I9 | Cycle de vie du dossier : en validation, reprise après refus ou expiration | ☐ Conforme ☐ Écart | |
 
 **Points qui demandent une décision plutôt qu'une correction, à signaler s'ils gênent :**
 
 - Le compteur public peut avoir jusqu'à **60 secondes de retard** (page en cache). Un visiteur peut lire « 3 places » alors qu'il n'y en a plus ; il part alors en liste d'attente sans que rien ne soit perdu.
 - Les places libérées par expiration **ne sont attribuées à personne automatiquement** : c'est un choix d'organisation. Quelqu'un doit ouvrir l'écran d'administration et les donner.
 - Abaisser le contingent d'hébergement **retire son lit** à un coureur qui renvoie son formulaire ensuite (étape 6.9). Le contingent fait autorité à chaque enregistrement.
+- La preuve ne se dépose **qu'après** l'acceptation de la décharge et du règlement (décision PO du 11/11/2026) : aucune acceptation n'est possible une fois le dossier en validation.
 - Les deux prix sont **provisoires**. Les changer après les premières inscriptions créera deux populations ayant versé des montants différents.

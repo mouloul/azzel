@@ -7,9 +7,13 @@ import { readAssistancePhone } from '@/lib/assistance-phone';
 import { lectureBornee, lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 
 import {
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_EXPIREE,
   COUREUR_STATUS_LISTE_ATTENTE,
+  COUREUR_STATUS_REFUSE,
   FUSEAU_COURSE,
-  STATUTS_MODIFIABLES,
+  estModifiable,
   formatDateFrUtc,
 } from '@/modules/inscriptions/domain';
 import { toApiError as toInscriptionsApiError } from '@/modules/inscriptions/errors';
@@ -119,15 +123,27 @@ export default async function InscriptionPage() {
     );
   }
 
-  if (state.coureur && !STATUTS_MODIFIABLES.includes(state.coureur.status)) {
+  if (state.coureur && !estModifiable(state.coureur.status)) {
+    // Deux dossiers figés, deux raisons : « déjà validé » adressé à un coureur
+    // qui attend la décision lui ferait croire que c'est fait.
+    const enValidation = state.coureur.status === COUREUR_STATUS_EN_VALIDATION;
     return (
       <section className="auth">
         <article className="card">
           <p className="surtitre">Inscription</p>
-          <h1>Dossier déjà validé</h1>
+          <h1>{enValidation ? 'Dossier en cours de validation' : 'Dossier déjà validé'}</h1>
           <p className="lead">
-            Ton dossier a été validé par l’organisation : il ne peut plus être modifié en ligne.
+            {enValidation
+              ? 'Ta preuve de paiement est déposée : l’organisation examine ton dossier. Il ne peut plus être modifié en attendant sa décision — tu peux seulement remplacer ta preuve.'
+              : 'Ton dossier a été validé par l’organisation : il ne peut plus être modifié en ligne.'}
           </p>
+          {enValidation ? (
+            <div className="auth-alt">
+              <a className="btn-action" href="/preuve">
+                Remplacer ma preuve de paiement
+              </a>
+            </div>
+          ) : null}
           <div className="auth-alt">
             <a className="btn-contour" href="/espace-coureur">
               Voir mon inscription
@@ -147,10 +163,14 @@ export default async function InscriptionPage() {
     ),
   ]);
   const enAttente = state.coureur?.status === COUREUR_STATUS_LISTE_ATTENTE;
+  const refuse = state.coureur?.status === COUREUR_STATUS_REFUSE;
+  const expiree = state.coureur?.status === COUREUR_STATUS_EXPIREE;
   // Échéance rendue à l'heure de la course : l'instant est stocké en UTC,
   // mais le coureur vit à Alger — lui afficher 22h59 le ferait rater d'une heure.
+  // Seul un dossier en constitution a une échéance VIVANTE : celle d'un
+  // dossier refusé ou expiré est passée, la lui annoncer serait faux.
   const echeance =
-    state.coureur?.preuveDueAt != null
+    state.coureur?.status === COUREUR_STATUS_EN_CONSTITUTION && state.coureur.preuveDueAt != null
       ? new Intl.DateTimeFormat('fr-FR', {
           dateStyle: 'full',
           timeStyle: 'short',
@@ -162,6 +182,28 @@ export default async function InscriptionPage() {
     <InscriptionForm state={state} assistancePhone={assistancePhone} hebergement={hebergement}>
       <FilEtapes etapes={etapesInscription(state.coureur)} />
       <CompteurPlaces places={places} />
+      {refuse ? (
+        <div role="alert" aria-live="assertive" className="error-box">
+          <p className="error-message">Ton dossier a été refusé.</p>
+          {state.coureur?.refusalReason != null ? (
+            <p className="error-action">Motif : {state.coureur.refusalReason}</p>
+          ) : null}
+          <p className="error-action">
+            Corrige ton inscription puis enregistre-la : elle repart du début. S’il reste une
+            place, elle t’est réservée avec un nouveau délai pour déposer une{' '}
+            <strong>nouvelle</strong> preuve de paiement (la preuve refusée ne compte plus) ;
+            sinon, tu passes en liste d’attente.
+          </p>
+        </div>
+      ) : null}
+      {expiree ? (
+        <p className="encart-attente" role="status">
+          Ton inscription a <strong>expiré</strong> faute de preuve de paiement dans le délai,
+          et ta place a été rendue. Enregistre de nouveau ton inscription pour la reprendre :
+          s’il reste une place, elle t’est réservée avec un nouveau délai ; sinon, tu passes
+          en liste d’attente.
+        </p>
+      ) : null}
       {echeance !== null ? (
         <p className="encart-echeance" role="status">
           Ta place est réservée. Dépose ta preuve de paiement avant le

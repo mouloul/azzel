@@ -41,6 +41,55 @@ export class DossierValidatedError extends Error {
   }
 }
 
+/**
+ * Dossier en validation : figé jusqu'à la décision de l'organisation. Seul le
+ * remplacement de la preuve reste ouvert (il laisse le dossier en validation).
+ */
+export class DossierEnValidationError extends Error {
+  constructor() {
+    super('dossier en validation : figé jusqu’à la décision');
+    this.name = 'DossierEnValidationError';
+  }
+}
+
+/**
+ * Dossier refusé ou expiré : il doit d'abord être repris par « Modifier mon
+ * inscription » (nouvelle place ou liste d'attente) avant tout dépôt.
+ */
+export class DossierAReprendreError extends Error {
+  constructor(readonly status: string) {
+    super(`dossier ${status} : à reprendre par « Modifier mon inscription »`);
+    this.name = 'DossierAReprendreError';
+  }
+}
+
+/**
+ * Coureur en liste d'attente : aucun versement ni document n'est demandé tant
+ * qu'une place ne lui a pas été attribuée. Jamais « déjà validé ».
+ */
+export class DossierListeAttenteError extends Error {
+  constructor() {
+    super('dossier en liste d’attente : aucune place attribuée');
+    this.name = 'DossierListeAttenteError';
+  }
+}
+
+/** Dépôt de preuve sans la décharge et le règlement acceptés. */
+export class AcceptationsManquantesError extends Error {
+  constructor() {
+    super('acceptations manquantes : décharge et règlement exigés avant la preuve');
+    this.name = 'AcceptationsManquantesError';
+  }
+}
+
+/** Décision de l'organisation hors du statut « en validation ». */
+export class DossierHorsValidationError extends Error {
+  constructor(readonly status: string) {
+    super(`décision impossible : dossier « ${status} », pas « en validation »`);
+    this.name = 'DossierHorsValidationError';
+  }
+}
+
 export class InvalidBodyError extends Error {
   constructor() {
     super('corps de requête illisible');
@@ -250,6 +299,41 @@ function sharedApiError(error: unknown, config: SharedErrorMapperConfig): ApiErr
       }),
     };
   }
+  if (error instanceof DossierEnValidationError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'inscriptions.dossier_en_validation',
+        message:
+          'Ton dossier est en cours de validation par l’organisation : il ne peut plus être modifié en attendant sa décision.',
+        action: 'Tu peux seulement remplacer ta preuve de paiement depuis ton espace coureur.',
+      }),
+    };
+  }
+  if (error instanceof DossierListeAttenteError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'inscriptions.dossier_liste_attente',
+        message:
+          'Ton inscription est en liste d’attente : aucun versement ni document n’est demandé tant qu’une place ne t’a pas été attribuée.',
+        action: 'L’organisation te préviendra par email dès qu’une place t’est attribuée.',
+      }),
+    };
+  }
+  if (error instanceof DossierAReprendreError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'inscriptions.dossier_a_reprendre',
+        message:
+          error.status === 'expirée'
+            ? 'Ton inscription a expiré : elle doit d’abord être reprise.'
+            : 'Ton dossier a été refusé : il doit d’abord être repris.',
+        action: 'Clique sur « Modifier mon inscription » depuis ton espace coureur, puis recommence.',
+      }),
+    };
+  }
   if (error instanceof InvalidBodyError) {
     return {
       status: 400,
@@ -379,6 +463,17 @@ export function toPreuveApiError(error: unknown): ApiError {
         message:
           'Cette preuve identique a déjà été refusée — dépose une version différente ou appelle l’équipe.',
         action: 'Choisis un autre fichier (photo reprise, PDF différent) puis renvoie-le.',
+      }),
+    };
+  }
+  if (error instanceof AcceptationsManquantesError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'preuve.acceptations_manquantes',
+        message:
+          'La décharge et le règlement doivent être acceptés avant le dépôt de ta preuve de paiement.',
+        action: 'Accepte-les sur la page /acceptations, puis dépose ta preuve.',
       }),
     };
   }
@@ -514,6 +609,16 @@ export function toAdminApiError(error: unknown): ApiError {
         code: 'admin.preuve_storage_error',
         message: 'Le fichier de cette preuve est illisible sur le stockage.',
         action: 'Réessaie dans un instant ; si cela persiste, vérifie le volume STORAGE_DIR.',
+      }),
+    };
+  }
+  if (error instanceof DossierHorsValidationError) {
+    return {
+      status: 409,
+      envelope: createErrorEnvelope({
+        code: 'admin.dossier_hors_validation',
+        message: `Ce dossier est « ${error.status} » : l’organisation ne décide que des dossiers en validation (preuve déposée).`,
+        action: 'Recharge la page : le dossier a pu changer d’état entre-temps.',
       }),
     };
   }

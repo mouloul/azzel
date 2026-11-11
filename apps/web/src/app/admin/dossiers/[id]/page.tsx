@@ -9,6 +9,12 @@ import { requireRolePage } from '@/modules/iam/session';
 import {
   AGE_CATEGORY_LABELS,
   type AgeCategory,
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_EXPIREE,
+  COUREUR_STATUS_LISTE_ATTENTE,
+  COUREUR_STATUS_REFUSE,
+  COUREUR_STATUS_VALIDE,
   statutAffiche,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
@@ -22,6 +28,18 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Dossier coureur',
+};
+
+/** L'organisation ne décide que d'un dossier en validation : ailleurs, on dit pourquoi. */
+const MESSAGE_SANS_DECISION: Record<string, string> = {
+  [COUREUR_STATUS_EN_CONSTITUTION]:
+    'Aucune décision à prendre : le coureur n’a pas encore déposé sa preuve de paiement.',
+  [COUREUR_STATUS_REFUSE]:
+    'Dossier refusé : il repassera en validation si le coureur modifie son inscription et dépose une nouvelle preuve.',
+  [COUREUR_STATUS_EXPIREE]:
+    'Inscription expirée faute de preuve : le coureur peut la reprendre en modifiant son inscription.',
+  [COUREUR_STATUS_LISTE_ATTENTE]:
+    'Coureur en liste d’attente : attribue-lui une place depuis l’écran Inscriptions.',
 };
 
 export default async function AdminDossierDetailPage({
@@ -77,7 +95,7 @@ export default async function AdminDossierDetailPage({
               langage visuel par statut (point + libellé, jamais la couleur
               seule) ; l'ancien vocabulaire aa-chip est retiré. */}
           {(() => {
-            const statut = statutAffiche(coureur.status, detail.preuveActive !== null);
+            const statut = statutAffiche(coureur.status);
             return (
               <span className={`socle-pastille ${statut.pastille}`}>
                 <span className="socle-pastille-point" aria-hidden="true" />
@@ -146,7 +164,11 @@ export default async function AdminDossierDetailPage({
           )}
         </div>
 
-        {detail.decidePar !== null ? (
+        {/* La trace de décision ne s'affiche que sur un dossier DÉCIDÉ : un
+            dossier refusé puis repris garde en base l'auteur du refus, mais
+            l'annoncer « décidé » sur un dossier en constitution serait faux. */}
+        {detail.decidePar !== null &&
+        (coureur.status === COUREUR_STATUS_VALIDE || coureur.status === COUREUR_STATUS_REFUSE) ? (
           <p className="meta">
             Décidé par {detail.decidePar.email} le{' '}
             {formatLocalDateTime(detail.decidePar.decidedAt)}
@@ -160,7 +182,14 @@ export default async function AdminDossierDetailPage({
           </div>
         ) : null}
 
-        <DecisionForm coureurId={coureur.id} status={coureur.status} />
+        {coureur.status === COUREUR_STATUS_EN_VALIDATION ? (
+          <DecisionForm coureurId={coureur.id} />
+        ) : coureur.status !== COUREUR_STATUS_VALIDE ? (
+          <p className="hint" role="status">
+            {MESSAGE_SANS_DECISION[coureur.status] ??
+              'Aucune décision possible : le dossier n’est pas en validation.'}
+          </p>
+        ) : null}
 
         <div className="auth-alt">
           <Link className="btn-lien" href="/admin/dossiers">

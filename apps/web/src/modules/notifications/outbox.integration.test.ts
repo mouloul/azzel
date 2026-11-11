@@ -135,8 +135,8 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
 
   /** Un dossier n'est validable qu'avec preuve active + décharge + règlement (story 1.6). */
   async function completerDossier(session: SessionRecord): Promise<void> {
-    await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
     await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
   }
 
   beforeAll(async () => {
@@ -264,6 +264,9 @@ describe.skipIf(testUrls === null)('notifications — intégration Postgres (bas
       store,
       triggerOutbox: noTrigger,
     });
+    // L'organisation ne décide que d'un dossier en validation (preuve déposée).
+    await acceptDocuments(refuseSession, { decharge: true, reglement: true }, { store });
+    await uploadPreuve(refuseSession, jpegBytes(21_000), { store, proofStore });
     const refuseCoureur = await coureurIdFor(refuseSession.accountId);
     await decideDossier(
       await organisateurSession(),
@@ -927,6 +930,9 @@ describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi r�
     try {
       const session = await createSession();
       await submitInscription(session, validInput(), { store, triggerOutbox: async () => {} });
+      // L'organisation ne décide que d'un dossier en validation (preuve déposée).
+      await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      await uploadPreuve(session, jpegBytes(21_000), { store, proofStore });
       const coureurRows = await sql`SELECT id FROM coureur WHERE account_id = ${session.accountId}`;
       const organisateurId = randomUUID();
       await sql`
@@ -953,6 +959,7 @@ describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi r�
       expect(message).not.toBeNull();
       const text = await mailpitMessageText((message as MailpitMessageListItem).ID);
       expect(text).toContain('Motif : Reçu de paiement illisible');
+      expect(text).toContain('Modifier mon inscription');
       expect(text).toContain('Appeler l’équipe');
     } finally {
       await mailpitPurge();
@@ -963,8 +970,8 @@ describe.skipIf(!mailpitReady)('notifications — intégration Mailpit (envoi r�
     try {
       const session = await createSession();
       await submitInscription(session, validInput(), { store, triggerOutbox: async () => {} });
-      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       const coureurRows = await sql`SELECT id FROM coureur WHERE account_id = ${session.accountId}`;
       const organisateurId = randomUUID();
       await sql`

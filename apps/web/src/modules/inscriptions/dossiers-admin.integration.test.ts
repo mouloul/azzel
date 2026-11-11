@@ -19,7 +19,11 @@ import {
 } from '@/test/integration-db';
 
 import {
+  AcceptationsManquantesError,
   DecisionInvalidError,
+  DossierAReprendreError,
+  DossierEnValidationError,
+  DossierHorsValidationError,
   DossierIncompletError,
   DossierNotFoundError,
   DossierValidatedError,
@@ -29,6 +33,7 @@ import {
   RefusalReasonRequiredError,
   RefusalReasonTooLongError,
   toAdminApiError,
+  toApiError,
   toPreuveApiError,
 } from './errors';
 import { LocalDiskProofStore } from './proof-store';
@@ -112,8 +117,13 @@ describe.skipIf(testUrls === null)(
       }
     });
 
+    /**
+     * Coureur inscrit. Par défaut, décharge et règlement acceptés : la preuve
+     * ne se dépose qu'après eux (PO, 11/11/2026).
+     */
     async function createCoureurSession(
       input: Partial<InscriptionFormInput> = {},
+      { accepter = true }: { accepter?: boolean } = {},
     ): Promise<SessionRecord> {
       const accountId = randomUUID();
       await sql`
@@ -128,6 +138,9 @@ describe.skipIf(testUrls === null)(
         createdAt: new Date(),
       };
       await submitInscription(session, validInput(input), { store });
+      if (accepter) {
+        await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      }
       return session;
     }
 
@@ -136,8 +149,8 @@ describe.skipIf(testUrls === null)(
      * acceptations. Préalable obligatoire à toute validation.
      */
     async function completerDossier(session: SessionRecord): Promise<void> {
-      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
       await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      await uploadPreuve(session, jpegBytes(20_000), { store, proofStore });
     }
 
     async function organisateurSession(): Promise<SessionRecord> {
@@ -197,7 +210,7 @@ describe.skipIf(testUrls === null)(
       expect(row?.refusal_reason).toBeNull();
     });
 
-    it('validation : en constitution → validé, horodaté, sans motif, traçabilité décidée par', async () => {
+    it('validation : en validation → validé, horodaté, sans motif, traçabilité décidée par', async () => {
       const session = await createCoureurSession();
       const coureurId = await coureurIdFor(session.accountId);
       await completerDossier(session);
@@ -229,50 +242,77 @@ describe.skipIf(testUrls === null)(
       expect(detail?.decidePar?.email).toBe(organisateur.email);
     });
 
-    it('validation sans preuve ni acceptations : DossierIncompletError (409 admin), rien ne change', async () => {
-      const session = await createCoureurSession();
-      const coureurId = await coureurIdFor(session.accountId);
-
-      const error = await decideDossier(
-        await organisateurSession(),
-        coureurId,
-        { decision: 'valider' },
-        { store },
-      ).catch((caught: unknown) => caught);
-
-      expect(error).toBeInstanceOf(DossierIncompletError);
-      expect((error as DossierIncompletError).pieces).toEqual(['preuve', 'decharge', 'reglement']);
-      const apiError = toAdminApiError(error);
-      expect(apiError.status).toBe(409);
-      expect(apiError.envelope.error.code).toBe('admin.dossier_incomplet');
-      expect(apiError.envelope.error.message).toContain('preuve de paiement');
-      expect(apiError.envelope.error.message).toContain('décharge');
-
-      const row = await coureurRow(coureurId);
-      expect(row?.status).toBe('en constitution');
-    });
-
-    it('validation avec preuve mais sans acceptations : refusée (décharge non signée)', async () => {
-      const session = await createCoureurSession();
-      const coureurId = await coureurIdFor(session.accountId);
-      await uploadPreuve(session, jpegBytes(21_000), { store, proofStore });
-
-      const error = await decideDossier(
-        await organisateurSession(),
-        coureurId,
-        { decision: 'valider' },
-        { store },
-      ).catch((caught: unknown) => caught);
-
-      expect(error).toBeInstanceOf(DossierIncompletError);
-      expect((error as DossierIncompletError).pieces).toEqual(['decharge', 'reglement']);
-      expect((await coureurRow(coureurId))?.status).toBe('en constitution');
-    });
-
-    it('validation avec acceptations mais sans preuve active : refusée', async () => {
+    it('décision sur un dossier en constitution (sans preuve) : 409 hors validation, rien ne change', async () => {
       const session = await createCoureurSession();
       const coureurId = await coureurIdFor(session.accountId);
       await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+      const before = await coureurRow(coureurId);
+
+      for (const decision of [
+        { decision: 'valider' },
+        { decision: 'refuser', motif: 'aucune preuve déposée' },
+      ]) {
+        const error = await decideDossier(
+          await organisateurSession(),
+          coureurId,
+          decision,
+          { store },
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(DossierHorsValidationError);
+        const apiError = toAdminApiError(error);
+        expect(apiError.status).toBe(409);
+        expect(apiError.envelope.error.code).toBe('admin.dossier_hors_validation');
+        expect(apiError.envelope.error.message).toContain('en constitution');
+      }
+
+      const after = await coureurRow(coureurId);
+      expect(after?.status).toBe('en constitution');
+      expect(after?.refusal_reason).toBeNull();
+      expect((after?.updated_at as Date).toISOString()).toBe(
+        (before?.updated_at as Date).toISOString(),
+      );
+    });
+
+    it('dépôt sans acceptations : 409 nommé, renvoi vers les acceptations, dossier inchangé', async () => {
+      const session = await createCoureurSession({}, { accepter: false });
+      const coureurId = await coureurIdFor(session.accountId);
+
+      const error = await uploadPreuve(session, jpegBytes(21_000), { store, proofStore }).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toBeInstanceOf(AcceptationsManquantesError);
+      const apiError = toPreuveApiError(error);
+      expect(apiError.status).toBe(409);
+      expect(apiError.envelope.error.code).toBe('preuve.acceptations_manquantes');
+      expect(apiError.envelope.error.action).toContain('/acceptations');
+      expect((await coureurRow(coureurId))?.status).toBe('en constitution');
+      const preuves = await sql`SELECT count(*)::int AS n FROM preuve WHERE coureur_id = ${coureurId}`;
+      expect(preuves[0]?.n).toBe(0);
+    });
+
+    it('en validation : aucune acceptation possible, le dossier est figé', async () => {
+      const session = await createCoureurSession();
+      const coureurId = await coureurIdFor(session.accountId);
+      await uploadPreuve(session, jpegBytes(21_500), { store, proofStore });
+      expect((await coureurRow(coureurId))?.status).toBe('en validation');
+
+      const error = await acceptDocuments(
+        session,
+        { decharge: true, reglement: true },
+        { store },
+      ).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(DossierEnValidationError);
+      expect(toApiError(error).envelope.error.code).toBe('inscriptions.dossier_en_validation');
+      expect((await coureurRow(coureurId))?.status).toBe('en validation');
+    });
+
+    it('défense en profondeur : en validation SANS preuve active (donnée forcée) → DossierIncompletError', async () => {
+      const session = await createCoureurSession();
+      const coureurId = await coureurIdFor(session.accountId);
+      await sql`UPDATE coureur SET status = 'en validation' WHERE id = ${coureurId}`;
 
       const error = await decideDossier(
         await organisateurSession(),
@@ -283,17 +323,33 @@ describe.skipIf(testUrls === null)(
 
       expect(error).toBeInstanceOf(DossierIncompletError);
       expect((error as DossierIncompletError).pieces).toEqual(['preuve']);
-      expect((await coureurRow(coureurId))?.status).toBe('en constitution');
+      expect((await coureurRow(coureurId))?.status).toBe('en validation');
     });
 
-    it('refus d’un dossier incomplet : toujours possible (seule la validation est gardée)', async () => {
-      const session = await createCoureurSession();
-      const coureurId = await coureurIdFor(session.accountId);
+    it('défense en profondeur : en validation SANS acceptations (donnée héritée) → validation refusée, refus possible', async () => {
+      const session = await createCoureurSession({}, { accepter: false });
+      const coureurId0 = await coureurIdFor(session.accountId);
+      // Situation antérieure à la règle « acceptations avant preuve » : preuve
+      // active posée sans acceptations, dossier migré en validation.
+      await sql`
+        INSERT INTO preuve (organisation_id, coureur_id, storage_key, mime, size_bytes, sha256, status)
+        VALUES (${organisationId}, ${coureurId0}, ${`${randomUUID()}.jpg`}, 'image/jpeg', 1024, ${randomUUID()}, 'active')
+      `;
+      await sql`UPDATE coureur SET status = 'en validation' WHERE id = ${coureurId0}`;
+      const incomplet = await decideDossier(
+        await organisateurSession(),
+        coureurId0,
+        { decision: 'valider' },
+        { store },
+      ).catch((caught: unknown) => caught);
+      expect(incomplet).toBeInstanceOf(DossierIncompletError);
+      expect((incomplet as DossierIncompletError).pieces).toEqual(['decharge', 'reglement']);
+      expect(toAdminApiError(incomplet).envelope.error.code).toBe('admin.dossier_incomplet');
 
       const summary = await decideDossier(
         await organisateurSession(),
-        coureurId,
-        { decision: 'refuser', motif: 'aucune preuve déposée' },
+        coureurId0,
+        { decision: 'refuser', motif: 'acceptations manquantes' },
         { store },
       );
 
@@ -326,6 +382,7 @@ describe.skipIf(testUrls === null)(
     it('refus avec motif : refusé + motif stocké, visible côté coureur', async () => {
       const session = await createCoureurSession();
       const coureurId = await coureurIdFor(session.accountId);
+      await uploadPreuve(session, jpegBytes(23_000), { store, proofStore });
 
       const summary = await decideDossier(
         await organisateurSession(),
@@ -373,7 +430,7 @@ describe.skipIf(testUrls === null)(
       ).rejects.toBeInstanceOf(DecisionInvalidError);
     });
 
-    it('re-validation depuis refusé : permise, motif remis à NULL', async () => {
+    it('décision depuis refusé : 409 hors validation — le coureur doit d’abord reprendre son dossier', async () => {
       const session = await createCoureurSession();
       const coureurId = await coureurIdFor(session.accountId);
       await completerDossier(session);
@@ -384,6 +441,28 @@ describe.skipIf(testUrls === null)(
         { store },
       );
 
+      await expect(
+        decideDossier(await organisateurSession(), coureurId, { decision: 'valider' }, { store }),
+      ).rejects.toBeInstanceOf(DossierHorsValidationError);
+
+      const row = await coureurRow(coureurId);
+      expect(row?.status).toBe('refusé');
+      expect(row?.refusal_reason).toBe('premier refus');
+    });
+
+    it('re-validation après reprise : refusé → modifier → nouvelle preuve → validé', async () => {
+      const session = await createCoureurSession();
+      const coureurId = await coureurIdFor(session.accountId);
+      await completerDossier(session);
+      await decideDossier(
+        await organisateurSession(),
+        coureurId,
+        { decision: 'refuser', motif: 'premier refus' },
+        { store },
+      );
+
+      await submitInscription(session, validInput(), { store });
+      await uploadPreuve(session, jpegBytes(20_500), { store, proofStore });
       const summary = await decideDossier(await organisateurSession(), coureurId, {
         decision: 'valider',
       }, { store });
@@ -440,7 +519,7 @@ describe.skipIf(testUrls === null)(
       expect(await getDossierDetail(await organisateurSession(), randomUUID(), { store })).toBeNull();
     });
 
-    it('cycle de correction : refusé + nouvelle preuve → en constitution, ancienne replaced', async () => {
+    it('cycle de correction : refusé → dépôt direct interdit ; reprise puis nouvelle preuve → en validation', async () => {
       const session = await createCoureurSession();
       const coureurId = await coureurIdFor(session.accountId);
       const first = await uploadPreuve(session, jpegBytes(50_000), { store, proofStore });
@@ -451,21 +530,33 @@ describe.skipIf(testUrls === null)(
         { store },
       );
 
+      // Depuis refusé, la seule action est « Modifier mon inscription ».
+      const direct = await uploadPreuve(session, jpegBytes(55_000), { store, proofStore }).catch(
+        (caught: unknown) => caught,
+      );
+      expect(direct).toBeInstanceOf(DossierAReprendreError);
+      expect(toPreuveApiError(direct).status).toBe(409);
+      expect(toPreuveApiError(direct).envelope.error.action).toContain('Modifier mon inscription');
+
+      await submitInscription(session, validInput(), { store });
+      const repris = await coureurRow(coureurId);
+      expect(repris?.status).toBe('en constitution');
+      expect(repris?.refusal_reason).toBeNull();
+
       const second = await uploadPreuve(session, jpegBytes(60_000), { store, proofStore });
 
       expect(second.id).not.toBe(first.id);
       const row = await coureurRow(coureurId);
-      expect(row?.status).toBe('en constitution');
+      expect(row?.status).toBe('en validation');
       expect(row?.refusal_reason).toBeNull();
 
       const preuves = await sql`
         SELECT id, status FROM preuve WHERE coureur_id = ${coureurId} ORDER BY created_at ASC
       `;
-      expect(preuves[0]?.status).toBe('replaced');
-      expect(preuves[1]?.status).toBe('active');
+      expect(preuves.map((preuve) => preuve.status)).toEqual(['refusée', 'active']);
     });
 
-    it('re-dépôt identique depuis refusé : PreuveIdenticalRefusedError, dossier et preuves inchangés', async () => {
+    it('re-dépôt identique après reprise d’un refus : PreuveIdenticalRefusedError, dossier et preuves inchangés', async () => {
       const session = await createCoureurSession();
       const coureurId = await coureurIdFor(session.accountId);
       const bytes = jpegBytes(40_000);
@@ -477,6 +568,10 @@ describe.skipIf(testUrls === null)(
         { store },
       );
 
+      // Reprise faite : la preuve refusée n'est plus active, mais ses octets
+      // restent reconnus.
+      await submitInscription(session, validInput(), { store });
+
       await expect(
         uploadPreuve(session, bytes, { store, proofStore }),
       ).rejects.toBeInstanceOf(PreuveIdenticalRefusedError);
@@ -486,12 +581,12 @@ describe.skipIf(testUrls === null)(
       expect(apiError.envelope.error.message).toContain('déjà été refusée');
 
       const row = await coureurRow(coureurId);
-      expect(row?.status).toBe('refusé');
-      expect(row?.refusal_reason).toBe('montant illisible');
+      expect(row?.status).toBe('en constitution');
+      expect(row?.refusal_reason).toBeNull();
       const preuves = await sql`
-        SELECT count(*)::int AS count FROM preuve WHERE coureur_id = ${coureurId}
+        SELECT status FROM preuve WHERE coureur_id = ${coureurId}
       `;
-      expect(preuves[0]?.count).toBe(1);
+      expect(preuves.map((preuve) => preuve.status)).toEqual(['refusée']);
     });
 
     it('liste : recherche nom/email, preuve et acceptations exposées, LIMIT 200', async () => {

@@ -19,6 +19,7 @@ import {
 } from '@/test/integration-db';
 
 import {
+  ACTION_MODIFIER_INSCRIPTION,
   CHECKLIST_VALIDATION_EN_ATTENTE,
   acceptDocuments,
   decideDossier,
@@ -155,8 +156,10 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
 
     const avant = await getChecklistState(session, { store });
     expect(avant.pieces.filter((entry) => entry.fait)).toHaveLength(5);
+    expect(avant.statut).toBe('en validation');
     expect(piece(avant, 'preuve').actionLabel).toBe('Remplacer ma preuve de paiement');
-    expect(piece(avant, 'epreuve').actionLabel).toBe('Modifier mon inscription');
+    // En validation : inscription figée jusqu'à la décision.
+    expect(piece(avant, 'epreuve').actionLabel).toBeUndefined();
     expect(piece(avant, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
     expect(avant.recap).toMatchObject({
       epreuve: 'La Longue',
@@ -175,7 +178,7 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     expect(piece(apres, 'validation').fait).toBe(true);
   });
 
-  it('dossier refusé : motif + action « Déposer une nouvelle preuve »', async () => {
+  it('dossier refusé : motif + action « Modifier mon inscription »', async () => {
     const session = await createSession();
     const summary = await submitInscription(session, validInput(), { store });
     await acceptDocuments(session, { decharge: true, reglement: true }, { store });
@@ -193,13 +196,13 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     const validation = piece(state, 'validation');
     expect(validation.fait).toBe(false);
     expect(validation.motifRefus).toBe('reçu illisible');
-    expect(validation.actionLabel).toBe('Déposer une nouvelle preuve');
-    expect(validation.actionHref).toBe('/preuve');
-    expect(piece(state, 'preuve').fait).toBe(true);
-    expect(piece(state, 'preuve').actionLabel).toBe('Remplacer ma preuve de paiement');
+    expect(validation.actionLabel).toBe(ACTION_MODIFIER_INSCRIPTION);
+    expect(validation.actionHref).toBe('/inscription');
+    expect(piece(state, 'preuve').fait).toBe(false);
+    expect(piece(state, 'preuve').actionLabel).toBeUndefined();
   });
 
-  it('refusé puis redépôt de preuve : la pièce validation repasse en attente', async () => {
+  it('refusé, repris puis nouvelle preuve : la pièce validation repasse en attente', async () => {
     const session = await createSession();
     const summary = await submitInscription(session, validInput(), { store });
     await acceptDocuments(session, { decharge: true, reglement: true }, { store });
@@ -214,6 +217,14 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     );
     const refuse = await getChecklistState(session, { store });
     expect(piece(refuse, 'validation').motifRefus).toBe('reçu illisible');
+
+    // Reprise par « Modifier mon inscription » : preuve refusée écartée.
+    await submitInscription(session, validInput(), { store });
+    const repris = await getChecklistState(session, { store });
+    expect(repris.statut).toBe('en constitution');
+    expect(piece(repris, 'preuve').fait).toBe(false);
+    expect(piece(repris, 'preuve').actionHref).toBe('/preuve');
+    expect(piece(repris, 'validation').motifRefus).toBeUndefined();
 
     await deposerPreuveActive(session, randomUUID());
 

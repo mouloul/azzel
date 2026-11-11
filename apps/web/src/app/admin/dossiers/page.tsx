@@ -6,7 +6,11 @@ import { lectureBorneeOuIndisponible } from '@/lib/lecture-bornee';
 import { requireRolePage } from '@/modules/iam/session';
 
 import {
+  COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_VALIDE,
   LIST_COUREURS_LIMIT,
+  peutAccepterDocuments,
   statutAffiche,
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
@@ -60,18 +64,19 @@ export default async function AdminDossiersPage({
   // filtre de recherche texte : aucun filtre de statut n'existe, les
   // compteurs ne sont donc PAS des liens (un compteur non cliquable vaut
   // mieux qu'un lien mort). Les libellés comptent ce qui est affiché.
-  const valides = state.dossiers.filter((d) => d.status === 'validé').length;
+  const valides = state.dossiers.filter((d) => d.status === COUREUR_STATUS_VALIDE).length;
   const enAttenteJustificatif = state.dossiers.filter(
-    (d) => d.status === 'en constitution' && !d.hasActivePreuve,
+    (d) => d.status === COUREUR_STATUS_EN_CONSTITUTION,
   ).length;
-  const enAttenteValidation = state.dossiers.filter(
-    (d) => d.status === 'en constitution' && d.hasActivePreuve,
+  // La file « à examiner » : les dossiers EN VALIDATION, seuls décidables.
+  const aExaminer = state.dossiers.filter(
+    (d) => d.status === COUREUR_STATUS_EN_VALIDATION,
   ).length;
-  // M1 (revue épopée 10) — un dossier REFUSÉ n'est jamais complétable : il
-  // sort du compteur d'acceptations manquantes (le comité n'agit que sur
-  // les dossiers encore ouverts).
+  // M1 (revue épopée 10) — seuls comptent les dossiers qui PEUVENT encore
+  // accepter (en constitution) : refusé, expiré ou en liste d'attente ne sont
+  // pas complétables en l'état.
   const acceptationsManquantes = state.dossiers.filter(
-    (d) => !d.acceptationsCompletes && d.status !== 'refusé',
+    (d) => !d.acceptationsCompletes && peutAccepterDocuments(d.status),
   ).length;
   const dossardsAttribues = state.dossiers.filter((d) => d.dossard !== null).length;
 
@@ -94,8 +99,8 @@ export default async function AdminDossiersPage({
             <dd className="dossiers-compteur-nombre">{enAttenteJustificatif}</dd>
           </div>
           <div className="dossiers-compteur">
-            <dt className="dossiers-compteur-libelle">En attente de validation</dt>
-            <dd className="dossiers-compteur-nombre">{enAttenteValidation}</dd>
+            <dt className="dossiers-compteur-libelle">À examiner (en validation)</dt>
+            <dd className="dossiers-compteur-nombre">{aExaminer}</dd>
           </div>
           <div className="dossiers-compteur">
             <dt className="dossiers-compteur-libelle">Acceptations manquantes</dt>
@@ -177,7 +182,7 @@ export default async function AdminDossiersPage({
                     </td>
                     <td>
                       {(() => {
-                        const statut = statutAffiche(dossier.status, dossier.hasActivePreuve);
+                        const statut = statutAffiche(dossier.status);
                         return (
                           <span className={`socle-pastille ${statut.pastille}`}>
                             <span className="socle-pastille-point" aria-hidden="true" />

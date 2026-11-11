@@ -15,23 +15,33 @@ import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
 import {
   COUREUR_STATUS_EN_CONSTITUTION,
+  COUREUR_STATUS_EN_VALIDATION,
+  COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_VALIDE,
   STATUTS_MODIFIABLES,
   COUREUR_STATUS_EXPIREE,
   COUREUR_STATUS_LISTE_ATTENTE,
+  estReprise,
   hebergementAccorde,
   limitePreuve,
   STATUTS_OCCUPANT_UNE_PLACE,
   placesRestantes,
+  statutApresModification,
   statutInitial,
   LIST_COUREURS_LIMIT,
   canDepositPreuve,
   isRegistrationOpen,
+  peutAccepterDocuments,
 } from './domain';
 import {
   DbUnavailableError,
   DossardsEpuisesError,
+  DossierAReprendreError,
+  DossierEnValidationError,
+  DossierHorsValidationError,
   DossierIncompletError,
+  DossierListeAttenteError,
+  AcceptationsManquantesError,
   DossierNotFoundError,
   DossierValidatedError,
   DocumentsMissingError,
@@ -424,6 +434,25 @@ function toPreuveRecord(row: PreuveRow): PreuveRecord {
 
 type Queryable = Sql | postgres.TransactionSql;
 
+/**
+ * Erreur levée quand le coureur tente une action que le statut de son dossier
+ * n'autorise pas. Le message doit dire POURQUOI : « déjà validé » adressé à un
+ * coureur refusé ou en attente de décision l'enverrait chercher une erreur
+ * qui n'existe pas.
+ */
+function erreurStatutFige(status: string): Error {
+  if (status === COUREUR_STATUS_EN_VALIDATION) {
+    return new DossierEnValidationError();
+  }
+  if (estReprise(status)) {
+    return new DossierAReprendreError(status);
+  }
+  if (status === COUREUR_STATUS_LISTE_ATTENTE) {
+    return new DossierListeAttenteError();
+  }
+  return new DossierValidatedError();
+}
+
 /** Sérialise toute attribution de numéro de l'édition (validation unitaire ou lot). */
 async function verrouillerNumerotation(
   sql: Queryable,
@@ -804,7 +833,9 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
      *
      * Idempotent : le filtre sur `status = 'en constitution'` fait qu'un
      * second passage ne retrouve plus les lignes du premier, et l'index unique
-     * partiel absorbe un éventuel doublon d'email.
+     * partiel (organisation, coureur, échéance) absorbe un éventuel doublon
+     * d'email. L'échéance fait partie de la clé : un dossier repris (nouvelle
+     * échéance) qui expire de nouveau est prévenu de nouveau.
      */
     async expirerInscriptionsEchues(maintenant: Date): Promise<BilanExpiration> {
       return withDb(async () => {
@@ -814,7 +845,13 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         for (const { id: organisationId } of organisationIds) {
           const bilan = await withOrg(sql, organisationId, async (tx) => {
             const lignes = await tx<
-              { id: string; email: string; first_name: string; edition_nom: string }[]
+              {
+                id: string;
+                email: string;
+                first_name: string;
+                edition_nom: string;
+                preuve_due_at: Date;
+              }[]
             >`
               UPDATE coureur AS c
               SET status = ${COUREUR_STATUS_EXPIREE},
@@ -831,7 +868,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
                   SELECT 1 FROM preuve AS p
                   WHERE p.coureur_id = c.id AND p.status = 'active'
                 )
-              RETURNING c.id, a.email, c.first_name, e.name AS edition_nom
+              RETURNING c.id, a.email, c.first_name, e.name AS edition_nom, c.preuve_due_at
             `;
             let enfiles = 0;
             for (const ligne of lignes) {
@@ -843,9 +880,10 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
                     coureurId: ligne.id,
                     prenom: ligne.first_name,
                     edition: ligne.edition_nom,
+                    echeance: ligne.preuve_due_at.toISOString(),
                   } as unknown as postgres.JSONValue)}
                 )
-                ON CONFLICT (organisation_id, (payload->>'coureurId'))
+                ON CONFLICT (organisation_id, (payload->>'coureurId'), (payload->>'echeance'))
                   WHERE (type = 'inscription_expiree')
                 DO NOTHING
                 RETURNING id
@@ -865,8 +903,10 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
      * Rappel unique, la veille de l'échéance : les dossiers dont la limite
      * tombe dans les 24 heures et dont la preuve manque encore.
      *
-     * Un seul rappel par dossier, garanti par l'index unique partiel : un cron
-     * qui tourne toutes les heures ne doit pas envoyer vingt-quatre emails.
+     * Un seul rappel par dossier ET par échéance, garanti par l'index unique
+     * partiel : un cron qui tourne toutes les heures ne doit pas envoyer
+     * vingt-quatre emails, mais un dossier repris (nouvelle échéance) est
+     * rappelé de nouveau.
      */
     async enfilerRappelsPreuve(maintenant: Date): Promise<number> {
       return withDb(async () => {
@@ -901,9 +941,10 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
                     coureurId: ligne.id,
                     prenom: ligne.first_name,
                     limite: ligne.preuve_due_at.toISOString(),
+                    echeance: ligne.preuve_due_at.toISOString(),
                   } as unknown as postgres.JSONValue)}
                 )
-                ON CONFLICT (organisation_id, (payload->>'coureurId'))
+                ON CONFLICT (organisation_id, (payload->>'coureurId'), (payload->>'echeance'))
                   WHERE (type = 'rappel_preuve')
                 DO NOTHING
                 RETURNING id
@@ -1240,6 +1281,18 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!isRegistrationOpen(edition.registration_closes_at)) {
             throw new RegistrationClosedError(edition.registration_closes_at);
           }
+          // Dossier existant verrouillé : son statut décide si l'enregistrement
+          // est une simple correction, une reprise (refusé, expiré) ou un refus
+          // (figé). Lu APRÈS le verrou d'édition, il ne peut plus glisser — une
+          // décision de l'organisation verrouille la même ligne.
+          const existantRows = await tx<{ id: string; status: string }[]>`
+            SELECT id, status FROM coureur
+            WHERE account_id = ${input.accountId}
+              AND edition_id = ${input.editionId}
+              AND organisation_id = ${input.organisationId}
+            FOR UPDATE
+          `;
+          const existant = existantRows[0] ?? null;
           // Le dossier du coureur lui-même est exclu du décompte : modifier son
           // inscription ne doit pas lui coûter une seconde place.
           const occupeesRows = await tx<{ occupees: number }[]>`
@@ -1249,9 +1302,18 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               AND account_id <> ${input.accountId}
               AND status = ANY(${STATUTS_OCCUPANT_UNE_PLACE as string[]})
           `;
-          const statutSiNouveau = statutInitial(
-            placesRestantes(edition.capacite, occupeesRows[0]?.occupees ?? 0),
-          );
+          const restantes = placesRestantes(edition.capacite, occupeesRows[0]?.occupees ?? 0);
+          const statutSiNouveau = statutInitial(restantes);
+          let reprise = false;
+          let statutReprise = statutSiNouveau;
+          if (existant !== null) {
+            const apres = statutApresModification(existant.status, restantes);
+            if (apres === null) {
+              throw erreurStatutFige(existant.status);
+            }
+            reprise = estReprise(existant.status);
+            statutReprise = apres;
+          }
           // Même verrou, même exclusion de soi : renoncer puis redemander
           // l'hébergement ne doit pas compter deux lits.
           const litsRows = await tx<{ occupes: number }[]>`
@@ -1268,11 +1330,15 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           );
           // Échéance posée UNIQUEMENT pour qui tient une place : un coureur en
           // liste d'attente n'a rien à verser, lui donner un délai reviendrait
-          // à lui réclamer un paiement pour une place qu'il n'a pas.
-          const echeanceSiNouveau =
-            statutSiNouveau === COUREUR_STATUS_EN_CONSTITUTION
+          // à lui réclamer un paiement pour une place qu'il n'a pas. Une
+          // reprise repart de zéro : nouvelle échéance à J+délai, comme une
+          // inscription neuve.
+          const echeance = (statut: string): Date | null =>
+            statut === COUREUR_STATUS_EN_CONSTITUTION
               ? limitePreuve(new Date(), edition.delai_preuve_jours)
               : null;
+          const echeanceSiNouveau = echeance(statutSiNouveau);
+          const echeanceReprise = echeance(statutReprise);
           const rows = await tx<{ id: string }[]>`
             INSERT INTO coureur (
               organisation_id, account_id, edition_id, epreuve_id,
@@ -1303,13 +1369,33 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               hebergement = EXCLUDED.hebergement,
               age = EXCLUDED.age,
               age_category = EXCLUDED.age_category,
+              -- Reprise (refusé, expiré) : le dossier repart du début du cycle.
+              -- Le motif de refus tombe (le CHECK l'exige hors « refusé ») ;
+              -- expired_at reste, trace de l'expiration passée.
+              status = CASE WHEN ${reprise}::boolean
+                THEN ${statutReprise}::text ELSE coureur.status END,
+              preuve_due_at = CASE WHEN ${reprise}::boolean
+                THEN ${echeanceReprise}::timestamptz ELSE coureur.preuve_due_at END,
+              refusal_reason = CASE WHEN ${reprise}::boolean
+                THEN NULL ELSE coureur.refusal_reason END,
               updated_at = now()
             WHERE coureur.status = ANY(${STATUTS_MODIFIABLES as string[]})
             RETURNING id
           `;
           const row = rows[0];
           if (!row) {
+            // Filet : le verrou ci-dessus rend ce cas impossible, sauf ligne
+            // créée entre-temps par un chemin qui ne prend pas le verrou.
             throw new DossierValidatedError();
+          }
+          if (reprise && existant?.status === COUREUR_STATUS_REFUSE) {
+            // La preuve refusée cesse d'être active : le coureur doit en
+            // déposer une nouvelle. Marquée « refusée » (et non « replaced »)
+            // pour que le dépôt du MÊME fichier reste reconnu et refusé.
+            await tx`
+              UPDATE preuve SET status = 'refusée'
+              WHERE coureur_id = ${row.id} AND status = 'active'
+            `;
           }
           const fullRows = await tx<CoureurRow[]>`
             SELECT ${tx.unsafe(COUREUR_COLUMNS)}
@@ -1370,8 +1456,8 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!coureur) {
             throw new NoCoureurError();
           }
-          if (coureur.status !== COUREUR_STATUS_EN_CONSTITUTION) {
-            throw new DossierValidatedError();
+          if (!peutAccepterDocuments(coureur.status)) {
+            throw erreurStatutFige(coureur.status);
           }
           const documentRows = await tx<{ slug: string; version: string }[]>`
             SELECT slug, version FROM document
@@ -1398,7 +1484,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               reglement_accepted_at = now(),
               reglement_version = ${reglementVersion},
               updated_at = now()
-            WHERE id = ${coureur.id} AND status = ${COUREUR_STATUS_EN_CONSTITUTION}
+            WHERE id = ${coureur.id}
             RETURNING
               decharge_accepted_at, decharge_version,
               reglement_accepted_at, reglement_version
@@ -1444,8 +1530,13 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!isRegistrationOpen(edition.registration_closes_at)) {
             throw new RegistrationClosedError(edition.registration_closes_at);
           }
-          const coureurRows = await tx<{ id: string; status: string }[]>`
-            SELECT id, status FROM coureur
+          const coureurRows = await tx<
+            { id: string; status: string; acceptations_completes: boolean }[]
+          >`
+            SELECT id, status,
+                   (decharge_accepted_at IS NOT NULL AND reglement_accepted_at IS NOT NULL)
+                     AS acceptations_completes
+            FROM coureur
             WHERE account_id = ${input.accountId}
               AND edition_id = ${input.editionId}
               AND organisation_id = ${input.organisationId}
@@ -1456,8 +1547,38 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             throw new NoCoureurError();
           }
           if (!canDepositPreuve(coureur.status)) {
-            throw new DossierValidatedError();
+            throw erreurStatutFige(coureur.status);
           }
+          // Acceptations AVANT la preuve (PO, 11/11/2026) : un dossier ne part
+          // pas à l'examen sans décharge ni règlement — il y resterait bloqué.
+          if (!coureur.acceptations_completes) {
+            throw new AcceptationsManquantesError();
+          }
+          // Octets identiques à une preuve déjà refusée : ce n'est pas une
+          // « nouvelle preuve ». Le dossier repris doit recevoir un autre
+          // justificatif, sinon le même reçu repasserait à l'examen en boucle.
+          const dejaRefusee = await tx<{ id: string }[]>`
+            SELECT id FROM preuve
+            WHERE coureur_id = ${coureur.id}
+              AND status = 'refusée'
+              AND sha256 = ${input.file.sha256}
+            LIMIT 1
+          `;
+          if (dejaRefusee.length > 0) {
+            throw new PreuveIdenticalRefusedError();
+          }
+          // Le dépôt fait passer le dossier en validation, dans la même
+          // transaction que la preuve : jamais de preuve active sur un dossier
+          // qui attendrait encore son justificatif.
+          const passerEnValidation = async (): Promise<void> => {
+            if (coureur.status === COUREUR_STATUS_EN_CONSTITUTION) {
+              await tx`
+                UPDATE coureur
+                SET status = ${COUREUR_STATUS_EN_VALIDATION}, updated_at = now()
+                WHERE id = ${coureur.id} AND status = ${COUREUR_STATUS_EN_CONSTITUTION}
+              `;
+            }
+          };
           const existing = await selectActivePreuve(
             tx,
             input.accountId,
@@ -1467,14 +1588,10 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           );
           const numeroTransaction = input.numeroTransaction ?? null;
           if (existing && existing.sha256 === input.file.sha256) {
-            if (coureur.status === 'refusé') {
-              // Octets identiques à la preuve déjà refusée : pas de « nouvelle preuve »,
-              // le dossier reste refusé — le coureur doit déposer une version différente.
-              throw new PreuveIdenticalRefusedError();
-            }
             // Même fichier, même numéro : rejeu, rien à écrire. Même fichier avec
             // un numéro corrigé : c'est une vraie mise à jour, on continue.
             if (existing.numero_transaction === numeroTransaction) {
+              await passerEnValidation();
               return { preuve: toPreuveRecord(existing), replaced: null };
             }
           }
@@ -1534,16 +1651,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!inserted) {
             throw new Error('insertion de la preuve impossible');
           }
-          if (coureur.status === 'refusé') {
-            // Cycle de correction : une nouvelle preuve rouvre le dossier.
-            // Le motif reste exigé par le CHECK tant que le statut est « refusé » ;
-            // le retour en constitution remet donc refusal_reason à NULL.
-            await tx`
-              UPDATE coureur
-              SET status = ${COUREUR_STATUS_EN_CONSTITUTION}, refusal_reason = NULL, updated_at = now()
-              WHERE id = ${coureur.id}
-            `;
-          }
+          await passerEnValidation();
           return { preuve: toPreuveRecord(inserted), replaced };
         }),
       );
@@ -1692,11 +1800,23 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           let status: 'validé' | 'refusé';
           let refusalReason: string | null = null;
           let dossardAttribue: number | null = null;
+          if (input.decision === 'valider' && locked.status === COUREUR_STATUS_VALIDE) {
+            // Re-validation idempotente : no-op, rien ne change.
+            return toCoureurRecord(locked);
+          }
+          if (input.decision === 'refuser' && locked.status === COUREUR_STATUS_VALIDE) {
+            throw new DossierValidatedError();
+          }
+          if (
+            (input.decision === 'valider' || input.decision === 'refuser') &&
+            locked.status !== COUREUR_STATUS_EN_VALIDATION
+          ) {
+            // L'organisation ne décide que d'un dossier qui attend sa décision :
+            // en constitution, rien n'est encore à examiner ; refusé, expiré ou
+            // en liste d'attente, la place n'est plus (ou pas encore) tenue.
+            throw new DossierHorsValidationError(locked.status);
+          }
           if (input.decision === 'valider') {
-            if (locked.status === 'validé') {
-              // Re-validation idempotente : no-op, rien ne change.
-              return toCoureurRecord(locked);
-            }
             // Garde juridique (stories 1.4 + 1.6) : pas de dossard sans preuve de
             // paiement active NI sans les deux acceptations horodatées. Lecture dans
             // la même transaction que le FOR UPDATE : l'état ne peut pas glisser.
@@ -1730,9 +1850,6 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             const motif = input.refusalReason?.trim() ?? '';
             if (motif.length === 0) {
               throw new RefusalReasonRequiredError();
-            }
-            if (locked.status === 'validé') {
-              throw new DossierValidatedError();
             }
             status = 'refusé';
             refusalReason = motif;

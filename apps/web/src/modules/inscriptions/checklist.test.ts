@@ -4,7 +4,9 @@ import { DbUnavailableError } from '@/modules/iam/errors';
 import type { SessionRecord } from '@/modules/iam/store';
 
 import {
+  ACTION_MODIFIER_INSCRIPTION,
   CHECKLIST_PREUVE_INDISPONIBLE,
+  CHECKLIST_VALIDATION_EXPIREE,
   CHECKLIST_VALIDATION_APRES_PREUVE,
   CHECKLIST_VALIDATION_EN_ATTENTE,
   getChecklistState,
@@ -152,7 +154,7 @@ describe('getChecklistState — consolidation des six pièces', () => {
     vi.clearAllMocks();
   });
 
-  it('dossier complet : six pièces faites, seule action « Modifier mon inscription »', async () => {
+  it('dossier validé : six pièces faites, aucune action — le dossier est figé', async () => {
     const store = buildChecklistStore({
       coureur: { ...ACCEPTATIONS_ACCEPTEES, status: 'validé' },
       preuve: PREUVE,
@@ -168,9 +170,7 @@ describe('getChecklistState — consolidation des six pièces', () => {
       'validation',
     ]);
     expect(state.pieces.every((entry) => entry.fait)).toBe(true);
-    expect(piece(state, 'epreuve').actionLabel).toBe('Modifier mon inscription');
-    expect(piece(state, 'epreuve').actionHref).toBe('/inscription');
-    for (const id of ['decharge', 'reglement', 'preuve', 'validation'] as const) {
+    for (const id of ['epreuve', 'decharge', 'reglement', 'preuve', 'validation'] as const) {
       expect(piece(state, id).actionLabel, id).toBeUndefined();
       expect(piece(state, id).actionHref, id).toBeUndefined();
       expect(piece(state, id).motifRefus, id).toBeUndefined();
@@ -178,14 +178,15 @@ describe('getChecklistState — consolidation des six pièces', () => {
     }
   });
 
-  it('dossier en constitution avec preuve : remplaçable, validation en attente, récap porté', async () => {
+  it('dossier en validation : preuve remplaçable, inscription figée, validation en attente, récap porté', async () => {
     const store = buildChecklistStore({
-      coureur: ACCEPTATIONS_ACCEPTEES,
+      coureur: { ...ACCEPTATIONS_ACCEPTEES, status: 'en validation' },
       preuve: PREUVE,
     });
     const state = await getChecklistState(session, { store });
     expect(state.pieces.filter((entry) => entry.fait)).toHaveLength(5);
-    expect(piece(state, 'epreuve').actionLabel).toBe('Modifier mon inscription');
+    // Figé jusqu'à la décision : seule la preuve peut encore changer.
+    expect(piece(state, 'epreuve').actionLabel).toBeUndefined();
     expect(piece(state, 'preuve').fait).toBe(true);
     expect(piece(state, 'preuve').actionLabel).toBe('Remplacer ma preuve de paiement');
     expect(piece(state, 'preuve').actionHref).toBe('/preuve');
@@ -221,7 +222,7 @@ describe('getChecklistState — consolidation des six pièces', () => {
     expect(piece(state, 'validation').fait).toBe(true);
   });
 
-  it('dossier refusé : motif + « Déposer une nouvelle preuve », preuve remplaçable', async () => {
+  it('dossier refusé : motif + seule action « Modifier mon inscription », preuve écartée', async () => {
     const store = buildChecklistStore({
       coureur: {
         ...ACCEPTATIONS_ACCEPTEES,
@@ -234,13 +235,55 @@ describe('getChecklistState — consolidation des six pièces', () => {
     const validation = piece(state, 'validation');
     expect(validation.fait).toBe(false);
     expect(validation.motifRefus).toBe('reçu illisible');
-    expect(validation.actionLabel).toBe('Déposer une nouvelle preuve');
-    expect(validation.actionHref).toBe('/preuve');
+    expect(validation.actionLabel).toBe(ACTION_MODIFIER_INSCRIPTION);
+    expect(validation.actionHref).toBe('/inscription');
     expect(validation.texteSecondaire).toBeUndefined();
     const preuve = piece(state, 'preuve');
-    expect(preuve.fait).toBe(true);
-    expect(preuve.actionLabel).toBe('Remplacer ma preuve de paiement');
-    expect(preuve.actionHref).toBe('/preuve');
+    // La preuve refusée n'est pas une pièce faite, et ne se remplace plus
+    // directement : la reprise passe par « Modifier mon inscription ».
+    expect(preuve.fait).toBe(false);
+    expect(preuve.actionLabel).toBeUndefined();
+    const liens = state.pieces.filter((entry) => entry.actionHref != null);
+    expect(liens.map((entry) => entry.actionHref)).toEqual(['/inscription']);
+  });
+
+  it('liste d’attente : aucun lien d’acceptation ni de dépôt, aucun texte de paiement', async () => {
+    const store = buildChecklistStore({ coureur: { status: 'liste d’attente' }, preuve: null });
+    const state = await getChecklistState(session, { store });
+    expect(piece(state, 'decharge').actionHref).toBeUndefined();
+    expect(piece(state, 'decharge').actionLabel).toBeUndefined();
+    expect(piece(state, 'reglement').actionLabel).toBeUndefined();
+    expect(piece(state, 'preuve').actionHref).toBeUndefined();
+    expect(piece(state, 'validation').texteSecondaire).toBeUndefined();
+    const liens = state.pieces.filter((entry) => entry.actionHref != null);
+    expect(liens.map((entry) => entry.actionHref)).toEqual(['/inscription']);
+  });
+
+  it('en validation, preuve momentanément illisible : « en attente de validation », pas « après ta preuve »', async () => {
+    const store = buildChecklistStore({
+      coureur: { ...ACCEPTATIONS_ACCEPTEES, status: 'en validation' },
+      preuve: null,
+    });
+    store.findActivePreuveByAccount.mockRejectedValue(new Error('boom'));
+    const state = await getChecklistState(session, { store });
+    expect(piece(state, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
+  });
+
+  it('dossier expiré : seule action « Modifier mon inscription », texte explicite', async () => {
+    const store = buildChecklistStore({
+      coureur: { status: 'expirée', expiredAt: new Date('2026-10-24T00:00:00.000Z') },
+      preuve: null,
+    });
+    const state = await getChecklistState(session, { store });
+    const validation = piece(state, 'validation');
+    expect(validation.actionLabel).toBe(ACTION_MODIFIER_INSCRIPTION);
+    expect(validation.actionHref).toBe('/inscription');
+    expect(validation.texteSecondaire).toBe(CHECKLIST_VALIDATION_EXPIREE);
+    // Ni acceptation ni dépôt tant que le dossier n'est pas repris.
+    expect(piece(state, 'decharge').actionHref).toBeUndefined();
+    expect(piece(state, 'preuve').actionHref).toBeUndefined();
+    const liens = state.pieces.filter((entry) => entry.actionHref != null);
+    expect(liens.map((entry) => entry.actionHref)).toEqual(['/inscription']);
   });
 
   it('non inscrit : email vert, actions directes, validation neutre, récap absent', async () => {

@@ -292,3 +292,16 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - **`generéA` : identifiant accentué dans un format persisté** [`app/volontaires/page.tsx`, `lib/idb-volontaires.ts`, `lib/revalidation-etat.ts`, `lib/fraicheur.ts`, `api/volontaires/etat/route.ts`] — la clé porte un accent alors que l'annuaire utilise `genereA` sans accent ; elle voyage en JSON sur le réseau, est mise en cache par le service worker et stockée en IndexedDB. Différé : le renommage n'est PAS cosmétique — il faut une lecture tolérante aux deux clés pendant une version et un incrément de `VERSION` du SW pour purger les caches, sinon le badge de fraîcheur casse sur tout appareil déjà installé. 10 fichiers sources concernés.
 - **La fiche importe le module de route du scanner** [`app/volontaires/page.tsx:12`] — `import { NOTICE_SCAN_PASSAGE, NOTICE_SCAN_RETRAIT } from './scan/page'` : la fiche tire tout le graphe du module page du scanner (`redirect`, `requireRolePage`, `getMissionsVolontaireState`, `./scan.css`, `export const dynamic`, `metadata`). Ces constantes devraient vivre dans un module neutre (`lib/scan/notices.ts`) importé par les deux pages. Sans effet mesuré aujourd'hui, à reprendre avec une passe sur le découpage des chunks.
 - **Marqueur de shell dupliqué sans garde-fou** [`sw-volontaires.js:43` et `volontaires-pwa.tsx`] — le SW code en dur `data-az-shell="fiche"`, React l'exporte de son côté ; le SW n'étant pas bundlé, rien ne relie les deux. Un renommage côté React désactive silencieusement TOUT le cache hors-ligne. Il manque un test qui rende le composant et vérifie que le HTML contient la chaîne attendue par le SW.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Empêcher l'organisateur de valider une preuve remplacée après l'ouverture de la fiche (contrôle de concurrence sur l'identifiant de preuve).
+  evidence: `decideDossier` ne reçoit pas la preuve examinée ; le remplacement reste permis en validation.
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Garder l'historique des refus (date, auteur, motif) visible côté admin après la reprise d'un dossier.
+  evidence: La reprise efface `refusal_reason` ; seule une preuve au statut « refusée » en garde trace.
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Décider si un dossier refusé ou expiré peut être repris après la clôture des inscriptions, et adapter emails et pages en conséquence.
+  evidence: `submitInscription` lève `RegistrationClosedError` ; les emails de refus/expiration renvoient pourtant vers « Modifier mon inscription ».
+- source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
+  summary: Aligner l'ordre des verrous (édition puis coureur) dans `decideDossier` pour éviter un interblocage avec `upsertCoureur`.
+  evidence: `decideDossier` verrouille le coureur puis l'édition (dossard) ; `upsertCoureur` fait l'inverse.

@@ -709,9 +709,13 @@ describe('acceptDocuments — service avec store stubbé', () => {
 });
 
 describe('cycle de statut — helpers domaine', () => {
-  it('canDepositPreuve : en constitution et refusé oui, validé non', () => {
+  it('canDepositPreuve : en constitution et en validation oui ; refusé, expirée, validé non', () => {
     expect(canDepositPreuve('en constitution')).toBe(true);
-    expect(canDepositPreuve('refusé')).toBe(true);
+    // Remplacement de preuve pendant l'examen : le dossier reste en validation.
+    expect(canDepositPreuve('en validation')).toBe(true);
+    // Refusé : la reprise passe par « Modifier mon inscription », pas par un dépôt.
+    expect(canDepositPreuve('refusé')).toBe(false);
+    expect(canDepositPreuve('expirée')).toBe(false);
     expect(canDepositPreuve('validé')).toBe(false);
   });
 

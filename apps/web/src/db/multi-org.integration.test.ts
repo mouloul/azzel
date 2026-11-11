@@ -265,6 +265,17 @@ describe.skipIf(testUrls === null)(
       if (summaryA.status !== 'en constitution' || summaryB.status !== 'en constitution') {
         throw new Error(`population A/B inattendue : ${summaryA.status} / ${summaryB.status}`);
       }
+      // Acceptations avant la preuve (PO, 11/11/2026).
+      await store.acceptDocuments({
+        organisationId: orgAId,
+        accountId: accountAId,
+        editionId: editionAId,
+      });
+      await store.acceptDocuments({
+        organisationId: orgBId,
+        accountId: accountBId,
+        editionId: editionBId,
+      });
       await store.savePreuve({
         organisationId: orgAId,
         accountId: accountAId,

@@ -246,8 +246,13 @@ describe.skipIf(testUrls === null)('seed « édition complète » — intégrati
     const parStatut = new Map(statuts.map((ligne) => [ligne.status, ligne.total]));
     expect(parStatut.get('validé')).toBe(VALIDES_ATTENDUS);
     expect(parStatut.get('refusé')).toBe(REFUSES_ATTENDUS);
+    // Cycle de vie : la preuve déposée place le dossier « en validation » ;
+    // seules les inscriptions nues restent « en constitution ».
+    expect(parStatut.get('en validation')).toBe(
+      COUREURS_FICTIFS.filter((coureur) => coureur.stade === 'dossier complet').length,
+    );
     expect(parStatut.get('en constitution')).toBe(
-      COUREURS_FICTIFS.length - VALIDES_ATTENDUS - REFUSES_ATTENDUS,
+      COUREURS_FICTIFS.filter((coureur) => coureur.stade === 'inscription seule').length,
     );
 
     // Un dossier refusé porte TOUJOURS son motif (contrainte couplée 0006).
