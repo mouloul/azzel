@@ -754,3 +754,33 @@
   gap: var(--az-space-2);
   font-weight: 600;
 }
+
+/* Accusé de réception (preuve envoyée) : encart à filet vert, dans l'esprit
+   de .error-box mais plus aéré — il remplace tout le formulaire et doit se
+   lire d'un coup d'œil comme « envoi réussi ». */
+.confirmation-box {
+  display: grid;
+  gap: var(--az-space-2);
+  margin: var(--az-space-4) 0 0;
+  padding: var(--az-space-4);
+  border-left: 4px solid var(--az-succes);
+  background: color-mix(in srgb, var(--az-succes) 12%, transparent);
+  border-radius: var(--az-radius-sm);
+}
+
+.confirmation-box:focus {
+  outline: none;
+}
+
+.confirmation-box:focus-visible {
+  outline: 2px solid var(--az-succes);
+  outline-offset: 2px;
+}
+
+.confirmation-box p {
+  margin: 0;
+}
+
+.confirmation-box .confirmation-message {
+  font-weight: 700;
+}
