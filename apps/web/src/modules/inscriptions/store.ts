@@ -42,6 +42,7 @@ import {
   RefusalReasonRequiredError,
   type PieceDossier,
 } from './errors';
+import { WILAYA_ETRANGER } from './provenance';
 
 /** Réglages modifiables d'une édition. Tous facultatifs : on n'envoie que ce qu'on change. */
 export interface ReglagesEdition {
@@ -165,6 +166,10 @@ export interface CoureurRecord {
   tailleTshirt: string;
   /** Nullable : les inscriptions anterieures a la demande du genre n'en portent pas. */
   genre: string | null;
+  /** Code de wilaya ('15') ou 'ETR'. Nullable : dossiers antérieurs à la question. */
+  wilaya: string | null;
+  /** Code ISO du pays de résidence, présent si et seulement si wilaya = 'ETR'. */
+  pays: string | null;
   /** Échéance de dépôt de la preuve, figée à l'inscription. Null en liste d'attente. */
   preuveDueAt: Date | null;
   expiredAt: Date | null;
@@ -216,6 +221,9 @@ export interface UpsertCoureurInput {
   dateNaissance: string;
   tailleTshirt: string;
   genre: string;
+  wilaya: string;
+  /** Ignoré hors 'ETR' : la base exige pays NULL pour toute autre provenance. */
+  pays: string | null;
   hebergement: boolean;
   age: number;
   categorieAge: string;
@@ -496,6 +504,8 @@ interface CoureurRow {
   birth_date: string;
   tshirt_size: string;
   genre: string | null;
+  wilaya: string | null;
+  pays: string | null;
   hebergement: boolean;
   preuve_due_at: Date | null;
   expired_at: Date | null;
@@ -576,6 +586,8 @@ function toCoureurRecord(row: CoureurRow): CoureurRecord {
     dateNaissance: row.birth_date,
     tailleTshirt: row.tshirt_size,
     genre: row.genre,
+    wilaya: row.wilaya,
+    pays: row.pays,
     hebergement: row.hebergement,
     preuveDueAt: row.preuve_due_at,
     expiredAt: row.expired_at,
@@ -600,7 +612,7 @@ const COUREUR_COLUMNS = `
   c.id, c.organisation_id, c.account_id, c.edition_id, c.epreuve_id,
   c.first_name, c.last_name, c.phone,
   c.emergency_contact_name, c.emergency_contact_phone,
-  c.birth_date::text AS birth_date, c.tshirt_size, c.genre, c.age, c.age_category, c.status,
+  c.birth_date::text AS birth_date, c.tshirt_size, c.genre, c.wilaya, c.pays, c.age, c.age_category, c.status,
   c.preuve_due_at, c.expired_at, c.hebergement,
   c.dossard, c.jeton_edossard, c.refusal_reason, c.decided_by, c.decided_at,
   c.decharge_accepted_at, c.decharge_version,
@@ -1269,6 +1281,10 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           // Échéance posée UNIQUEMENT pour qui tient une place : un coureur en
           // liste d'attente n'a rien à verser, lui donner un délai reviendrait
           // à lui réclamer un paiement pour une place qu'il n'a pas.
+          // Pays forcé à NULL hors étranger : la base l'exige (CHECK 0044), et
+          // un pays resté d'une saisie précédente ne doit pas faire échouer
+          // l'envoi d'un coureur qui a changé d'avis.
+          const pays = input.wilaya === WILAYA_ETRANGER ? input.pays : null;
           const echeanceSiNouveau =
             statutSiNouveau === COUREUR_STATUS_EN_CONSTITUTION
               ? limitePreuve(new Date(), edition.delai_preuve_jours)
@@ -1278,15 +1294,17 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               organisation_id, account_id, edition_id, epreuve_id,
               first_name, last_name, phone,
               emergency_contact_name, emergency_contact_phone,
-              birth_date, tshirt_size, genre, age, age_category, status, preuve_due_at,
+              birth_date, tshirt_size, genre, wilaya, pays,
+              age, age_category, status, preuve_due_at,
               hebergement
             )
             VALUES (
               ${input.organisationId}, ${input.accountId}, ${input.editionId}, ${input.epreuveId},
               ${input.prenom}, ${input.nom}, ${input.telephone},
               ${input.contactUrgenceNom}, ${input.contactUrgenceTelephone},
-              ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre}, ${input.age},
-              ${input.categorieAge}, ${statutSiNouveau}, ${echeanceSiNouveau},
+              ${input.dateNaissance}, ${input.tailleTshirt}, ${input.genre},
+              ${input.wilaya}, ${pays},
+              ${input.age}, ${input.categorieAge}, ${statutSiNouveau}, ${echeanceSiNouveau},
               ${hebergement}
             )
             ON CONFLICT (account_id, edition_id)
@@ -1300,6 +1318,8 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               birth_date = EXCLUDED.birth_date,
               tshirt_size = EXCLUDED.tshirt_size,
               genre = EXCLUDED.genre,
+              wilaya = EXCLUDED.wilaya,
+              pays = EXCLUDED.pays,
               hebergement = EXCLUDED.hebergement,
               age = EXCLUDED.age,
               age_category = EXCLUDED.age_category,

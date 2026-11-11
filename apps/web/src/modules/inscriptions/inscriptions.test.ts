@@ -11,6 +11,8 @@ import {
   AGE_CATEGORY_LABELS,
   FIELD_ORDER,
   MAX_AGE_AT_RACE,
+  MESSAGE_HEBERGEMENT_TIZI_OUZOU,
+  choisirWilaya,
   MAX_REFUSAL_REASON_LENGTH,
   MIN_AGE_AT_RACE,
   PASTILLE_STATUT,
@@ -47,6 +49,13 @@ import {
   submitInscription,
 } from './service';
 import type { CoureurRecord, EditionRecord, InscriptionsStore } from './store';
+import {
+  PAYS,
+  WILAYAS,
+  WILAYA_ETRANGER,
+  WILAYA_TIZI_OUZOU,
+  libelleProvenance,
+} from './provenance';
 import type { SessionRecord } from '@/modules/iam/store';
 
 const RACE_DATE = '2027-03-26';
@@ -62,6 +71,8 @@ function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionF
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    wilaya: '16',
+    pays: '',
     hebergement: '',
     ...overrides,
   };
@@ -143,6 +154,7 @@ describe('normalizeInscriptionInput', () => {
         dateNaissance: '1990-05-12',
         tailleTshirt: 'M ',
         genre: ' h ',
+        wilaya: ' 16 ',
         hebergement: '',
         junk: 42,
       }),
@@ -166,9 +178,10 @@ describe('validateInscriptionInput — champ par champ', () => {
 
   it('chaque champ OBLIGATOIRE manquant est nommé individuellement', () => {
     // L'hébergement est la seule option du formulaire : son absence est un
-    // choix, pas une erreur. Tout le reste est exigé.
+    // choix, pas une erreur. Le pays n'est exigé que pour l'étranger (voir
+    // la matrice de provenance). Tout le reste est exigé.
     const keys = (Object.keys(validInput()) as (keyof InscriptionFormInput)[]).filter(
-      (key) => key !== 'hebergement',
+      (key) => key !== 'hebergement' && key !== 'pays',
     );
     for (const key of keys) {
       const input = validInput({ [key]: '' });
@@ -177,7 +190,7 @@ describe('validateInscriptionInput — champ par champ', () => {
     }
   });
 
-  it('formulaire vide : les neuf champs obligatoires sont signalés', () => {
+  it('formulaire vide : les dix champs obligatoires sont signalés', () => {
     const errors = validateInscriptionInput(
       {
         epreuve: '',
@@ -189,6 +202,8 @@ describe('validateInscriptionInput — champ par champ', () => {
         dateNaissance: '',
         tailleTshirt: '',
         genre: '',
+        wilaya: '',
+        pays: '',
         hebergement: '',
       },
       slugs,
@@ -205,6 +220,7 @@ describe('validateInscriptionInput — champ par champ', () => {
         'dateNaissance',
         'tailleTshirt',
         'genre',
+        'wilaya',
       ].sort(),
     );
   });
@@ -333,6 +349,8 @@ describe('submitInscription — service avec store stubbé', () => {
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
       genre: 'H',
+      wilaya: null,
+      pays: null,
       hebergement: false,
       preuveDueAt: null,
       expiredAt: null,
@@ -423,9 +441,54 @@ describe('submitInscription — service avec store stubbé', () => {
         'dateNaissance',
         'tailleTshirt',
         'genre',
+        'wilaya',
       ].sort(),
     );
     expect(store.upsertCoureur).not.toHaveBeenCalled();
+  });
+
+  it('wilaya hors Tizi Ouzou + hébergement : inscrit avec la demande d’hébergement', async () => {
+    const store = buildStore();
+    await submitInscription(session, validInput({ wilaya: '16', hebergement: 'oui' }), { store });
+    expect(store.upsertCoureur).toHaveBeenCalledWith(
+      expect.objectContaining({ wilaya: '16', hebergement: true }),
+    );
+  });
+
+  it('Tizi Ouzou + hébergement : refus 400 nommé sur hebergement, rien d’écrit', async () => {
+    const store = buildStore();
+    const error = await submitInscription(
+      session,
+      validInput({ wilaya: '15', hebergement: 'oui' }),
+      { store },
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(InvalidFieldsError);
+    const apiError = toApiError(error);
+    expect(apiError.status).toBe(400);
+    expect(apiError.fields).toEqual({ hebergement: MESSAGE_HEBERGEMENT_TIZI_OUZOU });
+    expect(store.upsertCoureur).not.toHaveBeenCalled();
+  });
+
+  it('Tizi Ouzou sans hébergement : inscrit', async () => {
+    const store = buildStore();
+    await submitInscription(session, validInput({ wilaya: '15' }), { store });
+    expect(store.upsertCoureur).toHaveBeenCalledWith(
+      expect.objectContaining({ wilaya: '15', hebergement: false }),
+    );
+  });
+
+  it('étranger avec pays : pays transmis au store', async () => {
+    const store = buildStore();
+    await submitInscription(session, validInput({ wilaya: 'ETR', pays: 'FR' }), { store });
+    expect(store.upsertCoureur).toHaveBeenCalledWith(
+      expect.objectContaining({ wilaya: 'ETR', pays: 'FR' }),
+    );
+  });
+
+  it('pays envoyé hors étranger : inscrit (le store le force à NULL — voir l’intégration)', async () => {
+    const store = buildStore();
+    await submitInscription(session, validInput({ wilaya: '16', pays: 'FR' }), { store });
+    expect(store.upsertCoureur).toHaveBeenCalledWith(expect.objectContaining({ wilaya: '16' }));
   });
 
   it('aucune édition configurée : erreur serveur', async () => {
@@ -515,8 +578,133 @@ describe('genre du coureur', () => {
     expect(FIELD_ORDER).toContain('genre');
   });
 
-  it('l’hébergement, facultatif, reste HORS de cet ordre : il ne peut pas produire d’erreur', () => {
-    expect(FIELD_ORDER).not.toContain('hebergement');
+  it('l’hébergement, facultatif mais refusable (Tizi Ouzou), fait partie de l’ordre', () => {
+    expect(FIELD_ORDER).toContain('hebergement');
+  });
+});
+
+describe('provenance — wilaya, étranger et hébergement (matrice de la spec)', () => {
+  const slugs = ['longue', 'moyenne'];
+  const valider = (overrides: Partial<InscriptionFormInput>) =>
+    validateInscriptionInput(validInput(overrides), slugs, RACE_DATE);
+  const MESSAGE_WILAYA = 'Choisis ta wilaya, ou « Étranger ».';
+  const MESSAGE_PAYS = 'Indique ton pays de résidence.';
+
+  it('hors Tizi Ouzou + hébergement : aucune erreur', () => {
+    expect(valider({ wilaya: '16', hebergement: 'oui' })).toEqual({});
+  });
+
+  it('Tizi Ouzou + hébergement : erreur nommée sur hebergement, message de la règle', () => {
+    expect(valider({ wilaya: '15', hebergement: 'oui' })).toEqual({
+      hebergement:
+        'L’hébergement est réservé aux participants venant d’une autre wilaya que Tizi Ouzou.',
+    });
+  });
+
+  it('Tizi Ouzou sans hébergement : aucune erreur', () => {
+    expect(valider({ wilaya: '15', hebergement: '' })).toEqual({});
+  });
+
+  it('étranger sans pays : erreur sur pays', () => {
+    expect(valider({ wilaya: 'ETR', pays: '' })).toEqual({ pays: MESSAGE_PAYS });
+  });
+
+  it('étranger avec pays : aucune erreur', () => {
+    expect(valider({ wilaya: 'ETR', pays: 'FR' })).toEqual({});
+  });
+
+  it('pays inconnu ou Algérie : erreur sur pays', () => {
+    expect(valider({ wilaya: 'ETR', pays: 'XX' })).toEqual({ pays: MESSAGE_PAYS });
+    expect(valider({ wilaya: 'ETR', pays: 'DZ' })).toEqual({ pays: MESSAGE_PAYS });
+  });
+
+  it('wilaya absente : erreur sur wilaya', () => {
+    expect(valider({ wilaya: '' })).toEqual({ wilaya: MESSAGE_WILAYA });
+  });
+
+  it('wilaya inconnue : erreur sur wilaya, même message', () => {
+    expect(valider({ wilaya: '70' })).toEqual({ wilaya: MESSAGE_WILAYA });
+    expect(valider({ wilaya: '00' })).toEqual({ wilaya: MESSAGE_WILAYA });
+    expect(valider({ wilaya: '6' })).toEqual({ wilaya: MESSAGE_WILAYA });
+  });
+
+  it('pays envoyé hors étranger : ignoré, aucune erreur', () => {
+    expect(valider({ wilaya: '16', pays: 'FR' })).toEqual({});
+  });
+
+  it('les 69 wilayas sont acceptées', () => {
+    for (const { code } of WILAYAS) {
+      expect(valider({ wilaya: code }).wilaya, `wilaya ${code}`).toBeUndefined();
+    }
+  });
+
+  it('normalise la saisie brute : espaces et minuscules', () => {
+    const brut = normalizeInscriptionInput({ wilaya: ' etr ', pays: 'fr ' });
+    expect(brut.wilaya).toBe('ETR');
+    expect(brut.pays).toBe('FR');
+  });
+
+  it('wilaya et pays font partie de l’ordre des champs, après le téléphone', () => {
+    const telephone = FIELD_ORDER.indexOf('telephone');
+    expect(FIELD_ORDER.indexOf('wilaya')).toBe(telephone + 1);
+    expect(FIELD_ORDER.indexOf('pays')).toBe(telephone + 2);
+  });
+});
+
+describe('choisirWilaya — effets du choix dans le formulaire', () => {
+  it('Tizi Ouzou décoche l’hébergement déjà demandé', () => {
+    const apres = choisirWilaya(validInput({ wilaya: '16', hebergement: 'oui' }), '15');
+    expect(apres.wilaya).toBe('15');
+    expect(apres.hebergement).toBe('');
+    // …et l'envoi qui suit passe : la case décochée ne déclenche plus la règle.
+    expect(validateInscriptionInput(apres, ['longue'], RACE_DATE)).toEqual({});
+  });
+
+  it('dossier ancien sans wilaya, avec hébergement : choisir Tizi Ouzou le décoche', () => {
+    const ancien = validInput({ wilaya: '', hebergement: 'oui' });
+    expect(validateInscriptionInput(ancien, ['longue'], RACE_DATE)).toEqual({
+      wilaya: 'Choisis ta wilaya, ou « Étranger ».',
+    });
+    expect(choisirWilaya(ancien, '15').hebergement).toBe('');
+  });
+
+  it('une autre wilaya conserve l’hébergement', () => {
+    expect(choisirWilaya(validInput({ hebergement: 'oui' }), '06').hebergement).toBe('oui');
+  });
+
+  it('quitter « Étranger » efface le pays ; y rester le conserve', () => {
+    const etranger = validInput({ wilaya: 'ETR', pays: 'FR' });
+    expect(choisirWilaya(etranger, '16').pays).toBe('');
+    expect(choisirWilaya(etranger, 'ETR').pays).toBe('FR');
+  });
+});
+
+describe('référentiels de provenance', () => {
+  it('69 wilayas, codes 01 à 69 dans l’ordre, Tizi Ouzou = 15', () => {
+    expect(WILAYAS).toHaveLength(69);
+    expect(WILAYAS.map((wilaya) => wilaya.code)).toEqual(
+      Array.from({ length: 69 }, (_, index) => String(index + 1).padStart(2, '0')),
+    );
+    expect(WILAYAS.find((wilaya) => wilaya.code === WILAYA_TIZI_OUZOU)?.nom).toBe('Tizi Ouzou');
+    expect(WILAYAS.find((wilaya) => wilaya.code === '59')?.nom).toBe('Aflou');
+    expect(WILAYAS.find((wilaya) => wilaya.code === '69')?.nom).toBe('Messaad');
+  });
+
+  it('pays : codes ISO alpha-2 uniques, libellés français, triés, sans l’Algérie', () => {
+    const codes = PAYS.map((pays) => pays.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes.every((code) => /^[A-Z]{2}$/.test(code))).toBe(true);
+    expect(codes).not.toContain('DZ');
+    expect(PAYS.find((pays) => pays.code === 'FR')?.nom).toBe('France');
+    const noms = PAYS.map((pays) => pays.nom);
+    expect(noms).toEqual([...noms].sort((a, b) => a.localeCompare(b, 'fr')));
+  });
+
+  it('libelleProvenance : wilaya, étranger, non renseignée', () => {
+    expect(libelleProvenance('06', null)).toBe('Béjaïa (06)');
+    expect(libelleProvenance(WILAYA_ETRANGER, 'FR')).toBe('Étranger — France');
+    expect(libelleProvenance(null, null)).toBe('non renseignée');
+    expect(libelleProvenance(undefined, undefined)).toBe('non renseignée');
   });
 });
 
@@ -781,6 +969,8 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       dateNaissance: '1990-05-12',
       tailleTshirt: 'M',
       genre: 'H',
+      wilaya: null,
+      pays: null,
       hebergement: false,
       preuveDueAt: null,
       expiredAt: null,

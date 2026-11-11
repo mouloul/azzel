@@ -48,6 +48,8 @@ function validInput(): InscriptionFormInput {
     dateNaissance: '1990-05-12',
     tailleTshirt: 'M',
     genre: 'H',
+    wilaya: '16',
+    pays: '',
     hebergement: '',
   };
 }

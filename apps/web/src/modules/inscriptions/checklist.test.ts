@@ -87,6 +87,8 @@ function buildChecklistStore(scenario: ChecklistScenario = {}): InscriptionsStor
           dateNaissance: '1990-05-12',
           tailleTshirt: 'M',
           genre: 'H',
+          wilaya: null,
+          pays: null,
           hebergement: false,
           preuveDueAt: null,
           expiredAt: null,

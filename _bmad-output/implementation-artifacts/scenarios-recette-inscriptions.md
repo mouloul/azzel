@@ -1,7 +1,8 @@
-# Scénarios de recette — Inscriptions : contingent, expiration, genre, hébergement
+# Scénarios de recette — Inscriptions : contingent, expiration, genre, hébergement, wilaya
 
-**Produit :** Azzel · **Périmètre :** lots 1 → 5 de `spec-inscriptions-contingent-hebergement.md` · **Date :** 2026-11-05
-**Durée estimée :** 75–100 min (module par module, arrêt/reprise possible)
+**Produit :** Azzel · **Périmètre :** lots 1 → 5 de `spec-inscriptions-contingent-hebergement.md`, et module I9 de `spec-inscriptions-wilaya-hebergement.md` · **Date :** 2026-11-05 (I9 : 2026-11-10)
+**Durée estimée :** 75–100 min (module par module, arrêt/reprise possible), + 20 min pour le module I9
+**Ajout du 2026-11-10 :** module **I9 — Wilaya et hébergement** (`spec-inscriptions-wilaya-hebergement.md`). Pour retrouver des provenances dans le jeu fictif, relancer le seed après la migration : `pnpm -F @azzel/web seed:reset` puis `pnpm -F @azzel/web seed` (les coureurs fictifs déjà en base n'ont pas de wilaya). Depuis cet ajout, la **wilaya de provenance est obligatoire** dans le formulaire : dans les modules I2 à I7, choisissez une wilaya **autre que Tizi Ouzou** (par exemple « 16 — Alger ») pour pouvoir cocher l'hébergement.
 
 Chaque module se teste indépendamment : cochez au fur et à mesure et notez les écarts dans la colonne Observations du tableau final.
 
@@ -14,7 +15,7 @@ Plusieurs modules demandent de **modifier des réglages** (capacité, contingent
 ```bash
 bash scripts/dev-db.sh up         # Postgres 54329
 bash scripts/dev-mail.sh up       # faux SMTP — UI http://localhost:8026
-pnpm -F @azzel/web db:migrate     # jusqu'à 0038_reglages_journal.sql
+pnpm -F @azzel/web db:migrate     # jusqu'à 0044_wilaya_pays.sql
 AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 ```
 
@@ -135,7 +136,7 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 
 ## I6 — Hébergement optionnel (lot 4)
 
-**Précondition :** coureur connecté pouvant modifier son inscription ; accès admin pour régler le contingent.
+**Précondition :** coureur connecté pouvant modifier son inscription, avec une wilaya **autre que Tizi Ouzou** (voir I9) ; accès admin pour régler le contingent.
 
 | # | Action | Résultat attendu |
 |---|--------|------------------|
@@ -184,6 +185,70 @@ Ce module vérifie le point le plus délicat : deux personnes qui s'inscrivent *
 
 ---
 
+## I9 — Wilaya de provenance et hébergement réservé aux non-Tizi-Ouzou
+
+**Règle testée (décision du 10/11/2026) :** chaque coureur indique sa wilaya (69 wilayas, ou « Étranger » avec un pays). L'hébergement est **réservé aux participants venant d'une autre wilaya que Tizi Ouzou**. Les dossiers déjà saisis avant cette règle ne sont **pas** modifiés automatiquement.
+
+**Préconditions :**
+- Environnement de la section 0 démarré, migration `0044_wilaya_pays.sql` appliquée (la sortie de `db:migrate` l'annonce, ou « rien à faire » si elle l'était déjà).
+- Contingent d'hébergement non nul (200 par défaut).
+- Deux comptes coureurs : **A** neuf (aucune inscription), **B** neuf lui aussi (il servira de « dossier ancien » à l'étape 9.13).
+- Un compte organisateur pour `/admin/dossiers`.
+
+| # | Action | Résultat attendu | OK |
+|---|--------|------------------|----|
+| 9.1 | Coureur A : ouvrir `/inscription`, bloc « Ton identité » | Sous le téléphone, une liste **« Wilaya de provenance (obligatoire) »** avec l'aide « Là où tu résides. Tu vis hors d'Algérie : choisis « Étranger ». » | ☐ |
+| 9.2 | Dérouler la liste | « Choisir ta wilaya », puis **69 wilayas** numérotées de « 01 — Adrar » à « 69 — Messaad » (dont « 15 — Tizi Ouzou », « 59 — Aflou »), puis **« Étranger »** en dernier | ☐ |
+| 9.3 | Remplir tout le formulaire **sauf** la wilaya, cliquer « Valider et continuer » | Blocage, le curseur va sur la liste : « Choisis ta wilaya, ou « Étranger ». » | ☐ |
+| 9.4 | Choisir « 15 — Tizi Ouzou », descendre au bloc « Hébergement » | La case « Je souhaite un hébergement » est **décochée et grisée** ; dessous : « L'hébergement est réservé aux participants venant d'une autre wilaya que Tizi Ouzou. » | ☐ |
+| 9.5 | Lire le récapitulatif à droite (ou en bas sur téléphone) | Une ligne « Provenance : Tizi Ouzou (15) » | ☐ |
+| 9.6 | Choisir « 06 — Béjaïa » | La case redevient **active** ; l'aide commence par « Réservé aux participants venant d'une autre wilaya que Tizi Ouzou. Il reste N places… » | ☐ |
+| 9.7 | Cocher l'hébergement, puis **revenir** sur « 15 — Tizi Ouzou » | La case se **décoche toute seule** et se grise | ☐ |
+| 9.8 | Rechoisir « 06 — Béjaïa », cocher l'hébergement, envoyer | Inscription enregistrée. Sur `/preuve` : montant = **prix du dossard + prix de l'hébergement** (réglages de `/admin/inscriptions`) | ☐ |
+| 9.9 | Revenir sur `/inscription` | « 06 — Béjaïa » est présélectionné, la case hébergement cochée | ☐ |
+| 9.10 | Choisir « Étranger » | Une nouvelle liste **« Pays de résidence (obligatoire) »** apparaît sous la wilaya. Pas d'« Algérie » dedans ; les pays sont en français et dans l'ordre alphabétique | ☐ |
+| 9.11 | Sans choisir de pays, envoyer | Blocage : « Indique ton pays de résidence. » | ☐ |
+| 9.12 | Choisir « France », envoyer. Puis revenir sur `/inscription` | Enregistré. « Étranger » et « France » sont présélectionnés, le récapitulatif dit « Provenance : Étranger — France » ; l'hébergement reste possible | ☐ |
+| 9.13 | **Dossier ancien.** Coureur B : s'inscrire avec « 16 — Alger » et l'hébergement coché. Puis simuler un dossier saisi avant la règle (commande ci-dessous, en remplaçant l'email) | La commande affiche `UPDATE 1` | ☐ |
+| 9.14 | Organisateur : ouvrir `/admin/dossiers`, puis le dossier de B | La fiche s'affiche **sans erreur**, avec « Provenance : non renseignée » | ☐ |
+| 9.15 | Coureur B : ouvrir `/inscription` | La liste wilaya est **vide** (« Choisir ta wilaya »), la case hébergement **toujours cochée** : rien n'a été retiré d'office | ☐ |
+| 9.16 | **Garde-fou de la base** (commande ci-dessous, B a encore son hébergement) : tenter de donner Tizi Ouzou au dossier de B directement en base | Refus de Postgres : `violates check constraint "coureur_hebergement_hors_tizi_check"`. Rien n'est modifié | ☐ |
+| 9.17 | Coureur B : choisir « 15 — Tizi Ouzou » | La case se **décoche** et se grise | ☐ |
+| 9.18 | Organisateur : sur `/admin/inscriptions`, **relever** le chiffre « Hébergements pris ». Puis coureur B : enregistrer les modifications. Recharger `/admin/inscriptions` | Enregistré **sans erreur**. « Hébergements pris » a **diminué de 1** (et « lits restants » augmenté de 1). Sur `/preuve` de B : montant = **prix du dossard seul** | ☐ |
+| 9.19 | Organisateur : rouvrir la fiche de B | « Provenance : Tizi Ouzou (15) » | ☐ |
+| 9.20 | Ouvrir la fiche de A | « Provenance : Étranger — France » | ☐ |
+
+Commande de l'étape 9.13 (dossier « ancien » : on efface sa wilaya, l'hébergement reste) :
+
+```bash
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "UPDATE coureur SET wilaya = NULL, pays = NULL \
+   WHERE account_id = (SELECT id FROM account WHERE email = 'email-du-coureur-b@exemple.dz' \
+     AND organisation_id = (SELECT id FROM organisation WHERE slug = 'ait-aissi'));"
+```
+
+Commande de l'étape 9.16 (même email que pour 9.13 ; une réponse `UPDATE 0` signifie que l'email ne correspond à aucun dossier — le corriger) :
+
+```bash
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "UPDATE coureur SET wilaya = '15', pays = NULL \
+   WHERE account_id = (SELECT id FROM account WHERE email = 'email-du-coureur-b@exemple.dz' \
+     AND organisation_id = (SELECT id FROM organisation WHERE slug = 'ait-aissi'));"
+```
+
+Contrôle facultatif de ce qui est stocké (codes, jamais de libellés) :
+
+```bash
+docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
+  "SELECT first_name, wilaya, pays, hebergement FROM coureur ORDER BY updated_at DESC LIMIT 5;"
+```
+
+Attendu : `06` / `ETR` + `FR` / `15` / vide pour les dossiers anciens — jamais « Béjaïa » ni « France » en toutes lettres.
+
+- [ ] I9 conforme — Observations : …………
+
+---
+
 ## Remise en état après recette
 
 ```bash
@@ -209,10 +274,12 @@ L'historique des réglages conserve la trace de vos manipulations : c'est normal
 | I6 | Hébergement optionnel contingenté | ☐ Conforme ☐ Écart | |
 | I7 | Concurrence sur la dernière place | ☐ Conforme ☐ Écart | |
 | I8 | Dégradations et droits d'accès | ☐ Conforme ☐ Écart | |
+| I9 | Wilaya de provenance et hébergement hors Tizi Ouzou | ☐ Conforme ☐ Écart | |
 
 **Points qui demandent une décision plutôt qu'une correction, à signaler s'ils gênent :**
 
 - Le compteur public peut avoir jusqu'à **60 secondes de retard** (page en cache). Un visiteur peut lire « 3 places » alors qu'il n'y en a plus ; il part alors en liste d'attente sans que rien ne soit perdu.
 - Les places libérées par expiration **ne sont attribuées à personne automatiquement** : c'est un choix d'organisation. Quelqu'un doit ouvrir l'écran d'administration et les donner.
 - Abaisser le contingent d'hébergement **retire son lit** à un coureur qui renvoie son formulaire ensuite (étape 6.9). Le contingent fait autorité à chaque enregistrement.
+- Les dossiers saisis **avant** la question de la wilaya gardent leur hébergement tant qu'ils ne sont pas modifiés, même s'ils viennent de Tizi Ouzou (étapes 9.13-9.18) : la règle ne s'applique qu'à la prochaine modification. Un dossier déjà **validé** n'est plus modifiable par le coureur : il ne sera **jamais** régularisé automatiquement. Le tri se fait à la main, avec la requête de contrôle ci-dessus (`wilaya` vide et `hebergement` à `t`).
 - Les deux prix sont **provisoires**. Les changer après les premières inscriptions créera deux populations ayant versé des montants différents.

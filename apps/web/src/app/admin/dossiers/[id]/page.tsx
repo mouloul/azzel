@@ -13,6 +13,7 @@ import {
 } from '@/modules/inscriptions/domain';
 import { toAdminApiError } from '@/modules/inscriptions/errors';
 import { formatKiloBytes } from '@/modules/inscriptions/proof-format';
+import { libelleProvenance } from '@/modules/inscriptions/provenance';
 import { getDossierDetail } from '@/modules/inscriptions/service';
 
 import { AdminIndisponible } from '../../indisponible';
@@ -102,6 +103,9 @@ export default async function AdminDossierDetailPage({
             Né(e) le {coureur.dateNaissance} · T-shirt {coureur.tailleTshirt} · Téléphone{' '}
             {coureur.telephone}
           </p>
+          {/* Un dossier antérieur à la question n'a pas de wilaya : « non
+              renseignée », jamais une erreur. */}
+          <p>Provenance : {libelleProvenance(coureur.wilaya, coureur.pays)}</p>
           <p>
             Contact d’urgence : {coureur.contactUrgenceNom} · {coureur.contactUrgenceTelephone}
           </p>
