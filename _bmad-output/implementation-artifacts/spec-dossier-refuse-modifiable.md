@@ -105,6 +105,8 @@ refusé / expirée ── « Modifier mon inscription » ──▶ en constituti
 
 - **Itération 1 (revue, 11/11/2026)** — Constat : une preuve pouvait être déposée sans acceptations, d'où un dossier « en validation » invalidable ; l'implémentation avait ajouté une exception (compléter les acceptations en validation) contraire au gel. Amendement (décision PO dans le bloc gelé) : acceptations exigées avant le dépôt. État évité : dossier en validation bloqué, ou mutable pendant l'examen. KEEP : tout le reste de l'implémentation (migration 0044, reprise sous verrou, erreurs dédiées, tests du cycle) ; correction localisée sans réécriture, l'écart n'étant pas structurel.
 
+- **Amendement (décision PO, 11/11/2026 — `spec-validation-figee.md`)** — La décision « en validation est figé, seule la preuve peut être remplacée » est amendée : en validation, **aucun dépôt**, remplacement de preuve compris (`canDepositPreuve` réservé à « en constitution », 409 `inscriptions.dossier_en_validation` orienté assistance). Motif : plus aucune action coureur pendant l'examen ; le remplacement permettait de valider une preuve que l'organisateur n'avait pas vue. Un coureur qui s'est trompé de fichier appelle l'organisation, qui refuse le dossier ; il le reprend par « Modifier mon inscription ». Reprise après refus/expiration et décisions admin inchangées.
+
 ## Review Triage Log
 
 | # | Source | Constat | Verdict | Preuve | Route |

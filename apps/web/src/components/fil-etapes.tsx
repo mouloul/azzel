@@ -89,15 +89,14 @@ const STATUT_EN_VALIDATION = 'en validation';
 
 /**
  * En validation, trois étapes sont franchies et c'est à l'organisation d'agir :
- * Validation est courante. Inscription et Documents ne portent aucun lien —
- * leurs pages sont figées jusqu'à la décision ; seul Paiement (remplacement
- * de la preuve) reste atteignable.
+ * Validation est courante. Aucune étape ne porte de lien — le dossier est figé
+ * jusqu'à la décision, preuve comprise (PO, 11/11/2026).
  */
 function etapesEnValidation(): EtapeFil[] {
   return [
     { libelle: LIBELLES_ETAPE.inscription, etat: 'fait' },
     { libelle: LIBELLES_ETAPE.documents, etat: 'fait' },
-    { libelle: LIBELLES_ETAPE.paiement, etat: 'fait', href: '/preuve' },
+    { libelle: LIBELLES_ETAPE.paiement, etat: 'fait' },
     { libelle: LIBELLES_ETAPE.validation, etat: 'courante' },
   ];
 }

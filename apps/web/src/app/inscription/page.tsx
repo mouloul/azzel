@@ -134,20 +134,22 @@ export default async function InscriptionPage() {
           <h1>{enValidation ? 'Dossier en cours de validation' : 'Dossier déjà validé'}</h1>
           <p className="lead">
             {enValidation
-              ? 'Ta preuve de paiement est déposée : l’organisation examine ton dossier. Il ne peut plus être modifié en attendant sa décision — tu peux seulement remplacer ta preuve.'
+              ? 'Ta preuve de paiement est déposée : l’organisation examine ton dossier. Il ne peut plus être modifié en attendant sa décision.'
               : 'Ton dossier a été validé par l’organisation : il ne peut plus être modifié en ligne.'}
           </p>
           {enValidation ? (
-            <div className="auth-alt">
-              <a className="btn-action" href="/preuve">
-                Remplacer ma preuve de paiement
-              </a>
-            </div>
+            // Aucun dépôt en validation (PO, 11/11/2026) : une erreur se
+            // corrige par l'organisation, qui refuse le dossier.
+            <p className="hint">
+              Tu t’es trompé de fichier ou d’information ? Contacte l’organisation : elle
+              refusera ton dossier, que tu pourras ensuite reprendre.
+            </p>
           ) : null}
           <div className="auth-alt">
             <a className="btn-contour" href="/espace-coureur">
               Voir mon inscription
             </a>
+            {enValidation ? <AssistanceButton phone={assistancePhone} /> : null}
           </div>
         </article>
       </section>

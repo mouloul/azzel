@@ -186,9 +186,44 @@ describe('/preuve — dépôt refondu (story 9.4)', () => {
     expect(html).not.toContain('type="file"');
   });
 
-  it('en validation : dépôt ouvert (remplacement), encart « en cours de validation »', async () => {
+  it('en validation : lecture seule — preuve déposée, « en cours de validation », assistance, aucun champ', async () => {
+    vi.stubEnv('ASSISTANCE_PHONE', '+213 555 010 200');
     proofServiceMock.getPreuveState.mockResolvedValue({
       edition: EDITION,
+      coureurStatus: 'en validation',
+      refusalReason: null,
+      preuve: {
+        id: 'preuve-1',
+        depositedAt: '2026-11-11T21:56:00.000Z',
+        sizeBytes: 102_400,
+        mime: 'image/png',
+        format: 'PNG',
+        numeroTransaction: 'UHGF42567U',
+      },
+      documentsAcceptes: true,
+    });
+    const html = await rendu();
+    expect(html).toContain('en cours de validation');
+    expect(html).toContain('Preuve déposée');
+    expect(html).toContain('PNG');
+    expect(html).toMatch(/N° de transaction : (<!-- -->)?UHGF42567U/);
+    expect(html).not.toContain('momentanément indisponible');
+    expect(html).toContain('href="tel:+213555010200"');
+    expect(html).toContain('href="/espace-coureur"');
+    // Décision PO du 11/11/2026 : aucun dépôt pendant l'examen.
+    expect(html).not.toContain('type="file"');
+    expect(html).not.toContain('<input');
+    expect(html).not.toContain('Envoyer ma preuve');
+    expect(html).not.toContain('Remplacer');
+    // Fil : aucune étape ne renvoie vers une page figée.
+    expect(html).not.toContain('href="/preuve"');
+    expect(html).not.toContain('href="/inscription"');
+    expect(html).not.toContain('href="/acceptations"');
+  });
+
+  it('en validation, inscriptions clôturées : toujours la lecture seule de la preuve déposée', async () => {
+    proofServiceMock.getPreuveState.mockResolvedValue({
+      edition: { ...EDITION, registrationOpen: false },
       coureurStatus: 'en validation',
       refusalReason: null,
       preuve: null,
@@ -196,7 +231,11 @@ describe('/preuve — dépôt refondu (story 9.4)', () => {
     });
     const html = await rendu();
     expect(html).toContain('en cours de validation');
-    expect(html).toContain('type="file"');
+    expect(html).not.toContain('Les inscriptions sont fermées');
+    // Détail de la preuve illisible : repli explicite, pas un titre sans contenu.
+    expect(html).toContain('Ta preuve est enregistrée ; son détail est momentanément indisponible.');
+    expect(html).not.toContain('Déposée le');
+    expect(html).not.toContain('type="file"');
   });
 
   it('acceptations manquantes : renvoi vers /acceptations au lieu du formulaire', async () => {

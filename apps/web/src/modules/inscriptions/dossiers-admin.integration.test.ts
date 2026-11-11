@@ -680,8 +680,18 @@ describe.skipIf(testUrls === null)(
       const session = await createCoureurSession();
       const bytes = jpegBytes(30_000);
       const uploaded = await uploadPreuve(session, bytes, { store, proofStore });
+      // Plus de remplacement en validation (PO, 11/11/2026) : la preuve
+      // « replaced » est une situation héritée, reconstituée ici en remettant
+      // le dossier en constitution avant un second dépôt.
+      await sql`
+        UPDATE coureur SET status = 'en constitution'
+        WHERE id = ${await coureurIdFor(session.accountId)}
+      `;
       const autre = jpegBytes(31_000);
       const remplacante = await uploadPreuve(session, autre, { store, proofStore });
+      expect(
+        (await sql`SELECT status FROM preuve WHERE id = ${uploaded.id}`)[0]?.status,
+      ).toBe('replaced');
 
       const file = await readPreuveForOrganisation(await organisateurSession(), remplacante.id, {
         store,

@@ -317,3 +317,10 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
   summary: Aligner l'ordre des verrous (édition puis coureur) dans `decideDossier` pour éviter un interblocage avec `upsertCoureur`.
   evidence: `decideDossier` verrouille le coureur puis l'édition (dossard) ; `upsertCoureur` fait l'inverse.
+- source_spec: `_bmad-output/implementation-artifacts/spec-validation-figee.md`
+  summary: Résolu — « Empêcher l'organisateur de valider une preuve remplacée après l'ouverture de la fiche » (entrée de `spec-dossier-refuse-modifiable.md`) n'a plus d'objet.
+  evidence: Décision PO du 11/11/2026 : aucun dépôt de preuve en validation (`canDepositPreuve` réservé à « en constitution », 409 `inscriptions.dossier_en_validation`). La preuve examinée ne peut plus changer pendant l'examen.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-validation-figee.md`
+  summary: Permettre au coureur de voir (aperçu ou téléchargement) la preuve qu'il a déposée, sur /preuve en lecture seule.
+  evidence: La vue en validation demande « Tu t'es trompé de fichier ? » sans montrer le fichier ; aucune route de téléchargement côté coureur.

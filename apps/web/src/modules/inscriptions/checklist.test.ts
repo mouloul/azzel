@@ -180,18 +180,18 @@ describe('getChecklistState — consolidation des six pièces', () => {
     }
   });
 
-  it('dossier en validation : preuve remplaçable, inscription figée, validation en attente, récap porté', async () => {
+  it('dossier en validation : tout figé (preuve comprise), validation en attente, récap porté', async () => {
     const store = buildChecklistStore({
       coureur: { ...ACCEPTATIONS_ACCEPTEES, status: 'en validation' },
       preuve: PREUVE,
     });
     const state = await getChecklistState(session, { store });
     expect(state.pieces.filter((entry) => entry.fait)).toHaveLength(5);
-    // Figé jusqu'à la décision : seule la preuve peut encore changer.
+    // Figé jusqu'à la décision, preuve comprise (PO, 11/11/2026).
     expect(piece(state, 'epreuve').actionLabel).toBeUndefined();
     expect(piece(state, 'preuve').fait).toBe(true);
-    expect(piece(state, 'preuve').actionLabel).toBe('Remplacer ma preuve de paiement');
-    expect(piece(state, 'preuve').actionHref).toBe('/preuve');
+    expect(piece(state, 'preuve').actionLabel).toBeUndefined();
+    expect(piece(state, 'preuve').actionHref).toBeUndefined();
     const validation = piece(state, 'validation');
     expect(validation.fait).toBe(false);
     expect(validation.texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
@@ -348,12 +348,23 @@ describe('getChecklistState — consolidation des six pièces', () => {
     const inscrit = buildChecklistStore({
       edition: FERMEES,
       coureur: ACCEPTATIONS_ACCEPTEES,
-      preuve: PREUVE,
+      preuve: null,
     });
     const etatInscrit = await getChecklistState(session, { store: inscrit });
     expect(piece(etatInscrit, 'epreuve').actionLabel).toBeUndefined();
     expect(piece(etatInscrit, 'preuve').actionLabel).toBe('Inscriptions fermées');
     expect(piece(etatInscrit, 'preuve').actionHref).toBeUndefined();
+
+    // Preuve déjà déposée : rien à neutraliser, aucune action (plus de
+    // remplacement depuis le 11/11/2026).
+    const depose = buildChecklistStore({
+      edition: FERMEES,
+      coureur: ACCEPTATIONS_ACCEPTEES,
+      preuve: PREUVE,
+    });
+    const etatDepose = await getChecklistState(session, { store: depose });
+    expect(piece(etatDepose, 'preuve').actionLabel).toBeUndefined();
+    expect(piece(etatDepose, 'preuve').actionHref).toBeUndefined();
   });
 
   it('aucune édition configurée : liste vide, récap absent, sans erreur', async () => {

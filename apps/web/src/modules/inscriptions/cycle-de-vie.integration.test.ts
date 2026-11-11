@@ -325,7 +325,7 @@ describe.skipIf(testUrls === null)('cycle de vie du dossier — intégration Pos
     expect(row.hebergement).toBe(false);
   });
 
-  it('modifier en validation : 409 figé ; remplacement de preuve accepté, reste en validation', async () => {
+  it('modifier en validation : 409 figé ; dépôt de preuve refusé (409), preuve active inchangée', async () => {
     const session = await enValidation();
     const avant = await ligne(session);
 
@@ -341,9 +341,21 @@ describe.skipIf(testUrls === null)('cycle de vie du dossier — intégration Pos
     const apres = await ligne(session);
     expect(apres.updated_at.toISOString()).toBe(avant.updated_at.toISOString());
 
-    await uploadPreuve(session, jpegBytes(25_000, 0x11), { store, proofStore });
+    // Aucun remplacement pendant l'examen (PO, 11/11/2026).
+    const preuvesAvant = await statutsPreuves(session);
+    const depot = await uploadPreuve(session, jpegBytes(25_000, 0x11), {
+      store,
+      proofStore,
+    }).catch((caught: unknown) => caught);
+    expect(depot).toBeInstanceOf(DossierEnValidationError);
+    const depotError = toApiError(depot);
+    expect(depotError.status).toBe(409);
+    expect(depotError.envelope.error.code).toBe('inscriptions.dossier_en_validation');
+    expect(depotError.envelope.error.action).not.toContain('remplacer');
+    expect(depotError.envelope.error.action).toContain('Contacte l’organisation');
     expect((await ligne(session)).status).toBe('en validation');
-    expect(await statutsPreuves(session)).toEqual(['replaced', 'active']);
+    expect(await statutsPreuves(session)).toEqual(preuvesAvant);
+    expect(preuvesAvant).toEqual(['active']);
   });
 
   it('modifier un validé : 409 « Dossier déjà validé »', async () => {

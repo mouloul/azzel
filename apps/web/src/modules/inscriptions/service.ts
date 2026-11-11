@@ -939,17 +939,15 @@ export async function getChecklistState(
   const enValidation = coureur !== null && coureur.status === COUREUR_STATUS_EN_VALIDATION;
   const enAttente = coureur !== null && coureur.status === COUREUR_STATUS_LISTE_ATTENTE;
 
+  // Une preuve déposée ne se remplace plus (PO, 11/11/2026) : le dépôt fait
+  // passer le dossier en validation, figé jusqu'à la décision. Seul le premier
+  // dépôt, en constitution, est proposé.
   let actionPreuve: { label: string; href?: string } | null = null;
-  if (!preuveIndisponible) {
-    actionPreuve = neutraliseSiFermees(
-      preuve !== null
-        ? peutDeposer
-          ? { label: 'Remplacer ma preuve de paiement', href: '/preuve' }
-          : null
-        : peutDeposer
-          ? { label: 'Dépose ta preuve de paiement CCP', href: '/preuve' }
-          : null,
-    );
+  if (!preuveIndisponible && preuve === null && peutDeposer) {
+    actionPreuve = neutraliseSiFermees({
+      label: 'Dépose ta preuve de paiement CCP',
+      href: '/preuve',
+    });
   }
 
   const pieces: ChecklistPiece[] = [

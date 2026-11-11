@@ -1,26 +1,17 @@
 import { formatLocalDateTime } from '@azzel/shared';
 import type { Ref } from 'react';
 
+import { AssistanceButton } from '@/components/assistance-button';
 import type { PreuveSummary } from '@/modules/inscriptions/proof-service';
-
-/**
- * - premiere : aucun dépôt avant celui-ci ;
- * - remplacement : une nouvelle preuve a pris la place de la précédente ;
- * - deja-recue : même fichier que la preuve déjà enregistrée — le serveur l'a
- *   reconnue et n'a rien remplacé ; annoncer un remplacement serait faux.
- */
-export type VarianteEnvoi = 'premiere' | 'remplacement' | 'deja-recue';
-
-const MESSAGES: Record<VarianteEnvoi, string> = {
-  premiere: 'Ta preuve de paiement a bien été reçue.',
-  remplacement: 'Ta nouvelle preuve a bien été reçue. Elle remplace la précédente.',
-  'deja-recue': 'Cette preuve était déjà enregistrée : rien n’a changé.',
-};
 
 /**
  * Accusé de réception d'une preuve : remplace le formulaire dès que le serveur
  * a confirmé le dépôt. Sans lui, le bouton d'envoi disparaissait sur un
  * formulaire inchangé et le coureur ne savait pas si sa preuve était partie.
+ *
+ * Un seul message : le dépôt n'est possible qu'en constitution, c'est donc
+ * toujours le premier. Aucun remplacement proposé — le dossier passe en
+ * validation, figé jusqu'à la décision (PO, 11/11/2026).
  *
  * Annoncé par le focus (posé par le formulaire), pas par une région live :
  * une région insérée déjà remplie n'est pas lue de façon fiable, et les deux
@@ -28,13 +19,11 @@ const MESSAGES: Record<VarianteEnvoi, string> = {
  */
 export function PreuveEnvoyee({
   preuve,
-  variante,
-  onRemplacer,
+  assistancePhone,
   ref,
 }: {
   preuve: PreuveSummary;
-  variante: VarianteEnvoi;
-  onRemplacer: () => void;
+  assistancePhone: string;
   ref?: Ref<HTMLDivElement>;
 }) {
   return (
@@ -45,7 +34,7 @@ export function PreuveEnvoyee({
       aria-labelledby="preuve-envoyee-message"
     >
       <p id="preuve-envoyee-message" className="confirmation-message">
-        {MESSAGES[variante]}
+        Ta preuve de paiement a bien été reçue.
       </p>
       <p>
         Ton dossier est <strong>en validation</strong> : l’organisation vérifie ton
@@ -58,13 +47,15 @@ export function PreuveEnvoyee({
           ? ` · N° de transaction : ${preuve.numeroTransaction}`
           : ''}
       </p>
+      <p className="hint">
+        Tu t’es trompé de fichier ? Appelle l’organisation : elle refusera ton dossier, que tu
+        pourras ensuite reprendre avec « Modifier mon inscription ».
+      </p>
       <div className="auth-alt">
         <a className="btn-action" href="/espace-coureur">
           Voir mon dossier
         </a>
-        <button type="button" className="btn-contour" onClick={onRemplacer}>
-          Remplacer ma preuve
-        </button>
+        <AssistanceButton phone={assistancePhone} />
       </div>
     </div>
   );

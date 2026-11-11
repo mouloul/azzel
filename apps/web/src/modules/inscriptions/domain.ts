@@ -96,10 +96,11 @@ export const STATUTS_REPRISE: readonly string[] = [
  * Statuts dans lesquels le coureur peut encore enregistrer sa saisie.
  *
  * « Validé » est figé pour de bon ; « en validation » l'est jusqu'à la
- * décision (seule la preuve peut y être remplacée). Un dossier en attente de
- * place reste corrigeable — aucune raison de lui interdire de corriger son
- * téléphone. Un dossier refusé ou expiré l'est aussi : l'enregistrer est
- * justement ce qui le reprend (voir STATUTS_REPRISE).
+ * décision, sans exception — pas même la preuve (PO, 11/11/2026). Un
+ * dossier en attente de place reste corrigeable — aucune raison de lui
+ * interdire de corriger son téléphone. Un dossier refusé ou expiré l'est
+ * aussi : l'enregistrer est justement ce qui le reprend (voir
+ * STATUTS_REPRISE).
  */
 export const STATUTS_MODIFIABLES: readonly string[] = [
   COUREUR_STATUS_EN_CONSTITUTION,
@@ -458,13 +459,15 @@ export function statutAffiche(status: string): StatutAffiche {
 }
 
 /**
- * Dépôt (ou remplacement) de la preuve : en constitution, le dépôt fait
- * passer le dossier en validation ; en validation, le remplacement le laisse
- * en validation. Refusé ou expiré : le dossier doit d'abord être repris par
- * « Modifier mon inscription » — une nouvelle preuve seule ne suffit plus.
+ * Dépôt de la preuve : en constitution seulement ; le dépôt fait passer le
+ * dossier en validation. En validation, le dossier est figé jusqu'à la
+ * décision : aucun remplacement (PO, 11/11/2026) — l'organisateur ne doit
+ * jamais valider une preuve qu'il n'a pas vue. Un coureur qui s'est trompé de
+ * fichier appelle l'organisation, qui refuse le dossier. Refusé ou expiré : le
+ * dossier doit d'abord être repris par « Modifier mon inscription ».
  */
 export function canDepositPreuve(status: string): boolean {
-  return status === COUREUR_STATUS_EN_CONSTITUTION || status === COUREUR_STATUS_EN_VALIDATION;
+  return status === COUREUR_STATUS_EN_CONSTITUTION;
 }
 
 /**

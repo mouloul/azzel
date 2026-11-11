@@ -18,7 +18,8 @@ import {
 import { normaliserNumeroTransaction } from '@/modules/inscriptions/numero-transaction';
 import type { PreuveState, PreuveSummary } from '@/modules/inscriptions/proof-service';
 
-import { PreuveEnvoyee, type VarianteEnvoi } from './preuve-envoyee';
+import { PreuveEnvoyee } from './preuve-envoyee';
+import { doitRafraichirApresErreur, estRefusDossierEnValidation } from './rafraichir-apres-erreur';
 
 const NETWORK_ERROR = {
   message: 'Connexion au serveur impossible.',
@@ -99,24 +100,23 @@ export function PreuveForm({
   const [serverError, setServerError] = useState<{ message: string; action: string } | null>(null);
   const [reconnect, setReconnect] = useState(false);
   const [pending, setPending] = useState(false);
-  const [numeroSaisi, setNumeroSaisi] = useState(state.preuve?.numeroTransaction ?? '');
+  const [numeroSaisi, setNumeroSaisi] = useState('');
   const [numeroError, setNumeroError] = useState<string | null>(null);
-  const [deposited, setDeposited] = useState<PreuveSummary | null>(state.preuve);
-  const [envoi, setEnvoi] = useState<VarianteEnvoi | null>(null);
-  const envoye = envoi !== null;
+  // Preuve confirmée par le serveur : l'accusé de réception remplace alors le
+  // formulaire, définitivement (aucun remplacement en validation).
+  const [recue, setRecue] = useState<PreuveSummary | null>(null);
+  const envoye = recue !== null;
+  // Dossier passé en validation entre-temps (autre onglet) : état terminal,
+  // plus aucun contrôle de dépôt — l'erreur reste affichée avec l'assistance.
+  const [fige, setFige] = useState(false);
   const previewRef = useRef<string | null>(null);
   const confirmationRef = useRef<HTMLDivElement | null>(null);
-  const retourAuFormulaire = useRef(false);
 
-  // Dans les deux sens, l'élément qui a le focus disparaît (bouton d'envoi,
-  // puis « Remplacer ma preuve ») : sans le déplacer, un lecteur d'écran
-  // resterait sur un élément qui n'existe plus.
+  // Le bouton d'envoi, qui a le focus, disparaît : sans le déplacer, un
+  // lecteur d'écran resterait sur un élément qui n'existe plus.
   useEffect(() => {
     if (envoye) {
       confirmationRef.current?.focus();
-    } else if (retourAuFormulaire.current) {
-      retourAuFormulaire.current = false;
-      document.getElementById('preuve-fichier')?.focus();
     }
   }, [envoye]);
 
@@ -246,14 +246,22 @@ export function PreuveForm({
         if (response.status === 401) {
           setReconnect(true);
         }
-        if (response.status === 403 || response.status === 409) {
-          router.refresh();
-        }
         let payload: unknown = null;
         try {
           payload = await response.json();
         } catch {
           payload = null;
+        }
+        const code =
+          typeof payload === 'object' && payload !== null && 'error' in payload
+            ? (payload as { error?: { code?: unknown } }).error?.code
+            : undefined;
+        if (doitRafraichirApresErreur(response.status, code)) {
+          router.refresh();
+        }
+        if (estRefusDossierEnValidation(response.status, code)) {
+          setPreview(null);
+          setFige(true);
         }
         if (typeof payload === 'object' && payload !== null && 'error' in payload) {
           const error = (payload as { error?: { message?: unknown; action?: unknown } }).error;
@@ -283,21 +291,12 @@ export function PreuveForm({
         typeof (candidate as PreuveSummary).mime === 'string' &&
         typeof (candidate as PreuveSummary).format === 'string'
       ) {
-        const recue = candidate as PreuveSummary;
-        // Même fichier que la preuve active : le serveur renvoie celle-ci telle
-        // quelle (déduplication par empreinte), rien n'a été remplacé.
-        setEnvoi(
-          deposited === null
-            ? 'premiere'
-            : recue.id === deposited.id
-              ? 'deja-recue'
-              : 'remplacement',
-        );
-        setDeposited(recue);
+        setRecue(candidate as PreuveSummary);
         setPreview(null);
-        // Le dépôt change le statut du dossier (en validation) : l'en-tête et
-        // le fil d'étapes, rendus côté serveur, doivent le refléter.
-        router.refresh();
+        // Pas de router.refresh() : le dossier est passé en validation, la page
+        // serveur rendrait désormais sa vue en lecture seule et démonterait ce
+        // formulaire — l'accusé de réception disparaîtrait aussitôt. Rien de
+        // ce que rend le serveur n'est visible derrière l'accusé.
       } else {
         setServerError(NETWORK_ERROR);
       }
@@ -321,43 +320,22 @@ export function PreuveForm({
         <h1>
           {envoye
             ? 'Preuve envoyée'
-            : deposited !== null
-              ? 'Remplacer ta preuve'
+            : fige
+              ? 'Dossier en cours de validation'
               : 'Dépose ta preuve de paiement CCP ou Baridimob'}
         </h1>
-        {envoi !== null && deposited !== null ? (
-          // Les encarts serveur (montant, comptes, « en cours de validation »)
-          // s'effacent : l'accusé de réception les répéterait ou les
-          // contredirait (« saisis ci-dessous » sans champ en dessous).
-          <PreuveEnvoyee
-            ref={confirmationRef}
-            preuve={deposited}
-            variante={envoi}
-            onRemplacer={() => {
-              retourAuFormulaire.current = true;
-              setEnvoi(null);
-            }}
-          />
-        ) : (
+        {recue !== null ? (
+          // Les encarts serveur (montant, comptes) s'effacent : l'accusé de
+          // réception les répéterait ou les contredirait (« saisis ci-dessous »
+          // sans champ en dessous).
+          <PreuveEnvoyee ref={confirmationRef} preuve={recue} assistancePhone={assistancePhone} />
+        ) : fige ? null : (
           <>
             <p className="lead">
               Photographie ou document de ton reçu de virement : elle est compressée sur ton
               téléphone puis déposée ({formatKiloBytes(MAX_PROOF_BYTES)} maximum).
             </p>
             {children}
-            {deposited !== null && (
-              <div className="recap" role="status" aria-live="polite">
-                <p className="recap-titre">Preuve déposée</p>
-                <p>
-                  Déposée le {formatLocalDateTime(deposited.depositedAt)} ·{' '}
-                  {formatKiloBytes(deposited.sizeBytes)} ({deposited.format})
-                </p>
-                {deposited.numeroTransaction !== null && (
-                  <p>N° de transaction : {deposited.numeroTransaction}</p>
-                )}
-                <p className="meta">Tu peux la remplacer : l’ancienne reste conservée pour l’organisation.</p>
-              </div>
-            )}
 
             <div className="socle-champ">
               <label className="socle-etiquette" htmlFor="preuve-numero">
@@ -462,9 +440,7 @@ export function PreuveForm({
                     ? 'Envoi…'
                     : serverError !== null
                       ? 'Réessayer'
-                      : deposited !== null
-                        ? 'Remplacer ma preuve'
-                        : 'Envoyer ma preuve'}
+                      : 'Envoyer ma preuve'}
                 </button>
                 <button
                   type="button"
@@ -498,6 +474,11 @@ export function PreuveForm({
               )}
             </p>
             <div className="auth-alt">
+              {fige ? (
+                <a className="btn-action" href="/preuve">
+                  Voir ma preuve déposée
+                </a>
+              ) : null}
               <AssistanceButton phone={assistancePhone} />
             </div>
           </div>
