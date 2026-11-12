@@ -7,12 +7,14 @@ import {
   FOND_TOPO,
   MOTEUR_CARTE,
   RELIEF_TERRARIUM,
+  SURCOUCHE_OSM,
   attributionCourte,
   attributions,
   cleArcgisValide,
   exigeUneCle,
   fondSatellite,
   fondsDisponibles,
+  urlPorteUneCle,
 } from './fonds-carte';
 
 /* Story 11.2 — ces tests épinglent une DÉCISION JURIDIQUE, pas une
@@ -136,22 +138,68 @@ describe('attributions (FR-32, §5 de la note licences)', () => {
     ]);
   });
 
-  it('satellite actif : le bloc nomme Esri, le relief et le moteur — jamais OpenTopoMap', () => {
+  it('satellite actif : le bloc nomme Esri, la surcouche, le relief et le moteur — jamais OpenTopoMap', () => {
     const sat = fondSatellite('cle-de-test');
     const bloc = attributions(sat);
-    expect(bloc).toEqual([sat.attribution, RELIEF_TERRARIUM.attribution, MOTEUR_CARTE.attribution]);
+    expect(bloc).toEqual([
+      sat.attribution,
+      SURCOUCHE_OSM.attribution,
+      RELIEF_TERRARIUM.attribution,
+      MOTEUR_CARTE.attribution,
+    ]);
     expect(bloc.join(' ')).not.toContain('OpenTopoMap');
+    expect(bloc.join(' ')).toContain('OpenStreetMap');
+    expect(bloc.join(' ')).toContain('OpenMapTiles');
+  });
+
+  it('topographique actif : la surcouche n’est pas créditée en plus d’OpenTopoMap', () => {
+    const bloc = attributions(FOND_TOPO).join(' ');
+    expect(bloc).not.toContain('OpenMapTiles');
+    expect(bloc).not.toContain('OpenFreeMap');
+    expect(attributionCourte(FOND_TOPO)).not.toContain('OpenMapTiles');
+    expect(attributionCourte(FOND_TOPO)).not.toContain('OpenFreeMap');
   });
 
   it('la mention courte suit le fond actif', () => {
     expect(attributionCourte(FOND_TOPO)).toContain('OpenTopoMap');
-    expect(attributionCourte(fondSatellite('cle-de-test'))).toContain('Esri');
-    expect(attributionCourte(fondSatellite('cle-de-test'))).not.toContain('OpenTopoMap');
+    const courte = attributionCourte(fondSatellite('cle-de-test'));
+    expect(courte).toContain('Esri');
+    expect(courte).not.toContain('OpenTopoMap');
+    for (const ayantDroit of ['OpenStreetMap', 'OpenMapTiles', 'OpenFreeMap']) {
+      expect(courte).toContain(ayantDroit);
+    }
   });
 
   it('la mention courte nomme chaque ayant droit', () => {
     for (const ayantDroit of ['OpenStreetMap', 'OpenTopoMap', 'USGS', 'MapLibre']) {
       expect(ATTRIBUTION_COURTE).toContain(ayantDroit);
+    }
+  });
+});
+
+describe('surcouche noms et chemins — OpenFreeMap (2026-11-12)', () => {
+  it('attribution reproduite telle que publiée par le TileJSON d’OpenFreeMap', () => {
+    expect(SURCOUCHE_OSM.attribution).toBe('OpenFreeMap © OpenMapTiles Data from OpenStreetMap');
+  });
+
+  it('mention courte dérivée de SURCOUCHE_OSM : chaque ayant droit figure mot pour mot dans l’attribution', () => {
+    expect(SURCOUCHE_OSM.ayantsDroit.length).toBeGreaterThan(0);
+    for (const ayantDroit of SURCOUCHE_OSM.ayantsDroit) {
+      expect(SURCOUCHE_OSM.attribution).toContain(ayantDroit);
+    }
+    expect(attributionCourte(fondSatellite('cle-de-test'))).toContain(SURCOUCHE_OSM.ayantsDroit.join(', '));
+  });
+
+  it('source décrite par TileJSON (tuiles versionnées chaque semaine), glyphes OpenFreeMap', () => {
+    expect(SURCOUCHE_OSM.tilejson).toBe('https://tiles.openfreemap.org/planet');
+    expect(SURCOUCHE_OSM.glyphes).toBe('https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf');
+    expect(SURCOUCHE_OSM.licence).toContain('ODbL');
+  });
+
+  it('aucune clé dans les URL de la surcouche, et rien que du HTTPS', () => {
+    for (const url of [SURCOUCHE_OSM.tilejson, SURCOUCHE_OSM.glyphes]) {
+      expect(urlPorteUneCle(url)).toBe(false);
+      expect(url.startsWith('https://')).toBe(true);
     }
   });
 });

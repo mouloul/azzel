@@ -26,6 +26,34 @@ OpenTopoMap ne garantit ni disponibilité ni support, et **interdit les
 téléchargements de masse** sur ses serveurs publics. Azzel ne précharge
 aucune tuile, ni sur la vitrine ni dans l'application coureur.
 
+### Surcouche noms et chemins — OpenFreeMap / OpenMapTiles / OpenStreetMap
+
+Posée sur le fond satellite uniquement (masquée sur le topographique, qui
+porte déjà ses libellés) : routes, pistes et sentiers, noms des routes, noms
+de lieux. Données **OpenStreetMap sous ODbL 1.0**, schéma OpenMapTiles,
+tuiles et polices servies par OpenFreeMap. **Usage commercial autorisé**,
+gratuit, sans clé ; **aucune garantie de service** (si OpenFreeMap ne répond
+pas, la carte reste affichée, simplement sans libellés).
+
+Texte d'attribution, reproduit tel que publié dans le TileJSON
+(`https://tiles.openfreemap.org/planet`) :
+
+```
+OpenFreeMap © OpenMapTiles Data from OpenStreetMap
+```
+
+Liens à conserver : <https://openfreemap.org>, <https://www.openmaptiles.org/>
+et <https://www.openstreetmap.org/copyright>.
+
+Le TileJSON et les tuiles ne sont demandés **qu'à l'affichage du satellite** :
+la surcouche est ajoutée à la carte après son ouverture, au premier passage
+sur le satellite. Sans clé ArcGIS, la surcouche n'existe pas. **Avec une clé,
+le satellite est le fond par défaut** : la surcouche se charge donc dès
+l'ouverture de la carte pour la plupart des visiteurs, dont l'adresse IP est
+alors exposée à un tiers supplémentaire (OpenFreeMap). Seul un visiteur qui
+n'affiche jamais le satellite ne contacte pas openfreemap.org. Aucune tuile
+n'est préchargée ; seules les tuiles affichées sont demandées.
+
 ### Relief — AWS Terrain Tiles (terrarium)
 
 **Domaine public** (SRTM, GMTED2010 et 3DEP de l'U.S. Geological Survey),

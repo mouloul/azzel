@@ -317,3 +317,9 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-dossier-refuse-modifiable.md`
   summary: Aligner l'ordre des verrous (édition puis coureur) dans `decideDossier` pour éviter un interblocage avec `upsertCoureur`.
   evidence: `decideDossier` verrouille le coureur puis l'édition (dossard) ; `upsertCoureur` fait l'inverse.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carte-surcouche-noms-chemins-osm.md`
+  summary: Ajouter un test qui valide le style MapLibre complet (initial + surcouche ajoutée) avec `validateStyleMin` de `@maplibre/maplibre-gl-style-spec`.
+  evidence: Une faute d'expression dans une couche passerait les tests actuels mais ferait rejeter le style par MapLibre ; le paquet n'est pas résoluble depuis `apps/web` (dépendance transitive pnpm), il faut l'ajouter en devDependency.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carte-surcouche-noms-chemins-osm.md`
+  summary: Rendre les attributions cartographiques avec liens (openstreetmap.org/copyright, opentopomap.org, openmaptiles.org, openfreemap.org) dans `vue-parcours.tsx`.
+  evidence: Le bloc rend des chaînes en texte brut alors que `CREDITS.md` liste des « liens à conserver » et que les règles d'attribution OSMF demandent un lien sur carte interactive ; motif préexistant (OpenTopoMap).
