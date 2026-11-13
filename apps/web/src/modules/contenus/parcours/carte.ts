@@ -12,7 +12,7 @@
  *   - les couleurs viennent des tokens de la charte, pas de littéraux.
  */
 
-import { FOND_PAR_DEFAUT, RELIEF_TERRARIUM, type SourceTuiles } from './fonds-carte';
+import { FOND_PAR_DEFAUT, RELIEF_TERRARIUM, SURCOUCHE_OSM, type SourceTuiles } from './fonds-carte';
 
 /** Point du tracé tel que `parcours.json` le stocke : lon, lat, altitude. */
 export type PointTrace = readonly [lon: number, lat: number, altitudeM: number];
@@ -128,12 +128,19 @@ export function specificationStyle(
    * visible ou non selon `satelliteVisible`. MapLibre ne télécharge pas les
    * tuiles d'une couche masquée : un visiteur qui reste en topo ne contacte
    * jamais Esri.
+   *
+   * Avec le satellite vient la surcouche noms et chemins (OpenFreeMap), mais
+   * le style initial n'en porte que les `glyphs` : MapLibre ne les demande
+   * qu'au premier texte rendu. Source et couches sont ajoutées par le pilote
+   * APRÈS `load` (`surcouche-osm.ts`), pour que l'ouverture ne dépende jamais
+   * d'OpenFreeMap. Sans clé, le style reste strictement inchangé.
    */
   satellite: SourceTuiles | null = null,
   satelliteVisible = false,
 ): Record<string, unknown> {
   return {
     version: 8,
+    ...(satellite === null ? {} : { glyphs: SURCOUCHE_OSM.glyphes }),
     sources: {
       [IDS.fond]: {
         type: 'raster',

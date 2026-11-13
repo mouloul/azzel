@@ -324,3 +324,10 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-validation-figee.md`
   summary: Permettre au coureur de voir (aperçu ou téléchargement) la preuve qu'il a déposée, sur /preuve en lecture seule.
   evidence: La vue en validation demande « Tu t'es trompé de fichier ? » sans montrer le fichier ; aucune route de téléchargement côté coureur.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-carte-surcouche-noms-chemins-osm.md`
+  summary: Ajouter un test qui valide le style MapLibre complet (initial + surcouche ajoutée) avec `validateStyleMin` de `@maplibre/maplibre-gl-style-spec`.
+  evidence: Une faute d'expression dans une couche passerait les tests actuels mais ferait rejeter le style par MapLibre ; le paquet n'est pas résoluble depuis `apps/web` (dépendance transitive pnpm), il faut l'ajouter en devDependency.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carte-surcouche-noms-chemins-osm.md`
+  summary: Rendre les attributions cartographiques avec liens (openstreetmap.org/copyright, opentopomap.org, openmaptiles.org, openfreemap.org) dans `vue-parcours.tsx`.
+  evidence: Le bloc rend des chaînes en texte brut alors que `CREDITS.md` liste des « liens à conserver » et que les règles d'attribution OSMF demandent un lien sur carte interactive ; motif préexistant (OpenTopoMap).

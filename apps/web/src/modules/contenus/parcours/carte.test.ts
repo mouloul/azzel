@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FOND_TOPO, RELIEF_TERRARIUM, fondSatellite } from './fonds-carte';
+import { FOND_TOPO, RELIEF_TERRARIUM, SURCOUCHE_OSM, fondSatellite } from './fonds-carte';
 import { PARCOURS_DOC } from './lecture';
 import {
   CAMERA_3D,
@@ -15,6 +15,7 @@ import {
   webglDisponible,
   type PointTrace,
 } from './carte';
+import { COUCHES_SURCOUCHE, IDS_SURCOUCHE } from './surcouche-osm';
 
 const COULEURS = {
   trace: '#B4530F',
@@ -230,4 +231,31 @@ describe('specificationStyle — fond satellite optionnel', () => {
     const visible = specificationStyle(pts, couleurs, undefined, sat, true) as typeof masque;
     expect(visible.layers.find((l) => l.id === IDS.coucheSatellite)?.layout?.visibility).toBe('visible');
   });
+});
+
+describe('specificationStyle — surcouche noms et chemins (OpenFreeMap) hors du style initial', () => {
+  const pts: [number, number, number][] = [[4, 36, 100], [4.01, 36.01, 120]];
+  const sat = fondSatellite('CLE_DE_TEST_12345');
+  type Style = { glyphs?: string; sources: Record<string, unknown>; layers: { id: string }[] };
+
+  it('sans satellite : ni source, ni couche, ni glyphes — aucune mention d’OpenFreeMap', () => {
+    const style = specificationStyle(pts, COULEURS) as Style;
+    expect(style.glyphs).toBeUndefined();
+    expect(style.sources[IDS_SURCOUCHE.source]).toBeUndefined();
+    const ids = style.layers.map((l) => l.id);
+    for (const id of COUCHES_SURCOUCHE) expect(ids).not.toContain(id);
+    expect(JSON.stringify(style)).not.toContain('openfreemap');
+  });
+
+  it.each([false, true])(
+    'avec satellite (visible = %s) : glyphes seuls, ni source ni couche — `load` ne dépend pas d’OpenFreeMap',
+    (visible) => {
+      const style = specificationStyle(pts, COULEURS, undefined, sat, visible) as Style;
+      expect(style.glyphs).toBe(SURCOUCHE_OSM.glyphes);
+      expect(style.sources[IDS_SURCOUCHE.source]).toBeUndefined();
+      expect(JSON.stringify(style.sources)).not.toContain('openfreemap');
+      const ids = style.layers.map((l) => l.id);
+      for (const id of COUCHES_SURCOUCHE) expect(ids).not.toContain(id);
+    },
+  );
 });

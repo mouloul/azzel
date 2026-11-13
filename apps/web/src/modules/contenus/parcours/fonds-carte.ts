@@ -126,6 +126,55 @@ export const RELIEF_TERRARIUM: SourceTuiles = {
   licence: 'Domaine public (USGS)',
 };
 
+/**
+ * Surcouche vectorielle (tuiles Mapbox Vector Tiles, schéma OpenMapTiles),
+ * décrite par un TileJSON plutôt que par des URL de tuiles figées.
+ */
+export interface SurcoucheVectorielle {
+  readonly id: string;
+  readonly nom: string;
+  /** TileJSON de la source : il désigne les tuiles du moment. */
+  readonly tilejson: string;
+  /** Gabarit des glyphes (polices SDF) des libellés. */
+  readonly glyphes: string;
+  /** Police servie par `glyphes` ; elle ne couvre pas l'alphabet arabe. */
+  readonly police: readonly string[];
+  /** Attribution EXACTE, reproduite telle que publiée par le fournisseur. */
+  readonly attribution: string;
+  /**
+   * Ayants droit nommés dans `attribution`, dans l'ordre de la mention
+   * courte. Chacun figure mot pour mot dans `attribution` (vérifié par test).
+   */
+  readonly ayantsDroit: readonly string[];
+  readonly licence: string;
+}
+
+/**
+ * Surcouche « noms et chemins » posée sur le satellite (2026-11-12).
+ *
+ * L'imagerie Esri ne porte ni noms de lieux ni routes, et la clé ArcGIS du
+ * projet n'ouvre aucune couche de libellés Esri. OpenFreeMap sert les données
+ * OpenStreetMap au schéma OpenMapTiles : gratuit, sans clé, usage commercial
+ * autorisé, sans garantie de service.
+ *
+ * TileJSON et non URL de tuiles : OpenFreeMap versionne ses tuiles
+ * (`/planet/<date>/…`) et les renouvelle chaque semaine.
+ *
+ * Attribution : texte du champ `attribution` du TileJSON, débarrassé de ses
+ * balises (« OpenFreeMap », « © OpenMapTiles », « Data from OpenStreetMap »).
+ * Données OSM sous ODbL.
+ */
+export const SURCOUCHE_OSM: SurcoucheVectorielle = {
+  id: 'surcouche-osm',
+  nom: 'Noms et chemins',
+  tilejson: 'https://tiles.openfreemap.org/planet',
+  glyphes: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  police: ['Noto Sans Regular'],
+  attribution: 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap',
+  ayantsDroit: ['OpenStreetMap', 'OpenMapTiles', 'OpenFreeMap'],
+  licence: 'ODbL 1.0 (données OpenStreetMap) — OpenFreeMap, sans clé, usage commercial autorisé',
+};
+
 /** Moteur de rendu — BSD 3-Clause, mention recommandée. */
 export const MOTEUR_CARTE = {
   nom: 'MapLibre',
@@ -155,12 +204,16 @@ export const FOND_PAR_DEFAUT = FOND_TOPO;
 /**
  * Bloc d'attributions à afficher EN PERMANENCE, sans interaction (FR-32).
  *
- * L'ordre est stable : fond actif, puis relief — toujours crédité puisqu'il
- * est toujours chargé —, puis moteur. Le relief ne disparaît jamais du bloc,
- * quel que soit le fond : c'est lui qui porte l'obligation de crédit USGS.
+ * L'ordre est stable : fond actif, puis — sur le satellite seulement — la
+ * surcouche noms et chemins qui l'accompagne, puis relief — toujours crédité
+ * puisqu'il est toujours chargé —, puis moteur. Le relief ne disparaît jamais
+ * du bloc, quel que soit le fond : c'est lui qui porte l'obligation de crédit
+ * USGS. Sur le topographique, la surcouche est masquée : pas de crédit en plus.
  */
 export function attributions(fond: SourceTuiles = FOND_PAR_DEFAUT): readonly string[] {
-  return [fond.attribution, RELIEF_TERRARIUM.attribution, MOTEUR_CARTE.attribution];
+  return fond.id === 'satellite'
+    ? [fond.attribution, SURCOUCHE_OSM.attribution, RELIEF_TERRARIUM.attribution, MOTEUR_CARTE.attribution]
+    : [fond.attribution, RELIEF_TERRARIUM.attribution, MOTEUR_CARTE.attribution];
 }
 
 /**
@@ -171,14 +224,23 @@ export function attributions(fond: SourceTuiles = FOND_PAR_DEFAUT): readonly str
  */
 export const ATTRIBUTION_COURTE = '© OpenStreetMap, OpenTopoMap, USGS, MapLibre';
 
-/** Mention courte du fond ACTIF : jamais OpenTopoMap quand c'est Esri qui s'affiche. */
+/**
+ * Mention courte du fond ACTIF : jamais OpenTopoMap quand c'est Esri qui
+ * s'affiche ; sur le satellite, la surcouche OpenFreeMap / OpenMapTiles /
+ * OpenStreetMap est nommée avec lui.
+ */
 export function attributionCourte(fond: SourceTuiles = FOND_PAR_DEFAUT): string {
-  return fond.id === 'satellite' ? '© Esri, Maxar, Earthstar Geographics, USGS, MapLibre' : ATTRIBUTION_COURTE;
+  return fond.id === 'satellite'
+    ? `© Esri, Maxar, Earthstar Geographics, ${SURCOUCHE_OSM.ayantsDroit.join(', ')}, USGS, MapLibre`
+    : ATTRIBUTION_COURTE;
+}
+
+/** Une URL porte-t-elle une clé (paramètre ou gabarit `{key}`) ? */
+export function urlPorteUneCle(url: string): boolean {
+  return /[?&](api_?key|access_token|token|key)=/i.test(url) || url.includes('{key}');
 }
 
 /** Aucune URL de tuile ne doit porter de clé : rien à tenir hors du dépôt. */
 export function exigeUneCle(source: SourceTuiles): boolean {
-  return source.tuiles.some(
-    (url) => /[?&](api_?key|access_token|token|key)=/i.test(url) || url.includes('{key}'),
-  );
+  return source.tuiles.some(urlPorteUneCle);
 }

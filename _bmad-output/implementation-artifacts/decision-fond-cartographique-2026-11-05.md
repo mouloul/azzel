@@ -54,3 +54,39 @@ Sans clé : décision d'origine inchangée (OpenTopoMap seul, aucun appel Esri).
 Tuiles : `ibasemaps-api.arcgis.com/.../World_Imagery/MapServer/tile/{z}/{y}/{x}?token=…`, z18 max.
 La couche satellite est masquée tant que non choisie ; attribution Esri suit le fond actif.
 À faire à la mise en production : confronter l'attribution au `copyrightText` du service et restreindre la clé au domaine.
+
+## Amendement — surcouche noms et chemins sur le satellite (2026-11-12)
+
+L'imagerie Esri n'affiche ni noms de lieux ni routes, et la clé ArcGIS du projet n'ouvre aucune
+couche de libellés Esri (services `Reference/*` en 404, Basemap Styles en « Token Invalid »).
+Le satellite reçoit donc une **surcouche vectorielle OpenFreeMap** (données OpenStreetMap, schéma
+OpenMapTiles) : routes, pistes et sentiers, noms des routes, noms de lieux (ville, bourg, village,
+hameau).
+
+| Poste | Source retenue | Licence | Usage commercial | Coût | Plafond |
+| --- | --- | --- | --- | --- | --- |
+| Surcouche noms et chemins | OpenFreeMap (`tiles.openfreemap.org/planet`, TileJSON) | ODbL 1.0 (données OSM) | Autorisé | 0 | Aucun ; sans clé, sans garantie de service |
+
+- La surcouche n'existe **que si le satellite est proposé** (clé ArcGIS valide) ; sans clé, le style
+  est inchangé et aucun appel ne part vers openfreemap.org.
+- Sa visibilité **suit celle du satellite** : masquée sur le topographique, qui porte déjà ses
+  libellés OpenTopoMap.
+- **Appels réseau :** la surcouche n'est pas dans le style initial (son TileJSON y retiendrait
+  l'ouverture de la carte, et pour toujours s'il échouait). Elle est ajoutée après l'ouverture, au
+  premier affichage du satellite : TileJSON et tuiles ne partent qu'à ce moment. Or, avec clé, le
+  satellite est le fond par défaut : pour la plupart des visiteurs, la surcouche se charge dès
+  l'ouverture de la carte, et leur adresse IP est exposée à un tiers supplémentaire (OpenFreeMap).
+  Seul un visiteur qui n'affiche jamais le satellite ne contacte pas openfreemap.org. Si OpenFreeMap
+  ne répond pas, la carte s'affiche quand même, simplement sans libellés.
+- Ordre des couches : satellite < routes et chemins < tracé de l'épreuve < libellés.
+- Libellés en alphabet latin seulement (`name:fr`, sinon `name:latin`), sans repli sur `name` :
+  la police servie (Noto Sans) ne couvre pas l'arabe. Tunnels non dessinés.
+- Attribution « OpenFreeMap © OpenMapTiles Data from OpenStreetMap » ajoutée au bloc et à la mention
+  courte quand le satellite est actif, et à `CREDITS.md`.
+- Pas de clé, pas de préchargement, pas de nouveau contrôle d'interface.
+- Noms de routes : nom latin, sinon référence (`ref`, ex. RN12) ; tunnels, rail et ferry non nommés.
+
+**Reste à faire :**
+
+- [ ] Surveiller la disponibilité d'OpenFreeMap (service gratuit, sans garantie). Solution de sortie :
+  auto-héberger les tuiles OpenMapTiles (PMTiles) ou passer à un autre fournisseur.

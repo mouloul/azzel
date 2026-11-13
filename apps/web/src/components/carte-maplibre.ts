@@ -32,6 +32,13 @@ import {
   type TraceCarte,
 } from '@/modules/contenus/parcours/carte';
 import { FOND_TOPO, type SourceTuiles } from '@/modules/contenus/parcours/fonds-carte';
+import {
+  COUCHES_SURCOUCHE,
+  IDS_SURCOUCHE,
+  couchesLibellesSurcouche,
+  couchesLignesSurcouche,
+  sourceSurcouche,
+} from '@/modules/contenus/parcours/surcouche-osm';
 
 export interface OptionsCarte {
   conteneur: HTMLElement;
@@ -99,9 +106,32 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
     carte.setTerrain(actif ? { source: IDS.relief, exaggeration: exageration } : null);
   };
 
+  // Surcouche noms et chemins (OpenFreeMap), ajoutée PARESSEUSEMENT : jamais
+  // dans le style initial, où son TileJSON retiendrait `load` (et pour
+  // toujours s'il échouait) ; seulement quand le satellite s'affiche, pour
+  // qu'un visiteur resté en topo ne contacte jamais openfreemap.org. Si
+  // OpenFreeMap ne répond pas, la carte est déjà ouverte : seuls les libellés
+  // manquent. Volontairement AUCUN écouteur `error` : MapLibre ne journalise
+  // ses erreurs (`console.error`) que si personne ne les écoute.
+  let surcoucheAjoutee = false;
+  const ajouterSurcouche = () => {
+    if (surcoucheAjoutee) return;
+    surcoucheAjoutee = true;
+    carte.addSource(IDS_SURCOUCHE.source, sourceSurcouche() as never);
+    // Routes et chemins SOUS le tracé : l'épreuve n'est jamais recouverte.
+    for (const couche of couchesLignesSurcouche('visible')) {
+      carte.addLayer(couche as never, IDS.coucheHalo);
+    }
+    // Libellés au sommet : un nom de village reste lisible sur le tracé.
+    for (const couche of couchesLibellesSurcouche('visible')) {
+      carte.addLayer(couche as never);
+    }
+  };
+
   await new Promise<void>((resolve) => {
     carte.on('load', () => {
       poserRelief(true, exagerationCourante);
+      if (satelliteInitial) ajouterSurcouche();
       if (cadre !== null) {
         carte.fitBounds(cadre, {
           padding: MARGE_CADRAGE,
@@ -168,11 +198,15 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
     },
     definirFond(fond) {
       if (satellite === null) return;
-      carte.setLayoutProperty(
-        IDS.coucheSatellite,
-        'visibility',
-        fond === 'satellite' ? 'visible' : 'none',
-      );
+      const visibilite = fond === 'satellite' ? 'visible' : 'none';
+      carte.setLayoutProperty(IDS.coucheSatellite, 'visibility', visibilite);
+      // La surcouche suit le satellite : ajoutée à son premier affichage,
+      // simplement masquée ensuite (OpenTopoMap porte déjà ses libellés).
+      if (fond === 'satellite') ajouterSurcouche();
+      if (!surcoucheAjoutee) return;
+      for (const couche of COUCHES_SURCOUCHE) {
+        carte.setLayoutProperty(couche, 'visibility', visibilite);
+      }
     },
     placerCurseur,
     recadrer() {
