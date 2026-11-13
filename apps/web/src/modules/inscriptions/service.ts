@@ -19,11 +19,12 @@ import {
   COUREUR_STATUS_LISTE_ATTENTE,
   COUREUR_STATUS_REFUSE,
   COUREUR_STATUS_VALIDE,
+  BORNES_REGLAGES,
   CHAMPS_REGLAGES,
   dateCourseAffichee,
   type DateCourseAffichee,
   REGLAGES_OUI_NON,
-  LIBELLES_REGLAGES,
+  LIBELLES_JOURNAL_REGLAGES,
   canDepositPreuve,
   estModifiable,
   peutAccepterDocuments,
@@ -63,6 +64,7 @@ import {
   type InscriptionsStore,
   type ReglagesEdition,
   type ResultatAttribution,
+  surchargeDelaiPreuveMinutes,
 } from './store';
 
 export interface CoureurSummary {
@@ -361,6 +363,11 @@ export interface ReglagesAdminState {
   edition: { id: string; nom: string } | null;
   comptesPaiement: ComptesPaiement;
   reglages: Record<ChampReglage, number>;
+  /**
+   * Délai de preuve forcé en minutes par AZZEL_DELAI_PREUVE_MINUTES
+   * (développement seulement) ; null = le réglage en heures s'applique.
+   */
+  surchargeDelaiPreuveMinutes: number | null;
   placesOccupees: number;
   hebergementsOccupes: number;
   attente: CoureurEnAttenteView[];
@@ -488,9 +495,10 @@ export async function getReglagesAdmin(
         capaciteHebergement: 0,
         prixDossardDa: 0,
         prixHebergementDa: 0,
-        delaiPreuveJours: 0,
+        delaiPreuveHeures: 0,
         dateCoursePublique: 0,
       },
+      surchargeDelaiPreuveMinutes: surchargeDelaiPreuveMinutes(),
       placesOccupees: 0,
       hebergementsOccupes: 0,
       attente: [],
@@ -512,9 +520,10 @@ export async function getReglagesAdmin(
       capaciteHebergement: edition.capaciteHebergement,
       prixDossardDa: edition.prixDossardDa,
       prixHebergementDa: edition.prixHebergementDa,
-      delaiPreuveJours: edition.delaiPreuveJours,
+      delaiPreuveHeures: edition.delaiPreuveHeures,
       dateCoursePublique: edition.dateCoursePublique ? 1 : 0,
     },
+    surchargeDelaiPreuveMinutes: surchargeDelaiPreuveMinutes(),
     placesOccupees,
     hebergementsOccupes,
     attente: attente.map((coureur) => ({
@@ -523,7 +532,10 @@ export async function getReglagesAdmin(
     })),
     journal: journal.map((ligne) => ({
       champ: ligne.champ,
-      libelle: LIBELLES_REGLAGES[ligne.champ as ChampReglage] ?? ligne.champ,
+      // Dictionnaire de l'historique, pas des réglages actuels : une ligne
+      // « delaiPreuveJours » d'avant la migration 0045 garde un libellé qui
+      // dit son unité, et ses valeurs ne sont pas converties.
+      libelle: LIBELLES_JOURNAL_REGLAGES[ligne.champ] ?? ligne.champ,
       ancienneValeur: ligne.ancienneValeur,
       nouvelleValeur: ligne.nouvelleValeur,
       modifieLe: ligne.modifieLe.toISOString(),
@@ -535,7 +547,9 @@ export async function getReglagesAdmin(
 /**
  * Validation des réglages : entiers positifs et bornés. Une capacité à
  * 1 000 000 serait une faute de frappe, pas une décision — et elle rendrait
- * le compteur absurde pour tout le monde.
+ * le compteur absurde pour tout le monde. Certains réglages ont des bornes
+ * plus serrées (BORNES_REGLAGES : le délai de preuve, de 1 à 720 heures),
+ * refusées avec une erreur nommée sur le champ.
  */
 export function normaliserReglages(raw: unknown): {
   reglages: ReglagesEdition;
@@ -556,6 +570,17 @@ export function normaliserReglages(raw: unknown): {
     if (REGLAGES_OUI_NON.includes(champ)) {
       if (valeur !== 0 && valeur !== 1) {
         erreurs[champ] = 'Choisis oui ou non.';
+        continue;
+      }
+      reglages[champ] = valeur;
+      continue;
+    }
+    // Bornes propres au champ d'abord : -3, 1,5 ou 100 001 heures reçoivent
+    // le message qui donne la plage du délai, pas un garde-fou générique.
+    const bornes = BORNES_REGLAGES[champ];
+    if (bornes !== undefined) {
+      if (!Number.isInteger(valeur) || valeur < bornes.min || valeur > bornes.max) {
+        erreurs[champ] = bornes.message;
         continue;
       }
       reglages[champ] = valeur;

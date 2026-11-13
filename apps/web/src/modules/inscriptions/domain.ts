@@ -163,103 +163,89 @@ export function statutApresModification(statutActuel: string, restantes: number)
 export const FUSEAU_COURSE = 'Africa/Algiers';
 
 /**
- * Décalage du fuseau de la course, en minutes, à un instant donné.
- *
- * Calculé via Intl plutôt qu'en dur (+1) : l'Algérie n'applique pas l'heure
- * d'été aujourd'hui, mais une règle écrite en dur deviendrait fausse en
- * silence si cela changeait, et l'erreur ne se verrait qu'un jour de bascule.
+ * Bornes du délai de dépôt de la preuve, en heures : une heure au moins,
+ * trente jours au plus. Au-delà, ce serait une faute de frappe — et une place
+ * bloquée un mois sans versement.
  */
-function decalageFuseauMinutes(instant: Date): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: FUSEAU_COURSE,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(instant);
-  const lire = (type: string): number =>
-    Number(parts.find((part) => part.type === type)?.value ?? '0');
-  // `hour` vaut 24 à minuit dans certaines implémentations hour12: false.
-  const heure = lire('hour') % 24;
-  const mural = Date.UTC(
-    lire('year'),
-    lire('month') - 1,
-    lire('day'),
-    heure,
-    lire('minute'),
-    lire('second'),
-  );
-  // L'heure murale lue n'a qu'une précision à la seconde : comparer à
-  // l'instant SANS ses millisecondes, sinon le décalage traîne une erreur de
-  // presque une seconde qui ressort dans chaque échéance calculée.
-  const instantSecondes = Math.floor(instant.getTime() / 1000) * 1000;
-  return (mural - instantSecondes) / 60_000;
+export const DELAI_PREUVE_HEURES_MIN = 1;
+
+export const DELAI_PREUVE_HEURES_MAX = 720;
+
+/**
+ * Variable d'environnement de DÉVELOPPEMENT : délai forcé, en minutes. Sert à
+ * tester une expiration en local sans toucher à la base. Ignorée en
+ * production (voir lireSurchargeDelaiPreuve).
+ */
+export const ENV_DELAI_PREUVE_MINUTES = 'AZZEL_DELAI_PREUVE_MINUTES';
+
+/**
+ * Environnements où la surcharge est permise : liste BLANCHE. Un script lancé
+ * sans NODE_ENV (seed, seed:reset contre la recette depuis un poste dont le
+ * .env porte la variable) ne doit pas poser des échéances à quelques minutes.
+ */
+const ENVIRONNEMENTS_SURCHARGE_DELAI: readonly string[] = ['development', 'test'];
+
+/**
+ * Surcharge de développement du délai de preuve, en minutes, ou null.
+ *
+ * Pure : reçoit la valeur brute de la variable et NODE_ENV, ne lit rien
+ * elle-même. Prise en compte seulement si NODE_ENV vaut « development » ou
+ * « test », et seulement si c'est un entier strictement positif, au plus le
+ * délai maximal (720 h) — « abc », « 0 », « -3 », « 4.5 » ou une valeur
+ * énorme (qui donnerait une date invalide) sont ignorés : on retombe alors
+ * sur le délai réglé en administration.
+ */
+export function lireSurchargeDelaiPreuve(
+  valeur: string | null | undefined,
+  nodeEnv: string | null | undefined,
+): number | null {
+  if (
+    nodeEnv === null ||
+    nodeEnv === undefined ||
+    !ENVIRONNEMENTS_SURCHARGE_DELAI.includes(nodeEnv) ||
+    valeur === null ||
+    valeur === undefined
+  ) {
+    return null;
+  }
+  const texte = valeur.trim();
+  if (!/^\d+$/.test(texte)) {
+    return null;
+  }
+  const minutes = Number(texte);
+  return Number.isSafeInteger(minutes) && minutes > 0 && minutes <= DELAI_PREUVE_HEURES_MAX * 60
+    ? minutes
+    : null;
 }
 
-/** Instant correspondant à une heure murale d'Alger (an, mois, jour, h, min…). */
-function instantAlger(
-  annee: number,
-  mois: number,
-  jour: number,
-  heures: number,
-  minutes: number,
-  secondes: number,
-  millisecondes: number,
+/**
+ * Date limite de dépôt de la preuve : `debut` + le délai, en durée glissante
+ * (décision PO du 13/11/2026). Formulaire envoyé le 13/11 à 10:05 avec 48 h →
+ * 15/11 à 10:05. Aucun arrondi à la fin de journée : la réservation dure le
+ * même temps pour tous, quelle que soit l'heure d'inscription.
+ *
+ * `debut` est l'entrée en « en constitution » (formulaire envoyé, reprise,
+ * attribution depuis la liste d'attente), puis l'instant où le dossier
+ * devient rempli (décharge et règlement acceptés) : l'échéance REDÉMARRE à
+ * ce moment-là. Une correction de saisie, elle, ne la déplace jamais.
+ *
+ * `surchargeMinutes` (développement seulement, voir lireSurchargeDelaiPreuve)
+ * remplace le délai en heures quand elle est fournie.
+ */
+export function limitePreuve(
+  debut: Date,
+  delaiHeures: number,
+  surchargeMinutes?: number | null,
 ): Date {
-  const mural = Date.UTC(annee, mois - 1, jour, heures, minutes, secondes, millisecondes);
-  // Première estimation avec le décalage du moment, puis correction : si
-  // l'estimation tombe de l'autre côté d'un changement d'heure, le décalage
-  // lu à cet instant-là est le bon.
-  const approx = new Date(mural - decalageFuseauMinutes(new Date(mural)) * 60_000);
-  return new Date(mural - decalageFuseauMinutes(approx) * 60_000);
-}
-
-/** Date civile (année, mois, jour) d'un instant, lue à l'heure d'Alger. */
-function dateCivileAlger(instant: Date): [number, number, number] {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: FUSEAU_COURSE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(instant);
-  const lire = (type: string): number =>
-    Number(parts.find((part) => part.type === type)?.value ?? '0');
-  return [lire('year'), lire('month'), lire('day')];
+  const minutes =
+    surchargeMinutes !== null && surchargeMinutes !== undefined && surchargeMinutes > 0
+      ? surchargeMinutes
+      : delaiHeures * 60;
+  return new Date(debut.getTime() + minutes * 60_000);
 }
 
 /**
- * Date limite de dépôt de la preuve : fin du jour J+`delaiJours`, à l'heure
- * d'Alger. Inscrit mercredi 13h avec un délai de 2 jours → vendredi 23:59:59.
- *
- * Le jour de référence est le jour CIVIL LOCAL de l'inscription, pas le jour
- * UTC : une inscription à 00:30 heure d'Alger tombe la veille en UTC, et
- * compter en UTC lui volerait un jour.
- *
- * Cette limite est figée à l'inscription et jamais recalculée : une échéance
- * qui bouge parce qu'on a corrigé son numéro de téléphone serait injuste et
- * intestable.
- */
-export function limitePreuve(inscritLe: Date, delaiJours: number): Date {
-  const [annee, mois, jour] = dateCivileAlger(inscritLe);
-  // Arithmétique civile en UTC : Date.UTC gère les fins de mois, les années
-  // bissextiles et les passages d'année sans cas particulier.
-  const cible = new Date(Date.UTC(annee, mois - 1, jour + delaiJours));
-  return instantAlger(
-    cible.getUTCFullYear(),
-    cible.getUTCMonth() + 1,
-    cible.getUTCDate(),
-    23,
-    59,
-    59,
-    999,
-  );
-}
-
-/**
- * La limite est INCLUSE : à 23:59:59.999 pile, le dossier est encore dans les
+ * La limite est INCLUSE : pile à l'échéance, le dossier est encore dans les
  * temps. Une limite absente ne fait jamais expirer — on ne libère pas une
  * place sur une donnée manquante.
  */
@@ -305,7 +291,7 @@ export const CHAMPS_REGLAGES = [
   'capaciteHebergement',
   'prixDossardDa',
   'prixHebergementDa',
-  'delaiPreuveJours',
+  'delaiPreuveHeures',
   'dateCoursePublique',
 ] as const;
 
@@ -320,8 +306,34 @@ export const LIBELLES_REGLAGES: Record<ChampReglage, string> = {
   capaciteHebergement: 'Nombre d’hébergements',
   prixDossardDa: 'Prix du dossard (DA)',
   prixHebergementDa: 'Prix de l’hébergement (DA)',
-  delaiPreuveJours: 'Délai de dépôt de la preuve (jours)',
+  delaiPreuveHeures: 'Délai de dépôt de la preuve (heures)',
   dateCoursePublique: 'Afficher la date exacte de la course au public',
+};
+
+/**
+ * Bornes propres à certains réglages, plus serrées que le garde-fou commun
+ * (entier positif, plafond de saisie). Le formulaire les reprend en min/max,
+ * le service les impose, la base les vérifie (CHECK de la migration 0045).
+ */
+export const BORNES_REGLAGES: Partial<
+  Record<ChampReglage, { min: number; max: number; message: string }>
+> = {
+  delaiPreuveHeures: {
+    min: DELAI_PREUVE_HEURES_MIN,
+    max: DELAI_PREUVE_HEURES_MAX,
+    message: `Indique un délai entre ${DELAI_PREUVE_HEURES_MIN} et ${DELAI_PREUVE_HEURES_MAX} heures (30 jours).`,
+  },
+};
+
+/**
+ * Libellés de l'historique des réglages : ceux d'aujourd'hui, plus ceux des
+ * champs retirés dont des lignes subsistent. Le délai s'est réglé en jours
+ * jusqu'à la migration 0045 : ces lignes restent lisibles telles quelles,
+ * leurs valeurs ne sont PAS converties — « 2 → 3 » y reste des jours.
+ */
+export const LIBELLES_JOURNAL_REGLAGES: Readonly<Record<string, string>> = {
+  ...LIBELLES_REGLAGES,
+  delaiPreuveJours: 'Délai de dépôt de la preuve (jours, ancien réglage)',
 };
 
 export type CoureurStatus = (typeof COUREUR_STATUSES)[number];

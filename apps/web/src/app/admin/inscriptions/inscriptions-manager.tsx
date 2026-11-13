@@ -3,6 +3,8 @@
 import { useState } from 'react';
 
 import {
+  BORNES_REGLAGES,
+  ENV_DELAI_PREUVE_MINUTES,
   LIBELLES_REGLAGES,
   REGLAGES_OUI_NON,
   type ChampReglage,
@@ -15,7 +17,7 @@ const CHAMPS: readonly ChampReglage[] = [
   'capaciteHebergement',
   'prixDossardDa',
   'prixHebergementDa',
-  'delaiPreuveJours',
+  'delaiPreuveHeures',
   'dateCoursePublique',
 ];
 
@@ -28,8 +30,8 @@ const AIDES: Record<ChampReglage, string> = {
   capaciteHebergement: 'Nombre de lits. Son compteur est toujours affiché au formulaire.',
   prixDossardDa: 'Montant réclamé au coureur, affiché sur l’écran de dépôt de preuve.',
   prixHebergementDa: 'S’ajoute au dossard, en un seul versement.',
-  delaiPreuveJours:
-    'Nombre de jours pleins après l’inscription. Ne s’applique qu’aux inscriptions à venir : les échéances déjà posées ne bougent pas.',
+  delaiPreuveHeures:
+    'Durée laissée au coureur pour déposer sa preuve, de 1 à 720 heures. Elle part de l’envoi du formulaire, puis repart de zéro quand il accepte la décharge et le règlement : sans acceptations dans ce délai, le dossier expire et la place repart. Un changement ne recalcule pas les échéances déjà posées, sauf au redémarrage à la première acceptation, qui applique le délai en vigueur. En dessous de 25 h, le rappel « jusqu’à demain » part dès le premier passage du balayage.',
   dateCoursePublique:
     'Décoché, le public ne lit que la saison (« printemps 2027 ») sur la vitrine et dans le parcours coureur. La date réelle, elle, reste enregistrée telle quelle : l’âge des coureurs et le chronométrage en dépendent.',
 };
@@ -185,6 +187,12 @@ export function InscriptionsManager({ etat }: { etat: ReglagesAdminState }) {
     }
   }
 
+  // `!= null` : un état reçu sans le champ (serveur plus ancien) ne doit pas
+  // afficher « undefined min ».
+  const surchargeMinutes = courant.surchargeDelaiPreuveMinutes;
+  const avecSurcharge = (champ: ChampReglage): boolean =>
+    champ === 'delaiPreuveHeures' && surchargeMinutes != null;
+
   const placesRestantes = Math.max(0, courant.reglages.capacite - courant.placesOccupees);
   const litsRestants = Math.max(
     0,
@@ -254,19 +262,30 @@ export function InscriptionsManager({ etat }: { etat: ReglagesAdminState }) {
                   name={champ}
                   type="number"
                   inputMode="numeric"
-                  min={0}
+                  min={BORNES_REGLAGES[champ]?.min ?? 0}
+                  max={BORNES_REGLAGES[champ]?.max}
                   step={1}
                   value={valeurs[champ]}
                   onChange={(event) =>
                     setValeurs((anciennes) => ({ ...anciennes, [champ]: event.target.value }))
                   }
                   aria-invalid={erreurs[champ] !== undefined || undefined}
-                  aria-describedby={`aide-${champ}`}
+                  aria-describedby={
+                    avecSurcharge(champ) ? `aide-${champ} surcharge-${champ}` : `aide-${champ}`
+                  }
                 />
               )}
               <p id={`aide-${champ}`} className="socle-champ-aide">
                 {AIDES[champ]}
               </p>
+              {/* Surcharge de développement : sans cette mention, un
+                  organisateur en recette lirait « 48 » et verrait des
+                  dossiers expirer au bout de quatre minutes. */}
+              {avecSurcharge(champ) && (
+                <p id={`surcharge-${champ}`} className="admin-surcharge" role="note">
+                  {`Délai forcé à ${surchargeMinutes} min en développement (${ENV_DELAI_PREUVE_MINUTES}) : la valeur en heures ci-dessus ne s’applique pas tant que la variable est posée.`}
+                </p>
+              )}
               {erreurs[champ] !== undefined && (
                 <p className="field-error">{erreurs[champ]}</p>
               )}

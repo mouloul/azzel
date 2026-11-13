@@ -15,7 +15,7 @@ const EDITION: EditionRecord = {
   capaciteHebergement: 200,
   prixDossardDa: 2000,
   prixHebergementDa: 1500,
-  delaiPreuveJours: 2,
+  delaiPreuveHeures: 48,
   dateCoursePublique: false,
 };
 

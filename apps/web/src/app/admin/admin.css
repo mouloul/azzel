@@ -109,3 +109,13 @@
     display: block;
   }
 }
+
+/* Surcharge de développement du délai de preuve : filet d'attention — la
+   valeur affichée dans le champ n'est PAS celle qui s'applique. */
+.admin-surcharge {
+  margin: var(--az-space-2) 0 0;
+  padding: var(--az-space-2) var(--az-space-3);
+  border-left: 4px solid var(--az-attention);
+  background: var(--az-surface);
+  font-size: 15px;
+}

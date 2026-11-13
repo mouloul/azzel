@@ -331,3 +331,7 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-carte-surcouche-noms-chemins-osm.md`
   summary: Rendre les attributions cartographiques avec liens (openstreetmap.org/copyright, opentopomap.org, openmaptiles.org, openfreemap.org) dans `vue-parcours.tsx`.
   evidence: Le bloc rend des chaînes en texte brut alors que `CREDITS.md` liste des « liens à conserver » et que les règles d'attribution OSMF demandent un lien sur carte interactive ; motif préexistant (OpenTopoMap).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-delai-preuve-heures.md`
+  summary: Déployer la migration 0045 et le code ensemble (ou scinder en deux migrations : ajout de `delai_preuve_heures`, puis suppression de `delai_preuve_jours` après déploiement).
+  evidence: Entre la migration et le déploiement, l'ancien code lit une colonne supprimée (ou le nouveau une colonne absente) : inscriptions et admin en 500. La suppression est gelée dans la spec ; fenêtre courte en recette (migration lancée à la main depuis un poste).

@@ -324,7 +324,7 @@ describe('submitInscription — service avec store stubbé', () => {
       capaciteHebergement: 200,
       prixDossardDa: 2000,
       prixHebergementDa: 1500,
-      delaiPreuveJours: 2,
+      delaiPreuveHeures: 48,
       dateCoursePublique: false,
       ...edition,
     };
@@ -803,7 +803,7 @@ describe('acceptDocuments — service avec store stubbé', () => {
       capaciteHebergement: 200,
       prixDossardDa: 2000,
       prixHebergementDa: 1500,
-      delaiPreuveJours: 2,
+      delaiPreuveHeures: 48,
       dateCoursePublique: false,
       ...edition,
     };
@@ -953,7 +953,7 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       capaciteHebergement: 200,
       prixDossardDa: 2000,
       prixHebergementDa: 1500,
-      delaiPreuveJours: 2,
+      delaiPreuveHeures: 48,
       dateCoursePublique: false,
     };
     const record: CoureurRecord = {

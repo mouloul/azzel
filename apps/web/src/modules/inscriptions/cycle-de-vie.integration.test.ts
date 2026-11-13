@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/modules/notifications/worker', async () => {
   const { createSilentOutboxWorker } = await import('@/test/outbox-worker-mock');
@@ -20,7 +20,7 @@ import {
   type AzzelTestConnections,
 } from '@/test/integration-db';
 
-import type { InscriptionFormInput } from './domain';
+import { ENV_DELAI_PREUVE_MINUTES, type InscriptionFormInput } from './domain';
 import {
   DossierAReprendreError,
   DossierEnValidationError,
@@ -119,8 +119,15 @@ describe.skipIf(testUrls === null)('cycle de vie du dossier — intégration Pos
     }
   });
 
+  // Surcharge de développement du délai neutralisée : les échéances attendues
+  // ici sont celles du réglage en heures.
+  beforeEach(() => {
+    vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, '');
+  });
+
   afterEach(async () => {
-    await sql`UPDATE edition SET capacite = 600, capacite_hebergement = 200, delai_preuve_jours = 2`;
+    vi.unstubAllEnvs();
+    await sql`UPDATE edition SET capacite = 600, capacite_hebergement = 200, delai_preuve_heures = 48`;
     await sql`DELETE FROM email_outbox`;
     await sql`DELETE FROM preuve`;
     await sql`DELETE FROM coureur`;
@@ -269,14 +276,26 @@ describe.skipIf(testUrls === null)('cycle de vie du dossier — intégration Pos
     const avantReprise = Date.now();
 
     const resume = await submitInscription(session, validInput({ prenom: 'Yanis' }), { store });
+    const apresReprise = Date.now();
 
     expect(resume.status).toBe('en constitution');
     const row = await ligne(session);
     expect(row.status).toBe('en constitution');
     expect(row.refusal_reason).toBeNull();
-    // Nouvelle échéance J+délai à compter de la reprise, pas l'ancienne.
+    // Nouvelle échéance = reprise + 48 h, pas l'ancienne. Les acceptations
+    // sont conservées : le dossier est déjà rempli, l'échéance part de la
+    // reprise et une ré-acceptation ne la repousse pas.
     expect(row.preuve_due_at).not.toBeNull();
-    expect((row.preuve_due_at as Date).getTime()).toBeGreaterThan(avantReprise + 24 * 3600 * 1000);
+    const echeance = (row.preuve_due_at as Date).getTime();
+    expect(echeance).toBeGreaterThanOrEqual(avantReprise + 48 * 3600 * 1000);
+    expect(echeance).toBeLessThanOrEqual(apresReprise + 48 * 3600 * 1000);
+    const acceptations = await sql<{ completes: boolean }[]>`
+      SELECT (decharge_accepted_at IS NOT NULL AND reglement_accepted_at IS NOT NULL) AS completes
+      FROM coureur WHERE account_id = ${session.accountId}
+    `;
+    expect(acceptations[0]?.completes).toBe(true);
+    await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    expect((await ligne(session)).preuve_due_at?.getTime()).toBe(echeance);
     expect(await statutsPreuves(session)).toEqual(['refusée']);
     expect(
       await store.findActivePreuveByAccount(session.accountId, await editionId(), organisationId),
@@ -307,7 +326,9 @@ describe.skipIf(testUrls === null)('cycle de vie du dossier — intégration Pos
     const row = await ligne(session);
     expect(row.status).toBe('en constitution');
     expect(row.expired_at?.toISOString()).toBe(expireLe?.toISOString());
-    expect((row.preuve_due_at as Date).getTime()).toBeGreaterThan(Date.now());
+    // Jamais accepté : échéance provisoire à la reprise + 48 h, qui
+    // redémarrera à la validation des acceptations.
+    expect((row.preuve_due_at as Date).getTime()).toBeGreaterThan(Date.now() + 47 * 3600 * 1000);
   });
 
   it('reprise : le lit suit le contingent commun', async () => {
