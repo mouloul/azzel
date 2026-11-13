@@ -21,6 +21,7 @@ import {
 } from '@/test/integration-db';
 
 import {
+  DossierEnValidationError,
   DossierValidatedError,
   NoCoureurError,
   NumeroTransactionDejaUtiliseError,
@@ -253,47 +254,82 @@ describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel
     expect(readdirSync(storageDir)).toHaveLength(filesBefore);
   });
 
-  it('nouveau dépôt : la nouvelle devient active, l’ancienne reste en base marquée remplacée et sur disque', async () => {
+  it('second dépôt en validation : DossierEnValidationError, preuve active inchangée, rien écrit', async () => {
+    // Aucun remplacement pendant l'examen (PO, 11/11/2026).
     const session = await createCoureurSession();
     const coureurId = await coureurIdFor(session.accountId);
     const first = await uploadPreuve(session, jpegBytes(150_000), { store, proofStore });
-    const second = await uploadPreuve(session, jpegBytes(120_000), { store, proofStore });
+    const filesBefore = readdirSync(storageDir).length;
 
-    expect(second.id).not.toBe(first.id);
+    await expect(
+      uploadPreuve(session, jpegBytes(120_000), { store, proofStore }),
+    ).rejects.toBeInstanceOf(DossierEnValidationError);
 
     const all = await sql`
       SELECT id, status, storage_key FROM preuve
       WHERE coureur_id = ${coureurId}
-      ORDER BY created_at ASC
     `;
-    expect(all).toHaveLength(2);
-    expect(all[0]?.status).toBe('replaced');
+    expect(all).toHaveLength(1);
     expect(all[0]?.id).toBe(first.id);
-    expect(all[1]?.status).toBe('active');
-    expect(all[1]?.id).toBe(second.id);
-
-    const active = await activePreuveRows(coureurId);
-    expect(active).toHaveLength(1);
-
-    for (const row of all) {
-      expect(readdirSync(storageDir)).toContain(row?.storage_key);
-    }
+    expect(all[0]?.status).toBe('active');
+    expect(readdirSync(storageDir)).toHaveLength(filesBefore);
+    expect(readdirSync(storageDir)).toContain(all[0]?.storage_key);
   });
 
-  it('retry idempotent : même checksum → même preuve active, aucun doublon de ligne', async () => {
+  it('retry idempotent en validation : même fichier et même numéro → même preuve, rien écrit', async () => {
+    // Réponse perdue puis « Réessayer » : le premier envoi a déjà fait passer
+    // le dossier en validation. Le rejeu à l'identique renvoie la preuve active.
     const session = await createCoureurSession();
     const coureurId = await coureurIdFor(session.accountId);
     const bytes = jpegBytes(100_000);
+    const numero = `TXR${Date.now()}`;
     const filesBefore = readdirSync(storageDir).length;
-    const first = await uploadPreuve(session, bytes, { store, proofStore });
-    const replay = await uploadPreuve(session, bytes, { store, proofStore });
+    const first = await uploadPreuve(session, bytes, {
+      store,
+      proofStore,
+      numeroTransaction: numero,
+    });
+    const replay = await uploadPreuve(session, bytes, {
+      store,
+      proofStore,
+      numeroTransaction: numero,
+    });
 
     expect(replay.id).toBe(first.id);
     expect(replay.depositedAt).toBe(first.depositedAt);
-
-    const rows = await sql`SELECT count(*)::int AS count FROM preuve WHERE coureur_id = ${coureurId}`;
-    expect(rows[0]?.count).toBe(1);
+    const rows = await sql`
+      SELECT status FROM preuve WHERE coureur_id = ${coureurId}
+    `;
+    expect(rows.map((row) => row.status)).toEqual(['active']);
     expect(readdirSync(storageDir)).toHaveLength(filesBefore + 1);
+    expect((await sql`SELECT status FROM coureur WHERE id = ${coureurId}`)[0]?.status).toBe(
+      'en validation',
+    );
+  });
+
+  it('en validation : même fichier avec un AUTRE numéro → DossierEnValidationError, rien écrit', async () => {
+    const session = await createCoureurSession();
+    const coureurId = await coureurIdFor(session.accountId);
+    const bytes = jpegBytes(100_000);
+    const numero = `TXA${Date.now()}`;
+    const first = await uploadPreuve(session, bytes, {
+      store,
+      proofStore,
+      numeroTransaction: numero,
+    });
+    const filesBefore = readdirSync(storageDir).length;
+
+    await expect(
+      uploadPreuve(session, bytes, { store, proofStore, numeroTransaction: `${numero}B` }),
+    ).rejects.toBeInstanceOf(DossierEnValidationError);
+
+    const rows = await sql`
+      SELECT id, status, numero_transaction FROM preuve WHERE coureur_id = ${coureurId}
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(first.id);
+    expect(rows[0]?.numero_transaction).toBe(numero);
+    expect(readdirSync(storageDir)).toHaveLength(filesBefore);
   });
 
   it('numéro de transaction : un reçu ne justifie qu’un dossier, rien écrit pour le second', async () => {
@@ -313,13 +349,11 @@ describe.skipIf(testUrls === null)('preuve — intégration Postgres (base azzel
     ).rejects.toBeInstanceOf(NumeroTransactionDejaUtiliseError);
     expect(readdirSync(storageDir)).toHaveLength(filesBefore + 1);
 
-    // Le même coureur peut redéposer avec le même numéro (remplacement).
-    const remplacement = await uploadPreuve(premier, jpegBytes(32_000), {
-      store,
-      proofStore,
-      numeroTransaction: numero,
-    });
-    expect(remplacement.id).not.toBe(deposee.id);
+    // Le premier coureur, désormais en validation, ne peut plus redéposer.
+    await expect(
+      uploadPreuve(premier, jpegBytes(32_000), { store, proofStore, numeroTransaction: numero }),
+    ).rejects.toBeInstanceOf(DossierEnValidationError);
+    expect(readdirSync(storageDir)).toHaveLength(filesBefore + 1);
   });
 
   it('garde sans coureur : NoCoureurError, rien écrit', async () => {

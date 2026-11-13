@@ -18,6 +18,9 @@ import {
 import { normaliserNumeroTransaction } from '@/modules/inscriptions/numero-transaction';
 import type { PreuveState, PreuveSummary } from '@/modules/inscriptions/proof-service';
 
+import { PreuveEnvoyee } from './preuve-envoyee';
+import { doitRafraichirApresErreur, estRefusDossierEnValidation } from './rafraichir-apres-erreur';
+
 const NETWORK_ERROR = {
   message: 'Connexion au serveur impossible.',
   action: 'Vérifie ta connexion puis réessaie.',
@@ -97,10 +100,25 @@ export function PreuveForm({
   const [serverError, setServerError] = useState<{ message: string; action: string } | null>(null);
   const [reconnect, setReconnect] = useState(false);
   const [pending, setPending] = useState(false);
-  const [numeroSaisi, setNumeroSaisi] = useState(state.preuve?.numeroTransaction ?? '');
+  const [numeroSaisi, setNumeroSaisi] = useState('');
   const [numeroError, setNumeroError] = useState<string | null>(null);
-  const [deposited, setDeposited] = useState<PreuveSummary | null>(state.preuve);
+  // Preuve confirmée par le serveur : l'accusé de réception remplace alors le
+  // formulaire, définitivement (aucun remplacement en validation).
+  const [recue, setRecue] = useState<PreuveSummary | null>(null);
+  const envoye = recue !== null;
+  // Dossier passé en validation entre-temps (autre onglet) : état terminal,
+  // plus aucun contrôle de dépôt — l'erreur reste affichée avec l'assistance.
+  const [fige, setFige] = useState(false);
   const previewRef = useRef<string | null>(null);
+  const confirmationRef = useRef<HTMLDivElement | null>(null);
+
+  // Le bouton d'envoi, qui a le focus, disparaît : sans le déplacer, un
+  // lecteur d'écran resterait sur un élément qui n'existe plus.
+  useEffect(() => {
+    if (envoye) {
+      confirmationRef.current?.focus();
+    }
+  }, [envoye]);
 
   useEffect(() => {
     return () => {
@@ -228,14 +246,22 @@ export function PreuveForm({
         if (response.status === 401) {
           setReconnect(true);
         }
-        if (response.status === 403 || response.status === 409) {
-          router.refresh();
-        }
         let payload: unknown = null;
         try {
           payload = await response.json();
         } catch {
           payload = null;
+        }
+        const code =
+          typeof payload === 'object' && payload !== null && 'error' in payload
+            ? (payload as { error?: { code?: unknown } }).error?.code
+            : undefined;
+        if (doitRafraichirApresErreur(response.status, code)) {
+          router.refresh();
+        }
+        if (estRefusDossierEnValidation(response.status, code)) {
+          setPreview(null);
+          setFige(true);
         }
         if (typeof payload === 'object' && payload !== null && 'error' in payload) {
           const error = (payload as { error?: { message?: unknown; action?: unknown } }).error;
@@ -265,8 +291,12 @@ export function PreuveForm({
         typeof (candidate as PreuveSummary).mime === 'string' &&
         typeof (candidate as PreuveSummary).format === 'string'
       ) {
-        setDeposited(candidate as PreuveSummary);
+        setRecue(candidate as PreuveSummary);
         setPreview(null);
+        // Pas de router.refresh() : le dossier est passé en validation, la page
+        // serveur rendrait désormais sa vue en lecture seule et démonterait ce
+        // formulaire — l'accusé de réception disparaîtrait aussitôt. Rien de
+        // ce que rend le serveur n'est visible derrière l'accusé.
       } else {
         setServerError(NETWORK_ERROR);
       }
@@ -287,146 +317,146 @@ export function PreuveForm({
     <section className="auth auth-wide dossier-section">
       <article className="card">
         <p className="surtitre">Preuve de paiement</p>
-        <h1>{deposited !== null ? 'Remplacer ta preuve' : 'Dépose ta preuve de paiement CCP ou Baridimob'}</h1>
-        <p className="lead">
-          Photographie ou document de ton reçu de virement : elle est compressée sur ton
-          téléphone puis déposée ({formatKiloBytes(MAX_PROOF_BYTES)} maximum).
-        </p>
-        {children}
-        {deposited !== null && (
-          <div className="recap" role="status" aria-live="polite">
-            <p className="recap-titre">Preuve déposée</p>
-            <p>
-              Déposée le {formatLocalDateTime(deposited.depositedAt)} ·{' '}
-              {formatKiloBytes(deposited.sizeBytes)} ({deposited.format})
+        <h1>
+          {envoye
+            ? 'Preuve envoyée'
+            : fige
+              ? 'Dossier en cours de validation'
+              : 'Dépose ta preuve de paiement CCP ou Baridimob'}
+        </h1>
+        {recue !== null ? (
+          // Les encarts serveur (montant, comptes) s'effacent : l'accusé de
+          // réception les répéterait ou les contredirait (« saisis ci-dessous »
+          // sans champ en dessous).
+          <PreuveEnvoyee ref={confirmationRef} preuve={recue} assistancePhone={assistancePhone} />
+        ) : fige ? null : (
+          <>
+            <p className="lead">
+              Photographie ou document de ton reçu de virement : elle est compressée sur ton
+              téléphone puis déposée ({formatKiloBytes(MAX_PROOF_BYTES)} maximum).
             </p>
-            {deposited.numeroTransaction !== null && (
-              <p>N° de transaction : {deposited.numeroTransaction}</p>
-            )}
-            <p className="meta">Tu peux la remplacer : l’ancienne reste conservée pour l’organisation.</p>
-          </div>
-        )}
+            {children}
 
-        <div className="socle-champ">
-          <label className="socle-etiquette" htmlFor="preuve-numero">
-            Numéro de transaction
-            <span className="champ-obligatoire"> (obligatoire)</span>
-          </label>
-          <input
-            id="preuve-numero"
-            name="numeroTransaction"
-            type="text"
-            inputMode="text"
-            autoComplete="off"
-            autoCapitalize="characters"
-            maxLength={40}
-            value={numeroSaisi}
-            onChange={(event) => {
-              setNumeroSaisi(event.target.value);
-              setNumeroError(null);
-            }}
-            disabled={pending}
-            aria-invalid={numeroError !== null || undefined}
-            aria-describedby={
-              numeroError !== null ? 'preuve-numero-aide preuve-numero-erreur' : 'preuve-numero-aide'
-            }
-          />
-          <p id="preuve-numero-aide" className="socle-champ-aide">
-            Il figure sur ton reçu (« Identifiant de transaction »). Un numéro ne peut
-            justifier qu’un seul dossier.
-          </p>
-          {numeroError !== null && (
-            <p id="preuve-numero-erreur" className="field-error" role="alert">
-              {numeroError}
-            </p>
-          )}
-        </div>
-
-        {draft !== null ? (
-          <div className="recap" role="status" aria-live="polite">
-            <p className="recap-titre">Prêt à envoyer</p>
-            {draft.previewUrl !== null && (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={draft.previewUrl}
-                alt="Prévisualisation de ta preuve de paiement"
-                className="preuve-apercu"
+            <div className="socle-champ">
+              <label className="socle-etiquette" htmlFor="preuve-numero">
+                Numéro de transaction
+                <span className="champ-obligatoire"> (obligatoire)</span>
+              </label>
+              <input
+                id="preuve-numero"
+                name="numeroTransaction"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                maxLength={40}
+                value={numeroSaisi}
+                onChange={(event) => {
+                  setNumeroSaisi(event.target.value);
+                  setNumeroError(null);
+                }}
+                disabled={pending}
+                aria-invalid={numeroError !== null || undefined}
+                aria-describedby={
+                  numeroError !== null ? 'preuve-numero-aide preuve-numero-erreur' : 'preuve-numero-aide'
+                }
               />
-            )}
-            <p>
-              {draft.compressed
-                ? `Compressée sur ton téléphone : ${formatKiloBytes(
-                    draft.originalSizeBytes,
-                  )} → ${formatKiloBytes(draft.file.size)}`
-                : `${formatKiloBytes(draft.file.size)} (déjà ${formatKiloBytes(
-                    MAX_PROOF_BYTES,
-                  )} ou moins : envoyé tel quel)`}
-            </p>
-          </div>
-        ) : (
-          <div className="socle-champ">
-            <label className="socle-etiquette" htmlFor="preuve-fichier">
-              Ton reçu (photo ou PDF)
-              <span className="champ-obligatoire"> (obligatoire)</span>
-            </label>
-            <input
-              id="preuve-fichier"
-              name="fichier"
-              type="file"
-              accept={PROOF_ACCEPT_ATTRIBUTE}
-              onChange={onFileChange}
-              disabled={busy !== null || pending}
-              aria-invalid={fieldError !== null || undefined}
-              aria-describedby={
-                [
-                  'preuve-aide-formats',
-                  fieldError !== null ? 'preuve-erreur-format' : null,
-                ]
-                  .filter(Boolean)
-                  .join(' ') || undefined
-              }
-            />
-            <p id="preuve-aide-formats" className="socle-champ-aide">
-              Formats acceptés : {ACCEPTED_PROOF_FORMATS_LABEL}. Aucun autre format
-              n’est accepté.
-            </p>
-            {busy !== null && (
-              <p className="hint" role="status" aria-live="polite">
-                {busy}
+              <p id="preuve-numero-aide" className="socle-champ-aide">
+                Il figure sur ton reçu (« Identifiant de transaction »). Un numéro ne peut
+                justifier qu’un seul dossier.
               </p>
-            )}
-            {fieldError !== null && (
-              <p id="preuve-erreur-format" className="field-error" role="alert">
-                {fieldError}
-              </p>
-            )}
-          </div>
-        )}
+              {numeroError !== null && (
+                <p id="preuve-numero-erreur" className="field-error" role="alert">
+                  {numeroError}
+                </p>
+              )}
+            </div>
 
-        {draft !== null && (
-          <div className="auth-alt">
-            <button type="button" className="btn-action" onClick={onSubmit} disabled={pending}>
-              {pending
-                ? 'Envoi…'
-                : serverError !== null
-                  ? 'Réessayer'
-                  : deposited !== null
-                    ? 'Remplacer ma preuve'
-                    : 'Envoyer ma preuve'}
-            </button>
-            <button
-              type="button"
-              className="btn-contour"
-              onClick={() => {
-                setPreview(null);
-                setServerError(null);
-                setFieldError(null);
-              }}
-              disabled={pending}
-            >
-              Choisir un autre fichier
-            </button>
-          </div>
+            {draft !== null ? (
+              <div className="recap" role="status" aria-live="polite">
+                <p className="recap-titre">Prêt à envoyer</p>
+                {draft.previewUrl !== null && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={draft.previewUrl}
+                    alt="Prévisualisation de ta preuve de paiement"
+                    className="preuve-apercu"
+                  />
+                )}
+                <p>
+                  {draft.compressed
+                    ? `Compressée sur ton téléphone : ${formatKiloBytes(
+                        draft.originalSizeBytes,
+                      )} → ${formatKiloBytes(draft.file.size)}`
+                    : `${formatKiloBytes(draft.file.size)} (déjà ${formatKiloBytes(
+                        MAX_PROOF_BYTES,
+                      )} ou moins : envoyé tel quel)`}
+                </p>
+              </div>
+            ) : (
+              <div className="socle-champ">
+                <label className="socle-etiquette" htmlFor="preuve-fichier">
+                  Ton reçu (photo ou PDF)
+                  <span className="champ-obligatoire"> (obligatoire)</span>
+                </label>
+                <input
+                  id="preuve-fichier"
+                  name="fichier"
+                  type="file"
+                  accept={PROOF_ACCEPT_ATTRIBUTE}
+                  onChange={onFileChange}
+                  disabled={busy !== null || pending}
+                  aria-invalid={fieldError !== null || undefined}
+                  aria-describedby={
+                    [
+                      'preuve-aide-formats',
+                      fieldError !== null ? 'preuve-erreur-format' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                />
+                <p id="preuve-aide-formats" className="socle-champ-aide">
+                  Formats acceptés : {ACCEPTED_PROOF_FORMATS_LABEL}. Aucun autre format
+                  n’est accepté.
+                </p>
+                {busy !== null && (
+                  <p className="hint" role="status" aria-live="polite">
+                    {busy}
+                  </p>
+                )}
+                {fieldError !== null && (
+                  <p id="preuve-erreur-format" className="field-error" role="alert">
+                    {fieldError}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {draft !== null && (
+              <div className="auth-alt">
+                <button type="button" className="btn-action" onClick={onSubmit} disabled={pending}>
+                  {pending
+                    ? 'Envoi…'
+                    : serverError !== null
+                      ? 'Réessayer'
+                      : 'Envoyer ma preuve'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-contour"
+                  onClick={() => {
+                    setPreview(null);
+                    setServerError(null);
+                    setFieldError(null);
+                  }}
+                  disabled={pending}
+                >
+                  Choisir un autre fichier
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {serverError !== null && (
@@ -444,6 +474,11 @@ export function PreuveForm({
               )}
             </p>
             <div className="auth-alt">
+              {fige ? (
+                <a className="btn-action" href="/preuve">
+                  Voir ma preuve déposée
+                </a>
+              ) : null}
               <AssistanceButton phone={assistancePhone} />
             </div>
           </div>
@@ -454,11 +489,13 @@ export function PreuveForm({
             Clôture des inscriptions : {formatLocalDateTime(edition.registrationClosesAt)}
           </p>
         )}
-        <div className="auth-alt">
-          <a className="btn-lien" href="/espace-coureur">
-            Retour à mon espace
-          </a>
-        </div>
+        {!envoye && (
+          <div className="auth-alt">
+            <a className="btn-lien" href="/espace-coureur">
+              Retour à mon espace
+            </a>
+          </div>
+        )}
       </article>
     </section>
   );

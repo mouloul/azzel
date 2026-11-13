@@ -156,6 +156,8 @@ describe('etapesPreuve — /preuve : Documents marqué depuis documentsAcceptes'
     expect(etapes.map((etape) => etape.etat)).toEqual(['fait', 'fait', 'fait', 'courante']);
     expect(etapes[0]?.href).toBeUndefined();
     expect(etapes[1]?.href).toBeUndefined();
+    // Plus de remplacement de preuve en validation (PO, 11/11/2026).
+    expect(etapes[2]?.href).toBeUndefined();
     expect(etapes[3]?.href).toBeUndefined();
     expect(etapesInscription({ status: 'en validation', dechargeAccepte: null, reglementAccepte: null })).toEqual(etapes);
   });

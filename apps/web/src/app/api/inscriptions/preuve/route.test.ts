@@ -5,6 +5,7 @@ import { GET as getPreuve, POST as postPreuve } from './route';
 
 import { DbUnavailableError } from '@/modules/iam/errors';
 import {
+  DossierEnValidationError,
   DossierValidatedError,
   NoCoureurError,
   NumeroTransactionDejaUtiliseError,
@@ -361,6 +362,20 @@ describe('POST /api/inscriptions/preuve', () => {
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe('inscriptions.dossier_valide');
+  });
+
+  it('dossier en validation : 409 enveloppe inscriptions.dossier_en_validation, orientée assistance', async () => {
+    iamServiceMock.getSession.mockResolvedValue(SESSION);
+    proofServiceMock.uploadPreuve.mockRejectedValue(new DossierEnValidationError());
+    const part = multipart('recu.jpg', jpegBytes(64), 'image/jpeg');
+
+    const response = await postPreuve(postRequest(part.body, part.length, part.contentType));
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: { code: string; action: string } };
+    expect(body.error.code).toBe('inscriptions.dossier_en_validation');
+    expect(body.error.action).toContain('Contacte l’organisation');
+    expect(body.error.action).not.toContain('remplacer');
   });
 
   it('erreur inconnue : 500 enveloppe preuve.internal_error sans détail', async () => {

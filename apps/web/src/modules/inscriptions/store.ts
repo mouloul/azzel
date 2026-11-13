@@ -1566,6 +1566,26 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!coureur) {
             throw new NoCoureurError();
           }
+          const numeroTransaction = input.numeroTransaction ?? null;
+          // Rejeu après réponse perdue (« Réessayer ») : le premier envoi a déjà
+          // fait passer le dossier en validation. Même fichier ET même numéro que
+          // la preuve active : on la renvoie telle quelle, sans rien écrire.
+          // Tout autre dépôt en validation reste refusé (PO, 11/11/2026).
+          if (coureur.status === COUREUR_STATUS_EN_VALIDATION) {
+            const active = await selectActivePreuve(
+              tx,
+              input.accountId,
+              input.editionId,
+              input.organisationId,
+            );
+            if (
+              active &&
+              active.sha256 === input.file.sha256 &&
+              active.numero_transaction === numeroTransaction
+            ) {
+              return { preuve: toPreuveRecord(active), replaced: null };
+            }
+          }
           if (!canDepositPreuve(coureur.status)) {
             throw erreurStatutFige(coureur.status);
           }
@@ -1606,7 +1626,6 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             input.organisationId,
             true,
           );
-          const numeroTransaction = input.numeroTransaction ?? null;
           if (existing && existing.sha256 === input.file.sha256) {
             // Même fichier, même numéro : rejeu, rien à écrire. Même fichier avec
             // un numéro corrigé : c'est une vraie mise à jour, on continue.

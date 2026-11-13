@@ -251,7 +251,7 @@ Attendu : `06` / `ETR` + `FR` / `15` / vide pour les dossiers anciens — jamais
 
 ## I10 — Cycle de vie du dossier : en validation, reprise après refus ou expiration
 
-**Référence :** `spec-dossier-refuse-modifiable.md` (décision PO du 11/11/2026).
+**Référence :** `spec-dossier-refuse-modifiable.md` (décision PO du 11/11/2026), amendée par `spec-validation-figee.md` (même jour) : en validation, **aucun** dépôt de preuve, remplacement compris.
 
 ```
 en constitution (place réservée, 48 h) ── preuve déposée ──▶ en validation
@@ -277,11 +277,14 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 |---|--------|------------------|
 | 10.1 | Coureur neuf : s'inscrire sur `/inscription` | `/espace-coureur` affiche le statut **« En attente de justificatif de paiement »**, pastille à **point ambre** (orange foncé) |
 | 10.1b | **Sans** accepter les documents, ouvrir `/preuve` | Page **« Accepte d'abord la décharge et le règlement »** avec un bouton vers `/acceptations`. **Aucun** champ de dépôt : la preuve ne se dépose qu'après les acceptations |
-| 10.2 | Accepter les documents sur `/acceptations`, puis déposer le fichier **A** sur `/preuve` | Le statut devient **« En attente de validation par l'organisation »**, pastille à **point brun-gris** (le même que « Liste d'attente » : c'est à l'organisation d'agir). En base : `en validation` |
-| 10.3 | Ouvrir `/inscription` | Page **« Dossier en cours de validation »** — et **pas** « Dossier déjà validé ». Un bouton « Remplacer ma preuve de paiement » |
+| 10.2 | Accepter les documents sur `/acceptations`. Ouvrir `/preuve` dans **trois onglets** (gardez les deux autres pour 10.5 et 10.5b). Dans le premier, saisir le numéro de transaction (notez-le) et déposer le fichier **A** | Accusé de réception **« Ta preuve de paiement a bien été reçue. »**, avec le texte « Tu t'es trompé de fichier ? Appelle l'organisation… », un bouton **« Voir mon dossier »** et un bouton **« Appeler l'équipe »** — **aucun** bouton « Remplacer ma preuve ». Le statut devient **« En attente de validation par l'organisation »**, pastille à **point brun-gris** (le même que « Liste d'attente » : c'est à l'organisation d'agir). En base : `en validation` |
+| 10.2b | Ouvrir `/espace-coureur` | Pièce « Preuve de paiement » cochée, **sans** aucune action (ni « Remplacer », ni « Dépose »). Le bouton **« Appeler l'équipe »** est présent |
+| 10.3 | Ouvrir `/inscription` | Page **« Dossier en cours de validation »** — et **pas** « Dossier déjà validé ». **Aucun** lien vers `/preuve` ni bouton de remplacement ; un texte invite à contacter l'organisation en cas d'erreur, avec le bouton **« Appeler l'équipe »** |
 | 10.3b | Ouvrir `/acceptations` | Page **« Dossier en cours de validation »**, aucune case à cocher : rien ne change pendant l'examen |
-| 10.4 | Ouvrir `/preuve` | Encart « Ta preuve est déposée : ton dossier est en cours de validation… ». Le fil d'étapes montre Paiement « Fait » et Validation en cours. Le dépôt reste possible |
-| 10.5 | Déposer le fichier **B** (remplacement) | Accepté. Le statut **reste** « en validation ». En base, preuves : `replaced, active` |
+| 10.4 | Ouvrir `/preuve` dans un **nouvel** onglet (ne pas recharger les deux onglets gardés pour 10.5 et 10.5b) | Page **« Preuve déposée »** en lecture seule : encart « en cours de validation », date de dépôt, format et n° de transaction du fichier A, texte « Tu t'es trompé de fichier ? Contacte l'organisation… », boutons « Retour à mon espace » et « Appeler l'équipe ». **Aucun** champ de fichier ni de numéro, **aucun** bouton d'envoi. Le fil d'étapes montre Paiement « Fait » et Validation en cours, **sans lien** sur aucune étape |
+| 10.5 | Dans le **deuxième onglet** resté ouvert depuis 10.2 (formulaire encore affiché), choisir un **autre** fichier, **B**, et l'envoyer | Refus : « Ton dossier est en cours de validation par l'organisation : il ne peut plus être modifié… » et « Tu t'es trompé ? Contacte l'organisation : elle refusera ton dossier… ». Le titre devient « Dossier en cours de validation » et le formulaire est **figé** : plus de champ fichier ni de numéro, plus de bouton « Réessayer » ni « Choisir un autre fichier ». Restent le message, un bouton **« Voir ma preuve déposée »** et « Appeler l'équipe ». Cliquer « Voir ma preuve déposée » : vue « Preuve déposée » (lecture seule) avec les informations du fichier **A**. En base, preuves : `active` (une seule, celle du fichier A) |
+| 10.5b | **Renvoi après réponse perdue** (simulé) : dans le **troisième onglet** resté ouvert depuis 10.2, saisir le **même** numéro de transaction et déposer le **même** fichier **A** | Accusé de réception **normal** (« Ta preuve de paiement a bien été reçue. »), comme au premier envoi — **pas** de message d'erreur. En base, preuves : toujours `active` (une seule ligne, la date de dépôt est celle de 10.2) |
+| 10.5c | **Dossier en validation après la clôture des inscriptions** : noter la date de clôture actuelle (`SELECT registration_closes_at FROM edition;`), puis la passer dans le passé : `UPDATE edition SET registration_closes_at = now() - interval '1 day';` (même commande `docker exec … psql` qu'en tête de module). Ouvrir `/preuve` | Vue **« Preuve déposée »** en lecture seule (encart « en cours de validation », détail de la preuve A, « Appeler l'équipe ») — **pas** la page « Les inscriptions sont fermées ». Remettre ensuite la date notée : `UPDATE edition SET registration_closes_at = '<date notée>';` |
 | 10.6 | Organisateur : `/admin/dossiers` | Le compteur **« À examiner (en validation) »** compte ce dossier. « En attente de justificatif » compte les dossiers sans preuve |
 | 10.7 | Organisateur : ouvrir un dossier **en constitution** (sans preuve) | **Pas de formulaire de décision** ; message « Aucune décision à prendre : le coureur n'a pas encore déposé sa preuve de paiement. » |
 | 10.8 | Organisateur : ouvrir le dossier du coureur (en validation) | Le formulaire Valider / Refuser est proposé |
@@ -296,9 +299,9 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 | 10.12 | Coureur : ouvrir directement `/preuve` | Page **« Dossier refusé »** avec le motif et un bouton « Modifier mon inscription ». **Aucun** champ de dépôt |
 | 10.13 | Organisateur : rouvrir le dossier refusé | Pas de formulaire de décision ; message « Dossier refusé : il repassera en validation si le coureur modifie son inscription… » |
 | 10.14 | Coureur : cliquer « Modifier mon inscription » | Le formulaire s'ouvre (pas « Dossier déjà validé »). Un encadré rappelle le motif et explique : place réservée avec un nouveau délai s'il en reste, sinon liste d'attente |
-| 10.15 | Enregistrer sans rien changer | Retour à l'espace. Statut **« En attente de justificatif de paiement »**. En base : `en constitution`, `refusal_reason` vide, `preuve_due_at` = **nouvelle** échéance (fin du surlendemain d'aujourd'hui), preuves : `replaced, refusée` |
-| 10.16 | Sur `/preuve`, redéposer **le fichier B** (celui qui a été refusé) | Refus : « Cette preuve identique a déjà été refusée — dépose une version différente… ». Le statut reste en constitution |
-| 10.17 | Déposer le fichier **A** | Accepté. Statut « en validation ». Le dossier réapparaît dans « À examiner » |
+| 10.15 | Enregistrer sans rien changer | Retour à l'espace. Statut **« En attente de justificatif de paiement »**. En base : `en constitution`, `refusal_reason` vide, `preuve_due_at` = **nouvelle** échéance (fin du surlendemain d'aujourd'hui), preuves : `refusée` |
+| 10.16 | Sur `/preuve` (le formulaire de dépôt est de nouveau proposé), redéposer **le fichier A** (celui qui a été refusé) | Refus : « Cette preuve identique a déjà été refusée — dépose une version différente… ». Le statut reste en constitution |
+| 10.17 | Déposer le fichier **B** | Accepté. Statut « en validation ». Le dossier réapparaît dans « À examiner » |
 | 10.18 | Organisateur : **valider** | Statut « Validé », dossard attribué |
 | 10.19 | Coureur : ouvrir `/inscription` | Page **« Dossier déjà validé »** — c'est le seul statut qui l'affiche |
 

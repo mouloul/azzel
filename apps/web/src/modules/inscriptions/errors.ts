@@ -41,9 +41,13 @@ export class DossierValidatedError extends Error {
   }
 }
 
+/** Code d'enveloppe du 409 « dossier en validation », lu aussi côté client. */
+export const CODE_DOSSIER_EN_VALIDATION = 'inscriptions.dossier_en_validation';
+
 /**
- * Dossier en validation : figé jusqu'à la décision de l'organisation. Seul le
- * remplacement de la preuve reste ouvert (il laisse le dossier en validation).
+ * Dossier en validation : figé jusqu'à la décision de l'organisation, preuve
+ * comprise (PO, 11/11/2026). Une erreur se corrige par l'organisation, qui
+ * refuse le dossier ; le coureur le reprend ensuite.
  */
 export class DossierEnValidationError extends Error {
   constructor() {
@@ -303,10 +307,11 @@ function sharedApiError(error: unknown, config: SharedErrorMapperConfig): ApiErr
     return {
       status: 409,
       envelope: createErrorEnvelope({
-        code: 'inscriptions.dossier_en_validation',
+        code: CODE_DOSSIER_EN_VALIDATION,
         message:
           'Ton dossier est en cours de validation par l’organisation : il ne peut plus être modifié en attendant sa décision.',
-        action: 'Tu peux seulement remplacer ta preuve de paiement depuis ton espace coureur.',
+        action:
+          'Tu t’es trompé ? Contacte l’organisation : elle refusera ton dossier, que tu pourras ensuite reprendre avec « Modifier mon inscription ».',
       }),
     };
   }

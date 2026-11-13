@@ -111,6 +111,53 @@ export default async function PreuvePage() {
     );
   }
 
+  if (state.coureurStatus === COUREUR_STATUS_EN_VALIDATION) {
+    // Dossier en validation : lecture seule, avant même la clôture des
+    // inscriptions (le dépôt est fait, la clôture ne le concerne plus). Aucun
+    // remplacement (PO, 11/11/2026) : l'organisateur ne doit jamais valider
+    // une preuve qu'il n'a pas vue. Une erreur se corrige par l'organisation,
+    // qui refuse le dossier ; le coureur le reprend ensuite.
+    const preuve = state.preuve;
+    return (
+      <section className="auth">
+        <article className="card">
+          <p className="surtitre">Preuve de paiement</p>
+          <FilEtapes etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)} />
+          <h1>Preuve déposée</h1>
+          <p className="encart-attente" role="status">
+            Ton dossier est <strong>en cours de validation</strong> par l’organisation. Tu
+            reçois un email dès sa décision — tu n’as rien d’autre à faire d’ici là.
+          </p>
+          {preuve !== null ? (
+            <div className="recap">
+              <p className="recap-titre">Preuve déposée</p>
+              <p>
+                Déposée le {formatLocalDateTime(preuve.depositedAt)} · {preuve.format}
+              </p>
+              {preuve.numeroTransaction !== null ? (
+                <p>N° de transaction : {preuve.numeroTransaction}</p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="hint">
+              Ta preuve est enregistrée ; son détail est momentanément indisponible.
+            </p>
+          )}
+          <p className="hint">
+            Tu t’es trompé de fichier ? Contacte l’organisation : elle refusera ton dossier,
+            que tu pourras ensuite reprendre avec « Modifier mon inscription ».
+          </p>
+          <div className="auth-alt">
+            <a className="btn-contour" href="/espace-coureur">
+              Retour à mon espace
+            </a>
+            <AssistanceButton phone={assistancePhone} />
+          </div>
+        </article>
+      </section>
+    );
+  }
+
   if (!state.edition.registrationOpen) {
     return (
       <section className="auth">
@@ -209,13 +256,6 @@ export default async function PreuvePage() {
         <FilEtapes
           etapes={etapesPreuve(state.coureurStatus, state.documentsAcceptes)}
         />
-        {state.coureurStatus === COUREUR_STATUS_EN_VALIDATION ? (
-          <p className="encart-attente" role="status">
-            Ta preuve est déposée : ton dossier est <strong>en cours de validation</strong> par
-            l’organisation. Tu peux encore la remplacer si tu t’es trompé de fichier — le
-            dossier reste en validation.
-          </p>
-        ) : null}
         {montant !== null ? (
           <p className="encart-montant" role="status">
             Montant à verser :{' '}

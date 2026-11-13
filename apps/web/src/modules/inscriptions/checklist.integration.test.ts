@@ -159,8 +159,8 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     const avant = await getChecklistState(session, { store });
     expect(avant.pieces.filter((entry) => entry.fait)).toHaveLength(5);
     expect(avant.statut).toBe('en validation');
-    expect(piece(avant, 'preuve').actionLabel).toBe('Remplacer ma preuve de paiement');
-    // En validation : inscription figée jusqu'à la décision.
+    // En validation : tout est figé jusqu'à la décision, preuve comprise.
+    expect(piece(avant, 'preuve').actionLabel).toBeUndefined();
     expect(piece(avant, 'epreuve').actionLabel).toBeUndefined();
     expect(piece(avant, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
     expect(avant.recap).toMatchObject({

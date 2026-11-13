@@ -99,13 +99,17 @@ describe('/inscription — cycle de vie du dossier', () => {
     expect(html).not.toContain('FORMULAIRE-INSCRIPTION');
   });
 
-  it('en validation : figé, « en cours de validation », seul le remplacement de preuve est proposé', async () => {
+  it('en validation : figé, « en cours de validation », aucun remplacement de preuve, assistance proposée', async () => {
     serviceMock.getInscriptionState.mockResolvedValue(etat('en validation'));
     const html = await rendu();
     expect(html).toContain('Dossier en cours de validation');
     expect(html).not.toContain('Dossier déjà validé');
     expect(html).not.toContain('FORMULAIRE-INSCRIPTION');
-    expect(html).toContain('href="/preuve"');
+    // Décision PO du 11/11/2026 : plus aucun dépôt pendant l'examen.
+    expect(html).not.toContain('href="/preuve"');
+    expect(html).not.toContain('Remplacer');
+    expect(html).toContain('href="tel:');
+    expect(html).toContain('Appeler l’équipe');
   });
 
   it('refusé : formulaire ouvert, motif affiché, reprise expliquée, aucune échéance périmée', async () => {
