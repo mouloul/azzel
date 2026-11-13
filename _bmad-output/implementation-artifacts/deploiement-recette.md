@@ -107,8 +107,10 @@ conteneur Docker qui n'existe pas ici.
 | Production Branch | `main` |
 | Deployment Protection → Vercel Authentication | **Disabled** (voir piège 4) |
 
-> **Pas de `vercel.json`.** Les réglages vivent dans le tableau de bord ; un fichier
-> concurrent créerait deux sources de vérité qui divergeront.
+> **`apps/web/vercel.json` ne porte que le cron** (section 5 bis) : Vercel ne sait
+> déclarer un cron que dans ce fichier. Tous les autres réglages vivent dans le tableau
+> de bord, et n'en sortent pas — un fichier qui les reprendrait créerait deux sources de
+> vérité qui divergeront.
 
 **Variables d'environnement — à poser sur Production ET Preview :**
 
@@ -123,6 +125,7 @@ conteneur Docker qui n'existe pas ici.
 | `PROOF_STORAGE_URL` | `https://<ref>.supabase.co/storage/v1` | l'URL du projet seule suffit, le suffixe est ajouté |
 | `PROOF_STORAGE_KEY` | la clé **secrète** du projet | ⚠️ jamais commitée, jamais exposée au navigateur |
 | `PROOF_STORAGE_BUCKET` | `preuves` | défaut si absente |
+| `CRON_SECRET` | `openssl rand -hex 32` (32 caractères minimum) | ⚠️ secret ; garde de la route de balayage des échéances (section 5 bis) |
 
 **Poser sur Preview autant que sur Production.** Vercel sert le dernier build réussi :
 une variable posée sur un seul environnement produit une panne qui semble aléatoire
@@ -171,6 +174,133 @@ qui doit le recevoir.
 - Les emails sortants (validation, refus, rappel J-7) partent pour de vrai : ils portent
   la mention « environnement de démonstration — données fictives » pour qu'un message
   égaré ne soit jamais pris pour une communication officielle.
+
+---
+
+## 5 bis. Échéances de preuve : balayage automatique
+
+Un dossier sans preuve de paiement reçoit un rappel la veille de son échéance, puis
+**expire** à l'échéance, ce qui rend sa place. Rien de cela n'arrive si personne ne
+lance le balayage. En production, la crontab du VPS lance `inscriptions:echeances`
+(voir `README.md`). La recette n'a pas de crontab : le balayage y est exposé par la
+route `GET /api/cron/echeances`, que deux déclencheurs appellent.
+
+| Déclencheur | Fréquence | Rôle |
+| --- | --- | --- |
+| GitHub Actions — `.github/workflows/echeances.yml` | toutes les heures, à hh:17 | déclencheur principal |
+| Cron Vercel — `apps/web/vercel.json` | une fois par jour, 06:00 UTC (07:00 à Alger) | filet de sécurité ; le plan Hobby ne permet pas plus d'un passage par jour |
+
+Le balayage est **idempotent** : que les deux déclencheurs se chevauchent ou qu'on
+relance à la main, un second passage ne rappelle ni n'expire rien de plus.
+
+C'est aussi, en recette, le **seul chemin de reprise automatique de la file d'emails** :
+un email en échec au moment de l'événement (validation, refus…) n'est renvoyé que par
+ce balayage — ou par `emails:send` lancé à la main depuis un poste. Chaque appel envoie
+au plus **30 emails** (limite de durée de la fonction) ; le reste part au passage
+suivant.
+
+**Accès.** La route exige `Authorization: Bearer <CRON_SECRET>`, l'en-tête qu'envoie
+Vercel Cron dès que la variable `CRON_SECRET` est posée sur le projet. Le workflow
+envoie le même. Le schéma `Bearer` est lu sans égard à la casse, et les blancs
+autour du secret (retour à la ligne collé avec la valeur) sont ignorés des deux côtés.
+
+| Réponse | Sens |
+| --- | --- |
+| `200` + bilan | balayage fait, tous les emails tentés sont partis |
+| `401 cron.unauthorized` | en-tête absent ou secret faux ; rien n'est fait |
+| `502 cron.emails_failed` | balayage fait (bilan joint), mais au moins un email n'est pas parti : il reste dans la file, repris plus tard. Vérifier `SMTP_URL` et `APP_EMAIL_FROM` |
+| `503 cron.not_configured` | `CRON_SECRET` absente, vide ou de moins de 32 caractères sur Vercel ; rien n'est fait, la route ne s'ouvre jamais sans secret |
+| `503 cron.db_not_configured` | `DATABASE_URL` absente sur Vercel ; rien n'est fait. Panne de configuration : relancer ne sert à rien, il faut poser la variable et redéployer |
+| `503 cron.db_unavailable` | base injoignable ; relancer, sans risque |
+| `503 cron.db_misconfigured` | `DATABASE_URL` ne pointe pas sur le rôle `azzel_app` |
+| `503 cron.outbox_unavailable` | rappels et expirations faits (bilan joint), mais la file d'emails n'a pas pu être lue, en tout (« aucun email n'est parti ») ou en partie (« partiellement injoignable ») ; le passage suivant enverra |
+| `500 cron.internal_error` | erreur inattendue ; consulter les journaux de la fonction sur Vercel, puis relancer |
+
+### Mise en place
+
+1. Générer le secret : `openssl rand -hex 32` (64 caractères ; la route refuse un secret
+   de moins de 32).
+2. **Vercel** → Settings → Environment Variables : poser `CRON_SECRET` sur Production
+   ET Preview (section 4), puis **redéployer** : une variable n'est lue que par les
+   déploiements construits après sa pose.
+3. **GitHub** → Settings → Secrets and variables → Actions :
+   - onglet **Secrets** → New repository secret : `CRON_SECRET`, la **même** valeur ;
+   - onglet **Variables** → New repository variable (une **variable**, pas un secret :
+     l'URL n'a rien de confidentiel et reste ainsi lisible dans les journaux) :
+     `AZZEL_ECHEANCES_URL`, l'URL complète de la route sur le déploiement servi,
+     `https://azzel-moulouls-projects.vercel.app/api/cron/echeances`.
+4. **Vercel** → Settings → Cron Jobs : le cron `/api/cron/echeances` apparaît après le
+   premier déploiement de production qui porte `apps/web/vercel.json`.
+
+### Test manuel par `curl`
+
+```bash
+read -rs CRON_SECRET && export CRON_SECRET   # saisi sans écho, absent de l'historique
+URL=https://azzel-moulouls-projects.vercel.app/api/cron/echeances
+
+curl -sS -i -H "Authorization: Bearer $CRON_SECRET" "$URL"   # attendu : HTTP 200 + bilan
+curl -sS -i -H "Authorization: Bearer $CRON_SECRET" "$URL"   # relancé aussitôt : rappels, expirées, enfilés à zéro
+curl -sS -i "$URL"                                           # attendu : HTTP 401 cron.unauthorized
+```
+
+Bilan rendu par un passage (ici : 1 rappel, 4 dossiers expirés dont 2 déjà avisés,
+2 emails qui attendaient déjà dans la file) :
+
+```json
+{"ok":true,"bilan":{"rappels":1,"expirees":4,"emailsEnfiles":3,"emailsEnvoyes":5,"emailsEnEchec":0}}
+```
+
+- `rappels` : emails de rappel enfilés (échéance dans les 24 heures) ;
+- `expirees` : dossiers passés en « expirée », autant de places rendues ;
+- `emailsEnfiles` : emails enfilés par ce passage (rappels + avis d'expiration) ;
+- `emailsEnvoyes`, `emailsEnEchec` : passage de la file d'envoi. Il traite **toute** la
+  file en attente (30 au plus), pas seulement ce passage ; un email en échec reste dans
+  la file et sera repris.
+
+Relancé aussitôt, seuls `rappels`, `expirees` et `emailsEnfiles` retombent à zéro.
+`emailsEnvoyes` et `emailsEnEchec` reflètent l'état de la file à cet instant : ils
+peuvent rester non nuls (reliquat au-delà de 30, email arrivé entre-temps, ligne en
+échec sortie de son délai d'attente).
+
+### Test par « Run workflow »
+
+GitHub → Actions → **Échéances de preuve (recette)** → Run workflow, sur `main`.
+
+- **Vert** : l'étape « Appel de la route de balayage » imprime le bilan JSON puis
+  `Balayage fait (HTTP 200).`
+- **Rouge** : l'étape imprime l'enveloppe d'erreur (code `cron.*`, tableau ci-dessus)
+  et `Réponse HTTP <statut> : balayage non fait.` Le message « Secret de dépôt
+  CRON_SECRET et variable de dépôt AZZEL_ECHEANCES_URL requis » signale un réglage de
+  dépôt manquant. Une réponse `3xx` est aussi en rouge : c'est le signe d'une
+  protection de déploiement réactivée (piège 4). Un `502 cron.emails_failed` met le
+  workflow en rouge alors que le balayage est fait : c'est l'envoi d'emails qui est
+  cassé.
+
+Contrôle en base, après un passage vert — plus aucun dossier échu sans preuve :
+
+```sql
+BEGIN;
+  SELECT set_config('app.organisation_id', '<id org>', true);
+  SELECT count(*) FROM coureur AS c
+  WHERE c.status = 'en constitution'
+    AND c.preuve_due_at < now()
+    AND NOT EXISTS (SELECT 1 FROM preuve AS p WHERE p.coureur_id = c.id AND p.status = 'active');
+  -- attendu : 0
+ROLLBACK;
+```
+
+### À savoir
+
+- Le bouton « Run workflow » et la planification horaire n'existent qu'une fois le
+  workflow **sur la branche par défaut** (`main`) : GitHub ne planifie que depuis elle.
+- GitHub **retarde** les exécutions planifiées quand ses runners sont chargés, parfois
+  de plusieurs dizaines de minutes ; le cron Vercel quotidien rattrape un trou.
+- Le cron Vercel du plan Hobby part à une minute **quelconque** de l'heure prévue
+  (06:00–06:59 UTC), et seulement sur le déploiement de production.
+- Dépôt privé : chaque exécution décompte au moins une minute du quota GitHub Actions,
+  soit environ 720 minutes par mois pour 24 passages par jour.
+- Changer le secret : le modifier aux **deux** endroits (Vercel et le secret de dépôt
+  GitHub), puis redéployer Vercel.
 
 ---
 
@@ -292,6 +422,8 @@ vérifier que le déploiement servi porte bien le commit attendu.
 7. **Délivrabilité adresse par adresse**, pour chaque membre du comité.
 8. **Plafonds du free tier** : Postgres 500 Mo, storage 1 Go. Une preuve pèse au plus
    300 Ko ; le jeu de données en dépose 38.
+9. **Balayage des échéances** : « Run workflow » au vert, puis relancé aussitôt avec
+   `rappels`, `expirees` et `emailsEnfiles` à zéro (section 5 bis).
 
 ---
 

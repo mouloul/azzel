@@ -568,12 +568,24 @@ const CONNECTION_ERROR_CODES = new Set([
   '57P01',
   '57P03',
   '53300',
+  // Client `postgres` : délai de connexion dépassé, connexion coupée, fermée
+  // ou détruite.
+  'CONNECT_TIMEOUT',
+  'CONNECTION_CLOSED',
+  'CONNECTION_ENDED',
+  'CONNECTION_DESTROYED',
 ]);
 
 const CONNECTION_ERROR_PATTERN =
   /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|connection terminated|database system is starting|database system is shut down/i;
 
-function isConnectionError(error: unknown): boolean {
+/**
+ * Exportée pour la route de cron (`/api/cron/echeances`) : la garde de rôle
+ * applicatif (`protegerStore`) interroge la base AVANT `withDb`, et laisse donc
+ * passer une erreur de connexion brute qu'il faut aussi lire comme
+ * « base injoignable ».
+ */
+export function isConnectionError(error: unknown): boolean {
   if (error instanceof DbUnavailableError) {
     return true;
   }

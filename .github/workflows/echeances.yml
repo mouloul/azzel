@@ -1,0 +1,70 @@
+# Balayage des échéances de preuve — environnement de RECETTE (Vercel).
+#
+# La recette n'a pas de crontab : ce workflow appelle toutes les heures la route
+# GET /api/cron/echeances (rappel de la veille, expiration des dossiers sans
+# preuve — places rendues —, puis file d'envoi des emails). Le cron Vercel
+# quotidien déclaré dans apps/web/vercel.json reste le filet de sécurité. Le
+# balayage est idempotent : un double passage est sans effet.
+#
+# La production (VPS) ne dépend pas de ce workflow : sa crontab lance
+# `pnpm -F @azzel/web inscriptions:echeances` (README, section des crons).
+#
+# Réglages de dépôt requis (Settings → Secrets and variables → Actions) :
+#   secret    CRON_SECRET          — la MÊME valeur que la variable CRON_SECRET
+#                                    de Vercel ;
+#   variable  AZZEL_ECHEANCES_URL  — URL complète de la route (pas un secret :
+#                                    elle reste lisible dans les journaux), ex.
+#                                    https://<domaine-de-recette>/api/cron/echeances
+#
+# Rien d'autre : ni checkout, ni installation. Le job échoue (rouge) dès que la
+# réponse n'est pas 2xx. Mode opératoire :
+# _bmad-output/implementation-artifacts/deploiement-recette.md, section 5 bis.
+
+name: Échéances de preuve (recette)
+
+on:
+  schedule:
+    # Minute décalée : le début d'heure est le moment le plus chargé des
+    # runners GitHub, où les exécutions planifiées sont retardées, voire
+    # abandonnées.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+# Aucun accès au dépôt : le job ne fait qu'un appel HTTP.
+permissions: {}
+
+concurrency:
+  group: echeances-recette
+  cancel-in-progress: false
+
+jobs:
+  balayage:
+    name: Balayage des échéances
+    runs-on: ubuntu-latest
+    # Pire cas curl : 3 essais × 75 s + 2 attentes × 15 s = 255 s.
+    timeout-minutes: 6
+    steps:
+      - name: Appel de la route de balayage
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          AZZEL_ECHEANCES_URL: ${{ vars.AZZEL_ECHEANCES_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$AZZEL_ECHEANCES_URL" ]; then
+            echo "::error::Secret de dépôt CRON_SECRET et variable de dépôt AZZEL_ECHEANCES_URL requis (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          # Statut lu explicitement, pas par --fail : --fail laisse passer un 3xx
+          # (une redirection vers une page de connexion passerait au vert sans
+          # que rien ne soit fait). --retry reprend délais dépassés et 5xx
+          # passagers, sans risque : le balayage est idempotent. --max-time 75
+          # couvre les 60 s de la fonction ; --retry-max-time borne le tout.
+          corps="$(mktemp)"
+          statut="$(curl --silent --show-error --output "$corps" --write-out '%{http_code}' \
+            --max-time 75 --retry 2 --retry-delay 15 --retry-max-time 240 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "$AZZEL_ECHEANCES_URL")" || { cat "$corps"; echo; exit 1; }
+          cat "$corps"; echo
+          case "$statut" in
+            2??) echo "Balayage fait (HTTP $statut)." ;;
+            *) echo "::error::Réponse HTTP $statut : balayage non fait."; exit 1 ;;
+          esac

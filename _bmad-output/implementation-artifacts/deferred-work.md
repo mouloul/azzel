@@ -331,3 +331,7 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-carte-surcouche-noms-chemins-osm.md`
   summary: Rendre les attributions cartographiques avec liens (openstreetmap.org/copyright, opentopomap.org, openmaptiles.org, openfreemap.org) dans `vue-parcours.tsx`.
   evidence: Le bloc rend des chaînes en texte brut alors que `CREDITS.md` liste des « liens à conserver » et que les règles d'attribution OSMF demandent un lien sur carte interactive ; motif préexistant (OpenTopoMap).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-cron-echeances.md`
+  summary: Déclencher `emails:j7` (rappel batterie J-7) en recette, comme les échéances.
+  evidence: En recette (Vercel), aucune crontab : `emails:j7` n'est lancé par rien ; seule la route des échéances vide la file.
