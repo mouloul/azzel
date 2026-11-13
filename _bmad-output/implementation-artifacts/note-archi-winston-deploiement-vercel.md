@@ -351,6 +351,12 @@ Les réglages (répertoire racine, branche, protection, variables) vivent dans l
 de bord. Y ajouter un fichier au dépôt créerait **deux sources de vérité** qui
 divergeront. Décision prise à la mise en ligne, à tenir.
 
+> **Amendement du 13/11/2026 (décision PO : cron quotidien de recette).**
+> `apps/web/vercel.json` existe désormais et ne porte **que** la clé `crons` — le cron
+> quotidien de `/api/cron/echeances`, que Vercel ne sait déclarer que dans ce fichier.
+> Tous les autres réglages restent dans le tableau de bord. Voir
+> `deploiement-recette.md`, section 5 bis.
+
 ### 7.8 Piège de méthode : le déploiement servi n'est pas forcément le dernier commit
 
 Plusieurs builds ont échoué pendant la session, et l'hébergeur **continue de servir le

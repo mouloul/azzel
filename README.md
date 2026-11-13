@@ -92,6 +92,32 @@ Cron VPS (exemple, une fois par jour à 8 h) :
 0 8 * * * cd /srv/azzel && pnpm -F @azzel/web emails:j7 >>/var/log/azzel-emails-j7.log 2>&1
 ```
 
+Échéances de preuve — `inscriptions:echeances` enfile le rappel de la veille pour chaque
+dossier dont l'échéance tombe dans les 24 heures, **expire** les dossiers restés sans
+preuve passé l'échéance (la place est rendue), puis passe la file d'envoi. Idempotent :
+un rejeu ne réexpire rien et ne double aucun email. Sans ce cron, aucun dossier
+n'expire et aucun rappel ne part. Cron VPS, toutes les heures (minute décalée, pour ne
+pas tomber en même temps que les autres tâches de début d'heure) :
+
+```cron
+7 * * * * cd /srv/azzel && pnpm -F @azzel/web inscriptions:echeances >>/var/log/azzel-echeances.log 2>&1
+```
+
+Si le VPS est piloté par **Coolify**, les mêmes tâches se déclarent dans l'onglet
+**Scheduled Tasks** de l'application. La commande s'exécute dans le conteneur : son
+répertoire de travail doit être la racine du dépôt, et `pnpm` doit y être installé.
+
+| Nom | Commande | Fréquence |
+| --- | --- | --- |
+| `emails-send` | `pnpm -F @azzel/web emails:send` | `*/5 * * * *` |
+| `emails-j7` | `pnpm -F @azzel/web emails:j7` | `0 8 * * *` |
+| `inscriptions-echeances` | `pnpm -F @azzel/web inscriptions:echeances` | `7 * * * *` |
+
+La recette hébergée sur Vercel n'a pas de crontab : le même balayage y passe par la route
+`GET /api/cron/echeances`, protégée par `CRON_SECRET` et appelée par un cron Vercel
+quotidien et un workflow GitHub Actions horaire — voir
+`_bmad-output/implementation-artifacts/deploiement-recette.md`, section 5 bis.
+
 ## Conventions
 
 - **Langues** : interface utilisateur en français ; code et identifiants en anglais.

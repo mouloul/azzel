@@ -6,24 +6,17 @@ import postgres from 'postgres';
 import { exigeTls } from '@/db/client';
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { createOutboxStore, MAX_OUTBOX_ATTEMPTS } from '@/modules/notifications/outbox-store';
-import {
-  clampOutboxLimit,
-  DEFAULT_OUTBOX_LIMIT,
-  processOutbox,
-} from '@/modules/notifications/worker';
 
+import { balayerEcheances } from './echeances';
 import { createInscriptionsStore } from './store';
 
 /**
- * Balayage des échéances de preuve, à passer en cron.
+ * Balayage des échéances de preuve, à passer en cron (VPS de production) :
+ *   pnpm -F @azzel/web inscriptions:echeances
  *
- * Deux gestes, dans cet ordre : rappeler ceux dont l'échéance tombe dans les
- * 24 heures, puis expirer ceux qui l'ont dépassée. L'ordre compte — l'inverse
- * enverrait un rappel à quelqu'un qui vient d'expirer.
- *
- * Entièrement idempotent : le passage en « expirée » ne retrouve plus les
- * lignes du passage précédent, et les index uniques partiels absorbent tout
- * doublon d'email. Un cron horaire, ou rejoué dix fois, donne le même état.
+ * La logique (rappels, puis expirations, puis file d'envoi) vit dans
+ * `balayerEcheances`, partagée avec la route `GET /api/cron/echeances` de la
+ * recette ; cette commande n'ouvre que sa connexion et rend compte.
  */
 async function main(): Promise<void> {
   const databaseUrl = readDatabaseUrl();
@@ -41,19 +34,23 @@ async function main(): Promise<void> {
   try {
     const inscriptions = createInscriptionsStore(sql);
     const outbox = createOutboxStore(sql);
-    const maintenant = new Date();
 
-    const rappels = await inscriptions.enfilerRappelsPreuve(maintenant);
-    console.info(`Rappels de preuve : ${rappels} email(s) enfilé(s).`);
+    // Journal au fil de l'eau : si les expirations lèvent, les rappels déjà
+    // commités restent tracés.
+    const bilan = await balayerEcheances({ inscriptions, outbox }, new Date(), {
+      progression: (etape) => {
+        if (etape.etape === 'rappels') {
+          console.info(`Rappels de preuve : ${etape.rappels} email(s) enfilé(s).`);
+        } else if (etape.etape === 'expirations') {
+          console.info(
+            `Expirations : ${etape.expirees} inscription(s) expirée(s), ` +
+              `${etape.emailsExpiration} email(s) enfilé(s) — autant de places rendues.`,
+          );
+        }
+      },
+    });
 
-    const bilan = await inscriptions.expirerInscriptionsEchues(maintenant);
-    console.info(
-      `Expirations : ${bilan.expirees} inscription(s) expirée(s), ` +
-        `${bilan.emailsEnfiles} email(s) enfilé(s) — autant de places rendues.`,
-    );
-
-    const limite = clampOutboxLimit(rappels + bilan.emailsEnfiles + DEFAULT_OUTBOX_LIMIT);
-    const resume = await processOutbox(limite, { store: outbox });
+    const resume = bilan.envoi;
     if (resume.storeError !== null) {
       console.error('File d’envoi injoignable :', resume.storeError);
       process.exitCode = 1;
