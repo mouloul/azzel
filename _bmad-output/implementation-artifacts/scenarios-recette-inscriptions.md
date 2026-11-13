@@ -1,12 +1,13 @@
 # Scénarios de recette — Inscriptions : contingent, expiration, genre, hébergement, wilaya
 
-**Produit :** Azzel · **Périmètre :** lots 1 → 5 de `spec-inscriptions-contingent-hebergement.md`, module I9 de `spec-inscriptions-wilaya-hebergement.md`, module I10 de `spec-dossier-refuse-modifiable.md` · **Date :** 2026-11-05 (I9 : 2026-11-10, I10 : 2026-11-11)
-**Durée estimée :** 100–130 min (module par module, arrêt/reprise possible), + 20 min pour le module I9
+**Produit :** Azzel · **Périmètre :** lots 1 → 5 de `spec-inscriptions-contingent-hebergement.md`, module I9 de `spec-inscriptions-wilaya-hebergement.md`, module I10 de `spec-dossier-refuse-modifiable.md`, délai en heures de `spec-delai-preuve-heures.md` (I1, I4, I5) · **Date :** 2026-11-05 (I9 : 2026-11-10, I10 : 2026-11-11, délai en heures : 2026-11-13)
+**Durée estimée :** 100–130 min (module par module, arrêt/reprise possible), + 20 min pour le module I9, + 10 min pour les étapes 1.11 à 1.17 du module I1, + 35 à 45 min pour la partie B du module I5 (onze étapes, plusieurs attentes de 4 minutes et quatre relances du serveur)
 **Ajout du 2026-11-10 :** module **I9 — Wilaya et hébergement** (`spec-inscriptions-wilaya-hebergement.md`). Pour retrouver des provenances dans le jeu fictif, relancer le seed après la migration : `pnpm -F @azzel/web seed:reset` puis `pnpm -F @azzel/web seed` (les coureurs fictifs déjà en base n'ont pas de wilaya). Depuis cet ajout, la **wilaya de provenance est obligatoire** dans le formulaire : dans les modules I2 à I7 et I10, choisissez une wilaya **autre que Tizi Ouzou** (par exemple « 16 — Alger ») pour pouvoir cocher l'hébergement.
+**Ajout du 2026-11-13 :** le **délai de dépôt de la preuve se compte en heures** (`spec-delai-preuve-heures.md`, décision PO du 13/11/2026). Ce n'est plus « fin du surlendemain à 23 h 59 » mais une **durée glissante de 48 h** (réglable de 1 à 720 h dans `/admin/inscriptions`) : elle part de l'envoi du formulaire, puis **repart de zéro** quand le coureur accepte la décharge et le règlement. Sans acceptations dans le délai, le dossier expire et la place repart. Une variable de **développement**, `AZZEL_DELAI_PREUVE_MINUTES`, ramène ce délai à quelques minutes pour tester l'expiration sans toucher à la base (module I5, partie B).
 
 Chaque module se teste indépendamment : cochez au fur et à mesure et notez les écarts dans la colonne Observations du tableau final.
 
-Plusieurs modules demandent de **modifier des réglages** (capacité, contingent d'hébergement) pour provoquer les cas limites. Le module I1 explique où. Remettez les valeurs d'origine à la fin : **600 dossards, seuil 200, 200 hébergements, 2000 DA, 1500 DA, 2 jours**.
+Plusieurs modules demandent de **modifier des réglages** (capacité, contingent d'hébergement) pour provoquer les cas limites. Le module I1 explique où. Remettez les valeurs d'origine à la fin : **600 dossards, seuil 200, 200 hébergements, 2000 DA, 1500 DA, 48 heures**.
 
 ---
 
@@ -15,7 +16,7 @@ Plusieurs modules demandent de **modifier des réglages** (capacité, contingent
 ```bash
 bash scripts/dev-db.sh up         # Postgres 54329
 bash scripts/dev-mail.sh up       # faux SMTP — UI http://localhost:8026
-pnpm -F @azzel/web db:migrate     # jusqu'à 0044_statut_en_validation.sql (0044_wilaya_pays.sql comprise)
+pnpm -F @azzel/web db:migrate     # jusqu'à 0045_delai_preuve_heures.sql (« Migration appliquée : 0045_delai_preuve_heures.sql » au premier passage)
 AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web   # http://localhost:3000
 ```
 
@@ -36,7 +37,7 @@ Deux fenêtres sont utiles : une **navigation privée** pour jouer le coureur, u
 |---|--------|------------------|
 | 1.1 | Ouvrir `/admin`, regarder le menu | Une entrée **« Inscriptions »** entre « Dossiers » et « Volontaires » |
 | 1.2 | Ouvrir `/admin/inscriptions` | Titre « Inscriptions — Édition 2027 ». Cinq chiffres en tête : dossards pris, places restantes, hébergements pris, lits restants, en liste d'attente |
-| 1.3 | Lire les six réglages | Nombre de dossards **600**, seuil **200**, hébergements **200**, prix dossard **2000**, prix hébergement **1500**, délai **2** jours. Chacun porte une phrase d'explication |
+| 1.3 | Lire les réglages | Nombre de dossards **600**, seuil **200**, hébergements **200**, prix dossard **2000**, prix hébergement **1500**, « Délai de dépôt de la preuve (**heures**) » à **48** (et non plus « 2 jours »). Chacun porte une phrase d'explication ; celle du délai dit qu'il part de l'envoi du formulaire et repart de zéro à l'acceptation de la décharge et du règlement |
 | 1.4 | Saisir `-5` dans « Nombre de dossards », enregistrer | Refus : « Indique un nombre entier positif. » sous le champ. **Aucune valeur n'est modifiée** |
 | 1.5 | Saisir `999999999`, enregistrer | Refus : « 100000 au maximum. » |
 | 1.6 | Remettre `1000`, enregistrer | « Réglages enregistrés. » Le compteur « places restantes » augmente de 400 |
@@ -44,6 +45,13 @@ Deux fenêtres sont utiles : une **navigation privée** pour jouer le coureur, u
 | 1.8 | Réenregistrer sans rien changer | « Réglages enregistrés. » mais **aucune nouvelle ligne** dans l'historique — un réglage inchangé ne laisse pas de trace |
 | 1.9 | Modifier **seulement** le seuil (200 → 150), enregistrer | **Une seule** ligne ajoutée, sur le seuil. Rien sur la capacité |
 | 1.10 | Remettre capacité `600` et seuil `200` | Deux lignes de plus dans l'historique (c'est normal : ce sont deux vraies décisions) |
+| 1.11 | Saisir `0` dans « Délai de dépôt de la preuve (heures) », enregistrer | Refus **sous ce champ** : « Indique un délai entre 1 et 720 heures (30 jours). » **Aucune valeur n'est modifiée**, aucune ligne d'historique |
+| 1.12 | Saisir `721`, enregistrer | Même refus nommé, rien ne change |
+| 1.13 | Saisir `72`, enregistrer | « Réglages enregistrés. » Historique : « Délai de dépôt de la preuve (heures) : 48 → 72 » |
+| 1.14 | Remettre `48`, enregistrer | Une ligne « 72 → 48 » de plus |
+| 1.15 | Historique de l'**ancien** réglage en jours. Contrôler s'il en existe : `docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c "SELECT ancienne_valeur, nouvelle_valeur, modifie_le FROM edition_reglage_journal WHERE champ = 'delaiPreuveJours';"`. **Aucune ligne** (cas d'une base neuve) : en fabriquer une avec `docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c "INSERT INTO edition_reglage_journal (organisation_id, edition_id, champ, ancienne_valeur, nouvelle_valeur) SELECT organisation_id, id, 'delaiPreuveJours', 2, 3 FROM edition WHERE slug = '2027';"`. Recharger `/admin/inscriptions` | Chaque ligne de l'ancien réglage s'affiche « Délai de dépôt de la preuve (jours, ancien réglage) : 2 → 3 » — valeurs **en jours, non converties**, sans nom d'auteur pour la ligne fabriquée |
+| 1.16 | Vérifier le délai en base : `docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c "SELECT delai_preuve_heures FROM edition;"` puis `docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c '\d edition'` | Première commande : **48**. Seconde : la colonne `delai_preuve_heures` est listée, `delai_preuve_jours` **ne l'est plus**, et la contrainte `edition_delai_preuve_heures_check` (« delai_preuve_heures >= 1 AND delai_preuve_heures <= 720 ») apparaît sous « Check constraints » |
+| 1.17 | Aucune mention « forcé à … min en développement » sous le délai | Absente tant que `AZZEL_DELAI_PREUVE_MINUTES` n'est pas posée (voir I5, partie B) |
 
 - [ ] I1 conforme — Observations : …………
 
@@ -97,7 +105,7 @@ Deux fenêtres sont utiles : une **navigation privée** pour jouer le coureur, u
 | 4.2 | Relever la capacité de 1, enregistrer | « Places restantes : 1 ». Le bouton devient actif |
 | 4.3 | Cliquer « Attribuer une place » sur le premier de la file | « Place attribuée : le coureur a reçu un nouveau délai de dépôt. » Le coureur **disparaît** de la liste d'attente |
 | 4.4 | Côté coureur, recharger `/inscription` | L'encart « liste d'attente » a disparu. Un encart annonce la **date limite de dépôt de la preuve** |
-| 4.5 | Vérifier cette date | Fin du **surlendemain** (23 h 59), heure d'Algérie |
+| 4.5 | Vérifier cette date | Heure du clic « Attribuer une place » **+ 48 h**, heure d'Algérie, **sans arrondi** à 23 h 59 (ex. attribuée le 13/11 à 10 h 05 → 15/11 à 10 h 05). Si le coureur n'avait pas encore accepté la décharge et le règlement, l'échéance repartira de zéro quand il le fera (I5, partie B) |
 | 4.6 | Si plusieurs coureurs attendent, vérifier l'ordre du tableau | Du **plus ancien au plus récent** — l'ordre d'arrivée |
 
 - [ ] I4 conforme — Observations : …………
@@ -106,9 +114,13 @@ Deux fenêtres sont utiles : une **navigation privée** pour jouer le coureur, u
 
 ## I5 — Délai de preuve et expiration (lot 3)
 
+Deux façons de provoquer une expiration sans attendre 48 heures : **A** force l'échéance en base, **B** ramène le délai à 4 minutes par une variable de développement (aucune manipulation en base).
+
+### 5.A — Échéance forcée en base
+
 **Précondition :** un coureur **en constitution** (place prise), sans preuve déposée. Son identifiant de compte est nécessaire pour forcer l'échéance.
 
-> Ce module demande une manipulation en base pour ne pas attendre deux jours. Remplacez `EMAIL` par l'adresse du coureur testé.
+> Remplacez `EMAIL` par l'adresse du coureur testé.
 
 ```bash
 # Forcer l'échéance dans le passé
@@ -119,7 +131,7 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 
 | # | Action | Résultat attendu |
 |---|--------|------------------|
-| 5.1 | Avant toute manipulation, ouvrir `/inscription` en coureur | Un encart annonce la date limite : « Dépose ta preuve de paiement avant le … : passé ce délai, l'inscription expire et la place repart » |
+| 5.1 | Avant toute manipulation, ouvrir `/inscription` en coureur | Un encart annonce la date limite : « Dépose ta preuve de paiement avant le … : passé ce délai, l'inscription expire et la place repart ». La date et l'heure = envoi du formulaire **+ 48 h** (ou acceptation de la décharge et du règlement + 48 h si elle a eu lieu ensuite), heure d'Algérie |
 | 5.2 | Ouvrir `/preuve` | Un encart « Montant à verser : **2000 DA** — le dossard seul. » |
 | 5.3 | Jouer la commande ci-dessus, puis `pnpm -F @azzel/web inscriptions:echeances` | Sortie : « Expirations : **1** inscription(s) expirée(s), 1 email(s) enfilé(s) — autant de places rendues. » |
 | 5.4 | Ouvrir Mailpit (http://localhost:8026) | Un email « Azzel — ton inscription a expiré », qui dit que la place a été rendue et invite à cliquer sur « Modifier mon inscription » depuis l'espace coureur |
@@ -129,6 +141,30 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 | 5.8 | **Cas à ne pas casser :** reprendre un coureur en constitution, lui faire **déposer une preuve** sur `/preuve` (il passe « en validation »), puis forcer son échéance dans le passé et relancer la commande | « Expirations : **0** ». Un dossier déposé à temps **ne doit jamais expirer**, même s'il n'a pas encore été validé par l'équipe |
 | 5.9 | **Rappel de la veille :** forcer `preuve_due_at` à `now() + interval '20 hours'` sur un coureur sans preuve, lancer la commande | « Rappels de preuve : 1 ». Un email « ta place t'attend encore jusqu'à demain » dans Mailpit |
 | 5.10 | Relancer la commande trois fois | Toujours **un seul** email de rappel — un cron horaire ne doit pas en envoyer vingt-quatre |
+
+### 5.B — Délai de 4 minutes en développement (`AZZEL_DELAI_PREUVE_MINUTES`)
+
+**Précondition :** arrêter le serveur de développement, puis le relancer avec la variable en préfixe (ou posée dans le `.env` à la racine — un changement du fichier demande de relancer le serveur) :
+
+```bash
+AZZEL_DELAI_PREUVE_MINUTES=4 AZZEL_ADMIN_EMAILS=orga@example.dz pnpm dev:web
+```
+
+La commande `inscriptions:echeances` n'a **pas** besoin de la variable : elle compare les échéances déjà posées à l'heure courante. Notez l'heure exacte de chaque action (à la minute).
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| 5.11 | Organisateur : ouvrir `/admin/inscriptions` | Sous « Délai de dépôt de la preuve (heures) » (toujours **48**) : « Délai **forcé à 4 min en développement** (AZZEL_DELAI_PREUVE_MINUTES) : la valeur en heures ci-dessus ne s'applique pas tant que la variable est posée. » |
+| 5.12 | Coureur **C1** (navigation privée, compte neuf) : envoyer le formulaire d'inscription à l'heure **H**, **sans** accepter la décharge ni le règlement. Ouvrir `/inscription` | Encart de date limite : **H + 4 min** (heure d'Algérie) |
+| 5.13 | Attendre que H + 4 min soit passée, puis `pnpm -F @azzel/web inscriptions:echeances` | « Expirations : **1** inscription(s) expirée(s), 1 email(s) enfilé(s) — autant de places rendues. » C1 est « Expirée » ; Mailpit montre « Azzel — ton inscription a expiré » (**critère d'acceptation de la spec**) |
+| 5.14 | Coureur **C2** (compte neuf) : envoyer le formulaire à **H2**, puis **2 minutes plus tard** (à **H2'**) accepter la décharge et le règlement. Ouvrir `/inscription` | Date limite : **H2' + 4 min** — l'échéance est repartie de l'acceptation |
+| 5.15 | Juste après H2 + 4 min (mais avant H2' + 4 min), lancer `inscriptions:echeances` | « Expirations : **0** » — C2 a encore jusqu'à H2' + 4 min. *(Un rappel « ta place t'attend encore » part : avec 4 minutes, l'échéance est toujours à moins de 24 h — c'est attendu, la fenêtre du rappel ne change pas.)* |
+| 5.16 | Après H2' + 4 min, relancer la commande | « Expirations : **1** » : C2 expire, email d'expiration dans Mailpit |
+| 5.17 | Coureur **C3** : s'inscrire, accepter **tout de suite** la décharge et le règlement, puis les **accepter à nouveau** 2 minutes plus tard (bouton de l'écran « Décharge et règlement ») | La date limite **ne bouge pas** à la ré-acceptation : seule la première acceptation fait repartir le délai |
+| 5.18 | Coureur C1 (expiré) : « Modifier mon inscription », enregistrer à **H3** | Statut « en attente de justificatif », date limite **H3 + 4 min** (provisoire : C1 n'a jamais accepté les documents, elle repartira de zéro quand il le fera) |
+| 5.19 | Arrêter le serveur, le relancer avec `AZZEL_DELAI_PREUVE_MINUTES=abc` (puis `0`, puis `-3`, puis `99999`) | Aucune mention « forcé à » sur `/admin/inscriptions` ; une nouvelle inscription reçoit une date limite à **+ 48 h** : la valeur invalide est ignorée. Le terminal du serveur affiche un avertissement « [inscriptions] AZZEL_DELAI_PREUVE_MINUTES=… ignorée » |
+| 5.20 | *(Information)* hors développement : en production (`NODE_ENV=production`, par exemple sur Vercel) **et** dans un script lancé sans `NODE_ENV` (seed, seed:reset) | La variable est **ignorée** : le délai en heures s'applique toujours, aucune mention ne s'affiche, un avertissement serveur signale qu'elle est posée mais ignorée |
+| 5.21 | **Remise en état :** relancer le serveur **sans** la variable (et la retirer de `.env` si elle y a été posée) | La mention disparaît de `/admin/inscriptions`. Les échéances déjà posées à + 4 min ne sont pas recalculées — sauf au redémarrage à la première acceptation, qui applique alors le délai en vigueur (48 h) |
 
 - [ ] I5 conforme — Observations : …………
 
@@ -299,7 +335,7 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 | 10.12 | Coureur : ouvrir directement `/preuve` | Page **« Dossier refusé »** avec le motif et un bouton « Modifier mon inscription ». **Aucun** champ de dépôt |
 | 10.13 | Organisateur : rouvrir le dossier refusé | Pas de formulaire de décision ; message « Dossier refusé : il repassera en validation si le coureur modifie son inscription… » |
 | 10.14 | Coureur : cliquer « Modifier mon inscription » | Le formulaire s'ouvre (pas « Dossier déjà validé »). Un encadré rappelle le motif et explique : place réservée avec un nouveau délai s'il en reste, sinon liste d'attente |
-| 10.15 | Enregistrer sans rien changer | Retour à l'espace. Statut **« En attente de justificatif de paiement »**. En base : `en constitution`, `refusal_reason` vide, `preuve_due_at` = **nouvelle** échéance (fin du surlendemain d'aujourd'hui), preuves : `refusée` |
+| 10.15 | Enregistrer sans rien changer | Retour à l'espace. Statut **« En attente de justificatif de paiement »**. En base : `en constitution`, `refusal_reason` vide, `preuve_due_at` = **nouvelle** échéance (heure de l'enregistrement **+ 48 h** ; les acceptations étant conservées, elle ne bougera plus à une ré-acceptation), preuves : `refusée` |
 | 10.16 | Sur `/preuve` (le formulaire de dépôt est de nouveau proposé), redéposer **le fichier A** (celui qui a été refusé) | Refus : « Cette preuve identique a déjà été refusée — dépose une version différente… ». Le statut reste en constitution |
 | 10.17 | Déposer le fichier **B** | Accepté. Statut « en validation ». Le dossier réapparaît dans « À examiner » |
 | 10.18 | Organisateur : **valider** | Statut « Validé », dossard attribué |
@@ -378,7 +414,7 @@ Le coureur dont la preuve fabriquée a été retirée reste « en validation » 
 docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
   "UPDATE edition SET capacite = 600, seuil_affichage_places = 200, \
    capacite_hebergement = 200, prix_dossard_da = 2000, \
-   prix_hebergement_da = 1500, delai_preuve_jours = 2;"
+   prix_hebergement_da = 1500, delai_preuve_heures = 48;"
 ```
 
 L'historique des réglages conserve la trace de vos manipulations : c'est normal et voulu. Pour repartir d'une base propre, utilisez la commande de réinitialisation du seed.
@@ -393,7 +429,7 @@ L'historique des réglages conserve la trace de vos manipulations : c'est normal
 | I2 | Genre et majorité à 18 ans | ☐ Conforme ☐ Écart | |
 | I3 | Compteur de places et liste d'attente | ☐ Conforme ☐ Écart | |
 | I4 | Attribution manuelle d'une place | ☐ Conforme ☐ Écart | |
-| I5 | Délai de preuve, expiration, rappel | ☐ Conforme ☐ Écart | |
+| I5 | Délai de preuve (heures, surcharge de développement), expiration, rappel | ☐ Conforme ☐ Écart | |
 | I6 | Hébergement optionnel contingenté | ☐ Conforme ☐ Écart | |
 | I7 | Concurrence sur la dernière place | ☐ Conforme ☐ Écart | |
 | I8 | Dégradations et droits d'accès | ☐ Conforme ☐ Écart | |
@@ -403,6 +439,7 @@ L'historique des réglages conserve la trace de vos manipulations : c'est normal
 **Points qui demandent une décision plutôt qu'une correction, à signaler s'ils gênent :**
 
 - Le compteur public peut avoir jusqu'à **60 secondes de retard** (page en cache). Un visiteur peut lire « 3 places » alors qu'il n'y en a plus ; il part alors en liste d'attente sans que rien ne soit perdu.
+- Le délai de preuve **repart de zéro une seule fois**, à la première acceptation de la décharge et du règlement. Ré-accepter (nouvelle version d'un document, double clic) ne le repousse pas : sans cela, un coureur garderait sa place indéfiniment sans verser. Si l'organisation abaisse le délai entre l'inscription et l'acceptation d'un coureur, c'est le nouveau délai qui s'applique au redémarrage.
 - Les places libérées par expiration **ne sont attribuées à personne automatiquement** : c'est un choix d'organisation. Quelqu'un doit ouvrir l'écran d'administration et les donner.
 - Abaisser le contingent d'hébergement **retire son lit** à un coureur qui renvoie son formulaire ensuite (étape 6.9). Le contingent fait autorité à chaque enregistrement.
 - Les dossiers saisis **avant** la question de la wilaya gardent leur hébergement tant qu'ils ne sont pas modifiés, même s'ils viennent de Tizi Ouzou (étapes 9.13-9.18) : la règle ne s'applique qu'à la prochaine modification. Un dossier déjà **validé** n'est plus modifiable par le coureur : il ne sera **jamais** régularisé automatiquement. Le tri se fait à la main, avec la requête de contrôle ci-dessus (`wilaya` vide et `hebergement` à `t`).

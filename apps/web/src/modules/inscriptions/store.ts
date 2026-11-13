@@ -11,6 +11,7 @@ import { DOSSARD_MAX } from '@azzel/shared';
 
 import { findOrganisationIdBySlug, withOrg } from '@/db/org-scope';
 import { DEFAULT_ORGANISATION_SLUG } from '@/modules/iam/constants';
+import { readEnv } from '@/modules/iam/env';
 import { insertOutboxEmail } from '@/modules/notifications/outbox-store';
 
 import {
@@ -21,9 +22,11 @@ import {
   STATUTS_MODIFIABLES,
   COUREUR_STATUS_EXPIREE,
   COUREUR_STATUS_LISTE_ATTENTE,
+  ENV_DELAI_PREUVE_MINUTES,
   estReprise,
   hebergementAccorde,
   limitePreuve,
+  lireSurchargeDelaiPreuve,
   STATUTS_OCCUPANT_UNE_PLACE,
   placesRestantes,
   statutApresModification,
@@ -54,6 +57,35 @@ import {
 } from './errors';
 import { WILAYA_ETRANGER } from './provenance';
 
+/** Dernière surcharge rejetée signalée : un avertissement, pas un par inscription. */
+let surchargeRejeteeSignalee: string | null = null;
+
+/**
+ * Surcharge de développement du délai de preuve (AZZEL_DELAI_PREUVE_MINUTES),
+ * en minutes, ou null. Relue à chaque échéance posée, ce qui permet à un test
+ * de la poser le temps d'un cas ; mais readEnv met le .env en cache au
+ * premier accès : changer le fichier demande de relancer le serveur.
+ * Toujours null hors development / test (voir lireSurchargeDelaiPreuve).
+ */
+export function surchargeDelaiPreuveMinutes(): number | null {
+  const brut = readEnv(ENV_DELAI_PREUVE_MINUTES);
+  const nodeEnv = readEnv('NODE_ENV');
+  const minutes = lireSurchargeDelaiPreuve(brut, nodeEnv);
+  if (brut !== null && minutes === null) {
+    // Posée mais rejetée : le dire côté serveur, sinon on croit tester à
+    // 4 minutes alors que le délai en heures s'applique.
+    const cle = `${brut}|${nodeEnv ?? ''}`;
+    if (cle !== surchargeRejeteeSignalee) {
+      surchargeRejeteeSignalee = cle;
+      console.warn(
+        `[inscriptions] ${ENV_DELAI_PREUVE_MINUTES}=${brut} ignorée (NODE_ENV=${nodeEnv ?? 'absent'}) : ` +
+          'entier de 1 à 43200 attendu, en development ou test seulement — le délai en heures s’applique.',
+      );
+    }
+  }
+  return minutes;
+}
+
 /** Réglages modifiables d'une édition. Tous facultatifs : on n'envoie que ce qu'on change. */
 export interface ReglagesEdition {
   capacite?: number;
@@ -61,7 +93,8 @@ export interface ReglagesEdition {
   capaciteHebergement?: number;
   prixDossardDa?: number;
   prixHebergementDa?: number;
-  delaiPreuveJours?: number;
+  /** Heures, 1 à 720. */
+  delaiPreuveHeures?: number;
   /** 0 ou 1. */
   dateCoursePublique?: number;
 }
@@ -134,7 +167,8 @@ export interface EditionRecord {
   capaciteHebergement: number;
   prixDossardDa: number;
   prixHebergementDa: number;
-  delaiPreuveJours: number;
+  /** Délai de dépôt de la preuve, en heures (durée glissante). */
+  delaiPreuveHeures: number;
   /** La date exacte est-elle montrée au public ? Sinon : la saison seulement. */
   dateCoursePublique: boolean;
   /** Absent = aucun compte renseigné. */
@@ -180,7 +214,10 @@ export interface CoureurRecord {
   wilaya: string | null;
   /** Code ISO du pays de résidence, présent si et seulement si wilaya = 'ETR'. */
   pays: string | null;
-  /** Échéance de dépôt de la preuve, figée à l'inscription. Null en liste d'attente. */
+  /**
+   * Échéance de dépôt de la preuve : posée à l'entrée en constitution, puis
+   * redémarrée une fois à l'acceptation des documents. Null en liste d'attente.
+   */
   preuveDueAt: Date | null;
   expiredAt: Date | null;
   hebergement: boolean;
@@ -689,7 +726,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
               capacite_hebergement: number;
               prix_dossard_da: number;
               prix_hebergement_da: number;
-              delai_preuve_jours: number;
+              delai_preuve_heures: number;
               date_course_publique: number;
               compte_ccp: string | null;
               compte_baridimob: string | null;
@@ -700,7 +737,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             SELECT id, organisation_id, slug, name, race_date::text AS race_date,
                    registration_closes_at, capacite, seuil_affichage_places,
                    capacite_hebergement, prix_dossard_da, prix_hebergement_da,
-                   delai_preuve_jours, date_course_publique,
+                   delai_preuve_heures, date_course_publique,
                    compte_ccp, titulaire_ccp, compte_baridimob, titulaire_baridimob
             FROM edition
             WHERE organisation_id = ${organisationId}
@@ -723,7 +760,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             capaciteHebergement: row.capacite_hebergement,
             prixDossardDa: row.prix_dossard_da,
             prixHebergementDa: row.prix_hebergement_da,
-            delaiPreuveJours: row.delai_preuve_jours,
+            delaiPreuveHeures: row.delai_preuve_heures,
             dateCoursePublique: row.date_course_publique === 1,
             comptesPaiement: {
               ccp: row.compte_ccp,
@@ -997,7 +1034,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
         withOrg(sql, input.organisationId, async (tx) => {
           const avantRows = await tx<Record<string, number>[]>`
             SELECT capacite, seuil_affichage_places, capacite_hebergement,
-                   prix_dossard_da, prix_hebergement_da, delai_preuve_jours, date_course_publique
+                   prix_dossard_da, prix_hebergement_da, delai_preuve_heures, date_course_publique
             FROM edition WHERE id = ${input.editionId}
             FOR UPDATE
           `;
@@ -1011,7 +1048,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             ['capaciteHebergement', 'capacite_hebergement'],
             ['prixDossardDa', 'prix_dossard_da'],
             ['prixHebergementDa', 'prix_hebergement_da'],
-            ['delaiPreuveJours', 'delai_preuve_jours'],
+            ['delaiPreuveHeures', 'delai_preuve_heures'],
             ['dateCoursePublique', 'date_course_publique'],
           ];
           for (const [champ, colonne] of colonnes) {
@@ -1042,7 +1079,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             SELECT id, organisation_id, slug, name, race_date::text AS race_date,
                    registration_closes_at, capacite, seuil_affichage_places,
                    capacite_hebergement, prix_dossard_da, prix_hebergement_da,
-                   delai_preuve_jours, date_course_publique
+                   delai_preuve_heures, date_course_publique
             FROM edition WHERE id = ${input.editionId}
           `;
           const row = apres[0] as {
@@ -1057,7 +1094,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             capacite_hebergement: number;
             prix_dossard_da: number;
             prix_hebergement_da: number;
-            delai_preuve_jours: number;
+            delai_preuve_heures: number;
             date_course_publique: number;
           };
           return {
@@ -1072,7 +1109,7 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             capaciteHebergement: row.capacite_hebergement,
             prixDossardDa: row.prix_dossard_da,
             prixHebergementDa: row.prix_hebergement_da,
-            delaiPreuveJours: row.delai_preuve_jours,
+            delaiPreuveHeures: row.delai_preuve_heures,
             dateCoursePublique: row.date_course_publique === 1,
           };
         }),
@@ -1126,7 +1163,9 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
      * n'existe pas en cliquant pendant qu'un coureur s'inscrit.
      *
      * Le délai de preuve repart de l'attribution : le coureur n'est pas puni
-     * d'avoir attendu.
+     * d'avoir attendu. Acceptations déjà faites (dossier repris puis mis en
+     * attente) : l'échéance part de l'attribution et n'en bougera plus ;
+     * sinon elle redémarrera quand il les validera (acceptDocuments).
      */
     async attribuerPlace(input: AttribuerPlaceInput): Promise<ResultatAttribution> {
       return withDb(() =>
@@ -1139,8 +1178,8 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!coureur || coureur.status !== COUREUR_STATUS_LISTE_ATTENTE) {
             return 'introuvable';
           }
-          const editions = await tx<{ capacite: number; delai_preuve_jours: number }[]>`
-            SELECT capacite, delai_preuve_jours FROM edition
+          const editions = await tx<{ capacite: number; delai_preuve_heures: number }[]>`
+            SELECT capacite, delai_preuve_heures FROM edition
             WHERE id = ${coureur.edition_id}
             FOR UPDATE
           `;
@@ -1159,7 +1198,11 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           await tx`
             UPDATE coureur
             SET status = ${COUREUR_STATUS_EN_CONSTITUTION},
-                preuve_due_at = ${limitePreuve(input.maintenant, edition.delai_preuve_jours)},
+                preuve_due_at = ${limitePreuve(
+                  input.maintenant,
+                  edition.delai_preuve_heures,
+                  surchargeDelaiPreuveMinutes(),
+                )},
                 updated_at = now()
             WHERE id = ${input.coureurId}
           `;
@@ -1277,11 +1320,11 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
             {
               registration_closes_at: Date;
               capacite: number;
-              delai_preuve_jours: number;
+              delai_preuve_heures: number;
               capacite_hebergement: number;
             }[]
           >`
-            SELECT registration_closes_at, capacite, delai_preuve_jours,
+            SELECT registration_closes_at, capacite, delai_preuve_heures,
                    capacite_hebergement
             FROM edition WHERE id = ${input.editionId}
             FOR UPDATE
@@ -1343,15 +1386,18 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           // Échéance posée UNIQUEMENT pour qui tient une place : un coureur en
           // liste d'attente n'a rien à verser, lui donner un délai reviendrait
           // à lui réclamer un paiement pour une place qu'il n'a pas. Une
-          // reprise repart de zéro : nouvelle échéance à J+délai, comme une
-          // inscription neuve.
+          // reprise repart de zéro : nouvelle échéance à maintenant + délai,
+          // comme une inscription neuve — elle redémarrera à la validation
+          // des acceptations si elles manquent encore (acceptDocuments).
           // Pays forcé à NULL hors étranger : la base l'exige (CHECK 0044), et
           // un pays resté d'une saisie précédente ne doit pas faire échouer
           // l'envoi d'un coureur qui a changé d'avis.
           const pays = input.wilaya === WILAYA_ETRANGER ? input.pays : null;
+          const entreeLe = new Date();
+          const surcharge = surchargeDelaiPreuveMinutes();
           const echeance = (statut: string): Date | null =>
             statut === COUREUR_STATUS_EN_CONSTITUTION
-              ? limitePreuve(new Date(), edition.delai_preuve_jours)
+              ? limitePreuve(entreeLe, edition.delai_preuve_heures, surcharge)
               : null;
           const echeanceSiNouveau = echeance(statutSiNouveau);
           const echeanceReprise = echeance(statutReprise);
@@ -1451,11 +1497,26 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
       );
     },
 
+    /**
+     * Enregistre la décharge et le règlement acceptés.
+     *
+     * Le dossier devient REMPLI (formulaire envoyé, acceptations faites) : le
+     * délai de preuve redémarre de cet instant (décision PO du 13/11/2026).
+     * Seulement la première fois — une ré-acceptation (mise à jour de
+     * version, double clic) ne repousse rien, sinon un coureur garderait sa
+     * place indéfiniment en ré-acceptant sans jamais verser. Et seulement si
+     * l'échéance court encore : « sans acceptations dans le délai, le dossier
+     * expire » — une acceptation arrivée après l'échéance provisoire, avant le
+     * passage du balayage, ne la ressuscite pas. Un dossier sans échéance
+     * (antérieur à la règle) n'en reçoit pas pour autant.
+     */
     async acceptDocuments(input: AcceptDocumentsInput): Promise<AcceptancesSnapshot> {
       return withDb(() =>
         withOrg(sql, input.organisationId, async (tx) => {
-          const editionRows = await tx<{ registration_closes_at: Date }[]>`
-            SELECT registration_closes_at FROM edition
+          const editionRows = await tx<
+            { registration_closes_at: Date; delai_preuve_heures: number }[]
+          >`
+            SELECT registration_closes_at, delai_preuve_heures FROM edition
             WHERE id = ${input.editionId} AND organisation_id = ${input.organisationId}
           `;
           const edition = editionRows[0];
@@ -1465,8 +1526,21 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           if (!isRegistrationOpen(edition.registration_closes_at)) {
             throw new RegistrationClosedError(edition.registration_closes_at);
           }
-          const coureurRows = await tx<{ id: string; status: string }[]>`
-            SELECT id, status FROM coureur
+          const coureurRows = await tx<
+            {
+              id: string;
+              status: string;
+              acceptations_completes: boolean;
+              echeance_en_cours: boolean;
+            }[]
+          >`
+            SELECT id, status,
+                   (decharge_accepted_at IS NOT NULL AND reglement_accepted_at IS NOT NULL)
+                     AS acceptations_completes,
+                   -- now() : instant de la transaction, celui-là même qui
+                   -- horodate l'acceptation ci-dessous. NULL → faux.
+                   COALESCE(preuve_due_at >= now(), false) AS echeance_en_cours
+            FROM coureur
             WHERE account_id = ${input.accountId}
               AND edition_id = ${input.editionId}
               AND organisation_id = ${input.organisationId}
@@ -1512,6 +1586,25 @@ export function createInscriptionsStore(sql: Sql): InscriptionsStore {
           const updated = updatedRows[0];
           if (!updated) {
             throw new DossierValidatedError();
+          }
+          // Le statut est déjà garanti « en constitution » (peutAccepterDocuments,
+          // ligne verrouillée) : c'est le seul où l'échéance vit.
+          if (
+            coureur.status === COUREUR_STATUS_EN_CONSTITUTION &&
+            !coureur.acceptations_completes &&
+            coureur.echeance_en_cours
+          ) {
+            // Calculée depuis l'horodatage d'acceptation lui-même : l'échéance
+            // affichée se recoupe à la minute avec l'acceptation enregistrée.
+            await tx`
+              UPDATE coureur
+              SET preuve_due_at = ${limitePreuve(
+                updated.decharge_accepted_at,
+                edition.delai_preuve_heures,
+                surchargeDelaiPreuveMinutes(),
+              )}
+              WHERE id = ${coureur.id}
+            `;
           }
           return {
             dechargeAcceptedAt: updated.decharge_accepted_at,

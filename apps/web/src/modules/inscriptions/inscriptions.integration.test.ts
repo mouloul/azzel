@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import postgres from 'postgres';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/modules/notifications/worker', async () => {
   const { createSilentOutboxWorker } = await import('@/test/outbox-worker-mock');
@@ -26,15 +26,18 @@ import {
   InvalidFieldsError,
   NoCoureurError,
   RegistrationClosedError,
+  ReglagesInvalidesError,
 } from './errors';
 import {
   acceptDocuments,
   getAcceptancesState,
   getInscriptionState,
+  getReglagesAdmin,
   submitInscription,
+  updateReglagesAdmin,
 } from './service';
 import { createInscriptionsStore, type InscriptionsStore } from './store';
-import type { InscriptionFormInput } from './domain';
+import { ENV_DELAI_PREUVE_MINUTES, type InscriptionFormInput } from './domain';
 
 /** Noms des fichiers .sql de tous les dossiers de migrations du runner, triés. */
 async function listMigrationFiles(): Promise<string[]> {
@@ -49,6 +52,10 @@ async function listMigrationFiles(): Promise<string[]> {
 const testUrls = resolveTestDatabaseUrls('inscriptions');
 
 const RACE_DATE = '2027-03-26';
+
+const HEURE_MS = 3_600_000;
+
+const MINUTE_MS = 60_000;
 
 function validInput(overrides: Partial<InscriptionFormInput> = {}): InscriptionFormInput {
   return {
@@ -88,7 +95,15 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     }
   });
 
+  // La surcharge de développement du délai (AZZEL_DELAI_PREUVE_MINUTES),
+  // posée dans le .env d'un poste pour la recette, ne doit pas fausser les
+  // échéances attendues ici : neutralisée, sauf dans les cas qui la posent.
+  beforeEach(() => {
+    vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, '');
+  });
+
   afterEach(async () => {
+    vi.unstubAllEnvs();
     if (sql) {
       await sql`UPDATE edition SET registration_closes_at = TIMESTAMPTZ '2027-03-16T22:59:59Z'`;
       await sql`UPDATE document SET version = 'v1' WHERE slug IN ('decharge', 'reglement')`;
@@ -192,7 +207,7 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
 
   describe('échéance de la preuve', () => {
     afterEach(async () => {
-      await sql`UPDATE edition SET capacite = 600, delai_preuve_jours = 2`;
+      await sql`UPDATE edition SET capacite = 600, delai_preuve_heures = 48`;
       await sql`DELETE FROM coureur`;
     });
 
@@ -203,18 +218,17 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
       return rows[0];
     }
 
-    it('une place prise : l’échéance est figée à la fin du surlendemain', async () => {
+    it('une place prise : échéance provisoire à l’envoi du formulaire + 48 h, sans arrondi', async () => {
       const session = await createSession();
       const avant = Date.now();
       await submitInscription(session, validInput(), { store });
+      const apres = Date.now();
       const row = await ligne(session);
       expect(row?.status).toBe('en constitution');
       expect(row?.preuve_due_at).not.toBeNull();
-      // Fenêtre large : on vérifie l'ordre de grandeur (deux jours), le calcul
-      // exact à la seconde près est couvert par echeance.test.ts.
-      const delta = (row?.preuve_due_at as Date).getTime() - avant;
-      expect(delta).toBeGreaterThan(24 * 3600 * 1000);
-      expect(delta).toBeLessThan(4 * 24 * 3600 * 1000);
+      const echeance = (row?.preuve_due_at as Date).getTime();
+      expect(echeance).toBeGreaterThanOrEqual(avant + 48 * HEURE_MS);
+      expect(echeance).toBeLessThanOrEqual(apres + 48 * HEURE_MS);
     });
 
     it('liste d’attente : aucune échéance — on ne réclame pas un versement pour une place qu’on n’a pas', async () => {
@@ -245,9 +259,303 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
     });
   });
 
+  /**
+   * Délai glissant en heures (décision PO du 13/11/2026) : l'échéance part de
+   * l'entrée en constitution, puis REDÉMARRE quand le dossier devient rempli
+   * (décharge et règlement acceptés). Matrice de spec-delai-preuve-heures.md.
+   */
+  describe('délai glissant : échéance redémarrée à la validation des acceptations', () => {
+    afterEach(async () => {
+      await sql`UPDATE edition SET capacite = 600, delai_preuve_heures = 48`;
+      await sql`DELETE FROM email_outbox`;
+      await sql`DELETE FROM preuve`;
+      await sql`DELETE FROM coureur`;
+    });
+
+    interface LigneDelai {
+      id: string;
+      status: string;
+      preuve_due_at: Date | null;
+      decharge_accepted_at: Date | null;
+    }
+
+    async function ligne(session: SessionRecord): Promise<LigneDelai> {
+      const rows = await sql<LigneDelai[]>`
+        SELECT id, status, preuve_due_at, decharge_accepted_at
+        FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      const row = rows[0];
+      if (!row) {
+        throw new Error('coureur absent en base');
+      }
+      return row;
+    }
+
+    async function accepter(session: SessionRecord): Promise<void> {
+      await acceptDocuments(session, { decharge: true, reglement: true }, { store });
+    }
+
+    async function forcerEcheance(session: SessionRecord, echeance: Date): Promise<void> {
+      await sql`
+        UPDATE coureur SET preuve_due_at = ${echeance}
+        WHERE account_id = ${session.accountId}
+      `;
+    }
+
+    /** Coureur en liste d'attente (contingent plein), puis une place se libère. */
+    async function enAttentePuisPlaceLibre(): Promise<SessionRecord> {
+      await sql`UPDATE edition SET capacite = 0`;
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      expect((await ligne(session)).status).toBe('liste d’attente');
+      expect((await ligne(session)).preuve_due_at).toBeNull();
+      await sql`UPDATE edition SET capacite = 1`;
+      return session;
+    }
+
+    async function attribuer(session: SessionRecord, maintenant: Date): Promise<void> {
+      const resultat = await store.attribuerPlace({
+        organisationId: session.organisationId,
+        coureurId: (await ligne(session)).id,
+        maintenant,
+      });
+      expect(resultat).toBe('attribuee');
+    }
+
+    async function emailsExpiration(): Promise<number> {
+      const rows = await sql<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM email_outbox WHERE type = 'inscription_expiree'
+      `;
+      return rows[0]?.n ?? 0;
+    }
+
+    it('acceptations validées : l’échéance repart de l’acceptation (+ 48 h)', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      // Échéance provisoire rendue reconnaissable : le redémarrage doit la remplacer.
+      await forcerEcheance(session, new Date(Date.now() + HEURE_MS));
+
+      await accepter(session);
+
+      const row = await ligne(session);
+      expect(row.decharge_accepted_at).not.toBeNull();
+      expect(row.preuve_due_at?.getTime()).toBe(
+        (row.decharge_accepted_at as Date).getTime() + 48 * HEURE_MS,
+      );
+    });
+
+    it('ré-acceptation (dossier déjà rempli) : l’échéance ne bouge plus', async () => {
+      // Sinon un coureur garderait sa place indéfiniment en ré-acceptant.
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      await accepter(session);
+      const fixee = new Date('2027-01-01T10:00:00.000Z');
+      await forcerEcheance(session, fixee);
+
+      await accepter(session);
+
+      expect((await ligne(session)).preuve_due_at?.toISOString()).toBe(fixee.toISOString());
+    });
+
+    it('acceptation APRÈS l’échéance provisoire, avant le balayage : pas de redémarrage, le dossier expire', async () => {
+      // « Sans acceptations dans le délai, le dossier expire » : arriver après
+      // l'échéance ne la ressuscite pas, même si le balayage n'est pas passé.
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      const depassee = new Date(Date.now() - MINUTE_MS);
+      await forcerEcheance(session, depassee);
+
+      await accepter(session);
+
+      const row = await ligne(session);
+      expect(row.decharge_accepted_at).not.toBeNull();
+      expect(row.preuve_due_at?.toISOString()).toBe(depassee.toISOString());
+      const bilan = await store.expirerInscriptionsEchues(new Date());
+      expect(bilan.expirees).toBe(1);
+      expect((await ligne(session)).status).toBe('expirée');
+    });
+
+    it('dossier en constitution sans échéance (antérieur à la règle) : l’acceptation ne lui en crée pas', async () => {
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      await sql`UPDATE coureur SET preuve_due_at = NULL WHERE account_id = ${session.accountId}`;
+
+      await accepter(session);
+
+      const row = await ligne(session);
+      expect(row.status).toBe('en constitution');
+      expect(row.decharge_accepted_at).not.toBeNull();
+      expect(row.preuve_due_at).toBeNull();
+    });
+
+    it('jamais d’acceptations : expirée passé l’échéance provisoire, la place repart', async () => {
+      await sql`UPDATE edition SET capacite = 1`;
+      const session = await createSession();
+      await submitInscription(session, validInput(), { store });
+      const echeance = (await ligne(session)).preuve_due_at as Date;
+
+      const avant = await store.expirerInscriptionsEchues(new Date(echeance.getTime() - 1000));
+      expect(avant.expirees).toBe(0);
+      const apres = await store.expirerInscriptionsEchues(new Date(echeance.getTime() + 1000));
+      expect(apres.expirees).toBe(1);
+      expect((await ligne(session)).status).toBe('expirée');
+
+      const suivant = await createSession();
+      await submitInscription(suivant, validInput(), { store });
+      expect((await ligne(suivant)).status).toBe('en constitution');
+    });
+
+    it('attribution, acceptations déjà faites : échéance T + 48 h, que les acceptations ne repoussent pas', async () => {
+      const session = await enAttentePuisPlaceLibre();
+      // Acceptations conservées d'un cycle précédent (dossier repris puis mis en attente).
+      await sql`
+        UPDATE coureur
+        SET decharge_accepted_at = now() - interval '3 days', decharge_version = 'v1',
+            reglement_accepted_at = now() - interval '3 days', reglement_version = 'v1'
+        WHERE account_id = ${session.accountId}
+      `;
+      const t = new Date();
+
+      await attribuer(session, t);
+      expect((await ligne(session)).preuve_due_at?.getTime()).toBe(t.getTime() + 48 * HEURE_MS);
+
+      await accepter(session);
+      expect((await ligne(session)).preuve_due_at?.getTime()).toBe(t.getTime() + 48 * HEURE_MS);
+    });
+
+    it('attribution sans acceptations : T + 48 h, puis T’ + 48 h à l’acceptation', async () => {
+      const session = await enAttentePuisPlaceLibre();
+      const t = new Date();
+
+      await attribuer(session, t);
+      expect((await ligne(session)).status).toBe('en constitution');
+      expect((await ligne(session)).preuve_due_at?.getTime()).toBe(t.getTime() + 48 * HEURE_MS);
+
+      await accepter(session);
+      const row = await ligne(session);
+      expect(row.preuve_due_at?.getTime()).toBe(
+        (row.decharge_accepted_at as Date).getTime() + 48 * HEURE_MS,
+      );
+    });
+
+    it('délai réglé en administration : appliqué à l’entrée comme au redémarrage', async () => {
+      await sql`UPDATE edition SET delai_preuve_heures = 6`;
+      const session = await createSession();
+      const avant = Date.now();
+      await submitInscription(session, validInput(), { store });
+      const apres = Date.now();
+      const provisoire = ((await ligne(session)).preuve_due_at as Date).getTime();
+      expect(provisoire).toBeGreaterThanOrEqual(avant + 6 * HEURE_MS);
+      expect(provisoire).toBeLessThanOrEqual(apres + 6 * HEURE_MS);
+
+      await accepter(session);
+      const row = await ligne(session);
+      expect(row.preuve_due_at?.getTime()).toBe(
+        (row.decharge_accepted_at as Date).getTime() + 6 * HEURE_MS,
+      );
+    });
+
+    describe('surcharge de développement AZZEL_DELAI_PREUVE_MINUTES', () => {
+      it('4 minutes en développement : inscription, attribution, reprise et acceptation à + 4 min', async () => {
+        vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, '4');
+        vi.stubEnv('NODE_ENV', 'development');
+
+        // Formulaire envoyé.
+        const coureur = await createSession();
+        const avant = Date.now();
+        await submitInscription(coureur, validInput(), { store });
+        const apres = Date.now();
+        const provisoire = ((await ligne(coureur)).preuve_due_at as Date).getTime();
+        expect(provisoire).toBeGreaterThanOrEqual(avant + 4 * MINUTE_MS);
+        expect(provisoire).toBeLessThanOrEqual(apres + 4 * MINUTE_MS);
+
+        // Redémarrage à l'acceptation.
+        await accepter(coureur);
+        const acceptee = await ligne(coureur);
+        expect(acceptee.preuve_due_at?.getTime()).toBe(
+          (acceptee.decharge_accepted_at as Date).getTime() + 4 * MINUTE_MS,
+        );
+
+        // Attribution depuis la liste d'attente.
+        await sql`UPDATE edition SET capacite = 1`;
+        const attendeur = await createSession();
+        await submitInscription(attendeur, validInput(), { store });
+        expect((await ligne(attendeur)).status).toBe('liste d’attente');
+        await sql`UPDATE edition SET capacite = 2`;
+        const t = new Date();
+        await attribuer(attendeur, t);
+        expect((await ligne(attendeur)).preuve_due_at?.getTime()).toBe(t.getTime() + 4 * MINUTE_MS);
+      });
+
+      it('critère d’acceptation : inscrit, échéances lancées 4 minutes plus tard → expiré, email d’expiration enfilé, puis reprise à + 4 min', async () => {
+        vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, '4');
+        vi.stubEnv('NODE_ENV', 'development');
+        const session = await createSession();
+        await submitInscription(session, validInput(), { store });
+
+        // Ce que fait inscriptions:echeances, à l'instant « 4 minutes plus tard ».
+        const plusTard = new Date(Date.now() + 4 * MINUTE_MS + 1000);
+        await store.enfilerRappelsPreuve(plusTard);
+        const bilan = await store.expirerInscriptionsEchues(plusTard);
+
+        expect(bilan.expirees).toBe(1);
+        expect(bilan.emailsEnfiles).toBe(1);
+        expect((await ligne(session)).status).toBe('expirée');
+        expect(await emailsExpiration()).toBe(1);
+
+        // Reprise après expiration : nouvelle échéance à + 4 min aussi.
+        const avant = Date.now();
+        await submitInscription(session, validInput(), { store });
+        const apres = Date.now();
+        const reprise = await ligne(session);
+        expect(reprise.status).toBe('en constitution');
+        expect((reprise.preuve_due_at as Date).getTime()).toBeGreaterThanOrEqual(avant + 4 * MINUTE_MS);
+        expect((reprise.preuve_due_at as Date).getTime()).toBeLessThanOrEqual(apres + 4 * MINUTE_MS);
+      });
+
+      it('en production : ignorée, le délai en heures s’applique', async () => {
+        vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, '4');
+        vi.stubEnv('NODE_ENV', 'production');
+        const session = await createSession();
+        const avant = Date.now();
+        await submitInscription(session, validInput(), { store });
+        const apres = Date.now();
+        const echeance = ((await ligne(session)).preuve_due_at as Date).getTime();
+        expect(echeance).toBeGreaterThanOrEqual(avant + 48 * HEURE_MS);
+        expect(echeance).toBeLessThanOrEqual(apres + 48 * HEURE_MS);
+      });
+
+      it('valeur invalide (abc, 0, -3, énorme) : ignorée', async () => {
+        vi.stubEnv('NODE_ENV', 'development');
+        for (const valeur of ['abc', '0', '-3', '99999999999999999999']) {
+          vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, valeur);
+          const session = await createSession();
+          const avant = Date.now();
+          await submitInscription(session, validInput(), { store });
+          const apres = Date.now();
+          const echeance = ((await ligne(session)).preuve_due_at as Date).getTime();
+          expect(echeance, valeur).toBeGreaterThanOrEqual(avant + 48 * HEURE_MS);
+          expect(echeance, valeur).toBeLessThanOrEqual(apres + 48 * HEURE_MS);
+        }
+      });
+
+      it('sans NODE_ENV (script tsx : seed, seed:reset) : ignorée', async () => {
+        vi.stubEnv(ENV_DELAI_PREUVE_MINUTES, '4');
+        vi.stubEnv('NODE_ENV', '');
+        const session = await createSession();
+        const avant = Date.now();
+        await submitInscription(session, validInput(), { store });
+        const apres = Date.now();
+        const echeance = ((await ligne(session)).preuve_due_at as Date).getTime();
+        expect(echeance).toBeGreaterThanOrEqual(avant + 48 * HEURE_MS);
+        expect(echeance).toBeLessThanOrEqual(apres + 48 * HEURE_MS);
+      });
+    });
+  });
+
   describe('balayage des échéances dépassées', () => {
     afterEach(async () => {
-      await sql`UPDATE edition SET capacite = 600, delai_preuve_jours = 2`;
+      await sql`UPDATE edition SET capacite = 600, delai_preuve_heures = 48`;
       await sql`DELETE FROM email_outbox`;
       await sql`DELETE FROM preuve`;
       await sql`DELETE FROM coureur`;
@@ -632,7 +940,7 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
 
   describe('réglages d’édition et liste d’attente (administration)', () => {
     afterEach(async () => {
-      await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200, capacite_hebergement = 200, prix_dossard_da = 2000, prix_hebergement_da = 1500, delai_preuve_jours = 2, date_course_publique = 0`;
+      await sql`UPDATE edition SET capacite = 600, seuil_affichage_places = 200, capacite_hebergement = 200, prix_dossard_da = 2000, prix_hebergement_da = 1500, delai_preuve_heures = 48, date_course_publique = 0`;
       await sql`DELETE FROM edition_reglage_journal`;
       await sql`DELETE FROM coureur`;
     });
@@ -713,6 +1021,72 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
         SELECT champ FROM edition_reglage_journal
       `;
       expect(journal.map((l) => l.champ)).toEqual(['seuilAffichagePlaces']);
+    });
+
+    it('délai de preuve à 72 heures : appliqué, journalisé, et la base refuse 0 comme 721', async () => {
+      const session = await createSession();
+      const edition = await store.updateReglagesEdition({
+        organisationId: await organisationId(),
+        editionId: await editionId(),
+        accountId: session.accountId,
+        reglages: { delaiPreuveHeures: 72 },
+      });
+      expect(edition.delaiPreuveHeures).toBe(72);
+      expect((await store.findCurrentEdition(await organisationId()))?.delaiPreuveHeures).toBe(72);
+
+      const journal = await sql<{ champ: string; ancienne_valeur: number; nouvelle_valeur: number }[]>`
+        SELECT champ, ancienne_valeur, nouvelle_valeur FROM edition_reglage_journal
+      `;
+      expect(journal).toEqual([
+        { champ: 'delaiPreuveHeures', ancienne_valeur: 48, nouvelle_valeur: 72 },
+      ]);
+
+      // Défense en profondeur (CHECK 0045), au-delà de la validation du service.
+      await expect(sql`UPDATE edition SET delai_preuve_heures = 0`).rejects.toThrow();
+      await expect(sql`UPDATE edition SET delai_preuve_heures = 721`).rejects.toThrow();
+      // La contrainte commune des réglages a survécu à la suppression de la colonne en jours.
+      await expect(sql`UPDATE edition SET capacite = -1`).rejects.toThrow();
+    });
+
+    it('réglage hors bornes envoyé par l’écran : refus nommé, rien ne change', async () => {
+      const organisateur = { ...(await createSession()), role: 'organisateur' as const };
+      for (const valeur of [0, 721]) {
+        const error = await updateReglagesAdmin(
+          organisateur,
+          { delaiPreuveHeures: valeur, capacite: 900 },
+          { store },
+        ).catch((caught: unknown) => caught);
+        expect(error, String(valeur)).toBeInstanceOf(ReglagesInvalidesError);
+        expect((error as ReglagesInvalidesError).fields).toHaveProperty('delaiPreuveHeures');
+      }
+      const rows = await sql<{ capacite: number; delai_preuve_heures: number }[]>`
+        SELECT capacite, delai_preuve_heures FROM edition LIMIT 1
+      `;
+      expect(rows[0]).toEqual({ capacite: 600, delai_preuve_heures: 48 });
+      const journal = await sql`SELECT 1 FROM edition_reglage_journal`;
+      expect(journal).toHaveLength(0);
+    });
+
+    it('historique : une ligne de l’ancien délai en jours reste lisible, valeurs non converties', async () => {
+      const organisateur = await createSession();
+      await sql`
+        INSERT INTO edition_reglage_journal (
+          organisation_id, edition_id, champ, ancienne_valeur, nouvelle_valeur, modifie_par
+        )
+        VALUES (
+          ${await organisationId()}, ${await editionId()}, 'delaiPreuveJours', 2, 3,
+          ${organisateur.accountId}
+        )
+      `;
+      const etat = await getReglagesAdmin(organisateur, { store });
+      expect(etat.journal).toHaveLength(1);
+      expect(etat.journal[0]).toMatchObject({
+        champ: 'delaiPreuveJours',
+        libelle: 'Délai de dépôt de la preuve (jours, ancien réglage)',
+        ancienneValeur: 2,
+        nouvelleValeur: 3,
+      });
+      expect(etat.reglages.delaiPreuveHeures).toBe(48);
     });
 
     it('liste d’attente : ordonnée par ancienneté d’inscription', async () => {
@@ -820,6 +1194,67 @@ describe.skipIf(testUrls === null)('inscriptions — intégration Postgres (base
       'reglement_accepted_at',
       'reglement_version',
     ]);
+  });
+
+  it('migration 0045 : jours × 24 en heures (bornés à 1 et 720), colonne en jours supprimée, échéances intactes, rejouable', async () => {
+    const fichier = path.join(
+      MIGRATION_DIRS.find((dir) => dir.endsWith(path.join('inscriptions', 'migrations'))) ?? '',
+      '0045_delai_preuve_heures.sql',
+    );
+    const contenu = await readFile(fichier, 'utf8');
+    const session = await createSession();
+    await submitInscription(session, validInput(), { store });
+    const posee = new Date('2027-01-01T22:59:59.999Z');
+    await sql`UPDATE coureur SET preuve_due_at = ${posee} WHERE account_id = ${session.accountId}`;
+
+    // [jours d'avant 0045, heures attendues] : cas courant, 0 jour (0 h que
+    // la contrainte refuse → 1 h), 40 jours (960 h → plafond 720 h).
+    const cas: [number, number][] = [
+      [2, 48],
+      [0, 1],
+      [40, 720],
+    ];
+    try {
+      for (const [jours, heures] of cas) {
+        // Situation d'avant 0045 : l'édition réglée en jours. Le `try` couvre
+        // dès l'ajout de la colonne, pour qu'un échec ne la laisse pas en base.
+        await sql.unsafe(
+          `ALTER TABLE edition ADD COLUMN delai_preuve_jours integer NOT NULL DEFAULT ${jours}`,
+        );
+        await sql`UPDATE edition SET delai_preuve_heures = 5`;
+
+        await sql.unsafe(contenu);
+        await sql.unsafe(contenu);
+
+        const editions = await sql<{ delai_preuve_heures: number }[]>`
+          SELECT delai_preuve_heures FROM edition
+        `;
+        expect(editions.map((row) => row.delai_preuve_heures), `${jours} jours`).toEqual([heures]);
+        const colonnes = await sql`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_name = 'edition' AND column_name = 'delai_preuve_jours'
+        `;
+        expect(colonnes, `${jours} jours`).toHaveLength(0);
+      }
+      const contraintes = await sql<{ conname: string }[]>`
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'edition'::regclass
+          AND conname IN ('edition_reglages_check', 'edition_delai_preuve_heures_check')
+        ORDER BY conname
+      `;
+      expect(contraintes.map((row) => row.conname)).toEqual([
+        'edition_delai_preuve_heures_check',
+        'edition_reglages_check',
+      ]);
+      const coureurs = await sql<{ preuve_due_at: Date }[]>`
+        SELECT preuve_due_at FROM coureur WHERE account_id = ${session.accountId}
+      `;
+      expect(coureurs[0]?.preuve_due_at.toISOString()).toBe(posee.toISOString());
+    } finally {
+      await sql`ALTER TABLE edition DROP COLUMN IF EXISTS delai_preuve_jours`;
+      await sql`UPDATE edition SET delai_preuve_heures = 48`;
+      await sql`DELETE FROM coureur`;
+    }
   });
 
   it('migrations idempotentes : re-exécution sans erreur ni doublon', async () => {
