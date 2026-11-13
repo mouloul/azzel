@@ -1,9 +1,10 @@
 import { readAssistancePhone } from '@/lib/assistance-phone';
-import { sendPlainTextEmail } from '@/modules/iam/email';
+import { sendEmail } from '@/modules/iam/email';
 
 import {
   buildNotificationEmail,
   normalizeNotificationPayload,
+  type BuiltNotificationEmail,
   readConnexionUrl,
   readEspaceCoureurUrl,
   readRunnersAppUrl,
@@ -11,7 +12,12 @@ import {
 } from './email-contents';
 import { getOutboxStore, type OutboxRow, type OutboxStore } from './outbox-store';
 
-export type SendNotificationFn = (to: string, subject: string, text: string) => Promise<void>;
+export type SendNotificationFn = (
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+) => Promise<void>;
 
 export interface ProcessOutboxDeps {
   store?: OutboxStore;
@@ -43,7 +49,7 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
-function contentFor(row: OutboxRow): { subject: string; text: string } {
+function contentFor(row: OutboxRow): BuiltNotificationEmail {
   const payload = normalizeNotificationPayload(row.type as NotificationType, row.payload);
   return buildNotificationEmail(row.type as NotificationType, payload, {
     assistancePhone: readAssistancePhone(),
@@ -79,7 +85,7 @@ export async function processOutbox(
     return summary;
   }
   const send: SendNotificationFn =
-    deps.send ?? ((to, subject, text) => sendPlainTextEmail({ to, subject, text }));
+    deps.send ?? ((to, subject, text, html) => sendEmail({ to, subject, text, html }));
   const boundedLimit = clampOutboxLimit(limit);
   let organisationIds: string[];
   try {
@@ -127,7 +133,7 @@ export async function processOutbox(
     }
     try {
       const content = contentFor(row);
-      await send(row.destinataire, content.subject, content.text);
+      await send(row.destinataire, content.subject, content.text, content.html);
       await store.markOutboxSent(row.organisationId, row.id);
       summary.sent += 1;
     } catch (error) {

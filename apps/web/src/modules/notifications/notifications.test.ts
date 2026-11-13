@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { APP_EMAIL_FROM, sendPlainTextEmail } from '@/modules/iam/email';
+import { APP_EMAIL_FROM, sendEmail } from '@/modules/iam/email';
 
 // Mock nodemailer au niveau module : assert le mapping EXACT { from, to, subject, text }
 // passé à sendMail (une permutation sujet/texte rend ces tests rouges).
@@ -399,7 +399,7 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
     expect(store.markOutboxFailed).not.toHaveBeenCalled();
   });
 
-  it('envoi par défaut du worker : sendMail appelé avec exactement { from, to, subject, text }', async () => {
+  it('envoi par défaut du worker : sendMail appelé avec exactement { from, to, subject, text, html }', async () => {
     vi.stubEnv('SMTP_URL', 'smtp://azzel:azzel@localhost:2525');
     vi.stubEnv('ASSISTANCE_PHONE', ASSISTANCE_PHONE);
     vi.stubEnv('APP_URL', 'https://azzel.dz');
@@ -425,9 +425,48 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
         to: row.destinataire,
         subject: expected.subject,
         text: expected.text,
+        html: expected.html,
       });
     } finally {
       sendMailMock.mockClear();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('worker : inscription expirée et rappel de preuve gardent l’édition et l’échéance du payload', async () => {
+    vi.stubEnv('APP_URL', 'https://azzel.dz');
+    try {
+      const envoyes: { subject: string; text: string; html: string }[] = [];
+      const store = buildStore([
+        outboxRow({
+          id: 'outbox-expiree',
+          type: 'inscription_expiree',
+          payload: { coureurId: 'c1', prenom: 'Yani', edition: 'Édition 2027', echeance: 'x' },
+        }),
+        outboxRow({
+          id: 'outbox-rappel',
+          type: 'rappel_preuve',
+          payload: { coureurId: 'c1', prenom: 'Yani', limite: '2027-03-20T22:59:00.000Z' },
+        }),
+      ]);
+      const summary = await processOutbox(10, {
+        store,
+        send: async (_to, subject, text, html) => {
+          envoyes.push({ subject, text, html });
+        },
+      });
+      expect(summary.sent).toBe(2);
+      const expiree = envoyes.find((e) => e.subject === INSCRIPTION_EXPIREE_SUBJECT);
+      expect(expiree?.text).toContain('ton inscription à Édition 2027 a expiré');
+      expect(expiree?.html).toContain('ton inscription à Édition 2027 a expiré');
+      const rappel = envoyes.find((e) => e.subject !== INSCRIPTION_EXPIREE_SUBJECT);
+      // 22h59 UTC = 23h59 à Alger : l'échéance du payload est bien rendue.
+      expect(rappel?.text).toContain('23:59');
+      for (const envoye of envoyes) {
+        expect(envoye.text).not.toContain('undefined');
+        expect(envoye.html).not.toContain('undefined');
+      }
+    } finally {
       vi.unstubAllEnvs();
     }
   });
@@ -601,11 +640,11 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
   });
 });
 
-describe('sendPlainTextEmail — transport SMTP (nodemailer moqué)', () => {
+describe('sendEmail — transport SMTP (nodemailer moqué)', () => {
   it('sendMail appelé avec exactement { from, to, subject, text } — permutation sujet/texte = rouge', async () => {
     vi.stubEnv('SMTP_URL', 'smtp://azzel:azzel@localhost:2525');
     try {
-      await sendPlainTextEmail({
+      await sendEmail({
         to: 'coureur@exemple.dz',
         subject: INSCRIPTION_RECUE_SUBJECT,
         text: 'corps du message',
@@ -625,12 +664,35 @@ describe('sendPlainTextEmail — transport SMTP (nodemailer moqué)', () => {
     }
   });
 
+  it('html fourni : envoi multipart, le texte reste joint en repli', async () => {
+    vi.stubEnv('SMTP_URL', 'smtp://azzel:azzel@localhost:2525');
+    try {
+      await sendEmail({
+        to: 'coureur@exemple.dz',
+        subject: INSCRIPTION_RECUE_SUBJECT,
+        text: 'corps du message',
+        html: '<p>corps du message</p>',
+      });
+      expect(sendMailMock).toHaveBeenCalledWith({
+        from: APP_EMAIL_FROM,
+        to: 'coureur@exemple.dz',
+        subject: INSCRIPTION_RECUE_SUBJECT,
+        text: 'corps du message',
+        html: '<p>corps du message</p>',
+      });
+    } finally {
+      sendMailMock.mockClear();
+      createTransportMock.mockClear();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('sans SMTP_URL : console log puis résout (la ligne sera marquée sent côté worker)', async () => {
     vi.stubEnv('SMTP_URL', '');
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     try {
       await expect(
-        sendPlainTextEmail({
+        sendEmail({
           to: 'coureur@exemple.dz',
           subject: INSCRIPTION_RECUE_SUBJECT,
           text: 'corps',
@@ -649,7 +711,7 @@ describe('sendPlainTextEmail — transport SMTP (nodemailer moqué)', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     try {
       await expect(
-        sendPlainTextEmail({
+        sendEmail({
           to: 'coureur@exemple.dz',
           subject: INSCRIPTION_RECUE_SUBJECT,
           text: 'corps',

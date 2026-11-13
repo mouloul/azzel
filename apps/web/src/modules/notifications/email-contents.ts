@@ -1,5 +1,9 @@
+import { DEFAULT_APP_URL, readAppUrl } from '@/lib/app-url';
+import { rendreEmail, type ContenuEmail, type EmailRendu } from '@/lib/email-gabarit';
 import { CONNEXION_PATH } from '@/modules/iam/constants';
 import { readEnv } from '@/modules/iam/env';
+
+export { DEFAULT_APP_URL } from '@/lib/app-url';
 
 export const NOTIFICATION_TYPES = [
   'inscription_recue',
@@ -64,8 +68,6 @@ export interface InscriptionExpireePayload {
   edition: string;
 }
 
-export const DEFAULT_APP_URL = 'http://localhost:3000';
-
 export const ESPACE_COUREUR_PATH = '/espace-coureur';
 
 export function readEspaceCoureurUrl(): string {
@@ -91,26 +93,9 @@ export function readRunnersAppUrl(): string {
         return base.toString().replace(/\/+$/, '');
       }
     } catch {
-      // URL invalide : repli.
     }
   }
   return DEFAULT_APP_URL;
-}
-
-function readAppUrl(path: string): string {
-  const raw = readEnv('APP_URL');
-  if (raw !== null) {
-    try {
-      const base = new URL(raw);
-      // APP_URL malformée ou schéma non cliquable : repli sur la valeur par défaut.
-      if (base.protocol === 'http:' || base.protocol === 'https:') {
-        return new URL(path, base).toString();
-      }
-    } catch {
-      // URL invalide : repli.
-    }
-  }
-  return `${DEFAULT_APP_URL}${path}`;
 }
 
 export interface NotificationEmailOptions {
@@ -122,10 +107,7 @@ export interface NotificationEmailOptions {
   runnersAppUrl: string;
 }
 
-export interface BuiltNotificationEmail {
-  subject: string;
-  text: string;
-}
+export type BuiltNotificationEmail = EmailRendu;
 
 export const INSCRIPTION_RECUE_SUBJECT = 'Azzel — ton inscription est bien reçue';
 
@@ -181,56 +163,73 @@ function formaterDateCourseFr(dateCourse: string): string | null {
   return null;
 }
 
-// Contenus français sobres : objet + texte (pas d'HTML), tutoiement coureur (UX-DR-11).
-export function buildNotificationEmail(
+function contenuNotification(
   type: NotificationType,
   payload: NotificationPayload,
   options: NotificationEmailOptions,
-): BuiltNotificationEmail {
+): ContenuEmail {
   if (type === 'rappel_preuve') {
     const rappel = payload as RappelPreuvePayload;
     const echeance = formaterEcheanceAlger(rappel.limite);
     return {
-      subject: RAPPEL_PREUVE_SUBJECT,
-      text: [
-        `Salut ${rappel.prenom},`,
-        '',
-        'Ta place est réservée, mais ta preuve de paiement manque encore.',
-        // Limite illisible en base : phrase de repli honnête plutôt qu'une
-        // date vide qui ferait douter de l'échéance elle-même.
-        echeance === null
-          ? 'Elle doit être déposée avant la fin de ton délai, sinon ta place repart.'
-          : `Dépose-la avant le ${echeance}, sinon ta place repart aux autres coureurs.`,
-        '',
-        'Déposer ma preuve :',
-        options.espaceCoureurUrl,
-        '',
-        `Une question ? Appelle l’équipe : ${options.assistancePhone}`,
-        '',
-        'À bientôt,',
-        'L’équipe Azzel',
-      ].join('\n'),
+      objet: RAPPEL_PREUVE_SUBJECT,
+      apercu: 'Ta preuve de paiement manque encore : dépose-la à temps pour garder ta place.',
+      surtitre: 'Rappel',
+      titre: 'Ta place t’attend encore',
+      salutation: `Salut ${rappel.prenom},`,
+      blocs: [
+        {
+          type: 'paragraphe',
+          texte: 'Ta place est réservée, mais ta preuve de paiement manque encore.',
+        },
+        {
+          type: 'encart',
+          ton: 'alerte',
+          texte:
+            echeance === null
+              ? 'Elle doit être déposée avant la fin de ton délai, sinon ta place repart.'
+              : `Dépose-la avant le ${echeance}, sinon ta place repart aux autres coureurs.`,
+        },
+        { type: 'bouton', libelle: 'Déposer ma preuve', url: options.espaceCoureurUrl },
+        {
+          type: 'assistance',
+          libelle: 'Une question ? Appelle l’équipe',
+          telephone: options.assistancePhone,
+        },
+      ],
     };
   }
 
   if (type === 'inscription_expiree') {
     const expiree = payload as InscriptionExpireePayload;
     return {
-      subject: INSCRIPTION_EXPIREE_SUBJECT,
-      text: [
-        `Salut ${expiree.prenom},`,
-        '',
-        `Faute de preuve de paiement dans le délai, ton inscription à ${expiree.edition} a expiré et ta place a été rendue.`,
-        '',
-        'Rien n’est perdu : depuis ton espace coureur, clique sur « Modifier mon inscription » et enregistre-la de nouveau.',
-        'S’il reste une place, elle t’est réservée avec un nouveau délai pour déposer ta preuve ; sinon, tu passes en liste d’attente.',
-        options.espaceCoureurUrl,
-        '',
-        `Si tu as versé à temps, appelle l’équipe : ${options.assistancePhone}`,
-        '',
-        'À bientôt,',
-        'L’équipe Azzel',
-      ].join('\n'),
+      objet: INSCRIPTION_EXPIREE_SUBJECT,
+      apercu: 'Ta place a été rendue, mais tu peux encore reprendre ton inscription.',
+      surtitre: 'Inscription',
+      titre: 'Ton inscription a expiré',
+      salutation: `Salut ${expiree.prenom},`,
+      blocs: [
+        {
+          type: 'paragraphe',
+          texte: `Faute de preuve de paiement dans le délai, ton inscription à ${expiree.edition} a expiré et ta place a été rendue.`,
+        },
+        {
+          type: 'paragraphe',
+          texte:
+            'Rien n’est perdu : depuis ton espace coureur, clique sur « Modifier mon inscription » et enregistre-la de nouveau.',
+        },
+        {
+          type: 'encart',
+          texte:
+            'S’il reste une place, elle t’est réservée avec un nouveau délai pour déposer ta preuve ; sinon, tu passes en liste d’attente.',
+        },
+        { type: 'bouton', libelle: 'Reprendre mon inscription', url: options.espaceCoureurUrl },
+        {
+          type: 'assistance',
+          libelle: 'Si tu as versé à temps, appelle l’équipe',
+          telephone: options.assistancePhone,
+        },
+      ],
     };
   }
 
@@ -238,110 +237,156 @@ export function buildNotificationEmail(
     const rappel = payload as RappelJ7Payload;
     const dateLisible = formaterDateCourseFr(rappel.dateCourse);
     return {
-      subject: RAPPEL_J7_SUBJECT,
-      text: [
-        `Salut ${rappel.prenom},`,
-        '',
-        // Date sale/invalide en base : phrase de repli honnête, jamais
-        // « Ta course est le  — » (motif vide).
-        dateLisible === null
-          ? 'Ta course arrive bientôt.'
-          : `Ta course est le ${dateLisible} — c’est bientôt.`,
-        '',
-        'Pour que ton suivi et ton e-dossard tiennent jusqu’à l’arrivée :',
-        '1. Pars avec une batterie chargée à 100 %.',
-        '2. Ne tue pas l’application Azzel pendant la course — verrouille l’écran, mais laisse l’app ouverte.',
-        '3. Batterie fragile ? Une powerbank est en vente au village des partenaires.',
-        '',
-        'Ton e-dossard et ton suivi t’attendent dans l’application :',
-        options.runnersAppUrl,
-        '',
-        `Une question ? Appelle l’équipe : ${options.assistancePhone}`,
-        '',
-        'À bientôt,',
-        'L’équipe Azzel',
-      ].join('\n'),
+      objet: RAPPEL_J7_SUBJECT,
+      apercu: 'Batterie chargée, application ouverte : trois réflexes pour le jour J.',
+      surtitre: 'J-7',
+      titre: 'Ta course approche',
+      salutation: `Salut ${rappel.prenom},`,
+      blocs: [
+        {
+          type: 'paragraphe',
+          texte:
+            dateLisible === null
+              ? 'Ta course arrive bientôt.'
+              : `Ta course est le ${dateLisible} — c’est bientôt.`,
+        },
+        {
+          type: 'etapes',
+          intro: 'Pour que ton suivi et ton e-dossard tiennent jusqu’à l’arrivée :',
+          items: [
+            'Pars avec une batterie chargée à 100 %.',
+            'Ne tue pas l’application Azzel pendant la course — verrouille l’écran, mais laisse l’app ouverte.',
+            'Batterie fragile ? Une powerbank est en vente au village des partenaires.',
+          ],
+        },
+        {
+          type: 'paragraphe',
+          texte: 'Ton e-dossard et ton suivi t’attendent dans l’application.',
+        },
+        { type: 'bouton', libelle: 'Ouvrir l’application', url: options.runnersAppUrl },
+        {
+          type: 'assistance',
+          libelle: 'Une question ? Appelle l’équipe',
+          telephone: options.assistancePhone,
+        },
+      ],
     };
   }
+
   if (type === 'invitation_volontaire') {
     const invitation = payload as InvitationVolontairePayload;
     return {
-      subject: INVITATION_VOLONTAIRE_SUBJECT,
-      text: [
-        `Salut ${invitation.nom},`,
-        '',
-        'Bienvenue dans l’équipe des volontaires !',
-        'Pour accéder à tes missions, ouvre ce lien :',
-        options.connexionUrl,
-        '',
-        'Connecte-toi avec cette adresse email : tu recevras un code à saisir, pas de mot de passe à retenir.',
-        '',
-        'Conseil : connecte-toi la veille du jour J, sur le téléphone que tu utiliseras le jour J — ta session y reste ouverte, tu n’auras pas de code à attendre le matin de la course (une connexion sur un autre appareil fermerait la première).',
-        '',
-        `Un souci pour te connecter ? Appelle l’équipe : ${options.assistancePhone}`,
-        '',
-        'À bientôt,',
-        'L’équipe Azzel',
-      ].join('\n'),
+      objet: INVITATION_VOLONTAIRE_SUBJECT,
+      apercu: 'Bienvenue dans l’équipe des volontaires : voici comment accéder à tes missions.',
+      surtitre: 'Volontaires',
+      titre: 'Bienvenue dans l’équipe',
+      salutation: `Salut ${invitation.nom},`,
+      blocs: [
+        {
+          type: 'paragraphe',
+          texte: 'Bienvenue dans l’équipe des volontaires ! Pour accéder à tes missions, ouvre ce lien.',
+        },
+        { type: 'bouton', libelle: 'Accéder à mes missions', url: options.connexionUrl },
+        {
+          type: 'paragraphe',
+          texte:
+            'Connecte-toi avec cette adresse email : tu recevras un code à saisir, pas de mot de passe à retenir.',
+        },
+        {
+          type: 'encart',
+          libelle: 'Conseil',
+          texte:
+            'connecte-toi la veille du jour J, sur le téléphone que tu utiliseras le jour J — ta session y reste ouverte, tu n’auras pas de code à attendre le matin de la course (une connexion sur un autre appareil fermerait la première).',
+        },
+        {
+          type: 'assistance',
+          libelle: 'Un souci pour te connecter ? Appelle l’équipe',
+          telephone: options.assistancePhone,
+        },
+      ],
     };
   }
+
   if (type === 'dossier_refuse') {
     const refuse = payload as DossierRefusePayload;
     const motif = refuse.motif.trim();
-    // Motif absent/blanc : pas de ligne « Motif : » avec valeur vide.
-    const motifLines = motif === '' ? [] : [`Motif : ${motif}`];
     return {
-      subject: DOSSIER_REFUSE_SUBJECT,
-      text: [
-        `Salut ${refuse.prenom},`,
-        '',
-        `Ton dossier pour l’épreuve « ${refuse.epreuve} » a été refusé.`,
-        ...motifLines,
-        '',
-        'Pour le reprendre, clique sur « Modifier mon inscription » depuis ton espace coureur, puis dépose une nouvelle preuve de paiement (la preuve refusée ne compte plus).',
-        'S’il reste une place, elle t’est réservée avec un nouveau délai ; sinon, tu passes en liste d’attente.',
-        options.espaceCoureurUrl,
-        '',
-        `Appeler l’équipe : ${options.assistancePhone}`,
-        '',
-        'À bientôt,',
-        'L’équipe Azzel',
-      ].join('\n'),
+      objet: DOSSIER_REFUSE_SUBJECT,
+      apercu: 'Ton dossier est à reprendre : voici pourquoi, et comment faire.',
+      surtitre: 'Dossier',
+      titre: 'Ton dossier est refusé',
+      salutation: `Salut ${refuse.prenom},`,
+      blocs: [
+        {
+          type: 'paragraphe',
+          texte: `Ton dossier pour l’épreuve « ${refuse.epreuve} » a été refusé.`,
+        },
+        ...(motif === ''
+          ? []
+          : [{ type: 'encart' as const, ton: 'alerte' as const, libelle: 'Motif', texte: motif }]),
+        {
+          type: 'paragraphe',
+          texte:
+            'Pour le reprendre, clique sur « Modifier mon inscription » depuis ton espace coureur, puis dépose une nouvelle preuve de paiement (la preuve refusée ne compte plus).',
+        },
+        {
+          type: 'paragraphe',
+          texte:
+            'S’il reste une place, elle t’est réservée avec un nouveau délai ; sinon, tu passes en liste d’attente.',
+        },
+        { type: 'bouton', libelle: 'Reprendre mon dossier', url: options.espaceCoureurUrl },
+        { type: 'assistance', libelle: 'Appeler l’équipe', telephone: options.assistancePhone },
+      ],
     };
   }
+
   if (type === 'dossier_valide') {
     const valide = payload as DossierValidePayload;
     return {
-      subject: DOSSIER_VALIDE_SUBJECT,
-      text: [
-        `Salut ${valide.prenom},`,
-        '',
-        `Bonne nouvelle : ton dossier pour l’épreuve « ${valide.epreuve} » est validé.`,
-        'Rien d’autre à faire — on se retrouve au départ.',
-        '',
-        'À bientôt,',
-        'L’équipe Azzel',
-      ].join('\n'),
+      objet: DOSSIER_VALIDE_SUBJECT,
+      apercu: `Bonne nouvelle : ton dossier pour « ${valide.epreuve} » est validé.`,
+      surtitre: 'Dossier',
+      titre: 'Ton dossier est validé',
+      salutation: `Salut ${valide.prenom},`,
+      blocs: [
+        {
+          type: 'encart',
+          ton: 'succes',
+          texte: `Bonne nouvelle : ton dossier pour l’épreuve « ${valide.epreuve} » est validé.`,
+        },
+        { type: 'paragraphe', texte: 'Rien d’autre à faire — on se retrouve au départ.' },
+      ],
     };
   }
+
   const inscription = payload as InscriptionRecuePayload;
   return {
-    subject: INSCRIPTION_RECUE_SUBJECT,
-    text: [
-      `Salut ${inscription.prenom},`,
-      '',
-      `Ton inscription à l’épreuve « ${inscription.epreuve} » est bien reçue.`,
-      '',
-      'Il reste à compléter ton dossier :',
-      '1. Accepte la décharge et le règlement.',
-      '2. Dépose ta preuve de paiement CCP.',
-      '',
-      `Tout se fait depuis ton espace coureur : ${options.espaceCoureurUrl}`,
-      '',
-      'À bientôt,',
-      'L’équipe Azzel',
-    ].join('\n'),
+    objet: INSCRIPTION_RECUE_SUBJECT,
+    apercu: 'Il reste deux étapes pour compléter ton dossier.',
+    surtitre: 'Inscription',
+    titre: 'Inscription bien reçue',
+    salutation: `Salut ${inscription.prenom},`,
+    blocs: [
+      {
+        type: 'paragraphe',
+        texte: `Ton inscription à l’épreuve « ${inscription.epreuve} » est bien reçue.`,
+      },
+      {
+        type: 'etapes',
+        intro: 'Il reste à compléter ton dossier, depuis ton espace coureur :',
+        items: ['Accepte la décharge et le règlement.', 'Dépose ta preuve de paiement CCP.'],
+      },
+      { type: 'bouton', libelle: 'Compléter mon dossier', url: options.espaceCoureurUrl },
+    ],
   };
+}
+
+export function buildNotificationEmail(
+  type: NotificationType,
+  payload: NotificationPayload,
+  options: NotificationEmailOptions,
+): BuiltNotificationEmail {
+  return rendreEmail(contenuNotification(type, payload, options));
 }
 
 function payloadString(record: Record<string, unknown>, key: string): string {
@@ -349,8 +394,6 @@ function payloadString(record: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-// payload jsonb relu de base : normalisation défensive avant construction du contenu
-// (valeurs trimées — pas d'espace parasite dans les emails).
 export function normalizeNotificationPayload(
   type: NotificationType,
   raw: unknown,
@@ -363,6 +406,23 @@ export function normalizeNotificationPayload(
     return {
       prenom: payloadString(record, 'prenom').trim(),
       dateCourse: payloadString(record, 'dateCourse').trim(),
+    };
+  }
+  // Ces deux types ne portent ni épreuve ni motif : les ramener à la forme
+  // commune perdait l'échéance du rappel et le nom de l'édition (« ton
+  // inscription à undefined a expiré »).
+  if (type === 'rappel_preuve') {
+    return {
+      coureurId: payloadString(record, 'coureurId').trim(),
+      prenom: payloadString(record, 'prenom').trim(),
+      limite: payloadString(record, 'limite').trim(),
+    };
+  }
+  if (type === 'inscription_expiree') {
+    return {
+      coureurId: payloadString(record, 'coureurId').trim(),
+      prenom: payloadString(record, 'prenom').trim(),
+      edition: payloadString(record, 'edition').trim(),
     };
   }
   const base = {
