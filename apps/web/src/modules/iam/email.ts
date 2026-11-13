@@ -1,3 +1,5 @@
+import { rendreEmailHtml, type ContenuEmail } from '@/lib/email-gabarit';
+
 import { CODE_TTL_MINUTES } from './constants';
 import { readEnv, readSmtpUrl } from './env';
 import { EmailSendError } from './errors';
@@ -17,19 +19,38 @@ export function buildLoginCodeEmailText(code: string): string {
   return `Ton code Azzel : ${code} — valable ${CODE_TTL_MINUTES} minutes.`;
 }
 
-export interface PlainTextEmailInput {
+function contenuCodeConnexion(code: string): ContenuEmail {
+  return {
+    objet: LOGIN_CODE_EMAIL_SUBJECT,
+    apercu: buildLoginCodeEmailText(code),
+    surtitre: 'Connexion',
+    titre: 'Ton code de connexion',
+    salutation: 'Salut,',
+    blocs: [
+      { type: 'paragraphe', texte: 'Saisis ce code sur la page de connexion :' },
+      { type: 'code', code },
+      {
+        type: 'paragraphe',
+        texte: `Il est valable ${CODE_TTL_MINUTES} minutes. Si tu n’as rien demandé, ignore simplement cet email : personne ne peut se connecter sans ce code.`,
+      },
+    ],
+  };
+}
+
+export function buildLoginCodeEmailHtml(code: string): string {
+  return rendreEmailHtml(contenuCodeConnexion(code));
+}
+
+export interface EmailInput {
   to: string;
   subject: string;
+  /** Toujours fourni : repli des clients qui n'affichent pas le HTML. */
   text: string;
-  // Repli développement (SMTP_URL absente) : message journalisé à la place de celui
-  // du transport générique — sendLoginCodeEmail journalise le code en clair.
+  html?: string;
   devLog?: () => void;
 }
 
-// Transport SMTP partagé (nodemailer). Sans SMTP_URL : repli console en développement,
-// mais échec explicite en production (une ligne failed rejeuable vaut mieux qu'un
-// « envoyé » mensonger).
-export async function sendPlainTextEmail(input: PlainTextEmailInput): Promise<void> {
+export async function sendEmail(input: EmailInput): Promise<void> {
   const smtpUrl = readSmtpUrl();
   if (!smtpUrl) {
     if (process.env.NODE_ENV === 'production') {
@@ -54,6 +75,7 @@ export async function sendPlainTextEmail(input: PlainTextEmailInput): Promise<vo
       to: input.to,
       subject: input.subject,
       text: input.text,
+      ...(input.html === undefined ? {} : { html: input.html }),
     });
   } catch (cause) {
     throw new EmailSendError(cause);
@@ -61,10 +83,11 @@ export async function sendPlainTextEmail(input: PlainTextEmailInput): Promise<vo
 }
 
 export async function sendLoginCodeEmail(email: string, code: string): Promise<void> {
-  await sendPlainTextEmail({
+  await sendEmail({
     to: email,
     subject: LOGIN_CODE_EMAIL_SUBJECT,
     text: buildLoginCodeEmailText(code),
+    html: buildLoginCodeEmailHtml(code),
     devLog: () =>
       console.info(
         '[iam] code de connexion pour %s : %s (valable %d minutes)',
