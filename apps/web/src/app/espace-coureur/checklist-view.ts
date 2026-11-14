@@ -1,10 +1,15 @@
-import type { ChecklistPiece } from '@/modules/inscriptions/service';
+import {
+  CHECKLIST_VALIDATION_EXPIREE,
+  type ChecklistPiece,
+} from '@/modules/inscriptions/service';
 
 export const BANDEAU_DOSSIER_VALIDE = 'Dossier validé — dossard prêt';
 
 export interface EtatPiece {
   texte: string;
   classe: string;
+  /** Explication longue, affichée sous le libellé plutôt que dans la pastille. */
+  note?: string;
 }
 
 export function etatPiece(piece: ChecklistPiece): EtatPiece {
@@ -13,6 +18,15 @@ export function etatPiece(piece: ChecklistPiece): EtatPiece {
   }
   if (piece.motifRefus != null) {
     return { texte: 'Refusé', classe: 'checklist-etat checklist-etat--refuse' };
+  }
+  // Une phrase entière ne tient pas dans une pastille : l'état reste court,
+  // l'explication passe en note sous le libellé.
+  if (piece.texteSecondaire === CHECKLIST_VALIDATION_EXPIREE) {
+    return {
+      texte: 'Expirée',
+      classe: 'checklist-etat checklist-etat--expire',
+      note: piece.texteSecondaire,
+    };
   }
   if (piece.texteSecondaire != null) {
     return { texte: piece.texteSecondaire, classe: 'checklist-etat' };

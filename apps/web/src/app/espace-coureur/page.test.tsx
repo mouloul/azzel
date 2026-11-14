@@ -19,11 +19,12 @@ const inscriptionsServiceMock = vi.hoisted(() => ({
   getChecklistState: vi.fn(),
 }));
 
-vi.mock(
-  '@/modules/inscriptions/service',
-  () =>
-    inscriptionsServiceMock as unknown as typeof import('@/modules/inscriptions/service'),
-);
+// Constantes réelles (libellés partagés avec la vue), seul l'accès aux
+// données est simulé.
+vi.mock('@/modules/inscriptions/service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/modules/inscriptions/service')>()),
+  ...inscriptionsServiceMock,
+}));
 
 const assistanceMock = vi.hoisted(() => ({
   readAssistancePhone: vi.fn(() => '+213 555 010 200'),
