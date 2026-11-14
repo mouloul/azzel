@@ -89,7 +89,9 @@ graph LR
 | Canaux publics | Vitrine live (résultats, carte) servie par le **backend Next.js** (cache + SSE/polling) ; **jamais de lecture directe Supabase realtime depuis les navigateurs publics** (plafond 200 connexions, 2 M messages/mois) ; realtime réservé au portail admin. |
 | Opérations | Keep-alive hebdo Supabase (cron) ; dry-run pré-course obligatoire (PRD) ; distribution app coureurs : Play Store + App Store via EAS, **soumission anticipée** (revue iOS ≈ délais) — comptes dev Apple (~99 $/an) et Google (~25 $ une fois) ; repli Android : APK sideload. |
 | État & erreurs | Erreurs API : enveloppe unique définie dans `shared` ; horodatages ISO 8601 UTC stockés, affichage local. |
-| Logging | Minimal : journal sync (lots, rejets, offsets horloge) — l'auditabilité du chrono prime. |
+| Logging | Journal JSON sur stdout (`apps/web/src/lib/journal.ts`), **sans donnée personnelle** (clés personnelles refusées par le logger) ; journal sync (lots, rejets, offsets horloge) inchangé — l'auditabilité du chrono prime. |
+| Observabilité | Erreurs : **Sentry, organisation en région UE** (protocole Sentry — sortie GlitchTip par simple changement de DSN), masquage commun dans `shared`, `sendDefaultPii: false`, pas de replay ni de tracing. Disponibilité et crons : **moniteur externe au VPS** (Better Stack Uptime) sur `/api/sante`, battement de cœur en fin de chaque cron. Rien d'auto-hébergé sur le VPS applicatif. Alertes : Boss. (note-archi-winston-observabilite, 2026-11-14) |
+| Sauvegardes | Supabase free tier n'en fait aucune : dump Postgres + copie du bucket preuves depuis le VPS, **chiffrés**, stockés **hors VPS et hors Supabase** (UE), restauration éprouvée ; battement de cœur sur chaque sauvegarde. Modalités : story 12.2. |
 | Nommage | Code et identifiants en anglais ; documents et UI en français. |
 
 ## Stack
@@ -107,6 +109,7 @@ graph LR
 | @zxing/browser (fallback QR, toujours actif sur iOS) | 0.2.1 |
 | Supabase cloud — free tier | Postgres 500 Mo · storage 1 Go · realtime 200 conn. / 2 M msgs/mois · SMTP custom OK |
 | Hébergement web | VPS (IONOS/Hostinger) — auto-hébergement Next.js + reverse proxy (Coolify ou équiv.) |
+| Observabilité | Sentry SaaS région UE (offre Developer) · Better Stack Uptime (offre gratuite) · Coolify Sentinel |
 
 ## Structural Seed
 
@@ -159,5 +162,5 @@ erDiagram
 - **Bibliothèque cartographie vitrine** (Leaflet vs MapLibre) et rendu GPX : choix local du module `vitrine`, sans effet inter-unités.
 - **Export rapports** (format, moteur) : local au module `admin`.
 - **Migration self-host Supabase / nouvelle instance par organisation** : posture ouverte pour la location d'instances ; n'affecte aucune AD si AD-4 tient.
-- **CI/CD & observabilité approfondies** : à équipes/échelle étendues ; le dry-run opérationnel couvre le jour J (PRD).
+- **CI/CD ; observabilité au-delà des erreurs et de la disponibilité** (traces, métriques applicatives, analytics produit — PostHog à rouvrir si un besoin d'usage apparaît) : à équipes/échelle étendues ; le dry-run opérationnel couvre le jour J (PRD).
 - **iOS « Autoriser une fois » piège UX** : détail de l'app coureurs, traité en UX (`bmad-ux`).

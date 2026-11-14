@@ -1313,3 +1313,98 @@ So that je sache si je suis dans les temps avant qu'on me le dise.
 **When** cette story modifie le modèle de données des points de passage
 **Then** l'impact sur les écrans de scan et sur l'arbitrage serveur des passages est évalué et nommé avant toute migration
 **And** aucune modification ne casse les critères d'acceptation des stories 4.3, 4.4 et 4.5 — la dépendance est portée ici, pas rouverte là-bas.
+
+## Epic 12: Exploitation de production
+
+Épopée technique, hors périmètre produit. Avant que la production VPS + Coolify reçoive de vraies données de coureurs, on doit savoir quand elle tombe et pouvoir la reconstruire. Aucun service supplémentaire ne tourne sur le VPS applicatif ; tous les outils restent dans leur offre gratuite.
+
+Référence : `_bmad-output/implementation-artifacts/note-archi-winston-observabilite.md` ; spine §Consistency Conventions (Logging, Observabilité, Sauvegardes).
+
+**Règle cardinale de l'épopée : aucune donnée personnelle ne sort du VPS par le canal d'observabilité, et aucune sauvegarde ne sort non chiffrée.**
+
+### Story 12.1: Observabilité de production
+
+As a développeur bénévole seul à maintenir Azzel,
+I want être alerté des erreurs, des pannes et des crons arrêtés, sans exposer de données de coureurs,
+So that je découvre un incident avant qu'un coureur ou le comité me le signale, en particulier le jour J.
+
+**Acceptance Criteria:**
+
+**Given** les ~71 `console.error`/`console.warn` serveur de `apps/web/src`
+**When** le journal structuré est introduit
+**Then** `apps/web/src/lib/journal.ts` émet une ligne JSON par événement (`ts` ISO 8601 UTC, `niveau`, `module`, `organisationId` facultatif, `message`, champs) sur stdout
+**And** il refuse les clés personnelles connues (`email`, `telephone`, `nom`, coordonnées…) plutôt que de compter sur chaque appelant
+**And** les appels serveur existants passent par lui ; les logs côté client restent hors lot
+
+**Given** une erreur de rendu, de route ou d'action serveur
+**When** `SENTRY_DSN` est défini
+**Then** `apps/web/instrumentation.ts` initialise Sentry (organisation en région UE) et `onRequestError` remonte l'erreur avec `environment` issu de `SENTRY_ENVIRONMENT`
+**And** `sendDefaultPii: false`, `tracesSampleRate: 0`, pas de replay, ni corps de requête ni en-têtes `Cookie`/`Authorization`
+**And** le contexte utilisateur se limite à l'identifiant opaque du compte et à son rôle
+**And** sans `SENTRY_DSN`, rien ne s'initialise : développement local, tests et CI inchangés
+**And** les source maps ne sont envoyées que si `SENTRY_AUTH_TOKEN` est présent au build
+
+**Given** un événement d'erreur contenant email, téléphone, coordonnées GPS, clé de preuve ou jeton (`azzel_session`, jeton d'appareil, jeton e-dossard)
+**When** il passe par le `beforeSend` commun défini dans `packages/shared`
+**Then** il en ressort nettoyé — vérifié par tests unitaires — et ce même masquage sert au web et à Expo
+
+**Given** l'app coureurs `apps/runners`
+**When** `@sentry/react-native` est branché via son plugin Expo
+**Then** les erreurs remontent avec le même masquage, positions GPS retirées des breadcrumbs, DSN fourni par variable EAS
+
+**Given** le SDK Sentry navigateur
+**When** son impact est mesuré avec `pnpm budget`
+**Then** la décision (branché sur PWA scanneuse et formulaire d'inscription, ou différé) est consignée dans la story avec la mesure
+
+**Given** un moniteur externe au VPS
+**When** il interroge `GET /api/sante`
+**Then** la route répond `200 {"ok":true}` si un `select 1` borné aboutit, `503` sinon, en `no-store`, sans aucun détail d'infrastructure
+
+**Given** chaque cron VPS — `emails:send`, `inscriptions:echeances`, `emails:j7`, keep-alive Supabase
+**When** il se termine
+**Then** `apps/web/src/lib/battement.ts` appelle `HEARTBEAT_URL_<NOM>` en cas de succès, son URL `/fail` en cas d'échec
+**And** `battement` ne lève jamais d'erreur (délai dépassé, 500, URL absente) : une panne du moniteur ne casse pas un cron — vérifié par tests
+
+**Given** la mise en production
+**When** la story est livrée
+**Then** Better Stack surveille l'accueil et `/api/sante` et attend les battements des crons, alertes par email à Boss
+**And** les conditions d'usage de l'offre gratuite Better Stack sont relues à l'inscription ; si l'usage commercial est exclu, le repli Healthchecks.io + UptimeRobot de la note est appliqué
+**And** l'organisation Sentry est créée directement en région UE (non modifiable ensuite), spike protection activée
+**And** le README documente variables d'environnement, destinataire des alertes, lecture d'un événement et bascule vers GlitchTip
+**And** Sentry et Better Stack sont ajoutés au registre des sous-traitants.
+
+### Story 12.2: Sauvegardes de la base et des preuves
+
+As a développeur bénévole responsable des données de l'édition,
+I want des sauvegardes automatiques, chiffrées, stockées ailleurs et dont la restauration est éprouvée,
+So that une erreur de manipulation, une panne ou une perte du projet Supabase ne fasse pas disparaître les dossiers, les preuves et les passages du jour J.
+
+**Acceptance Criteria:**
+
+**Given** le free tier Supabase, qui ne fait aucune sauvegarde automatique
+**When** la crontab du VPS lance la sauvegarde
+**Then** un dump Postgres complet est produit via `DATABASE_OWNER_URL` sur la connexion directe (port 5432), jamais via le pooler
+**And** le bucket des preuves de paiement est copié dans le même lot — une base restaurée sans ses preuves rendrait la validation des dossiers impossible
+
+**Given** des sauvegardes contenant des données personnelles
+**When** elles quittent le VPS
+**Then** elles sont chiffrées avant envoi, avec une clé détenue par Boss hors du VPS
+**And** elles sont stockées en UE, chez un fournisseur distinct du VPS et de Supabase
+**And** la rétention est bornée (proposition : 7 quotidiennes + 4 hebdomadaires), alignée sur la politique de conservation des données de l'édition
+
+**Given** la fréquence de sauvegarde
+**When** elle est configurée
+**Then** elle est quotidienne en temps normal, et resserrée pendant la fenêtre de course (perte maximale visée : 1 h le jour J), plus un dump manuel juste avant le départ et un autre juste après l'arrivée
+
+**Given** une sauvegarde
+**When** la procédure de restauration est suivie
+**Then** elle restaure base et preuves dans une base locale (`scripts/dev-db.sh`), et le résultat est vérifié (comptages dossiers/preuves/passages, RLS multi-organisation intact)
+**And** la procédure est écrite pas à pas et rejouée une fois avant la clôture des inscriptions, puis au dry-run
+
+**Given** le battement de cœur prévu par la story 12.1
+**When** une sauvegarde se termine
+**Then** elle appelle `HEARTBEAT_URL_SAUVEGARDE` (ou son `/fail`), de sorte qu'une sauvegarde qui ne tourne plus déclenche une alerte
+
+**Given** l'alternative payante
+**When** la story est lancée
+**Then** le coût d'un mois de Supabase Pro autour du jour J (sauvegardes gérées) est comparé et la décision consignée — sans remplacer la sauvegarde hors Supabase, qui protège aussi contre la perte du projet lui-même.
