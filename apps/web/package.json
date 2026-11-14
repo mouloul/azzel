@@ -11,6 +11,7 @@
     "emails:send": "tsx src/modules/notifications/send-cli.ts",
     "emails:j7": "tsx src/modules/notifications/j7-cli.ts",
     "inscriptions:echeances": "tsx src/modules/inscriptions/echeances-cli.ts",
+    "preuves:exporter": "tsx src/modules/sauvegarde/exporter-cli.ts",
     "seed": "tsx src/modules/seed/seed.ts",
     "seed:reset": "tsx src/modules/seed/reset.ts",
     "build": "pnpm tokens:sync && next build",
