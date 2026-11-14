@@ -703,7 +703,22 @@
   background: color-mix(in srgb, var(--az-danger) 10%, transparent);
 }
 
+.espace .checklist-etat--expire {
+  border-color: var(--az-texte-2);
+  background: color-mix(in srgb, var(--az-texte-2) 8%, transparent);
+}
+
+/* Explication longue d'un état (ex. inscription expirée) : un paragraphe sous
+   le libellé, jamais dans la pastille qui doit rester sur une ligne. */
+.espace .checklist-note {
+  margin: 0;
+  color: var(--az-texte-2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
 /* Actions alignées sous le libellé : puce (28 px) + écart (12 px). */
+.espace .checklist-item .checklist-note,
 .espace .checklist-item .checklist-action,
 .espace .checklist-item .checklist-action-inactive,
 .espace .checklist-item .error-box {
@@ -737,6 +752,7 @@
     justify-self: start;
   }
 
+  .espace .checklist-item .checklist-note,
   .espace .checklist-item .checklist-action,
   .espace .checklist-item .checklist-action-inactive,
   .espace .checklist-item .error-box {

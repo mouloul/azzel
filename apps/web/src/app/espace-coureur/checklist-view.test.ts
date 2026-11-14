@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CHECKLIST_PREUVE_INDISPONIBLE,
   CHECKLIST_VALIDATION_EN_ATTENTE,
+  CHECKLIST_VALIDATION_EXPIREE,
   type ChecklistPiece,
 } from '@/modules/inscriptions/service';
 
@@ -51,6 +52,16 @@ describe('etatPiece — libellés exacts', () => {
     );
     expect(etat.texte).toBe('Indisponible (réessaie plus tard)');
     expect(etat.classe).toBe('checklist-etat');
+  });
+
+  it('inscription expirée → pastille courte, explication en note', () => {
+    expect(
+      etatPiece(piece({ id: 'validation', texteSecondaire: CHECKLIST_VALIDATION_EXPIREE })),
+    ).toEqual({
+      texte: 'Expirée',
+      classe: 'checklist-etat checklist-etat--expire',
+      note: CHECKLIST_VALIDATION_EXPIREE,
+    });
   });
 
   it('pièce manquante neutre → « À faire »', () => {

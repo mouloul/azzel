@@ -346,7 +346,7 @@ docker exec -e PGPASSWORD=azzel azzel-postgres psql -U azzel -d azzel -c \
 | # | Action | Résultat attendu |
 |---|--------|------------------|
 | 10.20 | Nouveau coureur inscrit, **sans** preuve. Forcer son échéance dans le passé, lancer la commande d'échéances | Statut « Expirée ». Email « ton inscription a expiré » : il invite à cliquer sur « Modifier mon inscription » depuis l'espace coureur |
-| 10.21 | Coureur : `/espace-coureur` | Pièce « Dossier validé » : « Inscription expirée faute de preuve dans le délai… » et l'action « Modifier mon inscription », seule |
+| 10.21 | Coureur : `/espace-coureur` | Pièce « Dossier validé » : pastille « Expirée », note « Inscription expirée faute de preuve dans le délai… » sous le libellé (sans chevauchement) et l'action « Modifier mon inscription », seule |
 | 10.22 | Ouvrir `/inscription` | Formulaire ouvert, encart « Ton inscription a expiré… Enregistre de nouveau ton inscription pour la reprendre » ; **aucune** échéance passée annoncée |
 | 10.23 | Enregistrer | Statut « En attente de justificatif ». En base : `en constitution`, nouvelle `preuve_due_at`, **`expired_at` conservé** (trace de l'expiration) |
 | 10.23b | **Second cycle** — sur ce même coureur, forcer `preuve_due_at` à `now() + interval '20 hours'`, lancer la commande d'échéances | « Rappels de preuve : **1** » — un second email « ta place t'attend encore » dans Mailpit (le premier cycle n'empêche pas le rappel de la nouvelle échéance). Relancer : toujours un seul nouveau rappel |

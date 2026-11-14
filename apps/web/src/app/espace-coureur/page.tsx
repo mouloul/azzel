@@ -187,6 +187,7 @@ function ChecklistCard({
                 <span className="checklist-libelle">{piece.libelle}</span>
                 <span className={etat.classe}>{etat.texte}</span>
               </p>
+              {etat.note != null && <p className="checklist-note">{etat.note}</p>}
               {piece.motifRefus != null && (
                 <div role="alert" aria-live="assertive" className="error-box">
                   <p className="error-message">Ton dossier a été refusé.</p>
