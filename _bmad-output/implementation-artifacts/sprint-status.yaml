@@ -127,3 +127,8 @@ development_status:
   11-6-confort-de-lecture-du-parcours: backlog
   11-7-barrières-horaires-sur-le-parcours: backlog
   epic-11-retrospective: optional
+
+  epic-12: backlog
+  12-1-observabilité-de-production: backlog
+  12-2-sauvegardes-de-la-base-et-des-preuves: backlog
+  epic-12-retrospective: optional
