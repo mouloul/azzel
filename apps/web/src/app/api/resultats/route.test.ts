@@ -28,7 +28,7 @@ const RESULTATS = {
     epreuves: [
       {
         epreuveSlug: 'longue',
-        epreuveNom: 'La Longue — 35 km',
+        epreuveNom: 'La Grande Boucle — 35 km',
         distanceKm: 35,
         heureDepart: '2027-03-26T07:00:00.000Z',
         configure: true,
@@ -41,7 +41,7 @@ const RESULTATS = {
     ],
   },
   derniersArrives: [
-    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 6_000_000 },
+    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 6_000_000 },
   ],
 };
 

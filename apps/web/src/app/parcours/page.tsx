@@ -55,7 +55,7 @@ export default async function ParcoursPage() {
   return (
     <>
       <Frise />
-      {/* Même vue que l'accueil (sélecteur Longue / Moyenne, carte en relief,
+      {/* Même vue que l'accueil (sélecteur Grande Boucle / Boucle Moyenne, carte en relief,
           profil) : une seule composition pour les deux pages. */}
       <SectionParcours
         entete={{

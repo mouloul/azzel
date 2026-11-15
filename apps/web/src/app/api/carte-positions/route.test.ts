@@ -24,7 +24,7 @@ const POSITIONS = {
     {
       dossard: 201,
       epreuveSlug: 'longue',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       lat: 36.5512,
       lon: 4.3601,
       capteA: '2027-03-26T09:41:00.000Z',
@@ -33,7 +33,7 @@ const POSITIONS = {
     {
       dossard: 204,
       epreuveSlug: 'longue',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       lat: 36.5602,
       lon: 4.3711,
       capteA: '2027-03-26T08:12:00.000Z',
@@ -60,7 +60,7 @@ describe('GET /api/carte-positions — lecture publique (story 7.3)', () => {
     expect(body.positions[0]).toEqual({
       dossard: 201,
       epreuveSlug: 'longue',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       lat: 36.5512,
       lon: 4.3601,
       capteA: '2027-03-26T09:41:00.000Z',

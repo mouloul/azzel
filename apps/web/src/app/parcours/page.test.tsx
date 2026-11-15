@@ -24,7 +24,7 @@ const BLOCS = [
       'L’épreuve phare, au départ du stade Agni Lhoudh.\n\nDénivelé positif : à confirmer par le comité.\nRavitaillements : à confirmer par le comité.',
     epreuve: {
       slug: 'longue',
-      nom: 'La Longue',
+      nom: 'La Grande Boucle',
       distanceKm: 28,
       gpxUrl: 'https://files.exemple.dz/longue.gpx',
     },
@@ -35,7 +35,7 @@ const BLOCS = [
     corps: 'Une distance plus courte, le même jour.<script>alert("xss")</script>',
     epreuve: {
       slug: 'moyenne',
-      nom: 'La Moyenne',
+      nom: 'La Boucle Moyenne',
       distanceKm: 12,
       gpxUrl: 'javascript:alert(document.domain)',
     },
@@ -66,7 +66,7 @@ describe('page /parcours — rendu public', () => {
     expect(html).toContain('Les parcours');
     expect(html).toContain('Épreuve affichée');
     expect(html).toContain('Le Grand Trail d’Aït Aïssi');
-    expect(html).toContain('La Petite Boucle');
+    expect(html).toContain('La Boucle Moyenne');
     // Fiche technique rédigée depuis le relevé : relief, effort, pentes.
     expect(html).toContain('Relief');
     expect(html).toContain('km-effort');

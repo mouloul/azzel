@@ -246,7 +246,7 @@ export default async function HomePage() {
       {/* Section « épreuves » et section « parcours » FUSIONNÉES (recette du
           05/11/2026) : l'accueil montrait d'abord deux cartes d'accroche, puis,
           plus bas, un sélecteur et une fiche. Un seul bloc désormais — on choisit
-          Longue ou Moyenne, et le détail de l'épreuve (chiffres, carte en relief,
+          Grande Boucle ou Boucle Moyenne, et le détail de l'épreuve (chiffres, carte en relief,
           profil) s'affiche juste en dessous. Reprise de la vue du POC 3D. */}
       <SectionParcours
         entete={{

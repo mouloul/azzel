@@ -141,7 +141,7 @@ const LIGNES: readonly Ligne[] = [
     'S',
     'F',
     'refusé',
-    'Le versement CCP correspond à une autre épreuve : modifier l’inscription, puis déposer une preuve au tarif de La Moyenne.',
+    'Le versement CCP correspond à une autre épreuve : modifier l’inscription, puis déposer une preuve au tarif de La Boucle Moyenne.',
   ],
   [
     'Smail',
@@ -508,8 +508,8 @@ export const HEURES_DEPART_FICTIVES: Readonly<Record<'longue' | 'moyenne', strin
  * jeton e-dossard à scanner.
  *
  * Les horaires sont RELATIFS AU DÉPART DE L'ÉPREUVE DU COUREUR, pas à une
- * heure d'horloge unique : les départs sont échelonnés (La Longue à 07:00, La
- * Moyenne à 08:00) et un passage antérieur au départ donnerait un temps de
+ * heure d'horloge unique : les départs sont échelonnés (La Grande Boucle à 07:00, La
+ * Boucle Moyenne à 08:00) et un passage antérieur au départ donnerait un temps de
  * classement négatif. `minutesDepuisDepart` est donc strictement positif pour
  * les passages ; seul le retrait de dossard précède le départ.
  */

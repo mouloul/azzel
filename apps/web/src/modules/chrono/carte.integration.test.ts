@@ -160,7 +160,7 @@ describe.skipIf(testUrls === null)(
       `;
       const epreuvePassee = await sql`
         INSERT INTO epreuve (id, organisation_id, edition_id, slug, name, distance_km, gpx_url)
-        VALUES (${randomUUID()}, ${orgAId}, ${editionPasseeId}, 'longue', 'La Longue 2026', 35.0,
+        VALUES (${randomUUID()}, ${orgAId}, ${editionPasseeId}, 'longue', 'La Grande Boucle 2026', 35.0,
                 'https://cdn.azzel.dz/carte-longue-2026.gpx')
         RETURNING id
       `;
@@ -448,7 +448,7 @@ describe.skipIf(testUrls === null)(
       // 404 isolé : seule « longue » servie, « moyenne » absente — jamais d'erreur.
       expect(traces.map((trace) => trace.epreuveSlug)).toEqual(['longue']);
       const longue = traces[0]!;
-      expect(longue.epreuveNom).toBe('La Longue');
+      expect(longue.epreuveNom).toBe('La Grande Boucle');
       expect(longue.points).toHaveLength(500);
       expect(longue.points[0]!.lat).toBeCloseTo(36.5, 5);
       expect(longue.points[499]!.lat).toBeCloseTo(36.5 + 1_199 / 10_000, 3);

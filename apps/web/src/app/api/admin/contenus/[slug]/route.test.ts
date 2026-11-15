@@ -54,7 +54,7 @@ const CONTENU = {
   corps: 'L’épreuve phare.',
   updatedAt: '2026-10-22T09:00:00.000Z',
   aConfirmer: true,
-  epreuve: { slug: 'longue', nom: 'La Longue — 35 km', distanceKm: 35, gpxUrl: null },
+  epreuve: { slug: 'longue', nom: 'La Grande Boucle — 35 km', distanceKm: 35, gpxUrl: null },
 };
 
 function context(slug = 'parcours-longue'): { params: Promise<{ slug: string }> } {

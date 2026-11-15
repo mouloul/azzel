@@ -37,7 +37,7 @@ const RESULTATS = {
     epreuves: [
       {
         epreuveSlug: 'longue',
-        epreuveNom: 'La Longue — 35 km',
+        epreuveNom: 'La Grande Boucle — 35 km',
         distanceKm: 35,
         heureDepart: '2027-03-26T07:00:00.000Z',
         configure: true,
@@ -49,7 +49,7 @@ const RESULTATS = {
     ],
   },
   derniersArrives: [
-    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 6_000_000 },
+    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 6_000_000 },
   ],
 };
 
@@ -84,7 +84,7 @@ describe('page /resultats — SSR vitrine (story 7.2)', () => {
     const html = await rendu();
     expect(html).toContain('Résultats en direct');
     expect(html).toContain('Classement provisoire');
-    expect(html).toContain('La Longue — 35 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
     expect(html).toContain('Derniers arrivés');
     expect(html).toContain('resultats-temoin');
     expect(html).toContain('synchronisé il y a');

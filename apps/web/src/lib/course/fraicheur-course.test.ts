@@ -18,7 +18,7 @@ const MAINTENANT = new Date('2027-05-16T08:00:00.000Z');
 function etat(fraicheur: string | null): EtatCourse {
   return {
     edition: { id: 'edition-1', nom: 'Édition 2027' },
-    partants: [{ epreuveId: 'ep-1', epreuveNom: 'La Longue', total: 12 }],
+    partants: [{ epreuveId: 'ep-1', epreuveNom: 'La Grande Boucle', total: 12 }],
     retraits: 3,
     arrives: 1,
     enCourse: 2,

@@ -44,7 +44,7 @@ const SESSION = {
 const COUREUR = {
   id: 'coureur-1',
   epreuve: 'longue',
-  epreuveNom: 'La Longue — 35 km',
+  epreuveNom: 'La Grande Boucle — 35 km',
   distanceKm: 35,
   prenom: 'Yani',
   nom: 'Ulahianne',
@@ -337,8 +337,8 @@ describe('GET /api/inscriptions', () => {
         registrationOpen: true,
       },
       epreuves: [
-        { id: 'ep-1', slug: 'longue', nom: 'La Longue — 35 km', distanceKm: 35 },
-        { id: 'ep-2', slug: 'moyenne', nom: 'La Moyenne — 12 km', distanceKm: 12 },
+        { id: 'ep-1', slug: 'longue', nom: 'La Grande Boucle — 35 km', distanceKm: 35 },
+        { id: 'ep-2', slug: 'moyenne', nom: 'La Boucle Moyenne — 12 km', distanceKm: 12 },
       ],
       coureur: null,
     };

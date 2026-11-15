@@ -48,7 +48,7 @@ const VUE_PARCOURS_ACCUEIL = {
   epreuves: [
     {
       slug: 'longue',
-      nom: 'La Longue',
+      nom: 'La Grande Boucle',
       distanceKm: 28,
       gpxUrl: 'https://files.exemple.dz/longue.gpx',
       metriques: null,
@@ -56,7 +56,7 @@ const VUE_PARCOURS_ACCUEIL = {
     },
     {
       slug: 'moyenne',
-      nom: 'La Moyenne',
+      nom: 'La Boucle Moyenne',
       distanceKm: 28,
       gpxUrl: null,
       metriques: null,
@@ -181,7 +181,7 @@ describe('accueil vitrine — rendu statique', () => {
     expect(html).toContain('Épreuve phare');
     expect(html.match(/Épreuve phare/g)).toHaveLength(1);
     expect(html).toContain('Le Grand Trail d’Aït Aïssi');
-    expect(html).toContain('La Petite Boucle');
+    expect(html).toContain('La Boucle Moyenne');
     expect(html).toContain('Une boucle au départ du stade Agni Lhoudh');
     expect(html).toContain('Le même départ et les mêmes sentiers');
     expect(html).not.toContain('Trail long — 35 km');
@@ -372,8 +372,8 @@ describe('accueil vitrine — section parcours (story 9.3)', () => {
       expect(radio).toContain('name="epreuve-parcours-accueil"');
     }
     expect(radios[0]).toContain('checked');
-    expect(section).toContain('La Longue');
-    expect(section).toContain('La Moyenne');
+    expect(section).toContain('La Grande Boucle');
+    expect(section).toContain('La Boucle Moyenne');
     expect(section).toContain('href="https://files.exemple.dz/longue.gpx"');
   });
 

@@ -18,7 +18,7 @@ const GROUPE_FR = new Intl.NumberFormat('fr-FR');
 function epreuveActuelle(overrides: Partial<EpreuveSectionParcours> = {}): EpreuveSectionParcours {
   return {
     slug: 'longue',
-    nom: 'La Longue — 35 km',
+    nom: 'La Grande Boucle — 35 km',
     distanceKm: 35,
     gpxUrl: 'https://files.exemple.dz/longue.gpx',
     metriques: null,
@@ -32,7 +32,7 @@ const VUE_ACTUELLE: SectionParcoursView = {
     epreuveActuelle(),
     epreuveActuelle({
       slug: 'moyenne',
-      nom: 'La Moyenne — 12 km',
+      nom: 'La Boucle Moyenne — 12 km',
       distanceKm: 12,
       gpxUrl: null,
     }),
@@ -66,7 +66,7 @@ const VUE_EPOPEE_11: SectionParcoursView = {
     }),
     epreuveActuelle({
       slug: 'moyenne',
-      nom: 'La Moyenne — 12 km',
+      nom: 'La Boucle Moyenne — 12 km',
       distanceKm: 12,
       gpxUrl: null,
       metriques: {
@@ -134,8 +134,8 @@ describe('section parcours accueil — sélecteur sans JavaScript (story 9.3)', 
     );
     // Chaque panneau porte la fiche ENTIÈRE de son épreuve : nom + synthèse
     // dans le même article — jamais un kilométrage orphelin.
-    expect(panneau(html, 0)).toContain('La Longue — 35 km');
-    expect(panneau(html, 1)).toContain('La Moyenne — 12 km');
+    expect(panneau(html, 0)).toContain('La Grande Boucle — 35 km');
+    expect(panneau(html, 1)).toContain('La Boucle Moyenne — 12 km');
   });
 
   it('données réelles seulement : nom, distance, GPX https — rien de plus', () => {

@@ -11,13 +11,13 @@ import { HeuresDepart } from './heures-depart';
 const EPREUVES = [
   {
     epreuveId: 'ep-longue',
-    epreuveNom: 'La Longue — 35 km',
+    epreuveNom: 'La Grande Boucle — 35 km',
     distanceKm: 35,
     heureDepart: '2027-05-16T08:00:00.000Z',
   },
   {
     epreuveId: 'ep-moyenne',
-    epreuveNom: 'La Moyenne — 12 km',
+    epreuveNom: 'La Boucle Moyenne — 12 km',
     distanceKm: 12,
     heureDepart: null,
   },

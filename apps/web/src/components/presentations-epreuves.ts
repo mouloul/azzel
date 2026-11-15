@@ -9,7 +9,7 @@ export const PRESENTATIONS_EPREUVES: Readonly<Record<string, PresentationEpreuve
       'Une boucle au départ du stade Agni Lhoudh, sur les sentiers de la forêt de Yakouren.',
   },
   moyenne: {
-    titre: 'La Petite Boucle',
+    titre: 'La Boucle Moyenne',
     texte: 'Le même départ et les mêmes sentiers, sur une distance plus courte.',
   },
 };

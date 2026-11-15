@@ -335,10 +335,10 @@ describe.skipIf(testUrls === null)(
       // Ordre = réception serveur DESC, dans PUIS entre lots ; ex æquo de
       // réception → dossard ASC.
       expect(resultats.derniersArrives).toEqual([
-        { dossard: 202, epreuveSlug: 'longue', epreuveNom: 'La Longue', tempsMs: temps(departLongue, 'arrivee-2') },
+        { dossard: 202, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', tempsMs: temps(departLongue, 'arrivee-2') },
         { dossard: 221, epreuveSlug: 'sprint', epreuveNom: 'Le Sprint — 5 km', tempsMs: null },
-        { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue', tempsMs: temps(departLongue, 'arrivee-1') },
-        { dossard: 211, epreuveSlug: 'moyenne', epreuveNom: 'La Moyenne', tempsMs: temps(departMoyenne, 'arrivee-1') },
+        { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', tempsMs: temps(departLongue, 'arrivee-1') },
+        { dossard: 211, epreuveSlug: 'moyenne', epreuveNom: 'La Boucle Moyenne', tempsMs: temps(departMoyenne, 'arrivee-1') },
       ]);
       // Les classements restent CEUX de 7.1, lus tels quels (203 encore en
       // course à ce stade — l'abandon vient au test suivant).

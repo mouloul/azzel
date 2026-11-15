@@ -167,8 +167,8 @@ describe('lignesCommande — épreuve × taille + totaux + médailles (jointure 
   it('matrice complète : une ligne par épreuve (zéros compris), totaux toutes tailles, médailles', () => {
     const commande = lignesCommande({
       epreuves: [
-        { slug: 'longue', nom: 'La Longue — 35 km' },
-        { slug: 'moyenne', nom: 'La Moyenne — 12 km' },
+        { slug: 'longue', nom: 'La Grande Boucle — 35 km' },
+        { slug: 'moyenne', nom: 'La Boucle Moyenne — 12 km' },
       ],
       decomptes: [
         { epreuveSlug: 'longue', taille: 'XS', total: 1 },
@@ -179,14 +179,14 @@ describe('lignesCommande — épreuve × taille + totaux + médailles (jointure 
     });
     expect(commande.tshirts).toEqual([
       ['Épreuve', ...TSHIRT_SIZES, 'Total'],
-      ['La Longue — 35 km', 1, 0, 2, 0, 1, 0, 4],
-      ['La Moyenne — 12 km', 0, 0, 0, 3, 0, 0, 3],
+      ['La Grande Boucle — 35 km', 1, 0, 2, 0, 1, 0, 4],
+      ['La Boucle Moyenne — 12 km', 0, 0, 0, 3, 0, 0, 3],
       ['Toutes épreuves', 1, 0, 2, 3, 1, 0, 7],
     ]);
     expect(commande.medailles).toEqual([
       ['Épreuve', 'Médailles (1 par coureur validé)'],
-      ['La Longue — 35 km', 4],
-      ['La Moyenne — 12 km', 3],
+      ['La Grande Boucle — 35 km', 4],
+      ['La Boucle Moyenne — 12 km', 3],
       ['Total', 7],
     ]);
   });
@@ -194,8 +194,8 @@ describe('lignesCommande — épreuve × taille + totaux + médailles (jointure 
   it('deux épreuves HOMONYMES ne fusionnent pas : la jointure se fait par slug', () => {
     const commande = lignesCommande({
       epreuves: [
-        { slug: 'longue-a', nom: 'La Longue' },
-        { slug: 'longue-b', nom: 'La Longue' },
+        { slug: 'longue-a', nom: 'La Grande Boucle' },
+        { slug: 'longue-b', nom: 'La Grande Boucle' },
       ],
       decomptes: [
         { epreuveSlug: 'longue-a', taille: 'M', total: 2 },
@@ -204,14 +204,14 @@ describe('lignesCommande — épreuve × taille + totaux + médailles (jointure 
     });
     expect(commande.tshirts).toEqual([
       ['Épreuve', ...TSHIRT_SIZES, 'Total'],
-      ['La Longue', 0, 0, 2, 0, 0, 0, 2],
-      ['La Longue', 0, 0, 1, 0, 0, 0, 1],
+      ['La Grande Boucle', 0, 0, 2, 0, 0, 0, 2],
+      ['La Grande Boucle', 0, 0, 1, 0, 0, 0, 1],
       ['Toutes épreuves', 0, 0, 3, 0, 0, 0, 3],
     ]);
     expect(commande.medailles).toEqual([
       ['Épreuve', 'Médailles (1 par coureur validé)'],
-      ['La Longue', 2],
-      ['La Longue', 1],
+      ['La Grande Boucle', 2],
+      ['La Grande Boucle', 1],
       ['Total', 3],
     ]);
   });

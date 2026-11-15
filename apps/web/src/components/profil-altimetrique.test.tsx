@@ -29,7 +29,7 @@ const PROFIL_LONGUE = construireProfilEpreuve(PARCOURS_DOC, 'longue');
 function epreuveAvecProfil(profil: ProfilEpreuve | null): EpreuveSectionParcours {
   return {
     slug: 'longue',
-    nom: 'La Longue — 35 km',
+    nom: 'La Grande Boucle — 35 km',
     // Décision produit 2026-11-04 : la fusion écrase la distance éditoriale
     // (35) par celle du relevé — le fixture suit le contrat réel.
     distanceKm: (PARCOURS_DOC?.epreuves.longue?.distanceM ?? 0) / 1000,
@@ -43,7 +43,7 @@ function epreuveAvecProfil(profil: ProfilEpreuve | null): EpreuveSectionParcours
 describe('profil altimetrique — SVG servi complet (story 11.4)', () => {
   const html = renderToStaticMarkup(
     <ProfilAltimetrique
-      nomEpreuve="La Longue — 35 km"
+      nomEpreuve="La Grande Boucle — 35 km"
       profil={PROFIL_LONGUE as ProfilEpreuve}
       slugEpreuve="longue"
     />,
@@ -53,7 +53,7 @@ describe('profil altimetrique — SVG servi complet (story 11.4)', () => {
     expect(html).toMatch(/<svg[^>]*role="img"/);
     expect(html).toContain('aria-labelledby="profil-alt-titre-longue"');
     expect(html).toContain('<title id="profil-alt-titre-longue">');
-    expect(html).toContain('Profil altimétrique de La Longue — 35 km');
+    expect(html).toContain('Profil altimétrique de La Grande Boucle — 35 km');
     // Chiffres PUBLIÉS 11.1 (même source que la fiche) : 28 km, 1 186 m de D+.
     expect(html).toContain(`1${NBSP_ETROIT}186${NBSP_ETROIT}m de D+`);
   });
@@ -114,7 +114,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
       epreuveAvecProfil(PROFIL_LONGUE),
       {
         slug: 'moyenne',
-        nom: 'La Moyenne — 12 km',
+        nom: 'La Boucle Moyenne — 12 km',
         distanceKm: 12,
         gpxUrl: null,
         metriques: null,
@@ -169,7 +169,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
             epreuveAvecProfil(null),
             {
               slug: 'moyenne',
-              nom: 'La Moyenne — 12 km',
+              nom: 'La Boucle Moyenne — 12 km',
               distanceKm: 12,
               gpxUrl: null,
               metriques: null,
@@ -191,7 +191,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
             epreuveAvecProfil(null),
             {
               slug: 'moyenne',
-              nom: 'La Moyenne — 12 km',
+              nom: 'La Boucle Moyenne — 12 km',
               distanceKm: 12,
               gpxUrl: null,
               metriques: null,

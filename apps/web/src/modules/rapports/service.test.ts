@@ -29,7 +29,7 @@ const CLASSEMENTS_RECORD: ClassementsRecord = {
     {
       epreuveId: 'ep-longue',
       slug: 'longue',
-      nom: 'La Longue — 35 km',
+      nom: 'La Grande Boucle — 35 km',
       distanceKm: 35,
       heureDepart: DEPART_LONGUE,
       lignes: [
@@ -98,8 +98,8 @@ const RECORD: RapportRecord = {
     { statut: 'refusé', total: 1 },
   ],
   validesParTaille: [
-    { epreuveNom: 'La Longue — 35 km', epreuveSlug: 'longue', taille: 'M', total: 2 },
-    { epreuveNom: 'La Longue — 35 km', epreuveSlug: 'longue', taille: 'XL', total: 1 },
+    { epreuveNom: 'La Grande Boucle — 35 km', epreuveSlug: 'longue', taille: 'M', total: 2 },
+    { epreuveNom: 'La Grande Boucle — 35 km', epreuveSlug: 'longue', taille: 'XL', total: 1 },
     { epreuveNom: 'Le Sprint — 5 km', epreuveSlug: 'sprint', taille: 'S', total: 1 },
   ],
   retraits: 6,
@@ -109,7 +109,7 @@ const RECORD: RapportRecord = {
   ],
   abandons: [
     {
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       dossard: 204,
       lieu: 'Col 1200',
       motif: 'epuisement',
@@ -170,9 +170,9 @@ describe('genererRapportPostCourse', () => {
     expect(lignes).toContain('Inscrits — Validé;7');
     expect(lignes).toContain('Inscrits — Refusé;1');
     expect(lignes).toContain('Retraits (présents au départ);6');
-    expect(lignes).toContain('Partants — La Longue — 35 km;5');
-    expect(lignes).toContain('Arrivées — La Longue — 35 km;3');
-    expect(lignes).toContain('Abandons — La Longue — 35 km;1');
+    expect(lignes).toContain('Partants — La Grande Boucle — 35 km;5');
+    expect(lignes).toContain('Arrivées — La Grande Boucle — 35 km;3');
+    expect(lignes).toContain('Abandons — La Grande Boucle — 35 km;1');
     expect(lignes).toContain('Partants — Le Sprint — 5 km;1');
   });
 
@@ -193,9 +193,9 @@ describe('genererRapportPostCourse', () => {
     const lignes = rapport.contenu.split('\r\n');
     expect(lignes).toContain('Épreuve;Dossard;Rang;Temps');
     // 201 et 202 arrivent ensemble → même temps, ex æquo 1, 1 ; 203 → 3.
-    expect(lignes).toContain('La Longue — 35 km;201;1;01:01:01');
-    expect(lignes).toContain('La Longue — 35 km;202;1;01:01:01');
-    expect(lignes).toContain('La Longue — 35 km;203;3;01:02:03');
+    expect(lignes).toContain('La Grande Boucle — 35 km;201;1;01:01:01');
+    expect(lignes).toContain('La Grande Boucle — 35 km;202;1;01:01:01');
+    expect(lignes).toContain('La Grande Boucle — 35 km;203;3;01:02:03');
     // Sprint sans heure de départ : arrivé SANS rang ni temps, jamais un
     // temps faux à zéro.
     expect(lignes).toContain('Le Sprint — 5 km;241;—;—');
@@ -207,7 +207,7 @@ describe('genererRapportPostCourse', () => {
     });
     const lignes = rapport.contenu.split('\r\n');
     expect(lignes).toContain('Épreuve;Dossard;Lieu;Motif;Heure;Auteur');
-    const abandon = lignes.find((ligne) => ligne.startsWith('La Longue — 35 km;204;'));
+    const abandon = lignes.find((ligne) => ligne.startsWith('La Grande Boucle — 35 km;204;'));
     expect(abandon).toBeDefined();
     expect(abandon).toContain('Col 1200');
     expect(abandon).toContain('Épuisement');
@@ -294,11 +294,11 @@ describe('genererCommande', () => {
       'Commande t-shirts par épreuve et taille (validés)',
     );
     expect(lignes).toContain('Épreuve;XS;S;M;L;XL;XXL;Total');
-    expect(lignes).toContain('La Longue — 35 km;0;0;2;0;1;0;3');
+    expect(lignes).toContain('La Grande Boucle — 35 km;0;0;2;0;1;0;3');
     expect(lignes).toContain('Le Sprint — 5 km;0;1;0;0;0;0;1');
     expect(lignes).toContain('Toutes épreuves;0;1;2;0;1;0;4');
     expect(lignes).toContain('Médailles par épreuve');
-    expect(lignes).toContain('La Longue — 35 km;3');
+    expect(lignes).toContain('La Grande Boucle — 35 km;3');
     expect(lignes).toContain('Le Sprint — 5 km;1');
     expect(lignes).toContain('Total;4');
     expect(commande.contenu).toContain('Zéro stock : commandé = validé');
@@ -321,7 +321,7 @@ describe('genererCommande', () => {
       store: magasin(vide),
     });
     const lignes = commande.contenu.split('\r\n');
-    expect(lignes).toContain('La Longue — 35 km;0;0;0;0;0;0;0');
+    expect(lignes).toContain('La Grande Boucle — 35 km;0;0;0;0;0;0;0');
     expect(lignes).toContain('Toutes épreuves;0;0;0;0;0;0;0');
     expect(lignes).toContain('Total;0');
   });

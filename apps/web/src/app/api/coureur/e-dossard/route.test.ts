@@ -45,7 +45,7 @@ const EDOSSARD = {
   dossard: 184,
   prenom: 'Yacine',
   nom: 'Amrani',
-  epreuveNom: 'La Longue — 35 km',
+  epreuveNom: 'La Grande Boucle — 35 km',
   editionNom: 'Édition 2027',
 };
 

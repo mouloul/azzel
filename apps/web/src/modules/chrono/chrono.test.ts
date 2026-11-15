@@ -428,7 +428,7 @@ describe('admin chrono — liste et révocation', () => {
 describe('story 5.1 — getEtatCourse (service PC course)', () => {
   const RECORD_ETAT = {
     edition: { id: 'edition-1', nom: 'Édition 2027' },
-    partants: [{ epreuveId: 'ep-1', epreuveNom: 'La Longue', total: 12 }],
+    partants: [{ epreuveId: 'ep-1', epreuveNom: 'La Grande Boucle', total: 12 }],
     retraits: 3,
     arrives: 1,
     abandones: 1,
@@ -849,7 +849,7 @@ const CLASSEMENTS_RECORD = {
     {
       epreuveId: EPREUVE_LONGUE_ID,
       slug: 'longue',
-      nom: 'La Longue — 35 km',
+      nom: 'La Grande Boucle — 35 km',
       distanceKm: 35,
       heureDepart: new Date('2027-05-16T09:00:00.000Z'),
       lignes: [
@@ -895,7 +895,7 @@ const CLASSEMENTS_RECORD = {
     {
       epreuveId: EPREUVE_MOYENNE_ID,
       slug: 'moyenne',
-      nom: 'La Moyenne — 12 km',
+      nom: 'La Boucle Moyenne — 12 km',
       distanceKm: 12,
       heureDepart: new Date('2027-05-16T09:30:00.000Z'),
       lignes: [
@@ -1003,7 +1003,7 @@ describe('story 7.1 — enregistrerHeuresDepart / getHeuresDepart (service)', ()
     const epreuveRecord = {
       epreuveId: 'ep-1',
       slug: 'longue',
-      nom: 'La Longue — 35 km',
+      nom: 'La Grande Boucle — 35 km',
       distanceKm: 35,
       heureDepart: new Date('2027-05-16T08:00:00.000Z'),
     };
@@ -1026,7 +1026,7 @@ describe('story 7.1 — enregistrerHeuresDepart / getHeuresDepart (service)', ()
       {
         epreuveId: 'ep-1',
         epreuveSlug: 'longue',
-        epreuveNom: 'La Longue — 35 km',
+        epreuveNom: 'La Grande Boucle — 35 km',
         distanceKm: 35,
         heureDepart: '2027-05-16T08:00:00.000Z',
       },
@@ -1041,7 +1041,7 @@ describe('story 7.1 — enregistrerHeuresDepart / getHeuresDepart (service)', ()
           {
             epreuveId: 'ep-1',
             slug: 'longue',
-            nom: 'La Longue — 35 km',
+            nom: 'La Grande Boucle — 35 km',
             distanceKm: 35,
             heureDepart: new Date('2027-05-16T08:00:00.000Z'),
           },
@@ -1151,7 +1151,7 @@ describe('story 7.1 — getClassements (service : rangs, temps, statuts, configu
           {
             epreuveId: 'epreuve-longue',
             slug: 'longue',
-            nom: 'La Longue — 35 km',
+            nom: 'La Grande Boucle — 35 km',
             distanceKm: 35,
             heureDepart: new Date('2027-05-16T09:00:00.000Z'),
             lignes: [
@@ -1245,10 +1245,10 @@ describe('story 7.2 — getResultatsPublic (service : org par défaut, sans sess
     expect(store.organisationParDefautId).toHaveBeenCalled();
     expect(store.classements).toHaveBeenCalledWith('org-1');
     expect(resultats.derniersArrives).toEqual([
-      { dossard: 203, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 140 * 60_000 },
-      { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 100 * 60_000 },
-      { dossard: 202, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 100 * 60_000 },
-      { dossard: 211, epreuveSlug: 'moyenne', epreuveNom: 'La Moyenne — 12 km', tempsMs: 50 * 60_000 },
+      { dossard: 203, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 140 * 60_000 },
+      { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 100 * 60_000 },
+      { dossard: 202, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 100 * 60_000 },
+      { dossard: 211, epreuveSlug: 'moyenne', epreuveNom: 'La Boucle Moyenne — 12 km', tempsMs: 50 * 60_000 },
       { dossard: 221, epreuveSlug: 'sprint', epreuveNom: 'Le Sprint — 5 km', tempsMs: null },
     ]);
   });
@@ -1278,7 +1278,7 @@ describe('story 7.2 — getResultatsPublic (service : org par défaut, sans sess
           {
             epreuveId: EPREUVE_LONGUE_ID,
             slug: 'longue',
-            nom: 'La Longue — 35 km',
+            nom: 'La Grande Boucle — 35 km',
             distanceKm: 35,
             heureDepart: new Date('2027-05-16T09:00:00.000Z'),
             lignes,

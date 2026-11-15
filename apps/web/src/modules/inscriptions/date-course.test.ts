@@ -50,11 +50,11 @@ describe('dateCourseAffichee — ce que le public lit de la date de course', () 
 
 describe('libelleEpreuve — la distance n’est dite qu’une fois', () => {
   it('le nom contient déjà la distance : rien n’est ajouté', () => {
-    expect(libelleEpreuve('La Longue — 35 km', 35)).toBe('La Longue — 35 km');
+    expect(libelleEpreuve('La Grande Boucle — 35 km', 35)).toBe('La Grande Boucle — 35 km');
   });
 
   it('le nom ne la contient pas : elle est ajoutée', () => {
-    expect(libelleEpreuve('La Longue', 35)).toBe('La Longue (35 km)');
+    expect(libelleEpreuve('La Grande Boucle', 35)).toBe('La Grande Boucle (35 km)');
   });
 
   it('distance décimale', () => {

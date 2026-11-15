@@ -264,7 +264,7 @@ describe.skipIf(testUrls === null)(
       const epreuveB = randomUUID();
       await sql`
         INSERT INTO epreuve (id, organisation_id, edition_id, slug, name, distance_km)
-        VALUES (${epreuveB}, ${orgB}, ${editionB}, 'longue', 'La Longue', 35.0)
+        VALUES (${epreuveB}, ${orgB}, ${editionB}, 'longue', 'La Grande Boucle', 35.0)
       `;
       for (let index = 0; index < 2; index += 1) {
         const accountB = randomUUID();

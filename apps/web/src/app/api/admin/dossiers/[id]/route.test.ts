@@ -44,7 +44,7 @@ const DETAIL = {
   coureur: {
     id: 'coureur-1',
     epreuve: 'longue',
-    epreuveNom: 'La Longue — 35 km',
+    epreuveNom: 'La Grande Boucle — 35 km',
     distanceKm: 35,
     prenom: 'Yani',
     nom: 'Ulahianne',

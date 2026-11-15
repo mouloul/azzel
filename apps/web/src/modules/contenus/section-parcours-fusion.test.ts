@@ -46,11 +46,11 @@ function epreuves(): EpreuveParcoursRecord[] {
     {
       id: 'e1',
       slug: 'longue',
-      nom: 'La Longue',
+      nom: 'La Grande Boucle',
       distanceKm: 28,
       gpxUrl: 'https://files.exemple.dz/longue.gpx',
     },
-    { id: 'e2', slug: 'moyenne', nom: 'La Moyenne', distanceKm: 12, gpxUrl: null },
+    { id: 'e2', slug: 'moyenne', nom: 'La Boucle Moyenne', distanceKm: 12, gpxUrl: null },
   ];
 }
 
@@ -115,7 +115,7 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     expect(moyenne?.pointsDePassage).not.toBeNull();
     expect(moyenne?.profil).not.toBeNull();
     // Le nom vient de la base et ne porte plus de distance (migration 0040).
-    expect(moyenne?.nom).toBe('La Moyenne');
+    expect(moyenne?.nom).toBe('La Boucle Moyenne');
     // Distance de SON relevé (12,7 km), pas celle de la base : la fiche
     // reste cohérente avec le profil qu'elle affiche.
     expect(moyenne?.distanceKm).toBeCloseTo(12.7, 1);

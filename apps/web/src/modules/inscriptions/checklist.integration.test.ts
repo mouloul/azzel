@@ -164,7 +164,7 @@ describe.skipIf(testUrls === null)('checklist — intégration Postgres (base az
     expect(piece(avant, 'epreuve').actionLabel).toBeUndefined();
     expect(piece(avant, 'validation').texteSecondaire).toBe(CHECKLIST_VALIDATION_EN_ATTENTE);
     expect(avant.recap).toMatchObject({
-      epreuve: 'La Longue',
+      epreuve: 'La Grande Boucle',
       distanceKm: 28,
       categorieAge: 'Senior (18–39 ans)',
       tshirt: 'M',

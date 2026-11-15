@@ -33,7 +33,7 @@ const RESULTATS: ResultatsPublic = {
     epreuves: [
       {
         epreuveSlug: 'longue',
-        epreuveNom: 'La Longue — 35 km',
+        epreuveNom: 'La Grande Boucle — 35 km',
         distanceKm: 35,
         heureDepart: '2027-03-26T07:00:00.000Z',
         configure: true,
@@ -56,7 +56,7 @@ const RESULTATS: ResultatsPublic = {
     ],
   },
   derniersArrives: [
-    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 100 * 60_000 },
+    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 100 * 60_000 },
     { dossard: 221, epreuveSlug: 'sprint', epreuveNom: 'Le Sprint — 5 km', tempsMs: null },
   ],
 };
@@ -72,7 +72,7 @@ const RESULTATS_FILTRES: ResultatsPublic = {
     epreuves: [
       {
         epreuveSlug: 'longue',
-        epreuveNom: 'La Longue — 35 km',
+        epreuveNom: 'La Grande Boucle — 35 km',
         distanceKm: 35,
         heureDepart: '2027-03-26T07:00:00.000Z',
         configure: true,
@@ -99,7 +99,7 @@ const RESULTATS_FILTRES: ResultatsPublic = {
   },
   derniersArrives: [
     { dossard: 301, epreuveSlug: 'sprint', epreuveNom: 'Le Sprint — 5 km', tempsMs: 25 * 60_000 },
-    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Longue — 35 km', tempsMs: 100 * 60_000 },
+    { dossard: 201, epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle — 35 km', tempsMs: 100 * 60_000 },
   ],
 };
 
@@ -177,7 +177,7 @@ describe('VueResultats — rendu serveur (story 7.2)', () => {
     expect(html).toContain('reconnexion…');
     expect(html).toContain('role="status"');
     // L'état reste rendu : le classement ne disparaît pas.
-    expect(html).toContain('La Longue — 35 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
     expect(html).toContain('201');
   });
 
@@ -191,7 +191,7 @@ describe('VueResultats — rendu serveur (story 7.2)', () => {
 
   it('classement par épreuve : rangs, badges dossard, temps formatés, statuts en toutes lettres', async () => {
     const html = await rendu(RESULTATS);
-    expect(html).toContain('La Longue — 35 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
     expect(html).toContain('resultats-dossard');
     expect(html).toContain('1 h 40 min 00 s');
     expect(html).toContain('En course');
@@ -337,7 +337,7 @@ describe('VueResultats — recherche, filtres et podium (story 9.5)', () => {
     expect(html).not.toContain('id="resultats-epreuve-longue"');
     expect(html).toContain('<option value="sprint" selected="">Le Sprint</option>');
     // Les DEUX épreuves restent proposées dans le select (changement possible).
-    expect(html).toContain('<option value="longue">La Longue</option>');
+    expect(html).toContain('<option value="longue">La Grande Boucle</option>');
     expect(html).not.toContain('Aucun dossard ne correspond');
   });
 

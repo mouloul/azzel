@@ -47,8 +47,8 @@ const SESSION_COUREUR = {
 const ETAT = {
   edition: { id: 'edition-1', nom: 'Édition 2027' },
   partants: [
-    { epreuveId: 'ep-1', epreuveNom: 'La Longue', total: 12 },
-    { epreuveId: 'ep-2', epreuveNom: 'La Moyenne', total: 30 },
+    { epreuveId: 'ep-1', epreuveNom: 'La Grande Boucle', total: 12 },
+    { epreuveId: 'ep-2', epreuveNom: 'La Boucle Moyenne', total: 30 },
   ],
   retraits: 42,
   arrives: 7,
