@@ -4,6 +4,7 @@ import { PARCOURS_DOC } from './lecture';
 import { arrondi } from './geo';
 import type { ParcoursDoc } from './construire';
 import {
+  libelleCourtMarqueur,
   BORNES_PENTE_PCT,
   FENETRE_PENTE_M,
   PAS_CURSEUR_M,
@@ -160,9 +161,18 @@ describe('construireProfilEpreuve — données réelles de la longue', () => {
     expect(profil?.points.length).toBe(140);
     expect(profil?.dplusM).toBe(DOC.epreuves.longue?.dplusM);
     expect(profil?.distanceM).toBe(DOC.epreuves.longue?.distanceM);
-    expect(profil?.marqueurs.map((m) => m.id)).toEqual(['depart', 'arrivee']);
-    expect(profil?.marqueurs[1]?.dplusSegmentAmontM).toBe(1186);
-    expect(profil?.marqueurs[1]?.kilometre).toBeCloseTo(28.01, 2);
+    expect(profil?.marqueurs.map((m) => m.id)).toEqual([
+      'depart',
+      'ravito-1',
+      'ravito-2',
+      'ravito-3',
+      'ravito-4',
+      'arrivee',
+    ]);
+    // D+ des tronçons : leur somme redonne le D+ publié (1 186 m).
+    const somme = (profil?.marqueurs ?? []).reduce((t, m) => t + (m.dplusSegmentAmontM ?? 0), 0);
+    expect(somme).toBe(1186);
+    expect(profil?.marqueurs[5]?.kilometre).toBeCloseTo(28.01, 2);
   });
 
   it('les 4 paliers présents (parts mesurées ≈ 25/51/20/4 % de la distance)', () => {
@@ -318,4 +328,12 @@ describe('slug hérité de Object (même garde que traceCarte)', () => {
       expect(sequenceEpreuve(DOC, slug)).toEqual([]);
     },
   );
+});
+
+describe('libelleCourtMarqueur — repères sous le profil (retour comité 2027)', () => {
+  it('raccourcit les ravitaillements, laisse Départ/Arrivée intacts', () => {
+    expect(libelleCourtMarqueur('Ravitaillement 2 · La montée du milieu')).toBe('Ravito 2');
+    expect(libelleCourtMarqueur('Départ')).toBe('Départ');
+    expect(libelleCourtMarqueur('Arrivée')).toBe('Arrivée');
+  });
 });

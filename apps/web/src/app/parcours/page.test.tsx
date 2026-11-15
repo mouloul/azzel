@@ -64,7 +64,7 @@ describe('page /parcours — rendu public', () => {
   it('titre de page en h1, sélecteur d’épreuve et une fiche par épreuve (vue de l’accueil)', () => {
     expect(html).toMatch(/<h1[^>]*id="titre-parcours"/);
     expect(html).toContain('Les parcours');
-    expect(html).toContain('Épreuve affichée');
+    expect(html).toContain('Choisir l’épreuve');
     expect(html).toContain('Le Grand Trail d’Aït Aïssi');
     expect(html).toContain('La Boucle Moyenne');
     // Fiche technique rédigée depuis le relevé : relief, effort, pentes.

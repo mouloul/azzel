@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ProfilAltimetrique } from '@/components/profil-altimetrique';
 import { ProfilCurseur, texteLecture } from '@/components/profil-curseur';
-import { MENTION_TRACE_PROVISOIRE, SectionParcours } from '@/components/section-parcours';
+import { SectionParcours } from '@/components/section-parcours';
 import { PARCOURS_DOC } from '@/modules/contenus/parcours/lecture';
 import {
   construireProfilEpreuve,
@@ -81,7 +81,7 @@ describe('profil altimetrique — SVG servi complet (story 11.4)', () => {
   it('marqueurs Départ/Arrivée : kilomètre + D+ du segment amont', () => {
     expect(html).toContain('aa-profil__marqueur-libelle');
     expect(html).toContain(`Départ · km${NBSP_ETROIT}0`);
-    expect(html).toContain(`Arrivée · km${NBSP_ETROIT}28 · +1${NBSP_ETROIT}186${NBSP_ETROIT}m D+`);
+    expect(html).toContain(`Arrivée · km${NBSP_ETROIT}28 · +207${NBSP_ETROIT}m D+`);
   });
 
   it('décor (grille, axes, aires, marqueurs) aria-hidden', () => {
@@ -149,16 +149,13 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
     expect(tranchePanneau(1)).not.toContain('class="vp"');
   });
 
-  it('décision produit 2026-11-04 : panneau longue = distance du relevé + mention « tracé provisoire »', () => {
+  it('décision produit 2026-11-04 : panneau longue = distance du relevé, sans mention « tracé provisoire » (retour comité 2027)', () => {
     // Distance AFFICHÉE = relevé (28 006,4 m → « 28 km », même convention
     // de format que « 12 km » : maximumFractionDigits 1, zéro traînant omis),
     // pas la base éditoriale (35) — le panneau est cohérent avec le profil.
     expect(html).toContain(`>28${NBSP_ETROIT}km<`);
     expect(html).not.toContain('>35');
-    // Mention sobre, SERVIE sans JavaScript, texte en constante unique.
-    expect(html).toContain(MENTION_TRACE_PROVISOIRE);
-    // Une seule occurrence : le panneau de la longue, jamais ailleurs.
-    expect(html.split(MENTION_TRACE_PROVISOIRE).length - 1).toBe(1);
+    expect(html).not.toContain('Tracé provisoire');
   });
 
   it('moyenne (sans données) : mention « tracé provisoire » absente', () => {
@@ -180,7 +177,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
         }}
       />,
     );
-    expect(sansProfil).not.toContain(MENTION_TRACE_PROVISOIRE);
+    expect(sansProfil).not.toContain('Tracé provisoire');
   });
 
   it('moyenne (sans données) : AUCUNE visualisation ni chiffre de profil, annonce conservée', () => {

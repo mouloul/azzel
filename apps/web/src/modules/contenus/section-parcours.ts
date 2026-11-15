@@ -54,6 +54,8 @@ export interface PointDePassageEpreuve {
   altitudeM: number | null;
   /** Services en toutes lettres (ex. « Ravitaillement », « Point d’eau »). */
   services: readonly string[] | null;
+  /** D+ cumulé depuis le point précédent de l’épreuve (0 au départ). */
+  dplusDepuisPrecedentM?: number | null;
 }
 
 /** Une épreuve de la section : la fiche `EpreuveView` + les champs épopée 11.
@@ -130,6 +132,7 @@ function fusionnerEpreuve(
       altitudeM: point.altitudeM ?? altitudeParId.get(point.id) ?? null,
       // FR-39 : services inconnus ⇒ null (jamais inventés).
       services: servicesParId.get(point.id) ?? null,
+      dplusDepuisPrecedentM: point.dplusSegmentAmontM ?? null,
     })),
     // Story 11.4 — profil décimé (serveur) ; géométrie exploitée par le SVG
     // de l’aside et l’île curseur, jamais par le HTML de base.

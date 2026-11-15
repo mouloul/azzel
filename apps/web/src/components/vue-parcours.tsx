@@ -12,7 +12,14 @@ import {
   attributionCourte,
   attributions,
 } from '@/modules/contenus/parcours/fonds-carte';
-import { BORNES_PENTE_PCT, LIBELLES_PALIERS, PALIERS, type ProfilEpreuve } from '@/modules/contenus/parcours/profil';
+import {
+  BORNES_PENTE_PCT,
+  ECART_REPERE_ARRIVEE_KM,
+  LIBELLES_PALIERS,
+  libelleCourtMarqueur,
+  PALIERS,
+  type ProfilEpreuve,
+} from '@/modules/contenus/parcours/profil';
 import {
   PALETTE_PENTE_VUE,
   VUE,
@@ -417,8 +424,15 @@ export function VueParcours({
               {profil.marqueurs.map((marqueur, index) => {
                 const x = echelles.x(marqueur.sM);
                 const y = echelles.y(marqueur.altitudeM ?? profil.altitudeMinM);
+                const dernier = profil.marqueurs[profil.marqueurs.length - 1];
+                const procheArrivee =
+                  dernier !== undefined && (dernier.sM - marqueur.sM) / 1000 < ECART_REPERE_ARRIVEE_KM;
                 const ancre =
-                  index === 0 ? 'start' : index === profil.marqueurs.length - 1 ? 'end' : 'middle';
+                  index === 0
+                    ? 'start'
+                    : index === profil.marqueurs.length - 1 || procheArrivee
+                      ? 'end'
+                      : 'middle';
                 const precedent = profil.marqueurs[index - 1];
                 const kmSegment =
                   precedent !== undefined ? (marqueur.sM - precedent.sM) / 1000 : null;
@@ -437,7 +451,8 @@ export function VueParcours({
                       {marqueur.kilometre !== null ? `${formatKm.format(marqueur.kilometre)} km` : ''}
                     </text>
                     <text className="vp__texte-doux" textAnchor={ancre} x={x} y={echelles.yBase + 36}>
-                      {marqueur.nom}
+                      <title>{marqueur.nom}</title>
+                      {libelleCourtMarqueur(marqueur.nom)}
                     </text>
                     {kmSegment !== null && precedent !== undefined && marqueur.dplusSegmentAmontM !== null ? (
                       <text

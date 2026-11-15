@@ -98,14 +98,28 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     // Heure de départ et barrière horaire : INCONNUES ⇒ null (jamais inventées).
     expect(longue?.metriques?.heureDepart).toBeNull();
     expect(longue?.metriques?.barriereHoraire).toBeNull();
-    // Points de passage : Départ/Arrivée auto-déduits, kilométrages extrêmes.
+    // Points de passage : Départ/Arrivée auto-déduits + les quatre
+    // ravitaillements déclarés (retour comité 2027), dans l'ordre du tracé.
     const points = longue?.pointsDePassage ?? [];
-    expect(points.map((p) => p.id)).toEqual(['depart', 'arrivee']);
+    expect(points.map((p) => p.id)).toEqual([
+      'depart',
+      'ravito-1',
+      'ravito-2',
+      'ravito-3',
+      'ravito-4',
+      'arrivee',
+    ]);
     expect(points[0]?.nom).toBe('Départ');
     expect(points[0]?.kilometre).toBe(0);
-    expect(points[1]?.kilometre).toBeCloseTo(28.01, 1);
-    // Services inconnus ⇒ null (FR-39 : jamais inventés).
-    expect(points.every((p) => p.services === null)).toBe(true);
+    expect(points[5]?.kilometre).toBeCloseTo(28.01, 1);
+    // Services : déclarés pour les ravitaillements, inconnus ⇒ null sinon
+    // (FR-39 : jamais inventés).
+    expect(points[0]?.services).toBeNull();
+    expect(points[5]?.services).toBeNull();
+    expect(points[1]?.services).toContain('Eau');
+    // D+ du tronçon amont exposé pour le détail des points de passage.
+    expect(points[0]?.dplusDepuisPrecedentM).toBe(0);
+    expect(points[1]?.dplusDepuisPrecedentM).toBeGreaterThan(0);
   });
 
   it('la moyenne porte son propre relevé (petite boucle)', async () => {
@@ -152,7 +166,14 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     // D+ du profil = chiffre PUBLIÉ 11.1 (même source que les métriques).
     expect(longue?.profil?.dplusM).toBe(longue?.metriques?.denivelePositifM);
     // Marqueurs Départ/Arrivée au référentiel de l’épreuve.
-    expect(longue?.profil?.marqueurs.map((m) => m.id)).toEqual(['depart', 'arrivee']);
+    expect(longue?.profil?.marqueurs.map((m) => m.id)).toEqual([
+      'depart',
+      'ravito-1',
+      'ravito-2',
+      'ravito-3',
+      'ravito-4',
+      'arrivee',
+    ]);
   });
 
   it('store indisponible : dégradation en section vide (convention 9.3 inchangée)', async () => {

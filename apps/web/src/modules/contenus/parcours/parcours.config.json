@@ -2,7 +2,50 @@
   "source": {
     "gpx": "docs/GPX/activity_24920331005.gpx"
   },
-  "pointsDePassage": [],
+  "pointsDePassage": [
+    {
+      "id": "ravito-1",
+      "nom": "Ravitaillement 1 · Le premier souffle",
+      "positionBaseM": 8000,
+      "services": [
+        "Eau",
+        "Boisson isotonique",
+        "Fruits secs"
+      ]
+    },
+    {
+      "id": "ravito-2",
+      "nom": "Ravitaillement 2 · La montée du milieu",
+      "positionBaseM": 15000,
+      "services": [
+        "Eau",
+        "Boisson isotonique",
+        "Salé",
+        "Sucré"
+      ]
+    },
+    {
+      "id": "ravito-3",
+      "nom": "Ravitaillement 3 · La descente technique",
+      "positionBaseM": 21000,
+      "services": [
+        "Eau",
+        "Boisson sucrée",
+        "Salé",
+        "Fruits"
+      ]
+    },
+    {
+      "id": "ravito-4",
+      "nom": "Ravitaillement 4 · Le dernier coup de collier",
+      "positionBaseM": 26000,
+      "services": [
+        "Eau",
+        "Fruits",
+        "Boisson sucrée"
+      ]
+    }
+  ],
   "epreuves": [
     {
       "slug": "longue",

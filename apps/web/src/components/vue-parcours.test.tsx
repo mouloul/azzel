@@ -168,8 +168,8 @@ describe('SectionParcours — l’accueil fusionné, avec la vraie vue', () => {
     expect(html).toContain('Contenu sous le sélecteur');
   });
 
-  it('la mention « tracé provisoire » accompagne la vue, comme avant', () => {
-    expect(section()).toContain('Tracé provisoire');
+  it('retour comité 2027 : plus de mention « tracé provisoire » sous la vue', () => {
+    expect(section()).not.toContain('Tracé provisoire');
   });
 
   it('un profil SANS métriques affiche quand même la vue, chiffres tirés du profil', () => {

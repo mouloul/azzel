@@ -55,6 +55,20 @@ export const LIBELLES_PALIERS: Readonly<Record<Palier, string>> = {
 };
 
 /** Palier d’une pente : échelle verrouillée, calcul sur la valeur absolue. */
+/**
+ * Libellé court d'un repère sous le profil : « Ravitaillement 2 · La montée
+ * du milieu » devient « Ravito 2 ». Le nom complet reste dans la liste des
+ * points de passage ; sous le profil, les libellés longs se chevauchaient.
+ */
+export function libelleCourtMarqueur(nom: string): string {
+  const tete = nom.split(' · ')[0] ?? nom;
+  return tete.replace(/^Ravitaillement\b/, 'Ravito');
+}
+
+/** Écart (km) sous lequel un repère se cale à gauche de son trait pour ne pas
+ *  mordre sur le libellé de l'arrivée, elle-même calée à droite. */
+export const ECART_REPERE_ARRIVEE_KM = 4;
+
 export function palierDePente(pentePct: number): Palier {
   const v = Math.abs(pentePct);
   if (v < BORNES_PENTE_PCT.soutenu) return 'roulant';

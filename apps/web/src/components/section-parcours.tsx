@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import type {
   EpreuveSectionParcours,
   MetriquesEpreuve,
+  PointDePassageEpreuve,
   SectionParcoursView,
 } from '@/modules/contenus/section-parcours';
 
@@ -33,16 +34,6 @@ import type {
 
 const NBSP = '\u202f';
 
-/**
- * Décision produit 2026-11-04 : le relevé GPX publié est un relevé D’ESSAI
- * (« essai trail ait ainsi 2027 ») — le tracé définitif n’existe pas. Toute
- * épreuve affichant des chiffres issus de ce relevé porte cette mention,
- * sobre et factuelle, JAMAIS présentée comme officielle. Une seule source :
- * la retirer ici (une ligne) le jour du tracé officiel.
- */
-export const MENTION_TRACE_PROVISOIRE =
-  'Tracé provisoire, issu d’un relevé d’essai : distance, dénivelé et profil pourront évoluer.';
-
 const formatKm = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 const formatM = new Intl.NumberFormat('fr-FR');
 
@@ -64,6 +55,33 @@ function lignesSynthese(epreuve: EpreuveSectionParcours): [label: string, valeur
     if (m.barriereHoraire !== null) lignes.push(['Barrière horaire', m.barriereHoraire]);
   }
   return lignes;
+}
+
+/**
+ * Détail du tronçon qui mène à un point : distance et D+ depuis le point
+ * précédent (« 8 km et +186 m depuis le départ »). Rien d'inventé : une
+ * valeur manquante retire seulement sa partie.
+ */
+function TronconAmont({
+  point,
+  precedent,
+}: {
+  point: PointDePassageEpreuve;
+  precedent: PointDePassageEpreuve | undefined;
+}) {
+  const morceaux: string[] = [];
+  if (point.kilometre !== null && precedent?.kilometre != null) {
+    morceaux.push(`${formatKm.format(point.kilometre - precedent.kilometre)}${NBSP}km`);
+  }
+  if (point.dplusDepuisPrecedentM != null) {
+    morceaux.push(`+${formatM.format(point.dplusDepuisPrecedentM)}${NBSP}m`);
+  }
+  if (morceaux.length === 0 || precedent === undefined) return null;
+  return (
+    <span className="aa-parcours-accueil__passage-troncon">
+      {morceaux.join(' et ')} depuis {precedent.nom === 'Départ' ? 'le départ' : 'le point précédent'}
+    </span>
+  );
 }
 
 /** Règles de bascule générées par épreuve (clé = rang, pas le slug : rien à échapper).
@@ -103,10 +121,7 @@ function PanneauEpreuve({
   const gpxUrl =
     epreuve.gpxUrl !== null && isHttpsUrl(epreuve.gpxUrl) ? epreuve.gpxUrl : null;
   const points = epreuve.pointsDePassage;
-  // Données issues du relevé d’essai (parcours.json) : métriques ou profil.
-  // Une épreuve sans relevé publié ne porte JAMAIS la mention.
   const profil = epreuve.profil ?? null;
-  const duReleve = epreuve.metriques !== null || profil !== null;
   return (
     <article className="socle-carte aa-parcours-accueil__panneau" data-panneau={rang}>
       <header className="aa-parcours-accueil__tete">
@@ -187,11 +202,6 @@ function PanneauEpreuve({
           </div>
         </>
       )}
-      {/* Servi SANS JavaScript : la mention fait partie du markup de base
-          (décision produit 2026-11-04, texte en constante unique). */}
-      {duReleve ? (
-        <p className="aa-parcours-accueil__provisoire">{MENTION_TRACE_PROVISOIRE}</p>
-      ) : null}
       {gpxUrl !== null ? (
         <a className="aa-lien-texte aa-parcours-accueil__gpx" href={gpxUrl} rel="noopener noreferrer">
           Télécharger le tracé GPX
@@ -203,7 +213,7 @@ function PanneauEpreuve({
           {/* Kilomètre rendu DANS le panneau de son épreuve : jamais orphelin
               de son référentiel (UX-DR-31), même sur la portion commune. */}
           <ul>
-            {points.map((point) => (
+            {points.map((point, i) => (
               <li key={point.id}>
                 <span className="aa-parcours-accueil__passage-nom">{point.nom}</span>
                 {point.kilometre !== null ? (
@@ -212,6 +222,7 @@ function PanneauEpreuve({
                 {point.altitudeM !== null ? (
                   <span className="aa-parcours-accueil__passage-km">{formatM.format(point.altitudeM)}{NBSP}m</span>
                 ) : null}
+                {i > 0 ? <TronconAmont point={point} precedent={points[i - 1]} /> : null}
                 {point.services !== null && point.services.length > 0 ? (
                   <span className="aa-parcours-accueil__passage-services">{point.services.join(' · ')}</span>
                 ) : null}
@@ -276,7 +287,9 @@ export function SectionParcours({
         ) : (
           <>
             <fieldset className="aa-parcours-accueil__selecteur">
-              <legend className="aa-parcours-accueil__legende">Épreuve affichée</legend>
+              {/* Retour comité 2027 : plus d’intitulé visible au-dessus des
+                  boutons ; la légende reste pour les lecteurs d’écran. */}
+              <legend className="visually-hidden">Choisir l’épreuve</legend>
               <div className="aa-parcours-accueil__choix">
                 {epreuves.map((epreuve, rang) => (
                   <div key={epreuve.slug}>

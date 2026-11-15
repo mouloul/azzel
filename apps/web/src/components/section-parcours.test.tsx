@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { MENTION_TRACE_PROVISOIRE, SectionParcours } from '@/components/section-parcours';
+import { SectionParcours } from '@/components/section-parcours';
 import type {
   EpreuveSectionParcours,
   SectionParcoursView,
@@ -103,7 +103,9 @@ describe('section parcours accueil — sélecteur sans JavaScript (story 9.3)', 
 
   it('un seul état : groupe de radios natifs, premier coché, labels liés par for/id', () => {
     expect(html).toContain('<fieldset');
-    expect(html).toContain('Épreuve affichée');
+    // Retour comité 2027 : intitulé masqué, gardé pour les lecteurs d’écran.
+    expect(html).toContain('<legend class="visually-hidden">Choisir l’épreuve</legend>');
+    expect(html).not.toContain('Épreuve affichée');
     const radios = html.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
     expect(radios.length).toBe(2);
     for (const radio of radios) {
@@ -159,9 +161,7 @@ describe('section parcours accueil — sélecteur sans JavaScript (story 9.3)', 
     ]) {
       expect(html).not.toContain(interdit);
     }
-    // Décision produit 2026-11-04 : sans données du relevé, pas de mention
-    // « tracé provisoire » non plus.
-    expect(html).not.toContain(MENTION_TRACE_PROVISOIRE);
+    expect(html).not.toContain('Tracé provisoire');
   });
 
   it('emplacement de la visualisation annoncé, utile tel quel — jamais un cadre vide', () => {
@@ -203,11 +203,8 @@ describe('section parcours accueil — vue épopée 11 (données non nulles)', (
     expect(panneau(html, 0)).toContain('Ravitaillement · Point d’eau');
   });
 
-  it('décision produit 2026-11-04 : mention « tracé provisoire » servie dans CHAQUE panneau à données', () => {
-    // Markup serveur (visible sans JS) ; la constante unique fait foi du
-    // texte — retrait en une ligne le jour du tracé officiel.
-    expect(panneau(html, 0)).toContain(MENTION_TRACE_PROVISOIRE);
-    expect(panneau(html, 1)).toContain(MENTION_TRACE_PROVISOIRE);
+  it('retour comité 2027 : plus aucune mention « tracé provisoire » dans les panneaux', () => {
+    expect(html).not.toContain('Tracé provisoire');
   });
 });
 
@@ -221,3 +218,45 @@ describe('section parcours accueil — vue vide (base indisponible, seed absent)
     expect(html).toContain('href="/parcours"');
   });
 });
+
+describe('section parcours — détail des points de passage (retour comité 2027)', () => {
+  const html = renderToStaticMarkup(
+    <SectionParcours
+      view={{
+        epreuves: [
+          {
+            slug: 'longue',
+            nom: 'La Grande Boucle',
+            distanceKm: 28,
+            gpxUrl: null,
+            metriques: null,
+            profil: null,
+            pointsDePassage: [
+              { id: 'depart', nom: 'Départ', kilometre: 0, altitudeM: 677, services: null, dplusDepuisPrecedentM: 0 },
+              {
+                id: 'ravito-1',
+                nom: 'Ravitaillement 1 · Le premier souffle',
+                kilometre: 8,
+                altitudeM: 345,
+                services: ['Eau', 'Fruits secs'],
+                dplusDepuisPrecedentM: 144,
+              },
+              { id: 'arrivee', nom: 'Arrivée', kilometre: 28, altitudeM: 676, services: null, dplusDepuisPrecedentM: 207 },
+            ],
+          },
+        ],
+      }}
+    />,
+  );
+
+  it('chaque point après le départ dit la distance et le D+ du tronçon qui y mène', () => {
+    expect(html).toContain(`8${NBSP_ETROIT}km et +144${NBSP_ETROIT}m depuis le départ`);
+    expect(html).toContain(`20${NBSP_ETROIT}km et +207${NBSP_ETROIT}m depuis le point précédent`);
+    expect(html).toContain('Eau · Fruits secs');
+  });
+
+  it('le départ ne porte aucun tronçon amont', () => {
+    expect((html.match(/aa-parcours-accueil__passage-troncon/g) ?? []).length).toBe(2);
+  });
+});
+
