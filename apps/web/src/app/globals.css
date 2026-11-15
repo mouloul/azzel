@@ -1443,6 +1443,7 @@ a.aa-partenaire__nom{color:inherit}
 .footer-nav{display:flex;flex-wrap:wrap;gap:var(--az-space-2) var(--az-space-4);margin:0 0 var(--az-space-3)}
 .footer-nav a{color:var(--az-texte);text-decoration:underline;text-underline-offset:3px}
 .footer-nav a:hover{color:var(--az-texte-2)}
+.footer-nav a[aria-current='page']{font-weight:700;text-decoration:none;box-shadow:inset 0 -2px 0 var(--accent)}
 
 /* Section parcours de l’accueil (story 9.3) — sélecteur SANS JavaScript :
    radios natifs masqués visuellement, labels .socle-action en cibles ≥ 44 px,
@@ -1589,7 +1590,6 @@ body:has(.aa-hero--plein) .site-header .admin-link:hover {
 body:has(.aa-hero--plein) .header-nav a {
   color: var(--on-forest);
 }
-
 body:has(.aa-hero--plein) .site-header :is(a, button):focus-visible {
   outline-color: var(--on-forest);
   box-shadow: 0 0 0 4px var(--forest-surface);
@@ -1891,6 +1891,18 @@ body:has(.aa-hero--plein) .site-header .theme-switch__option:has(input:focus-vis
   .header-nav a:hover {
     text-decoration: underline;
     text-underline-offset: 4px;
+  }
+
+  /* Rubrique courante : filet cuivre sous le libellé (jamais la couleur
+     seule). Le filet est tracé en bordure, le soulignement de survol ne s'y
+     superpose pas. */
+  .header-nav a[aria-current='page'] {
+    color: var(--accent);
+    box-shadow: inset 0 -3px 0 var(--accent);
+  }
+
+  .header-nav a[aria-current='page']:hover {
+    text-decoration: none;
   }
 }
 
