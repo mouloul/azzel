@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "source": {
     "fichier": "activity_24920331005.gpx",
     "nom": "essai trail ait ainsi 2027",
@@ -9422,6 +9422,26 @@
       "services": null
     },
     {
+      "id": "moyenne-ravito-1",
+      "nom": "Ravitaillement 1 · Le premier souffle",
+      "positionBaseM": 35249.1,
+      "indexBase": 4039,
+      "lon": 4.45868,
+      "lat": 36.77471,
+      "altitudeM": 354.5,
+      "services": ["Eau","Boisson isotonique","Fruits secs"]
+    },
+    {
+      "id": "moyenne-ravito-2",
+      "nom": "Ravitaillement 2 · Le dernier coup de collier",
+      "positionBaseM": 38770.3,
+      "indexBase": 4431,
+      "lon": 4.4397,
+      "lat": 36.773317,
+      "altitudeM": 473.1,
+      "services": ["Eau","Fruits","Boisson sucrée"]
+    },
+    {
       "id": "moyenne-arrivee",
       "nom": "Arrivée",
       "positionBaseM": 40730.9,
@@ -9511,11 +9531,25 @@
           "dplusSegmentAmontM": 0
         },
         {
+          "id": "moyenne-ravito-1",
+          "sM": 7242.7,
+          "kilometre": 7.24,
+          "altitudeM": 354.5,
+          "dplusSegmentAmontM": 115
+        },
+        {
+          "id": "moyenne-ravito-2",
+          "sM": 10764,
+          "kilometre": 10.76,
+          "altitudeM": 473.1,
+          "dplusSegmentAmontM": 203
+        },
+        {
           "id": "moyenne-arrivee",
           "sM": 12724.5,
           "kilometre": 12.72,
           "altitudeM": 674.7,
-          "dplusSegmentAmontM": 525
+          "dplusSegmentAmontM": 204
         }
       ],
       "source": {

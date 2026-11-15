@@ -134,6 +134,19 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     // reste cohérente avec le profil qu'elle affiche.
     expect(moyenne?.distanceKm).toBeCloseTo(12.7, 1);
     expect(moyenne?.metriques?.denivelePositifM).toBe(525);
+    // Retour comité 2027 : deux ravitaillements, les postes 1 et 4 de la
+    // Grande Boucle que ce relevé croise.
+    const points = moyenne?.pointsDePassage ?? [];
+    expect(points.map((p) => p.id)).toEqual([
+      'moyenne-depart',
+      'moyenne-ravito-1',
+      'moyenne-ravito-2',
+      'moyenne-arrivee',
+    ]);
+    expect(points[1]?.nom).toBe('Ravitaillement 1 · Le premier souffle');
+    expect(points[1]?.kilometre).toBeCloseTo(7.24, 1);
+    expect(points[2]?.nom).toBe('Ravitaillement 2 · Le dernier coup de collier');
+    expect(points[2]?.kilometre).toBeCloseTo(10.76, 1);
   });
 
   it('décision produit : la distance affichée est celle du RELEVÉ dès qu’il existe', async () => {

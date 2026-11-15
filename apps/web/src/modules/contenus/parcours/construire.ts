@@ -58,6 +58,21 @@ export interface ConfigEpreuve {
   portions?: readonly ConfigPortion[];
   /** Relevé propre (chemin depuis la racine du dépôt), exclusif de `portions`. */
   source?: { gpx: string };
+  /**
+   * Points de passage posés sur le relevé PROPRE de l'épreuve (seulement
+   * avec `source`) : leur position se compte depuis le départ de ce relevé.
+   */
+  pointsDePassage?: readonly ConfigPointRelevePropre[];
+}
+
+/** Point de passage d'une épreuve à relevé propre (ex. ravitaillement de la moyenne). */
+export interface ConfigPointRelevePropre {
+  id: string;
+  nom: string;
+  /** Position sur le relevé propre (mètres depuis son départ). */
+  positionM: number;
+  /** Services en toutes lettres (FR-39). Absent/null = inconnu — jamais inventé. */
+  services?: readonly string[] | null;
 }
 
 /** Schéma de parcours.config.json. */
@@ -162,7 +177,36 @@ export function validerConfig(config: unknown): ParcoursConfig {
           );
         }
       }
+      if (epreuve.pointsDePassage !== undefined) {
+        if (!Array.isArray(epreuve.pointsDePassage)) {
+          throw new ConfigInvalideError(`épreuve « ${epreuve.slug} » : pointsDePassage doit être un tableau`);
+        }
+        for (const p of epreuve.pointsDePassage) {
+          const point = (typeof p === 'object' && p !== null ? p : {}) as Record<string, unknown>;
+          if (!estTexte(point.id) || !estTexte(point.nom)) {
+            throw new ConfigInvalideError(`épreuve « ${epreuve.slug} » : point de passage sans id ou nom`);
+          }
+          if (point.id === reserves.depart || point.id === reserves.arrivee || point.id === 'depart' || point.id === 'arrivee') {
+            throw new ConfigInvalideError(`l’id « ${point.id} » est réservé — renomme le point`);
+          }
+          if (ids.has(point.id)) {
+            throw new ConfigInvalideError(`id de point de passage dupliqué : « ${point.id} »`);
+          }
+          ids.add(point.id);
+          if (typeof point.positionM !== 'number' || !Number.isFinite(point.positionM)) {
+            throw new ConfigInvalideError(`point « ${point.id} » : positionM (nombre de mètres) requis`);
+          }
+          if (point.services !== undefined && point.services !== null && !Array.isArray(point.services)) {
+            throw new ConfigInvalideError(`point « ${point.id} » : services doit être un tableau ou null`);
+          }
+        }
+      }
       continue;
+    }
+    if (epreuve.pointsDePassage !== undefined) {
+      throw new ConfigInvalideError(
+        `épreuve « ${epreuve.slug} » : pointsDePassage propres réservés aux épreuves à relevé propre (source)`,
+      );
     }
     if (!Array.isArray(epreuve.portions) || epreuve.portions.length === 0) {
       throw new ConfigInvalideError(
@@ -453,6 +497,28 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
         services: null,
       });
     }
+    for (const point of epreuve.pointsDePassage ?? []) {
+      if (point.positionM <= 0 || point.positionM >= g.distanceTotaleM) {
+        throw new ConfigInvalideError(
+          `point « ${point.id} » : positionM ${point.positionM} m hors relevé ]0 ; ${arrondi(g.distanceTotaleM, 0)} m[`,
+        );
+      }
+      const indexLocal = indexLePlusProche(g.distances, point.positionM);
+      const cible = g.points[indexLocal];
+      if (cible === undefined || indexLocal <= 0 || indexLocal >= g.points.length - 1) {
+        throw new ConfigInvalideError(`point « ${point.id} » : trop proche du départ/arrivée du relevé (réservés)`);
+      }
+      base.push({
+        id: point.id,
+        nom: point.nom,
+        positionBaseM: arrondi(decalageM + cible.distanceM, 1),
+        indexBase: decalageIndex + indexLocal,
+        lon: arrondi(cible.lon, 6),
+        lat: arrondi(cible.lat, 6),
+        altitudeM: cible.altitudeM,
+        services: point.services ?? null,
+      });
+    }
     tranchesPropres.set(epreuve.slug, { deIndex: decalageIndex, aIndex: finIndex });
     sourcesPropres.set(epreuve.slug, {
       fichier: epreuve.source.gpx.split('/').pop() ?? epreuve.source.gpx,
@@ -468,6 +534,8 @@ export function construireParcoursDoc(entree: EntreeConstruction): ParcoursDoc {
       },
     });
   }
+  // Points des relevés propres ajoutés après les bornes : ordre du profil.
+  base.sort((a, b) => a.positionBaseM - b.positionBaseM);
 
   // --- Vues d’épreuve.
   const epreuves: Record<string, EpreuveDoc> = {};

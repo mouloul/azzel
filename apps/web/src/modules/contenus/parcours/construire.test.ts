@@ -344,3 +344,45 @@ describe('parcours — épreuve sur son propre relevé', () => {
     );
   });
 });
+
+describe('parcours — points de passage sur un relevé propre (retour comité 2027)', () => {
+  function configAvecRavitos(points: unknown[]): Record<string, unknown> {
+    const config = configAvecReleveAnnexe();
+    (config.epreuves as Record<string, unknown>[])[1]!.pointsDePassage = points;
+    return config;
+  }
+
+  it('un ravitaillement posé sur le relevé de la moyenne apparaît dans SA vue, au bon kilomètre', () => {
+    const doc = construireAvecAnnexe(
+      configAvecRavitos([{ id: 'moyenne-ravito-1', nom: 'Ravitaillement 1', positionM: 2000, services: ['Eau'] }]),
+    );
+    const points = doc.epreuves.moyenne!.pointsDePassage;
+    expect(points.map((p) => p.id)).toEqual(['moyenne-depart', 'moyenne-ravito-1', 'moyenne-arrivee']);
+    expect(points[1]?.kilometre).toBe(2);
+    // Altitude du relevé annexe : 200 + index (20 à 2 000 m).
+    expect(points[1]?.altitudeM).toBe(220);
+    expect(points[1]?.dplusSegmentAmontM).toBe(20);
+    const base = doc.pointsDePassage.find((p) => p.id === 'moyenne-ravito-1');
+    expect(base?.services).toEqual(['Eau']);
+    expect(base?.positionBaseM).toBe(DISTANCE_TOTALE + 2000);
+    // La longue ne le voit pas.
+    expect(doc.epreuves.longue!.pointsDePassage.map((p) => p.id)).not.toContain('moyenne-ravito-1');
+  });
+
+  it('position hors du relevé propre : erreur nommée', () => {
+    expect(() =>
+      construireAvecAnnexe(configAvecRavitos([{ id: 'r', nom: 'R', positionM: 9000 }])),
+    ).toThrow(/hors relevé/);
+  });
+
+  it('config : positionM requise, id unique, réservé aux épreuves à relevé propre', () => {
+    expect(() => validerConfig(configAvecRavitos([{ id: 'r', nom: 'R' }]))).toThrow(/positionM/);
+    expect(() => validerConfig(configAvecRavitos([{ id: 'x', nom: 'R', positionM: 100 }]))).toThrow(/dupliqué/);
+    expect(() =>
+      validerConfig(configAvecRavitos([{ id: 'moyenne-arrivee', nom: 'R', positionM: 100 }])),
+    ).toThrow(/réservé/);
+    const surPortions = configAvecReleveAnnexe();
+    (surPortions.epreuves as Record<string, unknown>[])[0]!.pointsDePassage = [];
+    expect(() => validerConfig(surPortions)).toThrow(/relevé propre/);
+  });
+});
