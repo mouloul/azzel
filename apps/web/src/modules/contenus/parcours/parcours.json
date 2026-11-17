@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "source": {
     "fichier": "activity_24920331005.gpx",
     "nom": "essai trail ait ainsi 2027",
@@ -9423,22 +9423,22 @@
     },
     {
       "id": "moyenne-ravito-1",
-      "nom": "Ravitaillement 1 · Le premier souffle",
-      "positionBaseM": 35249.1,
-      "indexBase": 4039,
-      "lon": 4.45868,
-      "lat": 36.77471,
-      "altitudeM": 354.5,
+      "nom": "Ravitaillement 1 · Le fond de vallée",
+      "positionBaseM": 33813,
+      "indexBase": 3873,
+      "lon": 4.451883,
+      "lat": 36.768195,
+      "altitudeM": 318.1,
       "services": ["Eau","Boisson isotonique","Fruits secs"]
     },
     {
       "id": "moyenne-ravito-2",
-      "nom": "Ravitaillement 2 · Le dernier coup de collier",
-      "positionBaseM": 38770.3,
-      "indexBase": 4431,
-      "lon": 4.4397,
-      "lat": 36.773317,
-      "altitudeM": 473.1,
+      "nom": "Ravitaillement 2 · Avant la remontée",
+      "positionBaseM": 38138.6,
+      "indexBase": 4358,
+      "lon": 4.445228,
+      "lat": 36.772319,
+      "altitudeM": 408,
       "services": ["Eau","Fruits","Boisson sucrée"]
     },
     {
@@ -9532,24 +9532,24 @@
         },
         {
           "id": "moyenne-ravito-1",
-          "sM": 7242.7,
-          "kilometre": 7.24,
-          "altitudeM": 354.5,
-          "dplusSegmentAmontM": 115
+          "sM": 5806.6,
+          "kilometre": 5.81,
+          "altitudeM": 318.1,
+          "dplusSegmentAmontM": 49
         },
         {
           "id": "moyenne-ravito-2",
-          "sM": 10764,
-          "kilometre": 10.76,
-          "altitudeM": 473.1,
-          "dplusSegmentAmontM": 203
+          "sM": 10132.2,
+          "kilometre": 10.13,
+          "altitudeM": 408,
+          "dplusSegmentAmontM": 218
         },
         {
           "id": "moyenne-arrivee",
           "sM": 12724.5,
           "kilometre": 12.72,
           "altitudeM": 674.7,
-          "dplusSegmentAmontM": 204
+          "dplusSegmentAmontM": 269
         }
       ],
       "source": {

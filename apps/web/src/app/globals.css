@@ -962,10 +962,6 @@ main {
 .aa-chip{display:inline-block;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:4px 12px;border-radius:var(--az-radius-full);line-height:1.2}
 .aa-chip--phare{background:var(--action);color:var(--on-action)}
 .aa-chip--nouveau{background:var(--forest-surface);color:var(--on-forest)}
-/* Poste de ravitaillement servant AUSSI la Boucle Moyenne : puce de contour,
-   lue comme un complément du kilomètre de la Grande Boucle, pas comme un
-   second libellé de même poids. */
-.aa-chip--partage{border:1.5px solid var(--action);padding:2px 10px;background:transparent;color:var(--action)}
 /* I9 (revue épopée 10) — .aa-chip--tbc et .aa-chip--refuse retirés : seuls
    consommateurs = coureurStatusChipClass, supprimée (les statuts inscriptions
    passent aux pastilles socle, liste comme détail). */

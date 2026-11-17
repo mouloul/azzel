@@ -9,6 +9,11 @@ import { PARCOURS_DOC } from '@/modules/contenus/parcours/lecture';
  * fichier ne garde que le texte rédigé. Un écart comme « +186 m » ici au-dessus
  * de « +144 m » dans les points de passage ne peut donc plus réapparaître.
  *
+ * Décision du comité du 17/11/2026 : les deux postes de la Boucle Moyenne
+ * (km 5,81 et 10,13) lui sont PROPRES — ils tombent à 949 m et 514 m des
+ * postes de la Grande Boucle. Six postes distincts à armer, donc, et non
+ * quatre dont deux partagés.
+ *
  * Emplacements et contenus INDICATIFS — le comité les confirme avant
  * publication.
  */
@@ -22,11 +27,17 @@ export interface PointRavitaillement {
   readonly services: readonly string[];
   readonly detail: string;
   readonly conseil: string;
-  /** Kilomètre du MÊME poste sur la Boucle Moyenne, `null` s'il ne la sert pas. */
-  readonly kilometreBoucleMoyenne: number | null;
 }
 
-/** Texte rédigé de chaque poste, par id de point de passage (longue). */
+/** Une épreuve et ses postes, dans l'ordre du parcours. */
+export interface EpreuveRavitaillements {
+  readonly slug: string;
+  readonly nom: string;
+  readonly distanceKm: number;
+  readonly points: readonly PointRavitaillement[];
+}
+
+/** Texte rédigé de chaque poste, par id de point de passage. */
 const TEXTES: Readonly<Record<string, { nom: string; detail: string; conseil: string }>> = {
   'ravito-1': {
     nom: 'Le premier souffle',
@@ -56,68 +67,63 @@ const TEXTES: Readonly<Record<string, { nom: string; detail: string; conseil: st
     conseil:
       'Ne vous fiez pas à la distance restante : la dernière montée est raide. Buvez quelques gorgées, mangez léger, et gardez de l’énergie pour monter à votre rythme. Inutile de remplir complètement : il n’y a plus de point d’eau après.',
   },
+  'moyenne-ravito-1': {
+    nom: 'Le fond de vallée',
+    detail:
+      'Près de six kilomètres de descente depuis le stade (670 m) : le sentier a perdu plus de 350 m avant ce ravitaillement. Le point le plus bas du parcours, 270 m, arrive un peu plus loin, au km 9,1.',
+    conseil:
+      'Descendre longtemps fatigue les jambes sans donner soif : buvez et mangez quand même ici. Tout ce qui reste après ce point remonte — près de 490 m de dénivelé positif jusqu’à l’arrivée.',
+  },
+  'moyenne-ravito-2': {
+    nom: 'Avant la remontée',
+    detail:
+      'Le point bas est passé et la pente s’est déjà redressée. Dernier point avant les 2,6 derniers kilomètres, qui regagnent près de 270 m pour rejoindre le stade à 675 m.',
+    conseil:
+      'C’est ici qu’on remplit : il n’y a plus de point d’eau avant l’arrivée. Mangez léger, repartez à petits pas, et gardez de la marge pour la montée finale.',
+  },
 };
 
-/**
- * Postes servant AUSSI la Boucle Moyenne : son relevé croise ces deux
- * emplacements à moins de dix mètres, un seul poste tient donc les deux
- * courses (id du point sur la longue → id sur la moyenne).
- */
-const POSTES_PARTAGES: Readonly<Record<string, string>> = {
-  'ravito-1': 'moyenne-ravito-1',
-  'ravito-4': 'moyenne-ravito-2',
-};
-
-const EPREUVE_LONGUE = 'longue';
-const EPREUVE_MOYENNE = 'moyenne';
-
-function pointsDe(slug: string) {
-  return PARCOURS_DOC?.epreuves[slug]?.pointsDePassage ?? [];
-}
+const EPREUVES = [
+  { slug: 'longue', nom: 'La Grande Boucle' },
+  { slug: 'moyenne', nom: 'La Boucle Moyenne' },
+] as const;
 
 function servicesDe(id: string): readonly string[] {
   return PARCOURS_DOC?.pointsDePassage.find((point) => point.id === id)?.services ?? [];
 }
 
-/** Distance publiée d'une épreuve (km), `null` si son relevé n'existe pas. */
-function distanceKm(slug: string): number | null {
-  const distanceM = PARCOURS_DOC?.epreuves[slug]?.distanceM;
-  return distanceM === undefined ? null : distanceM / 1000;
-}
+/** Les épreuves qui ont un relevé publié, avec leurs postes rédigés. */
+export const RAVITAILLEMENTS_EPREUVES: readonly EpreuveRavitaillements[] = EPREUVES.flatMap(
+  (epreuve) => {
+    const vue = PARCOURS_DOC?.epreuves[epreuve.slug];
+    if (vue === undefined) return [];
+    const points = vue.pointsDePassage.flatMap((point) => {
+      const texte = TEXTES[point.id];
+      if (texte === undefined) return [];
+      return [
+        {
+          id: point.id,
+          kilometre: point.kilometre,
+          altitudeM: point.altitudeM ?? 0,
+          dplusDepuisPrecedentM: point.dplusSegmentAmontM ?? 0,
+          services: servicesDe(point.id),
+          ...texte,
+        },
+      ];
+    });
+    if (points.length === 0) return [];
+    return [{ ...epreuve, distanceKm: vue.distanceM / 1000, points }];
+  },
+);
 
-export const RAVITAILLEMENTS_DISTANCE_KM = distanceKm(EPREUVE_LONGUE);
-export const BOUCLE_MOYENNE_DISTANCE_KM = distanceKm(EPREUVE_MOYENNE);
-
-/** Les postes de la Grande Boucle, dans l'ordre du parcours. */
-export const RAVITAILLEMENTS_POINTS: readonly PointRavitaillement[] = pointsDe(EPREUVE_LONGUE)
-  .flatMap((point) => {
-    const texte = TEXTES[point.id];
-    if (texte === undefined) return [];
-    const idMoyenne = POSTES_PARTAGES[point.id];
-    const surMoyenne =
-      idMoyenne === undefined
-        ? undefined
-        : pointsDe(EPREUVE_MOYENNE).find((p) => p.id === idMoyenne);
-    return [
-      {
-        id: point.id,
-        kilometre: point.kilometre,
-        altitudeM: point.altitudeM ?? 0,
-        dplusDepuisPrecedentM: point.dplusSegmentAmontM ?? 0,
-        services: servicesDe(point.id),
-        kilometreBoucleMoyenne: surMoyenne?.kilometre ?? null,
-        ...texte,
-      },
-    ];
-  });
-
-/** Nombre de postes que la Boucle Moyenne rencontre sur son parcours. */
-export const RAVITAILLEMENTS_POINTS_BOUCLE_MOYENNE = RAVITAILLEMENTS_POINTS.filter(
-  (point) => point.kilometreBoucleMoyenne !== null,
-).length;
+/** Nombre total de postes à armer, les deux épreuves confondues. */
+export const RAVITAILLEMENTS_TOTAL = RAVITAILLEMENTS_EPREUVES.reduce(
+  (total, epreuve) => total + epreuve.points.length,
+  0,
+);
 
 export const RAVITAILLEMENTS_INTRO =
-  'Quatre points de ravitaillement jalonnent la Grande Boucle, dont deux que la Boucle Moyenne rencontre aussi. Ils sont pensés pour le relief : on y repart rarement sur du plat, alors mieux vaut y arriver en ayant déjà bu et mangé un peu, sans attendre la soif.';
+  'Chaque épreuve a ses propres points de ravitaillement : quatre sur la Grande Boucle, deux sur la Boucle Moyenne. Ils sont pensés pour le relief : on y repart rarement sur du plat, alors mieux vaut y arriver en ayant déjà bu et mangé un peu, sans attendre la soif.';
 
 export const RAVITAILLEMENTS_CONSEILS: readonly string[] = [
   'Buvez par petites gorgées, régulièrement : comptez de 400 à 600 ml par heure, davantage s’il fait chaud. Votre urine doit rester claire.',

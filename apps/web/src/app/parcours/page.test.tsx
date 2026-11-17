@@ -88,17 +88,16 @@ describe('page /parcours — rendu public', () => {
     expect(html).toContain('id="titre-ravitaillements"');
   });
 
-  it('quatre points de ravitaillement détaillés, aux km 8, 15, 21 et 26, dans la section dédiée', () => {
-    for (const km of [8, 15, 21, 26]) {
+  it('ravitaillements détaillés par épreuve : km 8, 15, 21, 26 puis km 5,8 et 10,1', () => {
+    for (const km of ['8', '15', '21', '26', '5,8', '10,1']) {
       expect(html).toContain(`<span class="aa-chip aa-chip--phare">Km ${km}</span>`);
     }
     expect(html).toContain('Plus long tronçon sans ravitaillement');
-    expect((html.match(/class="socle-carte aa-ravito"/g) ?? []).length).toBe(4);
-    expect(html).toContain('Boire et manger sur 28\u202fkm');
-    // Retour comité 2027 : la Boucle Moyenne a sa propre ligne de course et
-    // ses deux postes partagés sont annoncés à SON kilométrage.
-    expect(html).toContain('Boucle Moyenne · km 7,2');
-    expect(html).toContain('Boucle Moyenne · km 10,8');
+    // Retour comité 2027 : six postes distincts, quatre + deux.
+    expect((html.match(/class="socle-carte aa-ravito"/g) ?? []).length).toBe(6);
+    expect(html).toContain('id="titre-ravitos-longue"');
+    expect(html).toContain('id="titre-ravitos-moyenne"');
+    expect(html).toContain('Boire et manger en course');
     expect(html).toContain('à confirmer par le comité');
   });
 

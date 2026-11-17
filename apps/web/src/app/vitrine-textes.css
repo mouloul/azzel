@@ -40,11 +40,14 @@
 .aa-ravitos__borne-km{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;font-variant-numeric:tabular-nums}
 .aa-ravitos__borne--depart .aa-ravitos__borne-km,.aa-ravitos__borne--arrivee .aa-ravitos__borne-km{color:var(--rv-doux)}
 /* Cartes : même grammaire que la fiche épreuve. */
+/* Un bloc par épreuve (retour comité 2027) : titre, ligne de course, fiches. */
+.aa-ravitos__epreuve{margin-top:var(--az-space-7)}
+.aa-ravitos__epreuve-titre{margin:0;font-family:var(--font-display);font-weight:800;font-size:clamp(24px,3vw,32px);line-height:1.05;text-transform:uppercase;color:var(--heading)}
+.aa-ravitos__epreuve .aa-ravitos__ligne{margin-top:var(--az-space-4)}
 .aa-ravitos__liste{display:grid;gap:var(--az-space-5);margin:var(--az-space-6) 0 0;padding:0;list-style:none}
 .aa-ravito{display:grid;align-content:start;gap:var(--az-space-4)}
 .aa-ravito__tete{display:grid;gap:var(--az-space-2);padding-bottom:var(--az-space-4);border-bottom:1px solid var(--line)}
-.aa-ravito__surtitre{display:flex;flex-wrap:wrap;align-items:center;gap:var(--az-space-2);margin:0}
-.aa-ravito__seule{font-size:13px;color:var(--ink-muted)}
+.aa-ravito__surtitre{margin:0}
 .aa-ravito__titre{margin:0;font-family:var(--font-display);font-weight:700;font-size:clamp(22px,2.6vw,28px);line-height:1.05;text-transform:uppercase;color:var(--heading)}
 .aa-ravito__stats{display:flex;flex-wrap:wrap;gap:var(--az-space-1) var(--az-space-4);margin:0;font-size:14px;font-variant-numeric:tabular-nums}
 .aa-ravito__stats div{display:flex;gap:var(--az-space-1)}
