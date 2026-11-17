@@ -32,7 +32,7 @@ describe('ravitaillements — chiffres tirés de parcours.json (retour comité 2
 
   it('la distance affichée est celle du relevé, jamais une constante recopiée', () => {
     expect(longue?.distanceKm).toBeCloseTo(28.01, 2);
-    expect(moyenne?.distanceKm).toBeCloseTo(12.72, 2);
+    expect(moyenne?.distanceKm).toBeCloseTo(13.01, 2);
   });
 
   it('les services viennent du point de passage (une seule source, jamais inventés)', () => {
@@ -57,9 +57,9 @@ describe('ravitaillements — un bloc par épreuve (comité du 17/11/2026)', () 
     expect(RAVITAILLEMENTS_TOTAL).toBe(6);
   });
 
-  it('les postes de la Boucle Moyenne sont aux km 5,81 et 10,13 demandés', () => {
-    expect(moyenne?.points[0]?.kilometre).toBeCloseTo(5.81, 2);
-    expect(moyenne?.points[1]?.kilometre).toBeCloseTo(10.13, 2);
+  it('les postes de la Boucle Moyenne : km 5,81 et 10,13 de la montre, soit 6,09 et 10,42 depuis le stade', () => {
+    expect(moyenne?.points[0]?.kilometre).toBeCloseTo(6.09, 2);
+    expect(moyenne?.points[1]?.kilometre).toBeCloseTo(10.42, 2);
   });
 
   it('chaque bloc porte son titre, sa ligne de course et SES seules fiches', () => {
@@ -67,7 +67,7 @@ describe('ravitaillements — un bloc par épreuve (comité du 17/11/2026)', () 
     expect(bloc('longue')).toContain(`28${NBSP}km`);
     expect((bloc('longue').match(/class="socle-carte aa-ravito"/g) ?? []).length).toBe(4);
     expect(bloc('moyenne')).toContain('La Boucle Moyenne');
-    expect(bloc('moyenne')).toContain(`12,7${NBSP}km`);
+    expect(bloc('moyenne')).toContain(`13${NBSP}km`);
     expect(bloc('moyenne')).toContain('Le fond de vallée');
     expect(bloc('moyenne')).toContain('Avant la remontée');
     expect(bloc('moyenne')).not.toContain('Le premier souffle');

@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "source": {
     "fichier": "activity_24920331005.gpx",
     "nom": "essai trail ait ainsi 2027",
@@ -9412,16 +9412,6 @@
       "services": null
     },
     {
-      "id": "moyenne-depart",
-      "nom": "Départ",
-      "positionBaseM": 28006.4,
-      "indexBase": 3222,
-      "lon": 4.437434,
-      "lat": 36.763739,
-      "altitudeM": 669.8,
-      "services": null
-    },
-    {
       "id": "moyenne-ravito-1",
       "nom": "Ravitaillement 1 · Le fond de vallée",
       "positionBaseM": 33813,
@@ -9511,12 +9501,16 @@
       ]
     },
     "moyenne": {
-      "distanceM": 12724.5,
-      "dplusM": 525,
-      "dmoinsM": 524,
+      "distanceM": 13010.5,
+      "dplusM": 524,
+      "dmoinsM": 530,
       "altitudeMinM": 270.1,
-      "altitudeMaxM": 674.7,
+      "altitudeMaxM": 677.4,
       "tranches": [
+        {
+          "deIndex": 0,
+          "aIndex": 33
+        },
         {
           "deIndex": 3222,
           "aIndex": 4656
@@ -9524,30 +9518,30 @@
       ],
       "pointsDePassage": [
         {
-          "id": "moyenne-depart",
+          "id": "depart",
           "sM": 0,
           "kilometre": 0,
-          "altitudeM": 669.8,
+          "altitudeM": 677.4,
           "dplusSegmentAmontM": 0
         },
         {
           "id": "moyenne-ravito-1",
-          "sM": 5806.6,
-          "kilometre": 5.81,
+          "sM": 6092.6,
+          "kilometre": 6.09,
           "altitudeM": 318.1,
-          "dplusSegmentAmontM": 49
+          "dplusSegmentAmontM": 48
         },
         {
           "id": "moyenne-ravito-2",
-          "sM": 10132.2,
-          "kilometre": 10.13,
+          "sM": 10418.1,
+          "kilometre": 10.42,
           "altitudeM": 408,
           "dplusSegmentAmontM": 218
         },
         {
           "id": "moyenne-arrivee",
-          "sM": 12724.5,
-          "kilometre": 12.72,
+          "sM": 13010.5,
+          "kilometre": 13.01,
           "altitudeM": 674.7,
           "dplusSegmentAmontM": 269
         }

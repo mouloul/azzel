@@ -61,7 +61,9 @@
       "source": {
         "gpx": "docs/GPX/activity_petite_boucle.gpx"
       },
-      "commentaire": "Relevé propre de la petite boucle (« Yakouren Trail », 10/11/2026) : elle suit la longue jusque vers le km 10, coupe par un raccourci absent du relevé de la longue, puis reprend les derniers kilomètres. Relevé de terrain, pas un tracé officiel. Ses deux ravitaillements (km 5,81 et 10,13, positions demandées par le comité le 17/11/2026) lui sont PROPRES : ils tombent à 949 m et 514 m des postes de la Grande Boucle, donc quatre postes distincts à armer, pas deux partagés.",
+      "prefixeBase": {
+        "aM": 285.9
+      },
       "pointsDePassage": [
         {
           "id": "moyenne-ravito-1",
@@ -83,7 +85,8 @@
             "Boisson sucrée"
           ]
         }
-      ]
+      ],
+      "commentaire": "Relevé propre de la petite boucle (« Yakouren Trail », 10/11/2026) : elle suit la longue jusque vers le km 10, coupe par un raccourci absent du relevé de la longue, puis reprend les derniers kilomètres. Relevé de terrain, pas un tracé officiel. La montre s'est connectée 286 m après le stade : prefixeBase reprend ces 286 m sur le relevé de la longue (le relevé propre commence à 5 m de son point à 285,9 m), le départ redevient le stade, comme l'arrivée. Ses deux ravitaillements (positions sur le relevé propre 5 810 et 10 130 m, demandées par le comité le 17/11/2026) lui sont PROPRES : ils tombent à 949 m et 514 m des postes de la Grande Boucle."
     }
   ]
 }

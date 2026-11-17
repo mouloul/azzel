@@ -10,9 +10,11 @@ import { PARCOURS_DOC } from '@/modules/contenus/parcours/lecture';
  * de « +144 m » dans les points de passage ne peut donc plus réapparaître.
  *
  * Décision du comité du 17/11/2026 : les deux postes de la Boucle Moyenne
- * (km 5,81 et 10,13) lui sont PROPRES — ils tombent à 949 m et 514 m des
- * postes de la Grande Boucle. Six postes distincts à armer, donc, et non
- * quatre dont deux partagés.
+ * lui sont PROPRES — ils tombent à 949 m et 514 m des postes de la Grande
+ * Boucle. Six postes distincts à armer, donc, et non quatre dont deux
+ * partagés. Placés aux km 5,81 et 10,13 du relevé de la montre, ils sont aux
+ * km 6,1 et 10,4 depuis le stade : le relevé commençait 286 m après le
+ * départ (prefixeBase dans parcours.config.json).
  *
  * Emplacements et contenus INDICATIFS — le comité les confirme avant
  * publication.
@@ -70,7 +72,7 @@ const TEXTES: Readonly<Record<string, { nom: string; detail: string; conseil: st
   'moyenne-ravito-1': {
     nom: 'Le fond de vallée',
     detail:
-      'Près de six kilomètres de descente depuis le stade (670 m) : le sentier a perdu plus de 350 m avant ce ravitaillement. Le point le plus bas du parcours, 270 m, arrive un peu plus loin, au km 9,1.',
+      'Six kilomètres de descente depuis le stade (677 m) : le sentier a perdu plus de 350 m avant ce ravitaillement. Le point le plus bas du parcours, 270 m, arrive un peu plus loin, au km 9,4.',
     conseil:
       'Descendre longtemps fatigue les jambes sans donner soif : buvez et mangez quand même ici. Tout ce qui reste après ce point remonte — près de 490 m de dénivelé positif jusqu’à l’arrivée.',
   },

@@ -130,23 +130,24 @@ describe('section parcours — fusion parcours.json (story 11.1)', () => {
     expect(moyenne?.profil).not.toBeNull();
     // Le nom vient de la base et ne porte plus de distance (migration 0040).
     expect(moyenne?.nom).toBe('La Boucle Moyenne');
-    // Distance de SON relevé (12,7 km), pas celle de la base : la fiche
-    // reste cohérente avec le profil qu'elle affiche.
-    expect(moyenne?.distanceKm).toBeCloseTo(12.7, 1);
-    expect(moyenne?.metriques?.denivelePositifM).toBe(525);
-    // Retour comité 2027 (17/11) : deux ravitaillements PROPRES à la moyenne,
-    // aux km 5,81 et 10,13 demandés par le comité.
+    // Distance de SON tracé (13,0 km : 286 m de base + son relevé), pas celle
+    // de la base éditoriale : la fiche reste cohérente avec son profil.
+    expect(moyenne?.distanceKm).toBeCloseTo(13.01, 2);
+    expect(moyenne?.metriques?.denivelePositifM).toBe(524);
+    // Retour comité 2027 : départ au stade (celui de la base, la montre
+    // s'était connectée 286 m plus loin), deux ravitaillements PROPRES.
     const points = moyenne?.pointsDePassage ?? [];
     expect(points.map((p) => p.id)).toEqual([
-      'moyenne-depart',
+      'depart',
       'moyenne-ravito-1',
       'moyenne-ravito-2',
       'moyenne-arrivee',
     ]);
     expect(points[1]?.nom).toBe('Ravitaillement 1 · Le fond de vallée');
-    expect(points[1]?.kilometre).toBeCloseTo(5.81, 2);
+    // Km 5,81 et 10,13 du relevé de la montre = km 6,09 et 10,42 depuis le stade.
+    expect(points[1]?.kilometre).toBeCloseTo(6.09, 2);
     expect(points[2]?.nom).toBe('Ravitaillement 2 · Avant la remontée');
-    expect(points[2]?.kilometre).toBeCloseTo(10.13, 2);
+    expect(points[2]?.kilometre).toBeCloseTo(10.42, 2);
   });
 
   it('décision produit : la distance affichée est celle du RELEVÉ dès qu’il existe', async () => {

@@ -88,8 +88,8 @@ describe('page /parcours — rendu public', () => {
     expect(html).toContain('id="titre-ravitaillements"');
   });
 
-  it('ravitaillements détaillés par épreuve : km 8, 15, 21, 26 puis km 5,8 et 10,1', () => {
-    for (const km of ['8', '15', '21', '26', '5,8', '10,1']) {
+  it('ravitaillements détaillés par épreuve : km 8, 15, 21, 26 puis km 6,1 et 10,4', () => {
+    for (const km of ['8', '15', '21', '26', '6,1', '10,4']) {
       expect(html).toContain(`<span class="aa-chip aa-chip--phare">Km ${km}</span>`);
     }
     expect(html).toContain('Plus long tronçon sans ravitaillement');

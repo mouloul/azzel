@@ -386,3 +386,54 @@ describe('parcours — points de passage sur un relevé propre (retour comité 2
     expect(() => validerConfig(surPortions)).toThrow(/relevé propre/);
   });
 });
+
+describe('parcours — début emprunté à la base (prefixeBase, retour comité 2027)', () => {
+  function configAvecPrefixe(prefixe: unknown, points: unknown[] = []): Record<string, unknown> {
+    const config = configAvecReleveAnnexe();
+    const moyenne = (config.epreuves as Record<string, unknown>[])[1]!;
+    moyenne.prefixeBase = prefixe;
+    moyenne.pointsDePassage = points;
+    return config;
+  }
+
+  it('l’épreuve part du départ de la base, la suit jusqu’à aM, puis prend son relevé', () => {
+    const doc = construireAvecAnnexe(
+      configAvecPrefixe({ aM: 500 }, [{ id: 'moyenne-ravito-1', nom: 'Ravitaillement 1', positionM: 2000 }]),
+    );
+    const moyenne = doc.epreuves.moyenne!;
+    // Deux tranches : base [0 ; 500 m], puis tout le relevé propre.
+    expect(moyenne.tranches).toEqual([
+      { deIndex: 0, aIndex: 5 },
+      { deIndex: NB_POINTS, aIndex: NB_POINTS + NB_POINTS_ANNEXE - 1 },
+    ]);
+    expect(moyenne.distanceM).toBe(4500);
+    // Départ = celui de la base ; la borne de début du relevé disparaît.
+    expect(moyenne.pointsDePassage.map((p) => p.id)).toEqual([
+      'depart',
+      'moyenne-ravito-1',
+      'moyenne-arrivee',
+    ]);
+    expect(doc.pointsDePassage.map((p) => p.id)).not.toContain('moyenne-depart');
+    // Les kilomètres comptent depuis le VRAI départ : 500 m + 2 000 m.
+    expect(moyenne.pointsDePassage[1]?.kilometre).toBe(2.5);
+    expect(moyenne.pointsDePassage[2]?.kilometre).toBe(4.5);
+  });
+
+  it('la longue n’est pas touchée par le début emprunté', () => {
+    const doc = construireAvecAnnexe(configAvecPrefixe({ aM: 500 }));
+    expect(doc.epreuves.longue?.distanceM).toBe(DISTANCE_TOTALE);
+    expect(doc.epreuves.longue?.tranches).toEqual([{ deIndex: 0, aIndex: NB_POINTS - 1 }]);
+  });
+
+  it('config : aM positif requis, réservé aux épreuves à relevé propre', () => {
+    expect(() => validerConfig(configAvecPrefixe({}))).toThrow(/prefixeBase\.aM/);
+    expect(() => validerConfig(configAvecPrefixe({ aM: -3 }))).toThrow(/prefixeBase\.aM/);
+    const surPortions = configAvecReleveAnnexe();
+    (surPortions.epreuves as Record<string, unknown>[])[0]!.prefixeBase = { aM: 100 };
+    expect(() => validerConfig(surPortions)).toThrow(/relevé propre/);
+  });
+
+  it('aM au-delà de la base : erreur nommée', () => {
+    expect(() => construireAvecAnnexe(configAvecPrefixe({ aM: DISTANCE_TOTALE + 1 }))).toThrow(/hors base/);
+  });
+});
