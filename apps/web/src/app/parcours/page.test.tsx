@@ -94,7 +94,11 @@ describe('page /parcours — rendu public', () => {
     }
     expect(html).toContain('Plus long tronçon sans ravitaillement');
     expect((html.match(/class="socle-carte aa-ravito"/g) ?? []).length).toBe(4);
-    expect(html).toContain('Boire et manger sur 28 km');
+    expect(html).toContain('Boire et manger sur 28\u202fkm');
+    // Retour comité 2027 : la Boucle Moyenne a sa propre ligne de course et
+    // ses deux postes partagés sont annoncés à SON kilométrage.
+    expect(html).toContain('Boucle Moyenne · km 7,2');
+    expect(html).toContain('Boucle Moyenne · km 10,8');
     expect(html).toContain('à confirmer par le comité');
   });
 
