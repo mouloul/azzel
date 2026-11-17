@@ -206,13 +206,23 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
   // en 2D serrait la vue (échelle 300 m) par rapport à l'ouverture en 3D.
   const recentrer = () => {
     const camera = reliefActif ? CAMERA_3D : CAMERA_2D;
-    carte.easeTo({
-      center: [depart[0], depart[1]],
+    const cible = {
+      center: [depart[0], depart[1]] as [number, number],
       zoom: zoomInitial ?? carte.getZoom(),
       pitch: camera.pitch,
       bearing: camera.bearing,
-      duration: mouvementReduit ? 0 : DUREE_TRANSITION_MS,
-    });
+    };
+    if (!reliefActif) {
+      carte.easeTo({ ...cible, duration: mouvementReduit ? 0 : DUREE_TRANSITION_MS });
+      return;
+    }
+    // En 3D, PAS d'animation : `easeTo` se termine par `recalculateZoom`, qui
+    // relit le point central dans le tampon de coordonnées du relief — un
+    // tampon que MapLibre ne rafraîchit qu'au fil des gestes. Périmé ici, il
+    // rendait un zoom au hasard (50 m, 200 m, 1 km), voire une caméra plantée
+    // dans la montagne. `jumpTo` ne fait pas ce recalcul : centre et zoom
+    // sont posés tels quels, l'altitude est relue dans les tuiles du relief.
+    carte.jumpTo(cible);
   };
   carte.addControl(new ControleRecentrer(recentrer), 'top-right');
 
