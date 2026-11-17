@@ -10,13 +10,18 @@
  * aucun type MapLibre dans sa signature, et puisse donc rester légère.
  */
 
-import maplibregl, { type Map as CarteMapLibre, type Marker } from 'maplibre-gl';
+import maplibregl, { type Map as CarteMapLibre, type Marker, type Popup } from 'maplibre-gl';
 
 // Feuille de style du moteur (commandes, échelle, messages de gestes). Importée
 // ICI et non dans la page : ce module n'est chargé qu'à l'ouverture de la carte,
 // la feuille ne pèse donc jamais sur le premier rendu. Sans elle, les commandes
 // s'affichent en texte brut par-dessus la page.
 import 'maplibre-gl/dist/maplibre-gl.css';
+// Pastilles des points de passage et infobulles : chargées avec le moteur,
+// donc présentes quelle que soit la page qui ouvre la carte. Retour comité
+// 2027 : portées par `carte.css`, que /parcours n'importait plus depuis la vue
+// 3D, elles s'affichaient en boutons bruts et en texte clair sur fond blanc.
+import './carte-maplibre.css';
 
 import {
   CAMERA_2D,
@@ -32,6 +37,7 @@ import {
   type TraceCarte,
 } from '@/modules/contenus/parcours/carte';
 import { FOND_TOPO, type SourceTuiles } from '@/modules/contenus/parcours/fonds-carte';
+import type { Repere } from '@/modules/contenus/parcours/reperes';
 import {
   COUCHES_SURCOUCHE,
   IDS_SURCOUCHE,
@@ -45,13 +51,7 @@ export interface OptionsCarte {
   trace: TraceCarte;
   couleurs: CouleursTrace;
   /** Points de passage à marquer, dans l'ordre du parcours. */
-  reperes: readonly {
-    id: string;
-    nom: string;
-    lon: number;
-    lat: number;
-    libelle: string;
-  }[];
+  reperes: readonly Repere[];
   /** Fond satellite disponible (clé fournie), sinon null. */
   satellite?: SourceTuiles | null;
   /** Ouvrir directement sur le satellite. */
@@ -68,6 +68,48 @@ export interface PiloteCarte {
   placerCurseur(sM: number | null): void;
   recadrer(): void;
   detruire(): void;
+}
+
+/**
+ * Opacité des pastilles, qu'une crête les cache ou non en 3D. MapLibre les
+ * estompe à 0,2 quand il les juge cachées — illisibles sur le satellite — et
+ * ce jugement lit un tampon de profondeur qui reste périmé jusqu'au premier
+ * mouvement de caméra : au repos, des pastilles bien visibles passaient pour
+ * cachées. Retour comité 2027 : six repères à lire valent mieux qu'un effet
+ * d'occultation, l'estompage est donc neutralisé.
+ */
+const OPACITE_REPERE = '1';
+
+/**
+ * Contenu d'une infobulle de repère, construit nœud par nœud : les textes
+ * viennent du document publié, jamais d'HTML interprété (aucun innerHTML).
+ */
+export function contenuBulle(repere: Repere): HTMLElement {
+  const bulle = document.createElement('div');
+  bulle.className = 'aa-carte__bulle';
+  const ajouter = (balise: string, classe: string, texte: string) => {
+    const noeud = document.createElement(balise);
+    noeud.className = classe;
+    noeud.textContent = texte;
+    bulle.append(noeud);
+    return noeud;
+  };
+  ajouter('p', 'aa-carte__bulle-titre', repere.titre);
+  if (repere.sousTitre !== null) ajouter('p', 'aa-carte__bulle-nom', repere.sousTitre);
+  if (repere.mesures.length > 0) {
+    const liste = document.createElement('ul');
+    liste.className = 'aa-carte__bulle-mesures';
+    for (const mesure of repere.mesures) {
+      const ligne = document.createElement('li');
+      ligne.textContent = mesure;
+      liste.append(ligne);
+    }
+    bulle.append(liste);
+  }
+  if (repere.services.length > 0) {
+    ajouter('p', 'aa-carte__bulle-services', repere.services.join(' · '));
+  }
+  return bulle;
 }
 
 export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
@@ -140,21 +182,72 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
           duration: 0,
         });
       }
+      const marqueurs: Marker[] = [];
+      const bulles: Popup[] = [];
       for (const repere of reperes) {
         const pastille = document.createElement('button');
         pastille.type = 'button';
         pastille.className = 'aa-carte__repere';
+        pastille.dataset.type = repere.type;
         // Le marqueur est un VRAI bouton : il prend le focus, s'ouvre à
-        // Entrée comme au tap, et porte son nom accessible (UX-DR-26).
-        pastille.setAttribute('aria-label', repere.libelle);
-        pastille.textContent = repere.nom.slice(0, 1).toUpperCase();
-        new maplibregl.Marker({ element: pastille, anchor: 'bottom' })
+        // Entrée comme au tap, et porte son nom accessible (UX-DR-26) — posé
+        // APRÈS `addTo`, qui le remplace sans condition par « Map marker ».
+        pastille.setAttribute('aria-expanded', 'false');
+        pastille.textContent = repere.pastille;
+        // Infobulle tenue HORS du marqueur (pas de `setPopup`) : MapLibre
+        // referme d'office l'infobulle d'un marqueur qu'il croit caché par le
+        // relief, et ce jugement est faux tant que la caméra n'a pas bougé —
+        // au clic, l'infobulle s'ouvrait et se refermait aussitôt.
+        const bulle = new maplibregl.Popup({
+          className: 'aa-carte__popup',
+          closeButton: true,
+          closeOnClick: false,
+          maxWidth: '280px',
+          offset: 22,
+        })
           .setLngLat([repere.lon, repere.lat])
-          .setPopup(
-            new maplibregl.Popup({ offset: 16, closeButton: true }).setText(repere.libelle),
-          )
-          .addTo(carte);
+          .setDOMContent(contenuBulle(repere));
+        bulle.on('open', () => pastille.setAttribute('aria-expanded', 'true'));
+        bulle.on('close', () => pastille.setAttribute('aria-expanded', 'false'));
+        pastille.addEventListener('click', () => {
+          if (bulle.isOpen()) {
+            bulle.remove();
+            return;
+          }
+          // Une infobulle à la fois : la carte reste lisible.
+          for (const autre of bulles) autre.remove();
+          bulle.addTo(carte);
+        });
+        bulles.push(bulle);
+        marqueurs.push(
+          new maplibregl.Marker({
+            element: pastille,
+            anchor: 'center',
+            opacity: OPACITE_REPERE,
+            opacityWhenCovered: OPACITE_REPERE,
+          })
+            .setLngLat([repere.lon, repere.lat])
+            .addTo(carte),
+        );
+        pastille.setAttribute('aria-label', repere.libelle);
       }
+      // Un clic sur la carte, hors pastille, referme l'infobulle ouverte. Le
+      // clic sur une pastille remonte aussi jusqu'à la carte : il est ignoré
+      // ici, sinon il refermerait l'infobulle qu'il vient d'ouvrir.
+      carte.on('click', (evenement) => {
+        const cible = evenement.originalEvent.target;
+        if (cible instanceof Element && cible.closest('.aa-carte__repere') !== null) return;
+        for (const bulle of bulles) bulle.remove();
+      });
+      // Les pastilles sont posées AVANT que les tuiles d'altitude de la vue
+      // soient chargées : MapLibre les place alors au niveau 0, sous le
+      // relief — décalées du tracé, plusieurs centaines de pixels plus bas en
+      // 3D — et ne les recale qu'au prochain mouvement de caméra. Une fois la
+      // carte au repos (toutes tuiles chargées), on reprojette chaque
+      // pastille sur le relief.
+      carte.on('idle', () => {
+        for (const marqueur of marqueurs) marqueur.setLngLat(marqueur.getLngLat());
+      });
       resolve();
     });
   });

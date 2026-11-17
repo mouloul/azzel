@@ -1,0 +1,170 @@
+/* Pastilles des points de passage et infobulles de la carte MapLibre.
+ *
+ * Importée par carte-maplibre.ts, avec le moteur : elle n'existe qu'une fois la
+ * carte ouverte et ne pèse jamais sur le premier rendu. Toutes les couleurs
+ * viennent des tokens du thème — aucune valeur en dur, sombre et clair inclus
+ * (ombres comprises : color-mix sur --forest-800, garde css-sans-litteraux).
+ *
+ * Retour comité 2027 : sur la photo satellite, les pastilles s'affichaient en
+ * petits boutons gris (styles absents) et l'infobulle en texte clair sur fond
+ * blanc. Ici : disque plein cerclé de crème et ombré, lisible sur le
+ * satellite comme sur le topo ; infobulle en carte, texte foncé hiérarchisé.
+ */
+
+/* --- Pastille ------------------------------------------------------------ */
+
+/* Disque visible de 30 px ; la cible tactile en fait 44 grâce au ::after.
+   Jamais de `transform` ni de `position` ici : MapLibre place le marqueur par
+   un transform en ligne sur ce même élément (.maplibregl-marker). */
+.aa-carte__repere {
+  --repere-fond: var(--az-action);
+  --repere-encre: var(--az-action-texte);
+
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--on-forest);
+  border-radius: var(--az-radius-full);
+  background: var(--repere-fond);
+  color: var(--repere-encre);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--forest-800) 70%, transparent);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.aa-carte__repere::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: var(--az-radius-full);
+}
+
+/* Départ : la même couleur que son repère sur le profil (vp__repere--depart). */
+.aa-carte__repere[data-type='depart'] {
+  --repere-fond: var(--az-succes);
+  --repere-encre: var(--az-succes-encre);
+}
+
+/* Arrivée : sombre et cerclée, distincte du départ posé à quelques mètres. */
+.aa-carte__repere[data-type='arrivee'] {
+  --repere-fond: var(--forest);
+  --repere-encre: var(--on-forest);
+}
+
+.aa-carte__repere:hover {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--on-forest) 55%, transparent),
+    0 3px 10px color-mix(in srgb, var(--forest-800) 75%, transparent);
+}
+
+.aa-carte__repere:focus-visible {
+  outline: 3px solid var(--az-focus);
+  outline-offset: 3px;
+}
+
+/* --- Infobulle ----------------------------------------------------------- */
+
+/* Le conteneur de carte impose `font: 12px Helvetica` : police et corps sont
+   redonnés ici, sinon l'infobulle sort du registre du site. */
+.aa-carte__popup .maplibregl-popup-content {
+  padding: var(--az-space-3) 40px var(--az-space-3) var(--az-space-4);
+  /* Filet clair : en thème sombre, la carte se détache du satellite. */
+  border: 1px solid color-mix(in srgb, var(--on-forest) 22%, transparent);
+  border-radius: var(--az-rayon-md);
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--forest-800) 45%, transparent);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* La pointe prend la couleur de la carte, quel que soit le côté d'ancrage. */
+.aa-carte__popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.aa-carte__popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.aa-carte__popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--surface-raised);
+}
+
+.aa-carte__popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.aa-carte__popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.aa-carte__popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--surface-raised);
+}
+
+.aa-carte__popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--surface-raised);
+}
+
+.aa-carte__popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--surface-raised);
+}
+
+.aa-carte__popup .maplibregl-popup-close-button {
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--az-radius-full);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.aa-carte__popup .maplibregl-popup-close-button:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.aa-carte__popup .maplibregl-popup-close-button:focus-visible {
+  outline: 2px solid var(--az-focus);
+  outline-offset: 1px;
+}
+
+.aa-carte__bulle {
+  display: grid;
+  gap: 2px;
+}
+
+/* « Ravitaillement 2 », « Départ » : le registre des surtitres du site. */
+.aa-carte__bulle-titre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.aa-carte__bulle-nom {
+  margin: 0;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.aa-carte__bulle-mesures {
+  display: grid;
+  gap: 2px;
+  margin: var(--az-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.aa-carte__bulle-services {
+  margin: var(--az-space-2) 0 0;
+  padding-top: var(--az-space-2);
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
