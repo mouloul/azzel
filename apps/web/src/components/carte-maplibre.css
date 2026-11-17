@@ -50,6 +50,17 @@
   --repere-encre: var(--az-succes-encre);
 }
 
+/* Départ et arrivée au même endroit (boucle) : une seule pastille « D/A ». */
+.aa-carte__repere[data-type='depart-arrivee'] {
+  --repere-fond: var(--az-succes);
+  --repere-encre: var(--az-succes-encre);
+
+  width: 38px;
+  border-radius: var(--az-radius-full);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
 /* Arrivée : sombre et cerclée, distincte du départ posé à quelques mètres. */
 .aa-carte__repere[data-type='arrivee'] {
   --repere-fond: var(--forest);
@@ -168,3 +179,26 @@
   font-size: 13px;
   color: var(--ink-muted);
 }
+
+/* --- Bouton « Recentrer » (groupe des commandes de zoom) ------------------ */
+
+/* Les boutons du groupe MapLibre sont sur fond blanc dans les deux thèmes :
+   le viseur prend l'encre la plus sombre, --forest-800, constante. */
+.aa-carte__recentrer {
+  display: grid;
+  place-items: center;
+  color: var(--forest-800);
+}
+
+.aa-carte__recentrer svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.aa-carte__recentrer:focus-visible {
+  outline: 2px solid var(--az-focus);
+  outline-offset: 1px;
+}
+

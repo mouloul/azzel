@@ -96,7 +96,8 @@ describe('reperesEpreuve — pastilles et infobulles lisibles (retour comité 20
           altitudeM: 408,
           services: ['Eau', 'Fruits'],
         },
-        { id: 'moyenne-arrivee', nom: 'Arrivée', lon: 4.1, lat: 36.7, altitudeM: 674.7, services: null },
+        // Arrivée à ~4,5 km du départ : pas une boucle, pas de fusion D/A ici.
+        { id: 'moyenne-arrivee', nom: 'Arrivée', lon: 4.15, lat: 36.7, altitudeM: 674.7, services: null },
         { id: 'belvedere', nom: 'Belvédère', lon: 4.3, lat: 36.72, altitudeM: 900, services: null },
       ],
       epreuves: {
@@ -152,3 +153,45 @@ describe('reperesEpreuve — pastilles et infobulles lisibles (retour comité 20
   });
 });
 
+
+describe('reperesEpreuve — départ et arrivée au même endroit (retour comité 2027)', () => {
+  const NBSP = ' ';
+  function docBoucle(lonArrivee: number): ParcoursDoc {
+    return {
+      pointsDePassage: [
+        { id: 'depart', nom: 'Départ', lon: 4.434882, lat: 36.762623, altitudeM: 677.4, services: null },
+        { id: 'r1', nom: 'Ravitaillement 1 · Le col', lon: 4.45, lat: 36.77, altitudeM: 400, services: ['Eau'] },
+        { id: 'arrivee', nom: 'Arrivée', lon: lonArrivee, lat: 36.762562, altitudeM: 676, services: null },
+      ],
+      epreuves: {
+        longue: {
+          pointsDePassage: [
+            { id: 'depart', sM: 0, kilometre: 0, altitudeM: 677.4, dplusSegmentAmontM: 0 },
+            { id: 'r1', sM: 8000, kilometre: 8, altitudeM: 400, dplusSegmentAmontM: 144 },
+            { id: 'arrivee', sM: 28006, kilometre: 28.01, altitudeM: 676, dplusSegmentAmontM: 207 },
+          ],
+        },
+      },
+    } as unknown as ParcoursDoc;
+  }
+
+  it('à 18 m l’un de l’autre : une seule pastille « D/A », les deux kilomètres dans l’infobulle', () => {
+    const reperes = reperesEpreuve(docBoucle(4.434695), 'longue');
+    expect(reperes.map((r) => r.type)).toEqual(['depart-arrivee', 'ravitaillement']);
+    const [boucle] = reperes;
+    expect(boucle?.pastille).toBe('D/A');
+    expect(boucle?.titre).toBe('Départ et arrivée');
+    expect(boucle?.mesures).toEqual([
+      `Départ : km${NBSP}0`,
+      `Arrivée : km${NBSP}28, +207${NBSP}m de D+ depuis le point précédent`,
+      `677${NBSP}m d’altitude`,
+    ]);
+    expect(boucle?.libelle.startsWith('Départ et arrivée · ')).toBe(true);
+  });
+
+  it('départ et arrivée distants (au-delà du seuil) : deux pastilles distinctes', () => {
+    // ~900 m plus à l'est : une épreuve en ligne, pas une boucle.
+    const reperes = reperesEpreuve(docBoucle(4.445), 'longue');
+    expect(reperes.map((r) => r.pastille)).toEqual(['D', '1', 'A']);
+  });
+});

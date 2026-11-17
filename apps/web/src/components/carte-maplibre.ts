@@ -10,7 +10,12 @@
  * aucun type MapLibre dans sa signature, et puisse donc rester légère.
  */
 
-import maplibregl, { type Map as CarteMapLibre, type Marker, type Popup } from 'maplibre-gl';
+import maplibregl, {
+  type IControl,
+  type Map as CarteMapLibre,
+  type Marker,
+  type Popup,
+} from 'maplibre-gl';
 
 // Feuille de style du moteur (commandes, échelle, messages de gestes). Importée
 // ICI et non dans la page : ce module n'est chargé qu'à l'ouverture de la carte,
@@ -81,6 +86,53 @@ export interface PiloteCarte {
 const OPACITE_REPERE = '1';
 
 /**
+ * Bouton « Recentrer », rangé sous le zoom (+ / −) dans le même groupe de
+ * commandes : c'est là qu'on le cherche après avoir trop zoomé.
+ */
+export class ControleRecentrer implements IControl {
+  private conteneur: HTMLDivElement | null = null;
+
+  constructor(private readonly recentrer: () => void) {}
+
+  onAdd(): HTMLElement {
+    const conteneur = document.createElement('div');
+    conteneur.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.className = 'aa-carte__recentrer';
+    bouton.title = 'Recentrer sur le parcours';
+    bouton.setAttribute('aria-label', 'Recentrer la carte sur le parcours');
+    // Viseur : cercle et quatre traits, dessiné en currentColor.
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    for (const d of ['M10 2v3', 'M10 15v3', 'M2 10h3', 'M15 10h3']) {
+      const trait = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      trait.setAttribute('d', d);
+      svg.append(trait);
+    }
+    const cercle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    cercle.setAttribute('cx', '10');
+    cercle.setAttribute('cy', '10');
+    cercle.setAttribute('r', '5');
+    svg.append(cercle);
+    bouton.append(svg);
+    bouton.addEventListener('click', () => this.recentrer());
+    conteneur.append(bouton);
+    this.conteneur = conteneur;
+    return conteneur;
+  }
+
+  onRemove(): void {
+    this.conteneur?.remove();
+    this.conteneur = null;
+  }
+}
+
+/**
  * Contenu d'une infobulle de repère, construit nœud par nœud : les textes
  * viennent du document publié, jamais d'HTML interprété (aucun innerHTML).
  */
@@ -143,6 +195,26 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
 
   const cadre = emprise(trace.points);
   let exagerationCourante: number = EXAGERATION.defaut;
+  let reliefActif = true;
+  /** Zoom de la vue d'ouverture (cadrage du tracé), mémorisé au chargement. */
+  let zoomInitial: number | null = null;
+
+  // Retour comité 2027 : après un zoom puis un déplacement, on se retrouvait
+  // loin du tracé sans moyen simple d'y revenir. « Recentrer » rend le zoom
+  // d'ouverture (échelle ~500 m), centré sur le départ, dans le mode (3D ou
+  // 2D) en cours. Le zoom est MÉMORISÉ et non recalculé : un nouveau cadrage
+  // en 2D serrait la vue (échelle 300 m) par rapport à l'ouverture en 3D.
+  const recentrer = () => {
+    const camera = reliefActif ? CAMERA_3D : CAMERA_2D;
+    carte.easeTo({
+      center: [depart[0], depart[1]],
+      zoom: zoomInitial ?? carte.getZoom(),
+      pitch: camera.pitch,
+      bearing: camera.bearing,
+      duration: mouvementReduit ? 0 : DUREE_TRANSITION_MS,
+    });
+  };
+  carte.addControl(new ControleRecentrer(recentrer), 'top-right');
 
   const poserRelief = (actif: boolean, exageration: number) => {
     carte.setTerrain(actif ? { source: IDS.relief, exaggeration: exageration } : null);
@@ -182,6 +254,7 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
           duration: 0,
         });
       }
+      zoomInitial = carte.getZoom();
       const marqueurs: Marker[] = [];
       const bulles: Popup[] = [];
       for (const repere of reperes) {
@@ -276,6 +349,7 @@ export async function ouvrirCarte(options: OptionsCarte): Promise<PiloteCarte> {
 
   return {
     definirRelief(actif, exageration) {
+      reliefActif = actif;
       exagerationCourante = exageration;
       poserRelief(actif, exageration);
       const cible = actif ? CAMERA_3D : CAMERA_2D;

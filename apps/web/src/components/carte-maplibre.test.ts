@@ -53,6 +53,9 @@ class CarteFactice {
     return null;
   }
   fitBounds() {}
+  getZoom() {
+    return 14;
+  }
   easeTo() {}
   resize() {}
   remove() {}

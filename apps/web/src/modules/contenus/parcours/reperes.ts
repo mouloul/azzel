@@ -1,7 +1,14 @@
 import type { ParcoursDoc } from './construire';
+import { haversineM } from './geo';
 
 /** Nature d'un repère : elle fixe la couleur de sa pastille sur la carte. */
-export type TypeRepere = 'depart' | 'arrivee' | 'ravitaillement' | 'passage';
+export type TypeRepere = 'depart' | 'arrivee' | 'depart-arrivee' | 'ravitaillement' | 'passage';
+
+/**
+ * En deçà de cette distance, départ et arrivée sont un même lieu (le stade) :
+ * deux pastilles s'y superposaient et l'arrivée masquait le départ.
+ */
+export const SEUIL_MEME_LIEU_M = 50;
 
 /** Point de passage prêt pour une pastille de carte. */
 export interface Repere {
@@ -58,6 +65,49 @@ function pastilleDe(type: TypeRepere, nom: string): string {
  * l'accueil appelle à l'ouverture de la carte lisent ainsi le MÊME code.
  */
 export function reperesEpreuve(doc: ParcoursDoc | null, slug: string): Repere[] {
+  return fusionnerDepartArrivee(reperesBruts(doc, slug));
+}
+
+/**
+ * Boucle (départ et arrivée au même endroit) : une seule pastille « D/A »,
+ * dont l'infobulle porte les deux kilomètres. Retour comité 2027 : sur les
+ * deux épreuves, l'arrivée cachait le départ à quelques mètres de lui.
+ */
+function fusionnerDepartArrivee(reperes: Repere[]): Repere[] {
+  const premier = reperes[0];
+  const dernier = reperes[reperes.length - 1];
+  if (
+    reperes.length < 2 ||
+    premier?.type !== 'depart' ||
+    dernier?.type !== 'arrivee' ||
+    haversineM(premier.lat, premier.lon, dernier.lat, dernier.lon) > SEUIL_MEME_LIEU_M
+  ) {
+    return reperes;
+  }
+  // mesures[0] = « km … » quand le kilomètre est connu ; le reste suit.
+  const [kmDepart, ...autresDepart] = premier.mesures;
+  const [kmArrivee, ...autresArrivee] = dernier.mesures;
+  const mesures = [
+    ...(kmDepart !== undefined ? [`Départ : ${kmDepart}`] : []),
+    ...(kmArrivee !== undefined
+      ? [`Arrivée : ${[kmArrivee, ...autresArrivee.filter((m) => m.startsWith('+'))].join(', ')}`]
+      : []),
+    ...autresDepart,
+  ];
+  const fusion: Repere = {
+    ...premier,
+    id: `${premier.id}+${dernier.id}`,
+    type: 'depart-arrivee',
+    pastille: 'D/A',
+    titre: 'Départ et arrivée',
+    sousTitre: null,
+    mesures,
+    libelle: ['Départ et arrivée', ...mesures].join(' · '),
+  };
+  return [fusion, ...reperes.slice(1, -1)];
+}
+
+function reperesBruts(doc: ParcoursDoc | null, slug: string): Repere[] {
   // hasOwn : le slug peut venir d'une URL publique, et `epreuves['constructor']`
   // rendrait la fonction héritée de Object plutôt que `undefined`.
   if (doc == null || !Object.hasOwn(doc.epreuves, slug)) return [];
