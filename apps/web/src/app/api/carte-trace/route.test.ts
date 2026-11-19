@@ -22,7 +22,7 @@ const TRACES = {
   traces: [
     {
       epreuveSlug: 'longue',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       points: [
         { lat: 36.5512, lon: 4.3601 },
         { lat: 36.5602, lon: 4.3711 },

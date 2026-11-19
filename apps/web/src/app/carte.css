@@ -99,26 +99,8 @@
   margin-top: var(--az-space-1);
 }
 
-/* Pastille d'un point de passage : un vrai bouton, donc focusable. */
-.aa-carte__repere {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 2px solid var(--az-surface);
-  border-radius: var(--az-radius-full);
-  background: var(--az-action);
-  color: var(--az-action-texte);
-  font-family: var(--az-font-surtitre);
-  font-size: var(--az-font-size-surtitre);
-  cursor: pointer;
-}
-
-.aa-carte__repere:focus-visible {
-  outline: 3px solid var(--az-focus);
-  outline-offset: 2px;
-}
+/* Pastilles des points de passage et infobulles : dans
+   components/carte-maplibre.css, chargée par le moteur de carte lui-même. */
 
 /* Repère du curseur partagé (story 11.5) : posé seulement sur interaction. */
 .aa-carte__curseur {

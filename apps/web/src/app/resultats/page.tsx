@@ -101,7 +101,7 @@ export default async function ResultatsPage({
 
           <p className="aa-liens-vitrine">
             <Link className="aa-lien-texte" href="/parcours">
-              Parcours, horaires et consignes
+              Voir les parcours en détail
             </Link>
             <Link className="aa-lien-texte" href="/">
               Revenir à l’accueil

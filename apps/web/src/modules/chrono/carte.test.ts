@@ -23,7 +23,7 @@ import {
 
 const GPX_FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Azzel">
-  <trk><name>La Longue</name><trkseg>
+  <trk><name>La Grande Boucle</name><trkseg>
     <trkpt lat="36.5512" lon="4.3601"><ele>210</ele></trkpt>
     <trkpt lat="36.5602" lon="4.3711"></trkpt>
     <trkpt lat="36.9999" lon="4.3800"/>
@@ -97,7 +97,7 @@ function contenusStoreAvec(epreuves: EpreuveParcoursRecord[]) {
 }
 
 function epreuve(gpxUrl: string | null): EpreuveParcoursRecord {
-  return { id: 'epreuve-id', slug: 'longue', nom: 'La Longue — 35 km', distanceKm: 35, gpxUrl };
+  return { id: 'epreuve-id', slug: 'longue', nom: 'La Grande Boucle — 35 km', distanceKm: 35, gpxUrl };
 }
 
 describe('getTracesPubliques — orchestration (stores + fetch injectés)', () => {
@@ -146,7 +146,7 @@ describe('getTracesPubliques — orchestration (stores + fetch injectés)', () =
       chronoStore: chronoStoreAvec('org-id'),
       contenusStore: contenusStoreAvec([
         epreuve('https://cdn.azzel.dz/longue.gpx'),
-        { ...epreuve(null), slug: 'moyenne', nom: 'La Moyenne — 12 km', gpxUrl: 'https://cdn.azzel.dz/moyenne.gpx' },
+        { ...epreuve(null), slug: 'moyenne', nom: 'La Boucle Moyenne — 12 km', gpxUrl: 'https://cdn.azzel.dz/moyenne.gpx' },
       ]),
       fetchGpx,
     });
@@ -262,7 +262,7 @@ describe('getPositionsPubliques — micro-cache et estompée serveur', () => {
         {
           dossard: 201,
           epreuveSlug: 'longue',
-          epreuveNom: 'La Longue — 35 km',
+          epreuveNom: 'La Grande Boucle — 35 km',
           latitude: 36.5512,
           longitude: 4.3601,
           capteAt: new Date(maintenant - 30 * 60_000),
@@ -270,7 +270,7 @@ describe('getPositionsPubliques — micro-cache et estompée serveur', () => {
         {
           dossard: 202,
           epreuveSlug: 'longue',
-          epreuveNom: 'La Longue — 35 km',
+          epreuveNom: 'La Grande Boucle — 35 km',
           latitude: 36.5602,
           longitude: 4.3711,
           capteAt: new Date(maintenant - 3_600_001),
@@ -295,7 +295,7 @@ describe('getPositionsPubliques — micro-cache et estompée serveur', () => {
         {
           dossard: 201,
           epreuveSlug: 'longue',
-          epreuveNom: 'La Longue — 35 km',
+          epreuveNom: 'La Grande Boucle — 35 km',
           latitude: 36.5512,
           longitude: 4.3601,
           // Horloge appareil en avance : +5 min = dans la tolérance (pleine),
@@ -305,7 +305,7 @@ describe('getPositionsPubliques — micro-cache et estompée serveur', () => {
         {
           dossard: 202,
           epreuveSlug: 'longue',
-          epreuveNom: 'La Longue — 35 km',
+          epreuveNom: 'La Grande Boucle — 35 km',
           latitude: 36.5602,
           longitude: 4.3711,
           capteAt: new Date(maintenant + TOLERANCE_HORLOGE_MS + 1),

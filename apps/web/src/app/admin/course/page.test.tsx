@@ -54,8 +54,8 @@ const SESSION_ORGANISATEUR = {
 const ETAT = {
   edition: { id: 'edition-1', nom: 'Édition 2027' },
   partants: [
-    { epreuveId: 'ep-1', epreuveNom: 'La Longue — 35 km', total: 12 },
-    { epreuveId: 'ep-2', epreuveNom: 'La Moyenne — 12 km', total: 30 },
+    { epreuveId: 'ep-1', epreuveNom: 'La Grande Boucle — 35 km', total: 12 },
+    { epreuveId: 'ep-2', epreuveNom: 'La Boucle Moyenne — 12 km', total: 30 },
   ],
   retraits: 42,
   arrives: 7,
@@ -144,14 +144,14 @@ beforeEach(() => {
       {
         epreuveId: 'ep-1',
         epreuveSlug: 'longue',
-        epreuveNom: 'La Longue — 35 km',
+        epreuveNom: 'La Grande Boucle — 35 km',
         distanceKm: 35,
         heureDepart: '2027-05-16T08:00:00.000Z',
       },
       {
         epreuveId: 'ep-2',
         epreuveSlug: 'moyenne',
-        epreuveNom: 'La Moyenne — 12 km',
+        epreuveNom: 'La Boucle Moyenne — 12 km',
         distanceKm: 12,
         heureDepart: null,
       },
@@ -172,8 +172,8 @@ describe('page /admin/course — rendu serveur PC course (story 5.1)', () => {
     expect(html).toContain('Retraits');
     expect(html).toContain('42');
     expect(html).toContain('Partants');
-    expect(html).toContain('La Longue — 35 km');
-    expect(html).toContain('La Moyenne — 12 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
+    expect(html).toContain('La Boucle Moyenne — 12 km');
     expect(html).toContain('En course');
     expect(html).toContain('Arrivés');
     expect(html).toContain('Abandonnés');
@@ -418,8 +418,8 @@ describe('page /admin/course — carte Heures de départ (story 7.1)', () => {
     chronoServiceMock.getEtatCourse.mockResolvedValue(ETAT);
     const html = await rendu();
     expect(html).toContain('Heures de départ');
-    expect(html).toContain('La Longue — 35 km');
-    expect(html).toContain('La Moyenne — 12 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
+    expect(html).toContain('La Boucle Moyenne — 12 km');
     expect(html).toContain('type="datetime-local"');
     expect(html).toContain('Enregistrer les heures de départ');
     expect(html).toContain('Enregistrée :');

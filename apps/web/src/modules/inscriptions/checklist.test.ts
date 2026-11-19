@@ -79,7 +79,7 @@ function buildChecklistStore(scenario: ChecklistScenario = {}): InscriptionsStor
           editionId: 'edition-1',
           epreuveId: 'ep-1',
           epreuveSlug: 'longue',
-          epreuveNom: 'La Longue — 35 km',
+          epreuveNom: 'La Grande Boucle — 35 km',
           distanceKm: 35,
           prenom: 'Yani',
           nom: 'Ulahianne',
@@ -198,7 +198,7 @@ describe('getChecklistState — consolidation des six pièces', () => {
     expect(validation.actionLabel).toBeUndefined();
     expect(validation.motifRefus).toBeUndefined();
     expect(state.recap).toEqual({
-      epreuve: 'La Longue — 35 km',
+      epreuve: 'La Grande Boucle — 35 km',
       distanceKm: 35,
       categorieAge: 'Senior (18–39 ans)',
       tshirt: 'M',

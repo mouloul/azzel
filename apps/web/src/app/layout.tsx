@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AdminHeaderLink } from '@/components/admin-header-link';
 import { MonTrail } from '@/components/mon-trail';
+import { NavVitrine } from '@/components/nav-vitrine';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { buildThemeInitScript } from '@/lib/theme';
 import './globals.css';
@@ -65,12 +66,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Link>
             {/* Navigation vitrine dans l'en-tête à partir de 960 px (sous ce
                 seuil, le pied de page porte les mêmes liens). */}
-            <nav className="header-nav" aria-label="La course">
-              <Link href="/parcours">Parcours</Link>
-              <Link href="/region">La région</Link>
-              <Link href="/retour-en-images">Retour en images</Link>
-              <Link href="/resultats">Résultats</Link>
-            </nav>
+            <NavVitrine className="header-nav" label="La course" />
             <div className="header-actions">
               <AdminHeaderLink />
               <ThemeToggle />
@@ -83,16 +79,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <main id="contenu">{children}</main>
         <footer className="site-footer">
           <div className="site-footer__inner">
-            <nav className="footer-nav" aria-label="Le week-end sportif">
-              <Link href="/parcours">Parcours</Link>
-              <Link href="/region">La région</Link>
-              {/* Story 2.5 — un simple lien texte : le trailer et la page retour en
-                  images restent hors du budget de premier chargement de l'accueil. */}
-              <Link href="/retour-en-images">Retour en images</Link>
-              {/* Story 7.2 — résultats en direct partageables : la course devient
-                  lisible de l'extérieur le jour J, lien sobre dans la même nav. */}
-              <Link href="/resultats">Résultats</Link>
-            </nav>
+            {/* Mêmes liens texte sobres que l'en-tête (stories 2.4, 2.5, 7.2) :
+                le trailer et le retour en images restent hors du budget de
+                premier chargement de l'accueil. */}
+            <NavVitrine className="footer-nav" label="Le week-end sportif" />
             <p className="meta">Plateforme Azzel</p>
           </div>
         </footer>

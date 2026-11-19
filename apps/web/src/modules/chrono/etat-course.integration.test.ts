@@ -324,12 +324,12 @@ describe.skipIf(testUrls === null)(
     it('état initial : partants par épreuve (validés SEULS), tout à 0, boards vides, aucune donnée reçue', async () => {
       const etat = await getEtatCourse(organisateurA, { store: chronoStore });
       expect(etat.edition).toEqual({ id: editionAId, nom: 'Édition 2027' });
-      // La Longue = 3 validés (A5 sans dossard COMPTE : partants = validés,
+      // La Grande Boucle = 3 validés (A5 sans dossard COMPTE : partants = validés,
       // la numérotation n'y change rien ; l'en constitution ne part pas),
       // la Moyenne = 1.
       expect(etat.partants).toEqual([
-        { epreuveId: expect.any(String), epreuveNom: 'La Longue', total: 3 },
-        { epreuveId: expect.any(String), epreuveNom: 'La Moyenne', total: 1 },
+        { epreuveId: expect.any(String), epreuveNom: 'La Grande Boucle', total: 3 },
+        { epreuveId: expect.any(String), epreuveNom: 'La Boucle Moyenne', total: 1 },
       ]);
       expect(etat.retraits).toBe(0);
       expect(etat.arrives).toBe(0);

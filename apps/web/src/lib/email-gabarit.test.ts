@@ -23,9 +23,9 @@ const OPTIONS = {
 };
 
 const PAYLOADS: Record<NotificationType, NotificationPayload> = {
-  inscription_recue: { prenom: 'Yani', epreuve: 'La Longue — 35 km' },
-  dossier_valide: { prenom: 'Yani', epreuve: 'La Longue — 35 km' },
-  dossier_refuse: { prenom: 'Yani', epreuve: 'La Longue — 35 km', motif: 'Reçu illisible' },
+  inscription_recue: { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km' },
+  dossier_valide: { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km' },
+  dossier_refuse: { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km', motif: 'Reçu illisible' },
   invitation_volontaire: { nom: 'Kahina' },
   rappel_j7: { prenom: 'Yani', dateCourse: '2027-03-26' },
   rappel_preuve: { coureurId: 'c1', prenom: 'Yani', limite: '2027-03-20T22:59:00.000Z' },
@@ -96,10 +96,10 @@ describe('gabarit email — structure HTML', () => {
 
   it('espaces insécables à la française dans le HTML, pas dans le texte', () => {
     const { html, text } = rendreEmail(
-      contenu({ blocs: [{ type: 'paragraphe', texte: 'Batterie à 100 % ? Épreuve « La Longue » : ok' }] }),
+      contenu({ blocs: [{ type: 'paragraphe', texte: 'Batterie à 100 % ? Épreuve « La Grande Boucle » : ok' }] }),
     );
-    expect(html).toContain('Batterie à 100&nbsp;%&nbsp;? Épreuve «&nbsp;La Longue&nbsp;»&nbsp;: ok');
-    expect(text).toContain('Batterie à 100 % ? Épreuve « La Longue » : ok');
+    expect(html).toContain('Batterie à 100&nbsp;%&nbsp;? Épreuve «&nbsp;La Grande Boucle&nbsp;»&nbsp;: ok');
+    expect(text).toContain('Batterie à 100 % ? Épreuve « La Grande Boucle » : ok');
   });
 
   it('étapes numérotées dans les deux rendus', () => {

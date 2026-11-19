@@ -60,14 +60,14 @@ const ETAT_SERVEUR = [
   {
     epreuveId: '11111111-1111-4111-8111-111111111111',
     epreuveSlug: 'longue',
-    epreuveNom: 'La Longue — 35 km',
+    epreuveNom: 'La Grande Boucle — 35 km',
     distanceKm: 35,
     heureDepart: '2027-05-16T08:00:00.000Z',
   },
   {
     epreuveId: '22222222-2222-4222-8222-222222222222',
     epreuveSlug: 'moyenne',
-    epreuveNom: 'La Moyenne — 12 km',
+    epreuveNom: 'La Boucle Moyenne — 12 km',
     distanceKm: 12,
     heureDepart: null,
   },

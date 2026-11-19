@@ -329,8 +329,8 @@ describe('submitInscription — service avec store stubbé', () => {
       ...edition,
     };
     const epreuves = [
-      { id: 'ep-1', editionId: 'edition-1', slug: 'longue', nom: 'La Longue — 35 km', distanceKm: 35 },
-      { id: 'ep-2', editionId: 'edition-1', slug: 'moyenne', nom: 'La Moyenne — 12 km', distanceKm: 12 },
+      { id: 'ep-1', editionId: 'edition-1', slug: 'longue', nom: 'La Grande Boucle — 35 km', distanceKm: 35 },
+      { id: 'ep-2', editionId: 'edition-1', slug: 'moyenne', nom: 'La Boucle Moyenne — 12 km', distanceKm: 12 },
     ];
     const coureurRecord = (input: { epreuveId: string; age: number; categorieAge: string }): CoureurRecord => ({
       id: 'coureur-1',
@@ -339,7 +339,7 @@ describe('submitInscription — service avec store stubbé', () => {
       editionId: 'edition-1',
       epreuveId: input.epreuveId,
       epreuveSlug: 'longue',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       distanceKm: 35,
       prenom: 'Yani',
       nom: 'Ulahianne',
@@ -963,7 +963,7 @@ describe('decideDossier — validation d’entrée avec store stubbé', () => {
       editionId: 'edition-1',
       epreuveId: 'ep-1',
       epreuveSlug: 'longue',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       distanceKm: 35,
       prenom: 'Yani',
       nom: 'Ulahianne',

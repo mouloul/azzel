@@ -44,7 +44,7 @@ function coureur(partial: Record<string, unknown> = {}) {
   return {
     id: 'coureur-1',
     epreuve: 'la-longue',
-    epreuveNom: 'La Longue',
+    epreuveNom: 'La Grande Boucle',
     distanceKm: 42,
     prenom: 'Amina',
     nom: 'Belkacem',

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 7,
   "source": {
     "fichier": "activity_24920331005.gpx",
     "nom": "essai trail ait ainsi 2027",
@@ -9362,6 +9362,46 @@
       "services": null
     },
     {
+      "id": "ravito-1",
+      "nom": "Ravitaillement 1 · Le premier souffle",
+      "positionBaseM": 7997.6,
+      "indexBase": 916,
+      "lon": 4.45873,
+      "lat": 36.774735,
+      "altitudeM": 344.5,
+      "services": ["Eau","Boisson isotonique","Fruits secs"]
+    },
+    {
+      "id": "ravito-2",
+      "nom": "Ravitaillement 2 · La montée du milieu",
+      "positionBaseM": 14998.3,
+      "indexBase": 1724,
+      "lon": 4.42501,
+      "lat": 36.790784,
+      "altitudeM": 577.1,
+      "services": ["Eau","Boisson isotonique","Salé","Sucré"]
+    },
+    {
+      "id": "ravito-3",
+      "nom": "Ravitaillement 3 · La descente technique",
+      "positionBaseM": 20998,
+      "indexBase": 2412,
+      "lon": 4.426582,
+      "lat": 36.778685,
+      "altitudeM": 568.9,
+      "services": ["Eau","Boisson sucrée","Salé","Fruits"]
+    },
+    {
+      "id": "ravito-4",
+      "nom": "Ravitaillement 4 · Le dernier coup de collier",
+      "positionBaseM": 26002.5,
+      "indexBase": 2989,
+      "lon": 4.439606,
+      "lat": 36.773357,
+      "altitudeM": 474.7,
+      "services": ["Eau","Fruits","Boisson sucrée"]
+    },
+    {
       "id": "arrivee",
       "nom": "Arrivée",
       "positionBaseM": 28006.4,
@@ -9372,14 +9412,24 @@
       "services": null
     },
     {
-      "id": "moyenne-depart",
-      "nom": "Départ",
-      "positionBaseM": 28006.4,
-      "indexBase": 3222,
-      "lon": 4.437434,
-      "lat": 36.763739,
-      "altitudeM": 669.8,
-      "services": null
+      "id": "moyenne-ravito-1",
+      "nom": "Ravitaillement 1 · Le fond de vallée",
+      "positionBaseM": 33813,
+      "indexBase": 3873,
+      "lon": 4.451883,
+      "lat": 36.768195,
+      "altitudeM": 318.1,
+      "services": ["Eau","Boisson isotonique","Fruits secs"]
+    },
+    {
+      "id": "moyenne-ravito-2",
+      "nom": "Ravitaillement 2 · Avant la remontée",
+      "positionBaseM": 38138.6,
+      "indexBase": 4358,
+      "lon": 4.445228,
+      "lat": 36.772319,
+      "altitudeM": 408,
+      "services": ["Eau","Fruits","Boisson sucrée"]
     },
     {
       "id": "moyenne-arrivee",
@@ -9414,21 +9464,53 @@
           "dplusSegmentAmontM": 0
         },
         {
+          "id": "ravito-1",
+          "sM": 7997.6,
+          "kilometre": 8,
+          "altitudeM": 344.5,
+          "dplusSegmentAmontM": 144
+        },
+        {
+          "id": "ravito-2",
+          "sM": 14998.3,
+          "kilometre": 15,
+          "altitudeM": 577.1,
+          "dplusSegmentAmontM": 399
+        },
+        {
+          "id": "ravito-3",
+          "sM": 20998,
+          "kilometre": 21,
+          "altitudeM": 568.9,
+          "dplusSegmentAmontM": 266
+        },
+        {
+          "id": "ravito-4",
+          "sM": 26002.5,
+          "kilometre": 26,
+          "altitudeM": 474.7,
+          "dplusSegmentAmontM": 170
+        },
+        {
           "id": "arrivee",
           "sM": 28006.4,
           "kilometre": 28.01,
           "altitudeM": 676,
-          "dplusSegmentAmontM": 1186
+          "dplusSegmentAmontM": 207
         }
       ]
     },
     "moyenne": {
-      "distanceM": 12724.5,
-      "dplusM": 525,
-      "dmoinsM": 524,
+      "distanceM": 13010.5,
+      "dplusM": 524,
+      "dmoinsM": 530,
       "altitudeMinM": 270.1,
-      "altitudeMaxM": 674.7,
+      "altitudeMaxM": 677.4,
       "tranches": [
+        {
+          "deIndex": 0,
+          "aIndex": 33
+        },
         {
           "deIndex": 3222,
           "aIndex": 4656
@@ -9436,18 +9518,32 @@
       ],
       "pointsDePassage": [
         {
-          "id": "moyenne-depart",
+          "id": "depart",
           "sM": 0,
           "kilometre": 0,
-          "altitudeM": 669.8,
+          "altitudeM": 677.4,
           "dplusSegmentAmontM": 0
         },
         {
+          "id": "moyenne-ravito-1",
+          "sM": 6092.6,
+          "kilometre": 6.09,
+          "altitudeM": 318.1,
+          "dplusSegmentAmontM": 48
+        },
+        {
+          "id": "moyenne-ravito-2",
+          "sM": 10418.1,
+          "kilometre": 10.42,
+          "altitudeM": 408,
+          "dplusSegmentAmontM": 218
+        },
+        {
           "id": "moyenne-arrivee",
-          "sM": 12724.5,
-          "kilometre": 12.72,
+          "sM": 13010.5,
+          "kilometre": 13.01,
           "altitudeM": 674.7,
-          "dplusSegmentAmontM": 525
+          "dplusSegmentAmontM": 269
         }
       ],
       "source": {

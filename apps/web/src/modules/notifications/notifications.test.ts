@@ -50,12 +50,12 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
   it('inscription reçue : objet exact, prénom, épreuve, pièces restantes, lien espace coureur', () => {
     const email = buildNotificationEmail(
       'inscription_recue',
-      { prenom: 'Yani', epreuve: 'La Longue — 35 km' },
+      { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km' },
       OPTIONS,
     );
     expect(email.subject).toBe(INSCRIPTION_RECUE_SUBJECT);
     expect(email.text).toContain('Salut Yani');
-    expect(email.text).toContain('« La Longue — 35 km »');
+    expect(email.text).toContain('« La Grande Boucle — 35 km »');
     expect(email.text).toContain('décharge et le règlement');
     expect(email.text).toContain('preuve de paiement CCP');
     expect(email.text).toContain(OPTIONS.espaceCoureurUrl);
@@ -64,12 +64,12 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
   it('dossier validé : objet exact, prénom et épreuve, pas de motif', () => {
     const email = buildNotificationEmail(
       'dossier_valide',
-      { prenom: 'Yani', epreuve: 'La Longue — 35 km' },
+      { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km' },
       OPTIONS,
     );
     expect(email.subject).toBe(DOSSIER_VALIDE_SUBJECT);
     expect(email.text).toContain('Salut Yani');
-    expect(email.text).toContain('« La Longue — 35 km »');
+    expect(email.text).toContain('« La Grande Boucle — 35 km »');
     expect(email.text).toContain('validé');
     expect(email.text).not.toContain('Motif');
   });
@@ -77,7 +77,7 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
   it('dossier refusé : objet exact, motif, « Appeler l’équipe » et numéro d’assistance', () => {
     const email = buildNotificationEmail(
       'dossier_refuse',
-      { prenom: 'Yani', epreuve: 'La Longue — 35 km', motif: 'Reçu de paiement illisible' },
+      { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km', motif: 'Reçu de paiement illisible' },
       OPTIONS,
     );
     expect(email.subject).toBe(DOSSIER_REFUSE_SUBJECT);
@@ -129,7 +129,7 @@ describe('buildNotificationEmail — contenus français sobres (tutoiement)', ()
   it('dossier refusé avec motif blank : aucune ligne « Motif : » vide', () => {
     const email = buildNotificationEmail(
       'dossier_refuse',
-      { prenom: 'Yani', epreuve: 'La Longue — 35 km', motif: '   ' },
+      { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km', motif: '   ' },
       OPTIONS,
     );
     expect(email.subject).toBe(DOSSIER_REFUSE_SUBJECT);
@@ -288,7 +288,7 @@ function outboxRow(overrides: Partial<OutboxRow> = {}): OutboxRow {
     organisationId: 'org-1',
     destinataire: 'coureur@exemple.dz',
     type: 'inscription_recue',
-    payload: { prenom: 'Yani', epreuve: 'La Longue — 35 km' },
+    payload: { prenom: 'Yani', epreuve: 'La Grande Boucle — 35 km' },
     statut: 'pending',
     attempts: 0,
     lastError: null,
@@ -341,7 +341,7 @@ describe('processOutbox — worker avec transport et store stubbés', () => {
       outboxRow({
         id: 'outbox-2',
         type: 'dossier_refuse',
-        payload: { prenom: 'Iness', epreuve: 'La Moyenne — 12 km', motif: 'reçu flou' },
+        payload: { prenom: 'Iness', epreuve: 'La Boucle Moyenne — 12 km', motif: 'reçu flou' },
         createdAt: new Date('2026-10-21T08:00:01.000Z'),
       }),
     ];

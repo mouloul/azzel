@@ -58,7 +58,7 @@ const EDOSSARD_VALIDE_NUMEROTE = {
   dossard: 12,
   prenom: 'Yani',
   nom: 'Ulahianne',
-  epreuveNom: 'La Longue — 35 km',
+  epreuveNom: 'La Grande Boucle — 35 km',
   editionNom: 'Édition 2027',
 };
 
@@ -102,7 +102,7 @@ describe('page /espace-coureur/e-dossard — coureur validé numéroté', () => 
     expect(html).toContain('Édition 2027');
     expect(html).toContain('Yani');
     expect(html).toContain('Ulahianne');
-    expect(html).toContain('La Longue — 35 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
     expect(html).toContain('edossard-numero"');
     expect(html).toContain('>12</p>');
     expect(html).toContain('HORS-LIGNE PRÊT');

@@ -63,7 +63,7 @@ const EDITION = {
 };
 
 const RECAP = {
-  epreuve: 'La Longue — 35 km',
+  epreuve: 'La Grande Boucle — 35 km',
   distanceKm: 35,
   categorieAge: 'Senior (18–39 ans)',
   tshirt: 'XL',
@@ -123,9 +123,9 @@ describe('page /espace-coureur — récapitulatif', () => {
     expect(recap).toContain('En attente de justificatif de paiement');
   });
 
-  it('la distance n’est dite qu’une fois : « La Longue — 35 km », sans « (35 km) »', async () => {
+  it('la distance n’est dite qu’une fois : « La Grande Boucle — 35 km », sans « (35 km) »', async () => {
     const html = await renduRecap('en constitution', 4);
-    expect(html).toContain('La Longue — 35 km');
+    expect(html).toContain('La Grande Boucle — 35 km');
     expect(html).not.toContain('35 km (35 km)');
     expect(html).not.toContain('— 35 km (35');
   });

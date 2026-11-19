@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ProfilAltimetrique } from '@/components/profil-altimetrique';
 import { ProfilCurseur, texteLecture } from '@/components/profil-curseur';
-import { MENTION_TRACE_PROVISOIRE, SectionParcours } from '@/components/section-parcours';
+import { SectionParcours } from '@/components/section-parcours';
 import { PARCOURS_DOC } from '@/modules/contenus/parcours/lecture';
 import {
   construireProfilEpreuve,
@@ -29,7 +29,7 @@ const PROFIL_LONGUE = construireProfilEpreuve(PARCOURS_DOC, 'longue');
 function epreuveAvecProfil(profil: ProfilEpreuve | null): EpreuveSectionParcours {
   return {
     slug: 'longue',
-    nom: 'La Longue — 35 km',
+    nom: 'La Grande Boucle — 35 km',
     // Décision produit 2026-11-04 : la fusion écrase la distance éditoriale
     // (35) par celle du relevé — le fixture suit le contrat réel.
     distanceKm: (PARCOURS_DOC?.epreuves.longue?.distanceM ?? 0) / 1000,
@@ -43,7 +43,7 @@ function epreuveAvecProfil(profil: ProfilEpreuve | null): EpreuveSectionParcours
 describe('profil altimetrique — SVG servi complet (story 11.4)', () => {
   const html = renderToStaticMarkup(
     <ProfilAltimetrique
-      nomEpreuve="La Longue — 35 km"
+      nomEpreuve="La Grande Boucle — 35 km"
       profil={PROFIL_LONGUE as ProfilEpreuve}
       slugEpreuve="longue"
     />,
@@ -53,7 +53,7 @@ describe('profil altimetrique — SVG servi complet (story 11.4)', () => {
     expect(html).toMatch(/<svg[^>]*role="img"/);
     expect(html).toContain('aria-labelledby="profil-alt-titre-longue"');
     expect(html).toContain('<title id="profil-alt-titre-longue">');
-    expect(html).toContain('Profil altimétrique de La Longue — 35 km');
+    expect(html).toContain('Profil altimétrique de La Grande Boucle — 35 km');
     // Chiffres PUBLIÉS 11.1 (même source que la fiche) : 28 km, 1 186 m de D+.
     expect(html).toContain(`1${NBSP_ETROIT}186${NBSP_ETROIT}m de D+`);
   });
@@ -81,7 +81,7 @@ describe('profil altimetrique — SVG servi complet (story 11.4)', () => {
   it('marqueurs Départ/Arrivée : kilomètre + D+ du segment amont', () => {
     expect(html).toContain('aa-profil__marqueur-libelle');
     expect(html).toContain(`Départ · km${NBSP_ETROIT}0`);
-    expect(html).toContain(`Arrivée · km${NBSP_ETROIT}28 · +1${NBSP_ETROIT}186${NBSP_ETROIT}m D+`);
+    expect(html).toContain(`Arrivée · km${NBSP_ETROIT}28 · +207${NBSP_ETROIT}m D+`);
   });
 
   it('décor (grille, axes, aires, marqueurs) aria-hidden', () => {
@@ -114,7 +114,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
       epreuveAvecProfil(PROFIL_LONGUE),
       {
         slug: 'moyenne',
-        nom: 'La Moyenne — 12 km',
+        nom: 'La Boucle Moyenne — 12 km',
         distanceKm: 12,
         gpxUrl: null,
         metriques: null,
@@ -149,16 +149,13 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
     expect(tranchePanneau(1)).not.toContain('class="vp"');
   });
 
-  it('décision produit 2026-11-04 : panneau longue = distance du relevé + mention « tracé provisoire »', () => {
+  it('décision produit 2026-11-04 : panneau longue = distance du relevé, sans mention « tracé provisoire » (retour comité 2027)', () => {
     // Distance AFFICHÉE = relevé (28 006,4 m → « 28 km », même convention
     // de format que « 12 km » : maximumFractionDigits 1, zéro traînant omis),
     // pas la base éditoriale (35) — le panneau est cohérent avec le profil.
     expect(html).toContain(`>28${NBSP_ETROIT}km<`);
     expect(html).not.toContain('>35');
-    // Mention sobre, SERVIE sans JavaScript, texte en constante unique.
-    expect(html).toContain(MENTION_TRACE_PROVISOIRE);
-    // Une seule occurrence : le panneau de la longue, jamais ailleurs.
-    expect(html.split(MENTION_TRACE_PROVISOIRE).length - 1).toBe(1);
+    expect(html).not.toContain('Tracé provisoire');
   });
 
   it('moyenne (sans données) : mention « tracé provisoire » absente', () => {
@@ -169,7 +166,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
             epreuveAvecProfil(null),
             {
               slug: 'moyenne',
-              nom: 'La Moyenne — 12 km',
+              nom: 'La Boucle Moyenne — 12 km',
               distanceKm: 12,
               gpxUrl: null,
               metriques: null,
@@ -180,7 +177,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
         }}
       />,
     );
-    expect(sansProfil).not.toContain(MENTION_TRACE_PROVISOIRE);
+    expect(sansProfil).not.toContain('Tracé provisoire');
   });
 
   it('moyenne (sans données) : AUCUNE visualisation ni chiffre de profil, annonce conservée', () => {
@@ -191,7 +188,7 @@ describe('section parcours accueil — aside viz par épreuve (story 11.4)', () 
             epreuveAvecProfil(null),
             {
               slug: 'moyenne',
-              nom: 'La Moyenne — 12 km',
+              nom: 'La Boucle Moyenne — 12 km',
               distanceKm: 12,
               gpxUrl: null,
               metriques: null,

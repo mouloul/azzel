@@ -41,7 +41,7 @@ const DONNEES: EdossardCoureurData = {
   dossard: 12,
   prenom: 'Yani',
   nom: 'Ulahianne',
-  epreuveNom: 'La Longue — 35 km',
+  epreuveNom: 'La Grande Boucle — 35 km',
 };
 
 function buildStore(scenario: {
@@ -89,7 +89,7 @@ describe('obtenirEdossard — assemblage de l’état e-dossard', () => {
       dossard: 12,
       prenom: 'Yani',
       nom: 'Ulahianne',
-      epreuveNom: 'La Longue — 35 km',
+      epreuveNom: 'La Grande Boucle — 35 km',
       editionNom: 'Édition 2027',
     });
     expect(store.obtenirOuCreerJetonEdossard).toHaveBeenCalledWith({

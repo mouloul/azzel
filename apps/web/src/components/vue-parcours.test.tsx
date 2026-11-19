@@ -25,7 +25,7 @@ const STATS = {
 function rendre() {
   if (PROFIL === null) throw new Error('parcours.json absent');
   return renderToStaticMarkup(
-    <VueParcours nom="La Longue" profil={PROFIL} slug="longue" stats={STATS} version={2} />,
+    <VueParcours nom="La Grande Boucle" profil={PROFIL} slug="longue" stats={STATS} version={2} />,
   );
 }
 
@@ -33,7 +33,7 @@ describe('VueParcours — ce que le serveur sert', () => {
   const html = rendre();
 
   it('le nom de l’épreuve n’est écrit qu’une fois : le titre du panneau, pas un second dans la vue', () => {
-    expect(html).toContain('aria-label="Parcours — La Longue"');
+    expect(html).toContain('aria-label="Parcours — La Grande Boucle"');
     expect(html).not.toContain('<h4');
   });
 
@@ -124,7 +124,7 @@ describe('SectionParcours — l’accueil fusionné, avec la vraie vue', () => {
           epreuves: [
             {
               slug: 'longue',
-              nom: 'La Longue',
+              nom: 'La Grande Boucle',
               distanceKm: 28,
               gpxUrl: null,
               metriques: {
@@ -140,7 +140,7 @@ describe('SectionParcours — l’accueil fusionné, avec la vraie vue', () => {
             },
             {
               slug: 'moyenne',
-              nom: 'La Moyenne',
+              nom: 'La Boucle Moyenne',
               distanceKm: 12,
               gpxUrl: null,
               metriques: null,
@@ -168,8 +168,8 @@ describe('SectionParcours — l’accueil fusionné, avec la vraie vue', () => {
     expect(html).toContain('Contenu sous le sélecteur');
   });
 
-  it('la mention « tracé provisoire » accompagne la vue, comme avant', () => {
-    expect(section()).toContain('Tracé provisoire');
+  it('retour comité 2027 : plus de mention « tracé provisoire » sous la vue', () => {
+    expect(section()).not.toContain('Tracé provisoire');
   });
 
   it('un profil SANS métriques affiche quand même la vue, chiffres tirés du profil', () => {
@@ -180,7 +180,7 @@ describe('SectionParcours — l’accueil fusionné, avec la vraie vue', () => {
           epreuves: [
             {
               slug: 'longue',
-              nom: 'La Longue',
+              nom: 'La Grande Boucle',
               distanceKm: 28,
               gpxUrl: null,
               metriques: null,

@@ -28,7 +28,7 @@ const MAINTENANT = new Date('2027-03-26T10:00:00.000Z');
 const POSITION_RECENTE: PositionPublique = {
   dossard: 201,
   epreuveSlug: 'longue',
-  epreuveNom: 'La Longue — 35 km',
+  epreuveNom: 'La Grande Boucle — 35 km',
   lat: 36.5512,
   lon: 4.3601,
   capteA: '2027-03-26T09:41:00.000Z',
@@ -125,7 +125,7 @@ describe('interpreterPayloadTraces — défense de forme (pure)', () => {
     expect(
       interpreterPayloadTraces({
         ok: true,
-        traces: [{ epreuveSlug: 'longue', epreuveNom: 'La Longue', points: [] }],
+        traces: [{ epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', points: [] }],
       }).ok,
     ).toBe(true);
     expect(interpreterPayloadTraces({ ok: false, traces: [] }).ok).toBe(false);
@@ -135,12 +135,12 @@ describe('interpreterPayloadTraces — défense de forme (pure)', () => {
 
   it('revue 7.3 — item pourri → payload ENTIER refusé : points non-objets, lat/lon non finis, slug absent', () => {
     const tracesPourries: unknown[] = [
-      { epreuveSlug: 'longue', epreuveNom: 'La Longue', points: 'pas-un-tableau' },
-      { epreuveSlug: 'longue', epreuveNom: 'La Longue', points: [{ lat: 1, lon: 2 }, 'x'] },
-      { epreuveSlug: 'longue', epreuveNom: 'La Longue', points: [{ lat: '1', lon: 2 }] },
-      { epreuveSlug: 'longue', epreuveNom: 'La Longue', points: [{ lat: 1 }] },
-      { epreuveSlug: 'longue', epreuveNom: 'La Longue', points: [{ lon: 2 }] },
-      { epreuveNom: 'La Longue', points: [] },
+      { epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', points: 'pas-un-tableau' },
+      { epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', points: [{ lat: 1, lon: 2 }, 'x'] },
+      { epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', points: [{ lat: '1', lon: 2 }] },
+      { epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', points: [{ lat: 1 }] },
+      { epreuveSlug: 'longue', epreuveNom: 'La Grande Boucle', points: [{ lon: 2 }] },
+      { epreuveNom: 'La Grande Boucle', points: [] },
       { epreuveSlug: 'longue', points: [] },
       'pas-un-objet',
     ];
@@ -153,7 +153,7 @@ describe('interpreterPayloadTraces — défense de forme (pure)', () => {
 
 describe('libellePastille — anonymat et « dernière position connue » (pure)', () => {
   it('position récente : dossard qualifié par épreuve — jamais un nom', () => {
-    expect(libellePastille(POSITION_RECENTE, MAINTENANT)).toBe('201 — La Longue — 35 km');
+    expect(libellePastille(POSITION_RECENTE, MAINTENANT)).toBe('201 — La Grande Boucle — 35 km');
   });
 
   it('position estompée : « Dernière position connue il y a X » — sobre, jamais alarmiste', () => {
@@ -166,13 +166,13 @@ describe('libellePastille — anonymat et « dernière position connue » (pure)
 describe('libelleLignePosition — liste texte accessible (revue 7.3, pure)', () => {
   it('position récente : dossard + épreuve + âge', () => {
     expect(libelleLignePosition(POSITION_RECENTE, MAINTENANT)).toBe(
-      '201 — La Longue — 35 km — il y a 19 min',
+      '201 — La Grande Boucle — 35 km — il y a 19 min',
     );
   });
 
   it('position estompée : « dernière position connue » en toutes lettres', () => {
     expect(libelleLignePosition(POSITION_ESTOMPEE, MAINTENANT)).toBe(
-      '202 — La Longue — 35 km — dernière position connue il y a 1 h',
+      '202 — La Grande Boucle — 35 km — dernière position connue il y a 1 h',
     );
   });
 });

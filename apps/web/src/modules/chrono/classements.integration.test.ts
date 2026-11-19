@@ -605,7 +605,7 @@ describe.skipIf(testUrls === null)(
     });
 
     it('heures de départ : déplacement officiel → temps recalculés ; effacement (null) → configure false sans temps ; restauration', async () => {
-      // La Moyenne part 15 min PLUS TARD : le temps de M1 fond d'autant.
+      // La Boucle Moyenne part 15 min PLUS TARD : le temps de M1 fond d'autant.
       const departMoyenneDeplace = new Date(departMoyenne.getTime() + 900_000);
       await enregistrerHeuresDepart(
         organisateurA,

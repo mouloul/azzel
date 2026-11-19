@@ -246,7 +246,7 @@ export default async function HomePage() {
       {/* Section « épreuves » et section « parcours » FUSIONNÉES (recette du
           05/11/2026) : l'accueil montrait d'abord deux cartes d'accroche, puis,
           plus bas, un sélecteur et une fiche. Un seul bloc désormais — on choisit
-          Longue ou Moyenne, et le détail de l'épreuve (chiffres, carte en relief,
+          Grande Boucle ou Boucle Moyenne, et le détail de l'épreuve (chiffres, carte en relief,
           profil) s'affiche juste en dessous. Reprise de la vue du POC 3D. */}
       <SectionParcours
         entete={{
@@ -259,9 +259,12 @@ export default async function HomePage() {
         sansLienDetail
         pied={
           <>
+            {/* Retour comité 2027 : le lien texte « Parcours, horaires et
+                consignes » passait inaperçu et promettait des horaires que la
+                page ne publie pas. Un vrai bouton, qui dit ce qu'on y trouve. */}
             <p className="aa-liens-vitrine">
-              <Link className="aa-lien-texte" href="/parcours">
-                Parcours, horaires et consignes
+              <Link className="socle-action socle-action--contour" href="/parcours">
+                Voir les parcours en détail : carte, profil et ravitaillements
               </Link>
             </p>
             <div className="aa-galerie">

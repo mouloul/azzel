@@ -62,7 +62,7 @@ function epreuve(overrides: Partial<EpreuveParcoursRecord> = {}): EpreuveParcour
   return {
     id: 'epreuve-1',
     slug: 'longue',
-    nom: 'La Longue — 35 km',
+    nom: 'La Grande Boucle — 35 km',
     distanceKm: 35,
     gpxUrl: null,
     ...overrides,
@@ -224,7 +224,7 @@ describe('contenus — service', () => {
       listContenusBySlugs: vi.fn().mockResolvedValue([region, longue]),
       listEpreuvesParcours: vi
         .fn()
-        .mockResolvedValue([epreuve(), epreuve({ id: 'e2', slug: 'moyenne', nom: 'La Moyenne — 12 km', distanceKm: 12 })]),
+        .mockResolvedValue([epreuve(), epreuve({ id: 'e2', slug: 'moyenne', nom: 'La Boucle Moyenne — 12 km', distanceKm: 12 })]),
     });
     const state = await getContenusAdminState(SESSION, { store });
     expect(state.blocs.map((bloc) => bloc.slug)).toEqual(['parcours-longue', 'region']);
