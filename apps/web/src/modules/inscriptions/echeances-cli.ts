@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
+import { terminerAvecBattement } from '@/lib/battement';
 import { exigeTls } from '@/db/client';
 import { readDatabaseUrl } from '@/modules/iam/env';
 import { createOutboxStore, MAX_OUTBOX_ATTEMPTS } from '@/modules/notifications/outbox-store';
@@ -93,8 +94,5 @@ const invokedDirectly = (() => {
 })();
 
 if (invokedDirectly) {
-  void main().catch((error) => {
-    console.error('inscriptions:echeances a échoué :', error);
-    process.exitCode = 1;
-  });
+  void terminerAvecBattement('ECHEANCES', main, 'inscriptions:echeances');
 }

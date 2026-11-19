@@ -347,3 +347,18 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-12-2-sauvegardes-de-la-base-et-des-preuves.md`
   summary: Tester que `scripts/sauvegarde.sh` impose `PGSSLMODE=require` (et ne passe jamais le mot de passe en argument) pour un hôte distant, via un faux binaire `docker` en tête du PATH.
   evidence: Revue 12.2 (VG), non vérifié — sévérité high si la régression existait (dump en clair sur Internet). Seul l'hôte local (`prefer`) est exercé par les tests ; à régler par un test d'interception de l'environnement de `docker run`.
+- source_spec: none
+  summary: Story 12.1 lot B — journal JSON `apps/web/src/lib/journal.ts` (refus des clés personnelles) et migration des ~71 `console.error`/`console.warn` serveur d'`apps/web/src`.
+  evidence: Scindé de la story 12.1 le 2026-11-19 (Boss) : refactor transverse indépendant de l'alerting, livrable et relisible seul.
+- source_spec: none
+  summary: Story 12.1 lot C — Sentry sur l'app coureurs Expo (`@sentry/react-native` + plugin, masquage commun de `shared` étendu aux positions GPS des breadcrumbs, DSN via variable EAS, source maps EAS).
+  evidence: Scindé de la story 12.1 le 2026-11-19 (Boss) : dépend seulement du masquage commun livré par le lot A.
+- source_spec: none
+  summary: Story 12.1 lot D — mesurer l'impact du SDK Sentry navigateur avec `pnpm budget` et consigner la décision (branché sur PWA scanneuse et formulaire d'inscription, ou différé).
+  evidence: Scindé de la story 12.1 le 2026-11-19 (Boss) : décision de budget bundle indépendante du serveur.
+- source_spec: `_bmad-output/implementation-artifacts/spec-12-1-observabilite-de-production.md`
+  summary: Tester que `next.config.ts` emballé par `withSentryConfig` (avec `SENTRY_AUTH_TOKEN`) conserve `headers()` (en-têtes de sécurité, service workers).
+  evidence: Revue 12.1 (VG), non vérifié — high si l'emballage perdait les en-têtes ; la CI n'a jamais de jeton. À régler par un test qui importe la config avec le jeton posé.
+- source_spec: `_bmad-output/implementation-artifacts/spec-12-1-observabilite-de-production.md`
+  summary: Vérifier en recette que les 3 crons (`emails:send`, `inscriptions:echeances`, `emails:j7`) appellent bien `HEARTBEAT_URL_EMAILS`/`_ECHEANCES`/`_J7` (URL pointée vers un serveur local).
+  evidence: Revue 12.1 (VG), non vérifié — une faute de nom rendrait un cron muet pour le moniteur (medium) ; le câblage est derrière `invokedDirectly`, non exercé par les tests.

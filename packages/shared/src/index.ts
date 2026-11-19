@@ -9,3 +9,4 @@ export * from './dossier';
 export * from './citation';
 export * from './classements';
 export * from './carte';
+export * from './masquage';

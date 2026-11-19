@@ -1,5 +1,6 @@
 import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
+import { signalerErreurInattendue } from '@/lib/observabilite';
 import { DbUnavailableError, UnauthenticatedError } from '@/modules/iam/errors';
 
 import { formatDateFrUtc, type FieldErrors } from './domain';
@@ -282,17 +283,6 @@ interface SharedErrorMapperConfig {
   dossierValideAction: string;
 }
 
-/**
- * Une erreur non classée devient un 500 générique côté client : sans trace
- * côté serveur, la cause (stockage mal configuré, colonne absente faute de
- * migration, panne réseau…) est perdue, et les journaux de l'hébergeur ne
- * montrent qu'un statut. Les messages d'erreur du dépôt nomment les variables
- * fautives, jamais leurs valeurs : rien de secret n'est écrit ici.
- */
-function journaliserErreurInattendue(prefix: string, error: unknown): void {
-  console.error('[%s] erreur inattendue (500) :', prefix, error);
-}
-
 function sharedApiError(error: unknown, config: SharedErrorMapperConfig): ApiError {
   if (error instanceof RegistrationClosedError) {
     return {
@@ -390,7 +380,7 @@ function sharedApiError(error: unknown, config: SharedErrorMapperConfig): ApiErr
       }),
     };
   }
-  journaliserErreurInattendue(config.prefix, error);
+  signalerErreurInattendue(config.prefix, error);
   return {
     status: 500,
     envelope: createErrorEnvelope({
@@ -620,6 +610,7 @@ export function toAdminApiError(error: unknown): ApiError {
     };
   }
   if (error instanceof PreuveStorageError) {
+    signalerErreurInattendue('admin', error);
     return {
       status: 500,
       envelope: createErrorEnvelope({
@@ -699,7 +690,7 @@ export function toAdminApiError(error: unknown): ApiError {
       }),
     };
   }
-  journaliserErreurInattendue('admin', error);
+  signalerErreurInattendue('admin', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

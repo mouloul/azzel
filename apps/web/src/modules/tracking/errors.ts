@@ -1,6 +1,7 @@
 import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 
 import { DbUnavailableError } from '@/modules/iam/errors';
+import { signalerErreurInattendue } from '@/lib/observabilite';
 
 export { DbUnavailableError };
 
@@ -161,6 +162,7 @@ export function toTrackingApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('tracking', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

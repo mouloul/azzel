@@ -7,6 +7,7 @@ import type {
   AnnulationFieldErrors,
   HeuresDepartFieldErrors,
 } from './domain';
+import { signalerErreurInattendue } from '@/lib/observabilite';
 
 export { DbUnavailableError };
 
@@ -343,6 +344,7 @@ export function toChronoApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('chrono', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({
@@ -389,6 +391,7 @@ export function toChronoAdminApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('chrono', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({
@@ -618,6 +621,7 @@ export function toCourseApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('chrono', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({
@@ -646,6 +650,7 @@ export function toResultatsPublicApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('chrono', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({
@@ -674,6 +679,7 @@ export function toCartePubliqueApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('chrono', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

@@ -1,4 +1,5 @@
 import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
+import { signalerErreurInattendue } from '@/lib/observabilite';
 
 export class EmailInvalidError extends Error {
   constructor() {
@@ -190,6 +191,7 @@ export function toApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('iam', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

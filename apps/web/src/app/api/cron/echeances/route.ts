@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { createErrorEnvelope } from '@azzel/shared';
 
+import { signalerErreurInattendue } from '@/lib/observabilite';
 import { readDatabaseUrl, readEnv } from '@/modules/iam/env';
 import { AppRoleMisconfiguredError } from '@/modules/iam/errors';
 import { balayerEcheances, type BilanEcheances } from '@/modules/inscriptions/echeances';
@@ -153,7 +154,12 @@ export async function GET(request: NextRequest) {
       { plafondEnvoi: PLAFOND_ENVOI },
     );
   } catch (error) {
-    console.error('[cron] balayage des échéances en échec :', error);
+    // Les 503 (base) sont journalisés ici ; le 500 l'est par
+    // signalerErreurInattendue, qui écrit aussi le journal : pas de doublon.
+    const base = isConnectionError(error) || error instanceof AppRoleMisconfiguredError;
+    if (base) {
+      console.error('[cron] balayage des échéances en échec :', error);
+    }
     if (isConnectionError(error)) {
       return reponseErreur(
         503,
@@ -174,6 +180,7 @@ export async function GET(request: NextRequest) {
         }),
       );
     }
+    signalerErreurInattendue('cron', error);
     return reponseErreur(
       500,
       createErrorEnvelope({
