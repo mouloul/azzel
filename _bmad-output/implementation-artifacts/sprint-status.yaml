@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-20-2026 22:35
-last_updated: 11-07-2026 00:00
+last_updated: 11-14-2026 17:18
 project: Azzel
 project_key: NOKEY
 tracking_system: file-system
@@ -128,7 +128,7 @@ development_status:
   11-7-barrières-horaires-sur-le-parcours: backlog
   epic-11-retrospective: optional
 
-  epic-12: backlog
+  epic-12: in-progress
   12-1-observabilité-de-production: backlog
-  12-2-sauvegardes-de-la-base-et-des-preuves: backlog
+  12-2-sauvegardes-de-la-base-et-des-preuves: review
   epic-12-retrospective: optional

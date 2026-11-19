@@ -118,6 +118,21 @@ La recette hébergée sur Vercel n'a pas de crontab : le même balayage y passe 
 quotidien et un workflow GitHub Actions horaire — voir
 `_bmad-output/implementation-artifacts/deploiement-recette.md`, section 5 bis.
 
+## Sauvegardes (production)
+
+`scripts/sauvegarde.sh <quotidien|course|manuel>` archive un dump Postgres et toutes les
+preuves (vérifiées par sha256), chiffre l'archive avec une clé publique `age` et l'envoie
+sur Backblaze B2 (UE) avec rétention et battement de cœur. Il se lance par la crontab de
+l'**hôte** VPS (quotidienne à 02:30 UTC, horaire le jour J), pas en *Scheduled Task*
+Coolify. Mode opératoire complet (compte B2, `rclone`, paire de clés `age`, crontab,
+volume, décision Supabase Pro) : [`docs/exploitation-sauvegardes.md`](docs/exploitation-sauvegardes.md).
+
+```cron
+# cron n'hérite pas du PATH de la session (voir § 6 de la doc ci-dessus).
+PATH=/usr/local/bin:/usr/bin:/bin
+30 2 * * * cd /srv/azzel && flock -n /var/lock/azzel-sauvegarde.lock bash scripts/sauvegarde.sh quotidien >>/var/log/azzel-sauvegarde.log 2>&1
+```
+
 ## Conventions
 
 - **Langues** : interface utilisateur en français ; code et identifiants en anglais.

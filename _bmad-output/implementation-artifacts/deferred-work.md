@@ -338,3 +338,12 @@ Revue à 4 couches (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance
 - source_spec: `_bmad-output/implementation-artifacts/spec-delai-preuve-heures.md`
   summary: Déployer la migration 0045 et le code ensemble (ou scinder en deux migrations : ajout de `delai_preuve_heures`, puis suppression de `delai_preuve_jours` après déploiement).
   evidence: Entre la migration et le déploiement, l'ancien code lit une colonne supprimée (ou le nouveau une colonne absente) : inscriptions et admin en 500. La suppression est gelée dans la spec ; fenêtre courte en recette (migration lancée à la main depuis un poste).
+- source_spec: `_bmad-output/implementation-artifacts/spec-12-2-sauvegardes-de-la-base-et-des-preuves.md`
+  summary: Restauration éprouvée des sauvegardes (story 12.2, AC « restauration ») — `scripts/restauration.sh` (déchiffrement age, base `azzel_restauration` dans dev-db avec rôles Supabase créés en NOLOGIN, pg_restore, extraction des preuves) et `sauvegarde:verifier` (comptages vs manifeste, sha256 de chaque preuve référencée, isolation RLS en azzel_app), procédure de restauration en production, rejeu avant la clôture des inscriptions puis au dry-run.
+  evidence: Séparé à la demande de Boss le 2026-11-14 (spec à ~2 400 tokens). Tant que ce lot n'est pas livré, rien ne prouve qu'une archive est restaurable : l'AC de l'épopée 12.2 sur la restauration reste ouverte.
+- source_spec: `_bmad-output/implementation-artifacts/spec-12-2-sauvegardes-de-la-base-et-des-preuves.md`
+  summary: Aligner l'instantané du manifeste sur celui du dump (`pg_export_snapshot()` dans une session tenue ouverte, puis `pg_dump --snapshot=…`), pour que la future vérification puisse comparer les comptages à l'égalité.
+  evidence: Revue 12.2 (BH/ECH) : le dump et l'inventaire du manifeste lisent deux transactions distinctes ; sur une base vivante les comptages divergent. Documenté comme bornes hautes en attendant ; à traiter avec le lot « restauration éprouvée ».
+- source_spec: `_bmad-output/implementation-artifacts/spec-12-2-sauvegardes-de-la-base-et-des-preuves.md`
+  summary: Tester que `scripts/sauvegarde.sh` impose `PGSSLMODE=require` (et ne passe jamais le mot de passe en argument) pour un hôte distant, via un faux binaire `docker` en tête du PATH.
+  evidence: Revue 12.2 (VG), non vérifié — sévérité high si la régression existait (dump en clair sur Internet). Seul l'hôte local (`prefer`) est exercé par les tests ; à régler par un test d'interception de l'environnement de `docker run`.

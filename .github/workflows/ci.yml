@@ -90,5 +90,10 @@ jobs:
         # renseigner CHROME_BIN.
         run: bash scripts/check-budget.sh
 
+      - name: Outils de sauvegarde (age, rclone)
+        # Le test d'intégration de scripts/sauvegarde.sh (story 12.2) les exige
+        # sous AZZEL_REQUIRE_DB ; docker et curl sont déjà sur le runner.
+        run: sudo apt-get update && sudo apt-get install -y age rclone
+
       - name: Tests (unitaires + intégration, aucun saut autorisé)
         run: pnpm test
