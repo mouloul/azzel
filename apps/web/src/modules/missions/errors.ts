@@ -8,6 +8,7 @@ import {
   type SecteurFieldErrors,
   type VolontaireFieldErrors,
 } from './domain';
+import { signalerErreurInattendue } from '@/lib/observabilite';
 
 export { DbUnavailableError, UnauthenticatedError };
 
@@ -437,6 +438,7 @@ export function toMissionsApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('missions', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

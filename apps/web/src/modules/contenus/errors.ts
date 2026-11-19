@@ -3,6 +3,7 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 import { DbUnavailableError, UnauthenticatedError } from '@/modules/iam/errors';
 
 import type { ContenuFieldErrors } from './domain';
+import { signalerErreurInattendue } from '@/lib/observabilite';
 
 export { DbUnavailableError, UnauthenticatedError };
 
@@ -138,6 +139,7 @@ export function toContenusApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('contenus', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

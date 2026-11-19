@@ -3,6 +3,7 @@ import { createErrorEnvelope, type ErrorEnvelope } from '@azzel/shared';
 import { DbUnavailableError, UnauthenticatedError } from '@/modules/iam/errors';
 
 import type { TemoignageField, TemoignageFieldErrors } from './domain';
+import { signalerErreurInattendue } from '@/lib/observabilite';
 
 export { DbUnavailableError, UnauthenticatedError };
 
@@ -140,6 +141,7 @@ export function toRetourImagesApiError(error: unknown): ApiError {
       }),
     };
   }
+  signalerErreurInattendue('retour-images', error);
   return {
     status: 500,
     envelope: createErrorEnvelope({

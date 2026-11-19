@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
+import { terminerAvecBattement } from '@/lib/battement';
 import { exigeTls } from '@/db/client';
 
 import { readDatabaseUrl } from '@/modules/iam/env';
@@ -77,8 +78,5 @@ const invokedDirectly = (() => {
 })();
 
 if (invokedDirectly) {
-  void main().catch((error) => {
-    console.error('emails:send a échoué :', error);
-    process.exitCode = 1;
-  });
+  void terminerAvecBattement('EMAILS', main, 'emails:send');
 }

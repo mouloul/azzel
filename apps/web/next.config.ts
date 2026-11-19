@@ -1,3 +1,4 @@
+import { withSentryConfig } from '@sentry/nextjs/config';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
@@ -42,4 +43,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Les source maps ne partent chez Sentry que si le build dispose du jeton :
+// sans lui, la configuration est exactement celle d'avant.
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(nextConfig, {
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      sentryUrl: process.env.SENTRY_URL,
+      silent: true,
+      telemetry: false,
+    })
+  : nextConfig;

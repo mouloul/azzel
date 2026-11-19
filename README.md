@@ -127,6 +127,8 @@ l'**hôte** VPS (quotidienne à 02:30 UTC, horaire le jour J), pas en *Scheduled
 Coolify. Mode opératoire complet (compte B2, `rclone`, paire de clés `age`, crontab,
 volume, décision Supabase Pro) : [`docs/exploitation-sauvegardes.md`](docs/exploitation-sauvegardes.md).
 
+Observabilité (Sentry UE, `/api/sante`, battements des crons ; erreurs serveur seulement, 503 base indisponible non envoyés à Sentry, pertes possibles sur la recette Vercel, exemple d'hôte et de crontab avec les trois `HEARTBEAT_URL_*`) : [`docs/exploitation-observabilite.md`](docs/exploitation-observabilite.md).
+
 ```cron
 # cron n'hérite pas du PATH de la session (voir § 6 de la doc ci-dessus).
 PATH=/usr/local/bin:/usr/bin:/bin

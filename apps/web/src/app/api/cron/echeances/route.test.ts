@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const signaler = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/observabilite', () => ({ signalerErreurInattendue: signaler }));
+
 import { GET as getEcheances } from './route';
 
 import { AppRoleMisconfiguredError, DbUnavailableError } from '@/modules/iam/errors';
@@ -453,6 +456,7 @@ describe('GET /api/cron/echeances — base : configuration et disponibilité', (
     expect(response.status).toBe(500);
     const corps = (await response.json()) as Corps;
     expect(corps.error?.code).toBe('cron.internal_error');
+    expect(signaler).toHaveBeenCalledWith('cron', expect.any(Error));
     expect(JSON.stringify(corps)).not.toContain('stack interne');
     aucuneTraceDuSecret(corps);
   });
